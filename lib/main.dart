@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/login_screen.dart';
+import 'screens/signup_page.dart';
 
 void main() {
   runApp(const CallMeApp());
@@ -13,11 +13,7 @@ class CallMeApp extends StatelessWidget {
     return MaterialApp(
       title: 'CallMe',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.teal,
-        fontFamily: 'Poppins',
-      ),
-      home: const LoginScreen(),
+      home: SignupPage(),
     );
   }
 }
