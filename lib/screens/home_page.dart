@@ -6,12 +6,12 @@ class HomePage extends StatelessWidget {
   HomePage({super.key});
 
   final List<ServiceCategory> categories = [
-    ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jpeg'),
-    ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpeg'),
-    ServiceCategory(name: 'Electrician', imagePath: 'assets/electrician.jpeg'),
-    ServiceCategory(name: 'Salon', imagePath: 'assets/salon.jpeg'),
-    ServiceCategory(name: 'Painting', imagePath: 'assets/painting.jpeg'),
-    ServiceCategory(name: 'AC Repair', imagePath: 'assets/ac.jpeg'),
+    ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jfif'),
+    ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jfif'),
+    ServiceCategory(name: 'Electrician', imagePath: 'assets/electrician.jfif'),
+    ServiceCategory(name: 'Salon', imagePath: 'assets/salon.jfif'),
+    ServiceCategory(name: 'Painting', imagePath: 'assets/painting.jfif'),
+    ServiceCategory(name: 'AC Repair', imagePath: 'assets/ac.jfif'),
   ];
 
   @override
