@@ -1,98 +1,84 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'signup_page.dart';
 
-class LogoPage extends StatefulWidget {
-  const LogoPage({super.key});
+class HomePage extends StatelessWidget {
+  HomePage({super.key});
 
-  @override
-  State<LogoPage> createState() => _LogoPageState();
-}
-
-class _LogoPageState extends State<LogoPage>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _fade;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    );
-
-    _fade = Tween<double>(
-      begin: 0,
-      end: 1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
-
-    _scale = Tween<double>(
-      begin: 0.9,
-      end: 1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
-
-    _controller.forward();
-
-    Timer(const Duration(seconds: 5), () {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SignupPage()),
-      );
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  final List<Map<String, String>> categories = [
+    {'name': 'Cleaning', 'image': 'assets/cleaning.jfif'},
+    {'name': 'Plumbing', 'image': 'assets/plumbing.jfif'},
+    {'name': 'Electrician', 'image': 'assets/electrician.jfif'},
+    {'name': 'Salon', 'image': 'assets/salon.jfif'},
+    {'name': 'Painting', 'image': 'assets/painting.jfif'},
+    {'name': 'AC Repair', 'image': 'assets/ac.jfif'},
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [Color(0xFF8EC5FF), Colors.white, Color(0xFFFFB3B3)],
+      appBar: AppBar(
+        title: const Text('Home Services'),
+        centerTitle: true,
+        backgroundColor: Colors.deepPurple,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: GridView.builder(
+          itemCount: categories.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 0.9,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
           ),
-        ),
-        child: Center(
-          child: FadeTransition(
-            opacity: _fade,
-            child: ScaleTransition(
-              scale: _scale,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Image.asset(
-                    'assets/logo.png',
-                    width: 200,
-                    height: 200,
-                    fit: BoxFit.contain,
-                  ),
-
-                  Transform.translate(
-                    offset: const Offset(0, -50),
-                    child: const Text(
-                      'All in One Service',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Color.fromARGB(255, 70, 69, 69),
-                        letterSpacing: 1,
+          itemBuilder: (context, index) {
+            final category = categories[index];
+            return GestureDetector(
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('${category['name']} clicked!')),
+                );
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 5,
+                      offset: const Offset(2, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(12)),
+                        child: Image.asset(
+                          category['image']!,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(
+                        category['name']!,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    )
+                  ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

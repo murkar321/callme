@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'screens/logo_page.dart';
+import 'screens/login_screen.dart';
 import 'screens/signup_page.dart';
+import 'screens/home_page.dart';
 
 void main() {
   runApp(const CallMeApp());
@@ -13,7 +16,16 @@ class CallMeApp extends StatelessWidget {
     return MaterialApp(
       title: 'CallMe',
       debugShowCheckedModeBanner: false,
-      home: SignupPage(),
+      theme: ThemeData(
+        primarySwatch: Colors.deepPurple,
+      ),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const LogoPage(),
+        '/login': (context) => const LoginScreen(),
+        '/signup': (context) => const SignupPage(),
+        '/home': (context) => HomePage(),
+      },
     );
   }
 }
