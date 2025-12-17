@@ -1,3 +1,4 @@
+import 'package:callme/screens/map_picker_page.dart';
 import 'package:flutter/material.dart';
 import '../widgets/app_drawer.dart'; // ✅ ADD THIS
 
@@ -109,9 +110,25 @@ class _BookingPageState extends State<BookingPage> {
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            _textField(
-              controller: addressController,
-              hint: 'Enter full address',
+            InkWell(
+              onTap: () async {
+                final address = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MapPickerPage()),
+                );
+
+                if (address != null) {
+                  setState(() {
+                    addressController.text = address;
+                  });
+                }
+              },
+              child: AbsorbPointer(
+                child: _textField(
+                  controller: addressController,
+                  hint: 'Select address from map',
+                ),
+              ),
             ),
 
             const SizedBox(height: 16),
