@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
-import 'screens/logo_page.dart';
+import 'screens/signup_page.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const CallMeApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class CallMeApp extends StatelessWidget {
+  const CallMeApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
+      title: 'CallMe',
       debugShowCheckedModeBanner: false,
-      home: LogoPage(),
+      home: SignupPage(),
     );
   }
 }
