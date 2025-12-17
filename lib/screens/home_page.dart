@@ -1,4 +1,4 @@
-import 'package:callme/widgets/service_category.dart';
+import 'package:callme/models/service_category.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/screens/booking_page.dart';
 import 'package:callme/widgets/app_drawer.dart';

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'login_screen.dart';
+import 'singup_page.dart';
 
 class LogoPage extends StatefulWidget {
   const LogoPage({super.key});
@@ -39,7 +39,7 @@ class _LogoPageState extends State<LogoPage>
     Timer(const Duration(seconds: 5), () {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        MaterialPageRoute(builder: (_) => const SignupPage()),
       );
     });
   }
