@@ -17,7 +17,7 @@ class CallMeApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.deepPurple),
 
-      // ✅ Start app with Logo Page
+      // Start app with Logo Page
       home: const LogoPage(),
 
       // Optional named routes (for later navigation)

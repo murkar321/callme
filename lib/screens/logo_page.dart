@@ -56,13 +56,6 @@ class _LogoPageState extends State<LogoPage>
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [Color(0xFF8EC5FF), Colors.white, Color(0xFFFFB3B3)],
-          ),
-        ),
         child: Center(
           child: FadeTransition(
             opacity: _fade,
@@ -77,7 +70,6 @@ class _LogoPageState extends State<LogoPage>
                     height: 200,
                     fit: BoxFit.contain,
                   ),
-
                   Transform.translate(
                     offset: const Offset(0, -50),
                     child: const Text(
