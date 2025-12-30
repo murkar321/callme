@@ -24,15 +24,11 @@ class _LogoPageState extends State<LogoPage>
       duration: const Duration(seconds: 2),
     );
 
-    _fade = Tween<double>(
-      begin: 0,
-      end: 1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
+    _fade = Tween(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
 
-    _scale = Tween<double>(
-      begin: 0.9,
-      end: 1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
+    _scale = Tween(begin: 0.9, end: 1.0).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
 
     _controller.forward();
 
@@ -53,16 +49,9 @@ class _LogoPageState extends State<LogoPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
+      body: SizedBox(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [Color(0xFF8EC5FF), Colors.white, Color(0xFFFFB3B3)],
-          ),
-        ),
         child: Center(
           child: FadeTransition(
             opacity: _fade,
@@ -77,7 +66,7 @@ class _LogoPageState extends State<LogoPage>
                     height: 200,
                     fit: BoxFit.contain,
                   ),
-
+                  const SizedBox(height: 16),
                   Transform.translate(
                     offset: const Offset(0, -50),
                     child: const Text(
