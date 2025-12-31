@@ -26,7 +26,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Filter grid items based on search or selected category
     final filteredCategories = categories.where((category) {
       final matchesSearch =
           category.name.toLowerCase().contains(searchQuery.toLowerCase());
@@ -50,28 +49,10 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(12),
-<<<<<<< HEAD
-        child: ListView.builder(
-          itemCount: categories.length,
-          itemBuilder: (context, index) {
-            final category = categories[index];
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: CategoryCard(
-                name: category.name,
-                imagePath: category.imagePath,
-                onTap: () {},
-                onBook: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookingPage(serviceName: category.name),
-=======
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔍 Search Bar first
+            // 🔎 Search box
             TextField(
               decoration: InputDecoration(
                 hintText: 'Search for a service...',
@@ -83,20 +64,17 @@ class _HomePageState extends State<HomePage> {
                   borderSide: BorderSide.none,
                 ),
               ),
-              onChanged: (value) {
-                setState(() {
-                  searchQuery = value;
-                });
-              },
+              onChanged: (value) => setState(() => searchQuery = value),
             ),
-
             const SizedBox(height: 12),
 
-            // 🖼️ Horizontal category image list
+            // 🟦 Horizontal category selector (smooth scroll)
             SizedBox(
               height: 110,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.only(left: 6),
                 itemCount: categories.length,
                 itemBuilder: (context, index) {
                   final category = categories[index];
@@ -106,7 +84,7 @@ class _HomePageState extends State<HomePage> {
                     onTap: () {
                       setState(() {
                         if (selectedCategory == category.name) {
-                          selectedCategory = ''; // unselect
+                          selectedCategory = '';
                         } else {
                           selectedCategory = category.name;
                         }
@@ -155,50 +133,42 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ],
                       ),
->>>>>>> 0211842ef15b259eca8fadcec8edd7ce56098ee4
                     ),
                   );
                 },
               ),
-<<<<<<< HEAD
-            );
-          },
-=======
             ),
-
             const SizedBox(height: 12),
 
-            // 🧰 GridView for service cards
+            // 🟦 Vertical Cards (scrollable)
             Expanded(
-              child: GridView.builder(
+              child: ListView.builder(
                 itemCount: filteredCategories.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.75,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
+                padding: const EdgeInsets.only(bottom: 12),
                 itemBuilder: (context, index) {
                   final category = filteredCategories[index];
-                  return CategoryCard(
-                    name: category.name,
-                    imagePath: category.imagePath,
-                    onTap: () {},
-                    onBook: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              BookingPage(serviceName: category.name),
-                        ),
-                      );
-                    },
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                BookingPage(serviceName: category.name),
+                          ),
+                        );
+                      },
+                      child: CategoryCard(
+                        name: category.name,
+                        imagePath: category.imagePath,
+                      ),
+                    ),
                   );
                 },
               ),
             ),
           ],
->>>>>>> 0211842ef15b259eca8fadcec8edd7ce56098ee4
         ),
       ),
     );
