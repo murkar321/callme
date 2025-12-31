@@ -9,7 +9,7 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
-  final phoneController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -22,8 +22,8 @@ class _SignupPageState extends State<SignupPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Welcome 👋",
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                "Welcome",
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -31,18 +31,24 @@ class _SignupPageState extends State<SignupPage> {
                 style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const SizedBox(height: 40),
+
+              // 📞 Phone Input
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
                   labelText: "Mobile Number",
                   prefixIcon: const Icon(Icons.phone, color: Colors.indigo),
+                  hintText: "Enter 10 digit number",
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
+
               const SizedBox(height: 30),
+
+              // 🚀 Send OTP Button
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -54,9 +60,23 @@ class _SignupPageState extends State<SignupPage> {
                     ),
                   ),
                   onPressed: () {
+                    final phone = phoneController.text.trim();
+
+                    if (phone.isEmpty || phone.length != 10) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              "Please enter a valid 10-digit phone number"),
+                        ),
+                      );
+                      return;
+                    }
+
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const OtpPage()),
+                      MaterialPageRoute(
+                        builder: (context) => OtpPage(phone: phone),
+                      ),
                     );
                   },
                   child: const Text(
@@ -65,15 +85,24 @@ class _SignupPageState extends State<SignupPage> {
                   ),
                 ),
               ),
+
               const SizedBox(height: 20),
-              Center(
-                child: TextButton(
-                  onPressed: () {},
-                  child: const Text(
-                    "Need help?",
-                    style: TextStyle(color: Colors.indigo),
+
+              // ❓ Help + Login
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      // Skip login & go to app dashboard
+                      Navigator.pushReplacementNamed(context, '/bottomnav');
+                    },
+                    child: const Text(
+                      "Already User? Continue without login",
+                      style: TextStyle(color: Colors.indigo),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),

@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import 'home_page.dart';
 
 class OtpPage extends StatefulWidget {
-  const OtpPage({super.key});
+  final String phone; // receive phone number
+  const OtpPage({super.key, required this.phone});
 
   @override
   State<OtpPage> createState() => _OtpPageState();
 }
 
 class _OtpPageState extends State<OtpPage> {
-  final otpController = TextEditingController();
+  final TextEditingController otpController = TextEditingController();
+  bool isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -21,30 +22,36 @@ class _OtpPageState extends State<OtpPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Verify OTP 🔒",
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              Text(
+                "Verify Number",
+                style:
+                    const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                "Enter the 6-digit code sent to your number",
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+              const SizedBox(height: 6),
+              Text(
+                "OTP has been sent to +91 ${widget.phone}",
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const SizedBox(height: 40),
+
+              // OTP Input
               TextField(
                 controller: otpController,
                 keyboardType: TextInputType.number,
                 maxLength: 6,
                 textAlign: TextAlign.center,
                 decoration: InputDecoration(
-                  hintText: "Enter OTP",
+                  hintText: "Enter 6-digit OTP",
                   counterText: "",
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
+
               const SizedBox(height: 30),
+
+              // Verify Button
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -56,21 +63,41 @@ class _OtpPageState extends State<OtpPage> {
                     ),
                   ),
                   onPressed: () {
-                    Navigator.pushReplacement(
+                    final otp = otpController.text.trim();
+
+                    if (otp.length != 6) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Invalid OTP")),
+                      );
+                      return;
+                    }
+
+                    // After OTP success → go to Bottom Navigation screen
+                    Navigator.pushNamedAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (context) => HomePage()),
+                      '/bottomnav',
+                      (route) => false,
                     );
                   },
-                  child: const Text(
-                    "Verify & Continue",
-                    style: TextStyle(fontSize: 18, color: Colors.white),
-                  ),
+                  child: isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          "Verify & Continue",
+                          style: TextStyle(fontSize: 18, color: Colors.white),
+                        ),
                 ),
               ),
+
               const SizedBox(height: 20),
+
+              // Resend
               Center(
                 child: TextButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("OTP Resent")),
+                    );
+                  },
                   child: const Text(
                     "Resend OTP",
                     style: TextStyle(color: Colors.indigo),

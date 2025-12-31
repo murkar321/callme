@@ -8,7 +8,7 @@ class HomePage extends StatelessWidget {
   HomePage({super.key});
 
   final List<ServiceCategory> categories = [
-    ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jfif'),
+    ServiceCategory(name: 'Classes', imagePath: 'assets/class.jpg'),
     ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jfif'),
     ServiceCategory(name: 'Electrician', imagePath: 'assets/electrician.jfif'),
     ServiceCategory(name: 'Salon', imagePath: 'assets/salon.jfif'),
@@ -33,31 +33,26 @@ class HomePage extends StatelessWidget {
       ),
       body: Padding(
         padding: const EdgeInsets.all(12),
-        child: GridView.builder(
+        child: ListView.builder(
           itemCount: categories.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.75, // image + button balanced
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
           itemBuilder: (context, index) {
             final category = categories[index];
 
-            return CategoryCard(
-              name: category.name,
-              imagePath: category.imagePath,
-              onTap: () {
-                // optional category details page
-              },
-              onBook: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => BookingPage(serviceName: category.name),
-                  ),
-                );
-              },
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: CategoryCard(
+                name: category.name,
+                imagePath: category.imagePath,
+                onTap: () {},
+                onBook: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BookingPage(serviceName: category.name),
+                    ),
+                  );
+                },
+              ),
             );
           },
         ),

@@ -1,13 +1,61 @@
 import 'package:flutter/material.dart';
 import 'package:callme/widgets/app_drawer.dart';
 
+// ------------------ MODELS ------------------
+class OrderModel {
+  final String serviceName;
+  final String date;
+  final String time;
+  final String address;
+  final String status;
+  final int amount;
+
+  OrderModel({
+    required this.serviceName,
+    required this.date,
+    required this.time,
+    required this.address,
+    required this.status,
+    required this.amount,
+  });
+}
+
+// ------------------ DUMMY DATA ------------------
+final List<OrderModel> orders = [
+  OrderModel(
+    serviceName: 'Electrician Service',
+    date: '12 Dec 2025',
+    time: '10:00 AM',
+    address: 'Andheri East, Mumbai',
+    status: 'Completed',
+    amount: 799,
+  ),
+  OrderModel(
+    serviceName: 'Plumbing Service',
+    date: '15 Dec 2025',
+    time: '02:00 PM',
+    address: 'Bandra West, Mumbai',
+    status: 'Ongoing',
+    amount: 599,
+  ),
+  OrderModel(
+    serviceName: 'Home Cleaning',
+    date: '18 Dec 2025',
+    time: '09:00 AM',
+    address: 'Powai, Mumbai',
+    status: 'Cancelled',
+    amount: 999,
+  ),
+];
+
+// ------------------ PAGE ------------------
 class MyOrdersPage extends StatelessWidget {
   const MyOrdersPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const AppDrawer(), // ✅ DRAWER ADDED
+      drawer: const AppDrawer(), // Make sure AppDrawer exists
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         elevation: 1,
@@ -37,11 +85,11 @@ class MyOrdersPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black12,
             blurRadius: 12,
-            offset: const Offset(0, 6),
+            offset: Offset(0, 6),
           ),
         ],
       ),
@@ -64,15 +112,11 @@ class MyOrdersPage extends StatelessWidget {
               _statusChip(order.status),
             ],
           ),
-
           const SizedBox(height: 12),
-
           _infoRow(Icons.calendar_today, order.date),
           _infoRow(Icons.access_time, order.time),
           _infoRow(Icons.location_on, order.address),
-
           const Divider(height: 24),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -83,7 +127,10 @@ class MyOrdersPage extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              TextButton(onPressed: () {}, child: const Text('View Details')),
+              TextButton(
+                onPressed: () {},
+                child: const Text('View Details'),
+              ),
             ],
           ),
         ],
@@ -134,52 +181,3 @@ class MyOrdersPage extends StatelessWidget {
     );
   }
 }
-
-// ------------------ MODELS ------------------
-
-class OrderModel {
-  final String serviceName;
-  final String date;
-  final String time;
-  final String address;
-  final String status;
-  final int amount;
-
-  OrderModel({
-    required this.serviceName,
-    required this.date,
-    required this.time,
-    required this.address,
-    required this.status,
-    required this.amount,
-  });
-}
-
-// ------------------ DUMMY DATA ------------------
-
-final List<OrderModel> orders = [
-  OrderModel(
-    serviceName: 'Electrician Service',
-    date: '12 Dec 2025',
-    time: '10:00 AM',
-    address: 'Andheri East, Mumbai',
-    status: 'Completed',
-    amount: 799,
-  ),
-  OrderModel(
-    serviceName: 'Plumbing Service',
-    date: '15 Dec 2025',
-    time: '02:00 PM',
-    address: 'Bandra West, Mumbai',
-    status: 'Ongoing',
-    amount: 599,
-  ),
-  OrderModel(
-    serviceName: 'Home Cleaning',
-    date: '18 Dec 2025',
-    time: '09:00 AM',
-    address: 'Powai, Mumbai',
-    status: 'Cancelled',
-    amount: 999,
-  ),
-];
