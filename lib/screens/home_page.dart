@@ -1,7 +1,7 @@
 import 'package:callme/models/service_category.dart';
 import 'package:flutter/material.dart';
-import 'package:callme/screens/booking_page.dart';
 import 'package:callme/widgets/app_drawer.dart';
+import 'package:callme/screens/service_detail_page.dart';
 import '../widgets/category_card.dart';
 
 class HomePage extends StatefulWidget {
@@ -16,15 +16,14 @@ class _HomePageState extends State<HomePage> {
   double _offset = 0.0;
 
   final List<ServiceCategory> categories = [
-    ServiceCategory(name: 'Classes', imagePath: 'assets/class.jpg'),
-    ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jfif'),
-    ServiceCategory(name: 'Electrician', imagePath: 'assets/electrician.jfif'),
-    ServiceCategory(name: 'Salon', imagePath: 'assets/salon.jfif'),
-    ServiceCategory(name: 'Painting', imagePath: 'assets/painting.jfif'),
-    ServiceCategory(name: 'AC Repair', imagePath: 'assets/ac.jfif'),
-    ServiceCategory(name: 'Carpenter', imagePath: 'assets/carpenter.jfif'),
-    ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jfif'),
-    ServiceCategory(name: 'Technician', imagePath: 'assets/technician.jfif'),
+    ServiceCategory(name: 'Bakery', imagePath: 'assets/bakery.png'),
+    ServiceCategory(name: 'Photography', imagePath: 'assets/photo.png'),
+    ServiceCategory(name: 'Cleaning', imagePath: 'assets/k1.jpg'),
+    ServiceCategory(name: 'Carpenter', imagePath: 'assets/carpt.png'),
+    ServiceCategory(name: 'Gym', imagePath: 'assets/gym.jfif'),
+    ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
+    ServiceCategory(name: 'Mechanic', imagePath: 'assets/mechanic.png'),
+    ServiceCategory(name: 'Water Service', imagePath: 'assets/water.png'),
   ];
 
   String searchQuery = '';
@@ -92,7 +91,7 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         title: const Text(
-          'Home Services',
+          ' CallMe Services',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
@@ -120,7 +119,6 @@ class _HomePageState extends State<HomePage> {
               onChanged: (value) {
                 setState(() {
                   searchQuery = value;
-                  // Clear selected category when typing
                   if (selectedCategory.isNotEmpty) selectedCategory = '';
                 });
               },
@@ -150,67 +148,58 @@ class _HomePageState extends State<HomePage> {
                         (((_offset / width) - index).abs() * 0.18)
                             .clamp(0.0, 0.18);
 
-                    return AnimatedOpacity(
-                      duration: const Duration(milliseconds: 350),
-                      opacity: 1.0,
-                      child: Transform.scale(
-                        scale: scale,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeOut,
+                    return Transform.scale(
+                      scale: scale,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            selectedCategory = selectedCategory == category.name
+                                ? ''
+                                : category.name;
+                          });
+                        },
+                        child: Container(
+                          width: 90,
                           margin: const EdgeInsets.symmetric(horizontal: 8),
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                selectedCategory =
-                                    selectedCategory == category.name
-                                        ? ''
-                                        : category.name;
-                              });
-                            },
-                            child: Container(
-                              width: 90,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? Colors.blueAccent
-                                      : Colors.transparent,
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey.withOpacity(0.22),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 3),
-                                  )
-                                ],
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Image.asset(
-                                      category.imagePath,
-                                      height: 55,
-                                      width: 55,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    category.name,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? Colors.blueAccent
+                                  : Colors.transparent,
+                              width: 2,
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.grey.withOpacity(0.22),
+                                blurRadius: 6,
+                                offset: const Offset(0, 3),
+                              )
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.asset(
+                                  category.imagePath,
+                                  height: 55,
+                                  width: 55,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                category.name,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -222,7 +211,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 Vertical List – Clickable + Navigates
+            // 🔹 Vertical List → Service Detail Page
             Expanded(
               child: ListView.builder(
                 itemCount: filteredCategories.length,
@@ -236,8 +225,9 @@ class _HomePageState extends State<HomePage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                BookingPage(serviceName: category.name),
+                            builder: (_) => ServiceDetailPage(
+                              serviceName: category.name,
+                            ),
                           ),
                         );
                       },

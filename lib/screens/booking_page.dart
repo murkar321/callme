@@ -1,11 +1,11 @@
+import 'package:callme/screens/cart.dart';
 import 'package:callme/screens/map_picker_page.dart';
 import 'package:flutter/material.dart';
-import '../widgets/app_drawer.dart'; // ✅ ADD THIS
+import '../widgets/app_drawer.dart';
 
 class BookingPage extends StatefulWidget {
-  final String serviceName;
-
-  const BookingPage({super.key, required this.serviceName});
+  const BookingPage(
+      {super.key, required String serviceName, required double totalAmount});
 
   @override
   State<BookingPage> createState() => _BookingPageState();
@@ -18,10 +18,18 @@ class _BookingPageState extends State<BookingPage> {
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
 
+  double get totalAmount {
+    double total = 0;
+    for (var item in Cart.items) {
+      total += item.price;
+    }
+    return total;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const AppDrawer(), // ✅ DRAWER ADDED
+      drawer: const AppDrawer(),
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         title: const Text('Book Service'),
@@ -35,7 +43,7 @@ class _BookingPageState extends State<BookingPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Service Card
+            // 🔹 Service Summary Card
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -50,21 +58,42 @@ class _BookingPageState extends State<BookingPage> {
                   ),
                 ],
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.home_repair_service,
-                    color: Colors.blue,
-                    size: 32,
+                  const Text(
+                    "Selected Services",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      widget.serviceName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+
+                  const SizedBox(height: 8),
+
+                  // List of cart items
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: Cart.items.length,
+                    itemBuilder: (context, index) {
+                      final item = Cart.items[index];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(item.name),
+                        trailing: Text("₹${item.price}"),
+                      );
+                    },
+                  ),
+
+                  const Divider(),
+
+                  // Total Amount
+                  Text(
+                    'Total Amount: ₹${totalAmount.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -73,6 +102,7 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 20),
 
+            // 🔹 Date & Time
             const Text(
               'Select Date & Time',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -105,6 +135,7 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 20),
 
+            // 🔹 Address
             const Text(
               'Service Address',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -133,6 +164,7 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 16),
 
+            // 🔹 Notes
             const Text(
               'Additional Notes (Optional)',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -146,6 +178,7 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 30),
 
+            // 🔹 Confirm Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -254,9 +287,9 @@ class _BookingPageState extends State<BookingPage> {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Booking Confirmed')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Booking Confirmed')),
+    );
 
     Navigator.pop(context);
   }

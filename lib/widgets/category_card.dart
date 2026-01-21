@@ -18,7 +18,7 @@ class CategoryCard extends StatefulWidget {
 
 class _CategoryCardState extends State<CategoryCard>
     with SingleTickerProviderStateMixin {
-  double _scale = 1.0;
+  final double _scale = 1.0;
 
   @override
   Widget build(BuildContext context) {

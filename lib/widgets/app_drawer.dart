@@ -50,7 +50,8 @@ class AppDrawer extends StatelessWidget {
             context,
             icon: Icons.calendar_today,
             title: 'Book Service',
-            page: const BookingPage(serviceName: 'General Service'),
+            page: const BookingPage(
+                serviceName: 'General Service', totalAmount: 0.0),
           ),
           _drawerItem(
             context,
