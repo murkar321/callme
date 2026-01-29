@@ -15,7 +15,7 @@ class ServiceDetailPage extends StatefulWidget {
 class _ServiceDetailPageState extends State<ServiceDetailPage> {
   late String selectedCategory;
 
-  final Color primaryColor = const Color(0xFF7B1FA2);
+  final Color primaryColor = const Color.fromARGB(255, 185, 115, 212);
 
   @override
   void initState() {
