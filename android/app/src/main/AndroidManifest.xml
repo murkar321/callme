@@ -4,6 +4,9 @@
     <!-- 🔐 Location permissions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+
 
     <!-- Optional for Internet-based Firebase services -->
     <uses-permission android:name="android.permission.INTERNET" />

@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:callme/models/order_model.dart';
-import 'package:callme/data/orders_data.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:callme/models/service_category.dart';
+import 'package:callme/widgets/category_card.dart';
 
 class BusinessPage extends StatefulWidget {
   const BusinessPage({super.key});
@@ -10,248 +12,186 @@ class BusinessPage extends StatefulWidget {
 }
 
 class _BusinessPageState extends State<BusinessPage> {
-  String selectedFilter = "All"; // ✅ default view
+  List<ServiceCategory> businessCategories = [
+    ServiceCategory(name: 'Plumbing', imagePath: 'assets/images/plumbing.png'),
+    ServiceCategory(name: 'Electrician', imagePath: 'assets/images/electrician.png'),
+  ];
+
+  final ImagePicker _picker = ImagePicker();
+
+  // Function to show dialog to add new service
+  void _showAddServiceDialog() {
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController mobileController = TextEditingController();
+    final TextEditingController emailController = TextEditingController();
+    final TextEditingController addressController = TextEditingController();
+    File? pickedImage;
+    String? selectedCategory; // Dropdown selection
+
+    // Predefined categories
+    List<String> categories = ['Plumbing', 'Electrician', 'Carpentry', 'Cleaning'];
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Add New Service'),
+              content: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    // Dropdown for selecting category
+                    DropdownButtonFormField<String>(
+                      value: selectedCategory,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Category',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: categories.map((category) {
+                        return DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setStateDialog(() {
+                          selectedCategory = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Service Name
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Service Name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Mobile
+                    TextField(
+                      controller: mobileController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Mobile No',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Email
+                    TextField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Email Id',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Address
+                    TextField(
+                      controller: addressController,
+                      decoration: const InputDecoration(
+                        labelText: 'Address',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Image picker
+                    GestureDetector(
+                      onTap: () async {
+                        final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+                        if (image != null) {
+                          setStateDialog(() {
+                            pickedImage = File(image.path);
+                          });
+                        }
+                      },
+                      child: Container(
+                        height: 150,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: pickedImage == null
+                            ? const Center(child: Text('Tap to select image'))
+                            : Image.file(pickedImage!, fit: BoxFit.cover),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (nameController.text.isNotEmpty && selectedCategory != null) {
+                      setState(() {
+                        businessCategories.add(
+                          ServiceCategory(
+                            name: '${selectedCategory!} - ${nameController.text}',
+                            imagePath: pickedImage?.path ?? 'assets/images/default.png',
+                          ),
+                        );
+                      });
+                      Navigator.pop(context);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter name and select category')),
+                      );
+                    }
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final allOrders = [...OrdersData.orders];
-
-    final totalOrders = allOrders.length;
-    final completedOrders =
-        allOrders.where((o) => o.status == 'Completed').toList();
-
-    // ✅ Include both Pending and Ongoing orders as Active
-    final activeOrders = allOrders
-        .where((o) => o.status == 'Pending' || o.status == 'Ongoing')
-        .toList();
-
-    final totalRevenue =
-        allOrders.fold<double>(0, (sum, o) => sum + o.totalAmount);
-
-    // ✅ filter logic
-    List<OrderModel> filteredOrders;
-    switch (selectedFilter) {
-      case 'Completed':
-        filteredOrders = completedOrders;
-        break;
-      case 'Active':
-        filteredOrders = activeOrders;
-        break;
-      default:
-        filteredOrders = allOrders;
-    }
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text("My Business"),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
+        title: const Text('Business Services'),
       ),
-      backgroundColor: const Color(0xFFF5F7FB),
-      body: allOrders.isEmpty
-          ? const Center(
-              child: Text(
-                'No customer orders yet',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-            )
-          : Column(
-              children: [
-                // ✅ Clickable summary dashboard
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _summaryCard(
-                        title: 'Total Orders',
-                        value: totalOrders.toString(),
-                        color: Colors.blue,
-                        filter: 'All',
-                      ),
-                      _summaryCard(
-                        title: 'Completed',
-                        value: completedOrders.length.toString(),
-                        color: Colors.green,
-                        filter: 'Completed',
-                      ),
-                      _summaryCard(
-                        title: 'Active',
-                        value: activeOrders.length.toString(),
-                        color: Colors.orange,
-                        filter: 'Active',
-                      ),
-                      _summaryCard(
-                        title: 'Revenue',
-                        value: '₹${totalRevenue.toStringAsFixed(0)}',
-                        color: Colors.purple,
-                        filter: 'All',
-                      ),
-                    ],
-                  ),
-                ),
-
-                Divider(thickness: 1, color: Colors.grey.shade300),
-
-                // ✅ Display filtered orders
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredOrders.length,
-                    itemBuilder: (context, index) {
-                      final order = filteredOrders[index];
-                      return _businessOrderCard(order);
-                    },
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-
-  /// ✅ Summary card now clickable
-  Widget _summaryCard({
-    required String title,
-    required String value,
-    required Color color,
-    required String filter,
-  }) {
-    final isSelected = selectedFilter == filter;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            selectedFilter = filter;
-          });
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isSelected ? color.withOpacity(0.2) : color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? color : Colors.transparent,
-              width: 2,
-            ),
+      body: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: GridView.builder(
+          itemCount: businessCategories.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1,
           ),
-          child: Column(
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                style: const TextStyle(fontSize: 13, color: Colors.black54),
-              ),
-            ],
-          ),
+          itemBuilder: (context, index) {
+            final category = businessCategories[index];
+            return CategoryCard(
+              name: category.name,
+              imagePath: category.imagePath,
+            );
+          },
         ),
       ),
-    );
-  }
-
-  Widget _businessOrderCard(OrderModel order) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
-        ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddServiceDialog,
+        child: const Icon(Icons.add),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            order.services.join(', '),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text('Customer Address: ${order.address}'),
-          Text('Date: ${order.date.day}/${order.date.month}/${order.date.year}'),
-          Text('Time: ${order.time}'),
-          const SizedBox(height: 8),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _statusBadge(order.status),
-              DropdownButton<String>(
-                value: _validStatus(order.status),
-                underline: const SizedBox(),
-                icon: const Icon(Icons.edit, color: Colors.blue),
-                onChanged: (newStatus) {
-                  setState(() {
-                    order.status = newStatus!;
-                  });
-                },
-                items: const [
-                  DropdownMenuItem(value: 'Pending', child: Text('Pending')),
-                  DropdownMenuItem(value: 'Ongoing', child: Text('Ongoing')),
-                  DropdownMenuItem(value: 'Completed', child: Text('Completed')),
-                  DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Amount: ₹${order.totalAmount.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _validStatus(String status) {
-    const validStatuses = ['Pending', 'Ongoing', 'Completed', 'Cancelled'];
-    if (validStatuses.contains(status)) return status;
-    return 'Pending';
-  }
-
-  Widget _statusBadge(String status) {
-    Color bgColor;
-    switch (status) {
-      case 'Completed':
-        bgColor = Colors.green;
-        break;
-      case 'Ongoing':
-        bgColor = Colors.blue;
-        break;
-      case 'Pending':
-        bgColor = Colors.orange;
-        break;
-      case 'Cancelled':
-        bgColor = Colors.red;
-        break;
-      default:
-        bgColor = Colors.grey;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        status,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }
