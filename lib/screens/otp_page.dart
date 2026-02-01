@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OtpPage extends StatefulWidget {
-  final String phone; // receive phone number
+  final String phone; // +91XXXXXXXXXX
   const OtpPage({super.key, required this.phone});
 
   @override
@@ -10,7 +13,110 @@ class OtpPage extends StatefulWidget {
 
 class _OtpPageState extends State<OtpPage> {
   final TextEditingController otpController = TextEditingController();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  String verificationId = "";
   bool isLoading = false;
+  int resendTimer = 30;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    sendOtp();
+    startTimer();
+  }
+
+  // 🔹 Send OTP
+  Future<void> sendOtp() async {
+    await _auth.verifyPhoneNumber(
+      phoneNumber: widget.phone,
+      timeout: const Duration(seconds: 60),
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        await _auth.signInWithCredential(credential);
+        goToHome();
+      },
+      verificationFailed: (FirebaseAuthException e) {
+        showMessage(e.message ?? "OTP verification failed");
+      },
+      codeSent: (String vid, int? resendToken) {
+        setState(() => verificationId = vid);
+      },
+      codeAutoRetrievalTimeout: (String vid) {
+        verificationId = vid;
+      },
+    );
+  }
+
+  // 🔹 Verify OTP
+  Future<void> verifyOtp() async {
+    final otp = otpController.text.trim();
+    if (otp.length != 6) {
+      showMessage("Enter valid 6-digit OTP");
+      return;
+    }
+
+    try {
+      setState(() => isLoading = true);
+
+      final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: otp,
+      );
+
+      final userCredential = await _auth.signInWithCredential(credential);
+
+      // Save user in Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set({
+        'phone': widget.phone,
+        'provider': 'phone',
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      goToHome();
+    } catch (e) {
+      showMessage("Invalid OTP");
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  // 🔹 Timer
+  void startTimer() {
+    resendTimer = 30;
+    timer?.cancel();
+    timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (resendTimer == 0) {
+        t.cancel();
+      } else {
+        setState(() => resendTimer--);
+      }
+    });
+  }
+
+  // 🔹 Navigation
+  void goToHome() {
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/bottomnav',
+      (route) => false,
+    );
+  }
+
+  // 🔹 Snackbar
+  void showMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  @override
+  void dispose() {
+    otpController.dispose();
+    timer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,16 +128,16 @@ class _OtpPageState extends State<OtpPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "Verify Number",
-                style:
-                    const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              const Text(
+                "Verify Phone",
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
-                "OTP has been sent to +91 ${widget.phone}",
+                "OTP sent to ${widget.phone}",
                 style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
+
               const SizedBox(height: 40),
 
               // OTP Input
@@ -56,51 +162,40 @@ class _OtpPageState extends State<OtpPage> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
+                  onPressed: isLoading ? null : verifyOtp,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.indigo,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () {
-                    final otp = otpController.text.trim();
-
-                    if (otp.length != 6) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Invalid OTP")),
-                      );
-                      return;
-                    }
-
-                    // After OTP success → go to Bottom Navigation screen
-                    Navigator.pushNamedAndRemoveUntil(
-                      context,
-                      '/bottomnav',
-                      (route) => false,
-                    );
-                  },
                   child: isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? const CircularProgressIndicator(
+                          color: Colors.white,
+                        )
                       : const Text(
                           "Verify & Continue",
-                          style: TextStyle(fontSize: 18, color: Colors.white),
+                          style: TextStyle(fontSize: 18),
                         ),
                 ),
               ),
 
               const SizedBox(height: 20),
 
-              // Resend
+              // Resend OTP
               Center(
                 child: TextButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("OTP Resent")),
-                    );
-                  },
-                  child: const Text(
-                    "Resend OTP",
-                    style: TextStyle(color: Colors.indigo),
+                  onPressed: resendTimer == 0
+                      ? () {
+                          sendOtp();
+                          startTimer();
+                        }
+                      : null,
+                  child: Text(
+                    resendTimer == 0
+                        ? "Resend OTP"
+                        : "Resend OTP in $resendTimer sec",
+                    style: const TextStyle(color: Colors.indigo),
                   ),
                 ),
               ),

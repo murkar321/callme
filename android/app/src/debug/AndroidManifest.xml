@@ -4,4 +4,18 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+<meta-data
+    android:name="com.google.android.geo.API_KEY"
+    android:value="AIzaSyCFZgkNCOXpLHk7Xbc42eoxX4UCdpD7BVE"/>
+
+    <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+<meta-data
+    android:name="flutterEmbedding"
+    android:value="2" />
+
+ 
+
 </manifest>

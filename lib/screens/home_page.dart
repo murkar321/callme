@@ -1,8 +1,7 @@
-import 'package:callme/models/service_category.dart';
 import 'package:flutter/material.dart';
-import 'package:callme/widgets/app_drawer.dart';
+import 'package:callme/models/service_category.dart';
 import 'package:callme/screens/service_detail_page.dart';
-import '../widgets/category_card.dart';
+import 'package:callme/widgets/category_card.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -34,8 +33,10 @@ class _HomePageState extends State<HomePage> {
       final matchesSearch = category.name
           .toLowerCase()
           .contains(searchQuery.toLowerCase().trim());
+
       final matchesSelected =
           selectedCategory.isEmpty || category.name == selectedCategory;
+
       return matchesSearch && matchesSelected;
     }).toList();
   }
@@ -64,7 +65,7 @@ class _HomePageState extends State<HomePage> {
   void autoScroll() {
     if (!mounted || !_scrollController.hasClients) return;
 
-    double max = _scrollController.position.maxScrollExtent;
+    final max = _scrollController.position.maxScrollExtent;
     double next = _scrollController.offset + 120;
 
     if (next >= max) next = 0;
@@ -87,11 +88,10 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const AppDrawer(),
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         title: const Text(
-          ' CallMe Services',
+          'CallMe Services',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
@@ -102,9 +102,8 @@ class _HomePageState extends State<HomePage> {
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔍 Search Box
+            // 🔍 Search
             TextField(
               decoration: InputDecoration(
                 hintText: 'Search for a service...',
@@ -119,13 +118,14 @@ class _HomePageState extends State<HomePage> {
               onChanged: (value) {
                 setState(() {
                   searchQuery = value;
-                  if (selectedCategory.isNotEmpty) selectedCategory = '';
+                  selectedCategory = '';
                 });
               },
             ),
+
             const SizedBox(height: 12),
 
-            // 🔹 Horizontal Carousel
+            // 🔹 Horizontal Categories (showName = true)
             SizedBox(
               height: 110,
               child: NotificationListener<ScrollNotification>(
@@ -137,13 +137,12 @@ class _HomePageState extends State<HomePage> {
                   controller: _scrollController,
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(left: 6),
                   itemCount: filteredHorizontal.length,
                   itemBuilder: (context, index) {
                     final category = filteredHorizontal[index];
                     final isSelected = selectedCategory == category.name;
 
-                    final width = 90.0 + 16.0;
+                    final width = 106.0;
                     final scale = 1 -
                         (((_offset / width) - index).abs() * 0.18)
                             .clamp(0.0, 0.18);
@@ -153,53 +152,15 @@ class _HomePageState extends State<HomePage> {
                       child: GestureDetector(
                         onTap: () {
                           setState(() {
-                            selectedCategory = selectedCategory == category.name
-                                ? ''
-                                : category.name;
+                            selectedCategory = isSelected ? '' : category.name;
                           });
                         },
-                        child: Container(
-                          width: 90,
-                          margin: const EdgeInsets.symmetric(horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isSelected
-                                  ? Colors.blueAccent
-                                  : Colors.transparent,
-                              width: 2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.withOpacity(0.22),
-                                blurRadius: 6,
-                                offset: const Offset(0, 3),
-                              )
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.asset(
-                                  category.imagePath,
-                                  height: 55,
-                                  width: 55,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                category.name,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: CategoryCard(
+                            name: category.name,
+                            imagePath: category.imagePath,
+                            showName: true,
                           ),
                         ),
                       ),
@@ -211,15 +172,17 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 Vertical List → Service Detail Page
+            // 🔹 Vertical YouTube-Style Feed (showName = false)
             Expanded(
               child: ListView.builder(
                 itemCount: filteredCategories.length,
+                cacheExtent: 700,
                 padding: const EdgeInsets.only(bottom: 12),
                 itemBuilder: (context, index) {
                   final category = filteredCategories[index];
+
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.only(bottom: 14),
                     child: GestureDetector(
                       onTap: () {
                         Navigator.push(
@@ -234,7 +197,7 @@ class _HomePageState extends State<HomePage> {
                       child: CategoryCard(
                         name: category.name,
                         imagePath: category.imagePath,
-                        showName: false,
+                        showName: false, // 👈 YouTube style
                       ),
                     ),
                   );

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'cart.dart';
 import 'booking_page.dart';
-import 'package:callme/models/service_products.dart';
 import 'package:callme/models/service_product.dart';
 
 class ProductDetailPage extends StatelessWidget {

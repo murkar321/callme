@@ -2,15 +2,13 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:callme/screens/cart.dart';
 import 'package:callme/screens/map_picker_page.dart';
-import '../widgets/app_drawer.dart';
 import 'package:callme/data/orders_data.dart';
 import 'package:callme/models/order_model.dart';
-import 'package:callme/models/service_products.dart';
 import 'package:callme/models/service_product.dart';
 
 class BookingPage extends StatefulWidget {
   final String serviceName;
-  final ServiceProduct  product;
+  final ServiceProduct product;
 
   const BookingPage({
     super.key,
@@ -50,15 +48,15 @@ class _BookingPageState extends State<BookingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
-        title: const Text('Book Service'),
+        title: Text(widget.serviceName),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 1,
       ),
+      drawer: const AppDrawer(),
+      backgroundColor: const Color(0xFFF5F7FB),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -66,7 +64,10 @@ class _BookingPageState extends State<BookingPage> {
           children: [
             _serviceSummaryCard(),
             const SizedBox(height: 20),
-            const Text('Select Date & Time', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Select Date & Time',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -83,14 +84,19 @@ class _BookingPageState extends State<BookingPage> {
                 Expanded(
                   child: _selectTile(
                     icon: Icons.access_time,
-                    title: selectedTime == null ? 'Select Time' : selectedTime!.format(context),
+                    title: selectedTime == null
+                        ? 'Select Time'
+                        : selectedTime!.format(context),
                     onTap: _pickTime,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 20),
-            const Text('Service Address', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Service Address',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             InkWell(
               onTap: () async {
@@ -103,13 +109,23 @@ class _BookingPageState extends State<BookingPage> {
                 }
               },
               child: AbsorbPointer(
-                child: _textField(controller: addressController, hint: 'Select address from map'),
+                child: _textField(
+                  controller: addressController,
+                  hint: 'Select address from map',
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Additional Notes (Optional)', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Additional Notes (Optional)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
-            _textField(controller: noteController, hint: 'Any instructions for service provider', maxLines: 3),
+            _textField(
+              controller: noteController,
+              hint: 'Any instructions for service provider',
+              maxLines: 3,
+            ),
             const SizedBox(height: 30),
             SizedBox(
               width: double.infinity,
@@ -118,9 +134,14 @@ class _BookingPageState extends State<BookingPage> {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   backgroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
-                child: const Text('Confirm Booking', style: TextStyle(fontSize: 16)),
+                child: const Text(
+                  'Confirm Booking',
+                  style: TextStyle(fontSize: 16),
+                ),
               ),
             ),
           ],
@@ -136,22 +157,47 @@ class _BookingPageState extends State<BookingPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 6))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Selected Services', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'Selected Services',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
-          ...Cart.items.map((item) => ListTile(contentPadding: EdgeInsets.zero, title: Text(item.name), trailing: Text("₹${item.price}"))),
+          ...Cart.items.map(
+            (item) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(item.name),
+              trailing: Text("₹${item.price}"),
+            ),
+          ),
           const Divider(),
-          Text('Total Amount: ₹${totalAmount.toStringAsFixed(0)}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
+          Text(
+            'Total Amount: ₹${totalAmount.toStringAsFixed(0)}',
+            style: const TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _selectTile({required IconData icon, required String title, required VoidCallback onTap}) {
+  Widget _selectTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -159,16 +205,30 @@ class _BookingPageState extends State<BookingPage> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Row(
-          children: [Icon(icon, color: Colors.blue), const SizedBox(width: 10), Expanded(child: Text(title))],
+          children: [
+            Icon(icon, color: Colors.blue),
+            const SizedBox(width: 10),
+            Expanded(child: Text(title)),
+          ],
         ),
       ),
     );
   }
 
-  Widget _textField({required TextEditingController controller, required String hint, int maxLines = 1}) {
+  Widget _textField({
+    required TextEditingController controller,
+    required String hint,
+    int maxLines = 1,
+  }) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
@@ -176,7 +236,10 @@ class _BookingPageState extends State<BookingPage> {
         hintText: hint,
         filled: true,
         fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
   }
@@ -192,13 +255,18 @@ class _BookingPageState extends State<BookingPage> {
   }
 
   Future<void> _pickTime() async {
-    final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    final time =
+        await showTimePicker(context: context, initialTime: TimeOfDay.now());
     if (time != null) setState(() => selectedTime = time);
   }
 
   void _confirmBooking() {
-    if (selectedDate == null || selectedTime == null || addressController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all required details')));
+    if (selectedDate == null ||
+        selectedTime == null ||
+        addressController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all required details')),
+      );
       return;
     }
 
@@ -214,7 +282,9 @@ class _BookingPageState extends State<BookingPage> {
     );
 
     OrdersData.orders.add(order);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Booking Confirmed')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Booking Confirmed')),
+    );
     Cart.items.clear();
     Navigator.pop(context);
   }

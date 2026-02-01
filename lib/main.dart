@@ -1,10 +1,17 @@
-import 'package:callme/screens/bottom_nav_page.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+import 'firebase_options.dart';
 import 'screens/logo_page.dart';
 import 'screens/singup_page.dart';
 import 'screens/home_page.dart';
+import 'screens/bottom_nav_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const CallMeApp());
 }
 
@@ -16,16 +23,18 @@ class CallMeApp extends StatelessWidget {
     return MaterialApp(
       title: 'CallMe',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.deepPurple),
+      theme: ThemeData(
+        primarySwatch: Colors.deepPurple,
+      ),
 
-      // First screen (splash → logo page)
+      // Splash / Logo screen
       home: const LogoPage(),
 
       // Named routes
       routes: {
         '/signup': (context) => const SignupPage(),
-        '/bottomnav': (context) => const BottomNavPage(), // 👈 Added
-        '/home': (context) => HomePage(), // Still usable
+        '/bottomnav': (context) => const BottomNavPage(),
+        '/home': (context) => HomePage(),
       },
     );
   }

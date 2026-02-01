@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:callme/widgets/app_drawer.dart';
 import 'package:callme/data/orders_data.dart';
 import 'package:callme/models/order_model.dart';
 
+/// Helper to control sorting order by status
 int statusPriority(String status) {
   switch (status) {
     case 'Ongoing':
@@ -21,7 +21,7 @@ class MyOrdersPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Get live orders from OrdersData
+    // ✅ Get live orders from global OrdersData
     final sortedOrders = List<OrderModel>.from(OrdersData.orders)
       ..sort((a, b) =>
           statusPriority(a.status).compareTo(statusPriority(b.status)));
@@ -77,13 +77,13 @@ class MyOrdersPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          /// Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
                 child: Text(
-                  order.services.join(', '), // ✅ support multiple services
+                  order.services.join(', '), // ✅ Multiple services supported
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -94,11 +94,15 @@ class MyOrdersPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+
+          /// Order info
           _infoRow(Icons.calendar_today,
               '${order.date.day}/${order.date.month}/${order.date.year}'),
           _infoRow(Icons.access_time, order.time),
           _infoRow(Icons.location_on, order.address),
           const Divider(height: 24),
+
+          /// Amount and button
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -110,7 +114,9 @@ class MyOrdersPage extends StatelessWidget {
                 ),
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () {
+                  // Future enhancement: show order details
+                },
                 child: const Text('View Details'),
               ),
             ],

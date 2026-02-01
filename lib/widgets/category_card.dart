@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-class CategoryCard extends StatefulWidget {
+class CategoryCard extends StatelessWidget {
   final String name;
   final String imagePath;
-  final bool showName; // true for horizontal, false for vertical
+  final bool showName; // true = horizontal, false = vertical
 
   const CategoryCard({
     super.key,
@@ -13,86 +13,129 @@ class CategoryCard extends StatefulWidget {
   });
 
   @override
-  State<CategoryCard> createState() => _CategoryCardState();
-}
-
-class _CategoryCardState extends State<CategoryCard>
-    with SingleTickerProviderStateMixin {
-  final double _scale = 1.0;
-
-  @override
   Widget build(BuildContext context) {
-    // 🔹 Determine size dynamically
-    double cardWidth;
-    double cardHeight;
-
-    if (widget.showName) {
-      // Horizontal cards: fixed width, smaller height
-      cardWidth = 90;
-      cardHeight = 110;
-    } else {
-      // Vertical cards: adapt to screen width, maintain 16:9 aspect ratio
-      final screenWidth = MediaQuery.of(context).size.width;
-      cardWidth = screenWidth * 0.9; // 90% of screen width
-      cardHeight = cardWidth * 9 / 16; // 16:9 aspect ratio
-    }
-
-    return TweenAnimationBuilder(
-      duration: const Duration(milliseconds: 400),
-      tween: Tween<double>(begin: 0.85, end: 1.0),
-      curve: Curves.easeOut,
-      builder: (context, value, child) {
-        return AnimatedScale(
-          duration: const Duration(milliseconds: 130),
-          scale: _scale,
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Container(
-        width: cardWidth,
-        height: cardHeight,
+    if (showName) {
+      // 🔹 HORIZONTAL CARD (UNCHANGED LOGIC)
+      return Container(
+        width: 90,
+        margin: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
           color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
+              color: Colors.grey.withOpacity(0.22),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            )
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                imagePath,
+                height: 55,
+                width: 55,
+                fit: BoxFit.cover,
+                cacheWidth: 200,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Stack(
-            children: [
-              // 🔹 Image fills container and keeps aspect ratio
-              Positioned.fill(
-                child: Image.asset(
-                  widget.imagePath,
-                  fit: BoxFit.cover,
-                ),
+      );
+    }
+
+    // 🔹 VERTICAL CARD (YOUTUBE STYLE)
+    return Card(
+      elevation: 2,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 🖼 Thumbnail (16:9)
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Image.asset(
+              imagePath,
+              fit: BoxFit.cover,
+              cacheWidth: 800,
+              errorBuilder: (_, __, ___) => const Center(
+                child: Icon(Icons.image_not_supported),
               ),
-              // 🔹 Optional name text (horizontal cards)
-              if (widget.showName)
-                Positioned(
-                  bottom: 8,
-                  left: 10,
-                  right: 10,
-                  child: Text(
-                    widget.name,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                      shadows: [Shadow(blurRadius: 5, color: Colors.black)],
-                    ),
-                    textAlign: TextAlign.center,
+            ),
+          ),
+
+          // 📄 Info section (like YouTube)
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left icon (channel-style)
+                const CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.blueAccent,
+                  child: Icon(
+                    Icons.miscellaneous_services,
+                    size: 18,
+                    color: Colors.white,
                   ),
                 ),
-            ],
+
+                const SizedBox(width: 10),
+
+                // Title + subtitle
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Available nearby • Fast service',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // More options icon
+                const Icon(
+                  Icons.more_vert,
+                  size: 18,
+                  color: Colors.grey,
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
