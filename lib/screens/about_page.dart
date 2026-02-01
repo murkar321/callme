@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:callme/widgets/app_drawer.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -7,7 +6,6 @@ class AboutPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const AppDrawer(),
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         title: const Text(

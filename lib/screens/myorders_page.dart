@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:callme/widgets/app_drawer.dart';
 
 // ------------------ MODELS ------------------
 class OrderModel {
@@ -23,14 +22,6 @@ class OrderModel {
 // ------------------ DUMMY DATA ------------------
 final List<OrderModel> orders = [
   OrderModel(
-    serviceName: 'Electrician Service',
-    date: '12 Dec 2025',
-    time: '10:00 AM',
-    address: 'Andheri East, Mumbai',
-    status: 'Completed',
-    amount: 799,
-  ),
-  OrderModel(
     serviceName: 'Plumbing Service',
     date: '15 Dec 2025',
     time: '02:00 PM',
@@ -46,6 +37,14 @@ final List<OrderModel> orders = [
     status: 'Cancelled',
     amount: 999,
   ),
+  OrderModel(
+    serviceName: 'Electrician Service',
+    date: '12 Dec 2025',
+    time: '10:00 AM',
+    address: 'Andheri East, Mumbai',
+    status: 'Completed',
+    amount: 799,
+  ),
 ];
 
 // ------------------ PAGE ------------------
@@ -55,7 +54,7 @@ class MyOrdersPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const AppDrawer(), // Make sure AppDrawer exists
+      // Make sure AppDrawer exists
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         elevation: 1,

@@ -1,7 +1,6 @@
 import 'package:callme/screens/cart.dart';
 import 'package:callme/screens/map_picker_page.dart';
 import 'package:flutter/material.dart';
-import '../widgets/app_drawer.dart';
 
 class BookingPage extends StatefulWidget {
   const BookingPage(
@@ -29,15 +28,6 @@ class _BookingPageState extends State<BookingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: const Color(0xFFF5F7FB),
-      appBar: AppBar(
-        title: const Text('Book Service'),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(

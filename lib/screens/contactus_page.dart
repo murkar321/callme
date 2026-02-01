@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:callme/widgets/app_drawer.dart';
 
 class ContactUsPage extends StatelessWidget {
   const ContactUsPage({super.key});
@@ -7,7 +6,7 @@ class ContactUsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const AppDrawer(), // ✅ DRAWER ADDED
+      // ✅ DRAWER ADDED
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         elevation: 1,
@@ -94,13 +93,10 @@ class ContactUsPage extends StatelessWidget {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
-
                   _textField(label: 'Your Name'),
                   _textField(label: 'Email (Optional)'),
                   _textField(label: 'Message', maxLines: 4),
-
                   const SizedBox(height: 16),
-
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
