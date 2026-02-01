@@ -55,7 +55,6 @@ class _BookingPageState extends State<BookingPage> {
         foregroundColor: Colors.black,
         elevation: 1,
       ),
-      drawer: const AppDrawer(),
       backgroundColor: const Color(0xFFF5F7FB),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
