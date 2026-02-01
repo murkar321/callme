@@ -1,61 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:callme/widgets/app_drawer.dart';
+import 'package:callme/data/orders_data.dart';
+import 'package:callme/models/order_model.dart';
 
-// ------------------ MODELS ------------------
-class OrderModel {
-  final String serviceName;
-  final String date;
-  final String time;
-  final String address;
-  final String status;
-  final int amount;
-
-  OrderModel({
-    required this.serviceName,
-    required this.date,
-    required this.time,
-    required this.address,
-    required this.status,
-    required this.amount,
-  });
+int statusPriority(String status) {
+  switch (status) {
+    case 'Ongoing':
+      return 1;
+    case 'Completed':
+      return 2;
+    case 'Cancelled':
+      return 3;
+    default:
+      return 4;
+  }
 }
 
-// ------------------ DUMMY DATA ------------------
-final List<OrderModel> orders = [
-  OrderModel(
-    serviceName: 'Electrician Service',
-    date: '12 Dec 2025',
-    time: '10:00 AM',
-    address: 'Andheri East, Mumbai',
-    status: 'Completed',
-    amount: 799,
-  ),
-  OrderModel(
-    serviceName: 'Plumbing Service',
-    date: '15 Dec 2025',
-    time: '02:00 PM',
-    address: 'Bandra West, Mumbai',
-    status: 'Ongoing',
-    amount: 599,
-  ),
-  OrderModel(
-    serviceName: 'Home Cleaning',
-    date: '18 Dec 2025',
-    time: '09:00 AM',
-    address: 'Powai, Mumbai',
-    status: 'Cancelled',
-    amount: 999,
-  ),
-];
-
-// ------------------ PAGE ------------------
 class MyOrdersPage extends StatelessWidget {
   const MyOrdersPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Get live orders from OrdersData
+    final sortedOrders = List<OrderModel>.from(OrdersData.orders)
+      ..sort((a, b) =>
+          statusPriority(a.status).compareTo(statusPriority(b.status)));
+
     return Scaffold(
-      drawer: const AppDrawer(), // Make sure AppDrawer exists
+      drawer: const AppDrawer(),
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         elevation: 1,
@@ -67,14 +39,23 @@ class MyOrdersPage extends StatelessWidget {
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: orders.length,
-        itemBuilder: (context, index) {
-          final order = orders[index];
-          return _orderCard(order);
-        },
-      ),
+
+      // ✅ If there are no orders yet
+      body: sortedOrders.isEmpty
+          ? const Center(
+              child: Text(
+                'No orders placed yet',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: sortedOrders.length,
+              itemBuilder: (context, index) {
+                final order = sortedOrders[index];
+                return _orderCard(order);
+              },
+            ),
     );
   }
 
@@ -102,7 +83,7 @@ class MyOrdersPage extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  order.serviceName,
+                  order.services.join(', '), // ✅ support multiple services
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -113,7 +94,8 @@ class MyOrdersPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _infoRow(Icons.calendar_today, order.date),
+          _infoRow(Icons.calendar_today,
+              '${order.date.day}/${order.date.month}/${order.date.year}'),
           _infoRow(Icons.access_time, order.time),
           _infoRow(Icons.location_on, order.address),
           const Divider(height: 24),
@@ -121,7 +103,7 @@ class MyOrdersPage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '₹ ${order.amount}',
+                '₹ ${order.totalAmount.toStringAsFixed(0)}',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,

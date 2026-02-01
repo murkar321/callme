@@ -1,4 +1,4 @@
-import 'package:callme/screens/buisness_page.dart';
+import 'package:callme/screens/business_page.dart';
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'myorders_page.dart';

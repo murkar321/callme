@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:callme/models/service_products.dart';
 import 'booking_page.dart';
 import 'cart.dart';
+import 'ProductDetailPage.dart';
 
 class ServiceDetailPage extends StatefulWidget {
   final String serviceName;
@@ -14,7 +15,6 @@ class ServiceDetailPage extends StatefulWidget {
 
 class _ServiceDetailPageState extends State<ServiceDetailPage> {
   late String selectedCategory;
-
   final Color primaryColor = const Color(0xFF7B1FA2);
 
   @override
@@ -44,16 +44,18 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
         actions: [
           Stack(
             children: [
+              // 🛒 Cart icon in AppBar
               IconButton(
                 icon: const Icon(Icons.shopping_cart),
                 onPressed: () {
                   if (Cart.items.isEmpty) return;
+
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => BookingPage(
                         serviceName: widget.serviceName,
-                        totalAmount: totalAmount,
+                        product: Cart.items.first,
                       ),
                     ),
                   );
@@ -68,7 +70,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     backgroundColor: Colors.red,
                     child: Text(
                       Cart.items.length.toString(),
-                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                 ),
@@ -179,20 +184,35 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              /// 🖼 IMAGE
-                              ClipRRect(
+                              /// 🖼 IMAGE (tap to view details)
+                              InkWell(
                                 borderRadius: const BorderRadius.vertical(
                                     top: Radius.circular(18)),
-                                child: Image.asset(
-                                  product.imagePath,
-                                  height: 140,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ProductDetailPage(
+                                        product: product,
+                                        serviceName: widget.serviceName,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(18)),
+                                  child: Image.asset(
+                                    product.imagePath,
                                     height: 140,
-                                    color: Colors.grey.shade200,
-                                    child:
-                                        const Icon(Icons.image_not_supported),
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      height: 140,
+                                      color: Colors.grey.shade200,
+                                      child: const Icon(
+                                          Icons.image_not_supported),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -279,15 +299,15 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => BookingPage(
-                        serviceName: widget.serviceName,
-                        totalAmount: totalAmount,
+                        serviceName: widget.serviceName, // ✅ Fixed
+                        product: Cart.items.first,       // ✅ Fixed
                       ),
                     ),
                   );
                 },
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
                     color: primaryColor,
                     borderRadius: BorderRadius.circular(16),
@@ -298,12 +318,16 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                       Text(
                         "${Cart.items.length} items",
                         style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       Text(
                         "₹${totalAmount.toStringAsFixed(0)}  View Cart →",
                         style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w600),
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),

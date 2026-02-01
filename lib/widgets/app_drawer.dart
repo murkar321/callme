@@ -1,10 +1,13 @@
+import 'package:callme/models/service_product.dart';
 import 'package:callme/screens/about_page.dart';
 import 'package:callme/screens/booking_page.dart';
 import 'package:callme/screens/contactus_page.dart';
 import 'package:callme/screens/home_page.dart';
 import 'package:callme/screens/myorders_page.dart';
 import 'package:callme/screens/profile_page.dart';
+import 'package:callme/models/service_products.dart';
 import 'package:flutter/material.dart';
+import 'package:callme/screens/ProductDetailPage.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -50,8 +53,15 @@ class AppDrawer extends StatelessWidget {
             context,
             icon: Icons.calendar_today,
             title: 'Book Service',
-            page: const BookingPage(
-                serviceName: 'General Service', totalAmount: 0.0),
+           page: BookingPage(
+  serviceName: 'General Service',
+  product: ServiceProduct(
+    name: 'General Service',
+    price: 568,
+    imagePath: 'assets/default_service.jpg',
+  ),
+),
+
           ),
           _drawerItem(
             context,
