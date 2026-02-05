@@ -14,7 +14,8 @@ class BusinessPage extends StatefulWidget {
 class _BusinessPageState extends State<BusinessPage> {
   List<ServiceCategory> businessCategories = [
     ServiceCategory(name: 'Plumbing', imagePath: 'assets/images/plumbing.png'),
-    ServiceCategory(name: 'Electrician', imagePath: 'assets/images/electrician.png'),
+    ServiceCategory(
+        name: 'Electrician', imagePath: 'assets/images/electrician.png'),
   ];
 
   final ImagePicker _picker = ImagePicker();
@@ -29,7 +30,12 @@ class _BusinessPageState extends State<BusinessPage> {
     String? selectedCategory; // Dropdown selection
 
     // Predefined categories
-    List<String> categories = ['Plumbing', 'Electrician', 'Carpentry', 'Cleaning'];
+    List<String> categories = [
+      'Plumbing',
+      'Electrician',
+      'Carpentry',
+      'Cleaning'
+    ];
 
     showDialog(
       context: context,
@@ -43,7 +49,7 @@ class _BusinessPageState extends State<BusinessPage> {
                   children: [
                     // Dropdown for selecting category
                     DropdownButtonFormField<String>(
-                      value: selectedCategory,
+                      initialValue: selectedCategory,
                       decoration: const InputDecoration(
                         labelText: 'Select Category',
                         border: OutlineInputBorder(),
@@ -107,7 +113,8 @@ class _BusinessPageState extends State<BusinessPage> {
                     // Image picker
                     GestureDetector(
                       onTap: () async {
-                        final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+                        final XFile? image = await _picker.pickImage(
+                            source: ImageSource.gallery);
                         if (image != null) {
                           setStateDialog(() {
                             pickedImage = File(image.path);
@@ -136,19 +143,24 @@ class _BusinessPageState extends State<BusinessPage> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    if (nameController.text.isNotEmpty && selectedCategory != null) {
+                    if (nameController.text.isNotEmpty &&
+                        selectedCategory != null) {
                       setState(() {
                         businessCategories.add(
                           ServiceCategory(
-                            name: '${selectedCategory!} - ${nameController.text}',
-                            imagePath: pickedImage?.path ?? 'assets/images/default.png',
+                            name:
+                                '${selectedCategory!} - ${nameController.text}',
+                            imagePath: pickedImage?.path ??
+                                'assets/images/default.png',
                           ),
                         );
                       });
                       Navigator.pop(context);
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please enter name and select category')),
+                        const SnackBar(
+                            content:
+                                Text('Please enter name and select category')),
                       );
                     }
                   },
