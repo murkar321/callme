@@ -88,13 +88,15 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         name: 'Wedding Event',
         price: 8000,
         imagePath: 'assets/e3.jpg',
-        description: 'Capture wedding-related events such as receptions or mehendi.',
+        description:
+            'Capture wedding-related events such as receptions or mehendi.',
       ),
       ServiceProduct(
         name: 'College Event',
         price: 1000,
         imagePath: 'assets/e4.jpg',
-        description: 'Budget-friendly photography for college events and fests.',
+        description:
+            'Budget-friendly photography for college events and fests.',
       ),
     ],
     'Birthday': [
@@ -102,7 +104,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         name: 'Birthday Shoot Half Day',
         price: 1000,
         imagePath: 'assets/bi1.jpg',
-        description: 'Half-day birthday shoot including decorations and cake-cutting.',
+        description:
+            'Half-day birthday shoot including decorations and cake-cutting.',
       ),
       ServiceProduct(
         name: 'Birthday Shoot Full Day',
@@ -159,7 +162,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         name: 'Cleaning',
         price: 1200,
         imagePath: 'assets/k1.jpg',
-        description: 'Complete kitchen cleaning service with deep sanitization.',
+        description:
+            'Complete kitchen cleaning service with deep sanitization.',
       ),
       ServiceProduct(
         name: 'Cleaning',
@@ -217,13 +221,15 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         name: 'Office Floor',
         price: 2000,
         imagePath: 'assets/f1.jpg',
-        description: 'Office floor cleaning using industrial vacuum and polish.',
+        description:
+            'Office floor cleaning using industrial vacuum and polish.',
       ),
       ServiceProduct(
         name: 'Home Floor',
         price: 1200,
         imagePath: 'assets/f2.jpg',
-        description: 'Home floor cleaning with disinfectants and shine treatment.',
+        description:
+            'Home floor cleaning with disinfectants and shine treatment.',
       ),
       ServiceProduct(
         name: 'Mall Floor',

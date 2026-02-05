@@ -1,19 +1,19 @@
 import 'dart:math';
+import 'package:callme/models/cart.dart';
+import 'package:callme/models/service_product.dart';
 import 'package:flutter/material.dart';
-import 'package:callme/screens/cart.dart';
 import 'package:callme/screens/map_picker_page.dart';
 import 'package:callme/data/orders_data.dart';
 import 'package:callme/models/order_model.dart';
-import 'package:callme/models/service_product.dart';
 
 class BookingPage extends StatefulWidget {
   final String serviceName;
-  final ServiceProduct product;
 
   const BookingPage({
     super.key,
     required this.serviceName,
-    required this.product,
+    required Map<ServiceProduct, int> cartItems,
+    required ServiceProduct product,
   });
 
   @override
@@ -27,15 +27,13 @@ class _BookingPageState extends State<BookingPage> {
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
 
-  double get totalAmount => Cart.items.fold(0, (sum, item) => sum + item.price);
-
-  @override
-  void initState() {
-    super.initState();
-    // Automatically add the selected product to Cart if not already added
-    if (!Cart.items.contains(widget.product)) {
-      Cart.items.add(widget.product);
-    }
+  /// ✅ TOTAL AMOUNT WITH QUANTITIES
+  double get totalAmount {
+    double total = 0;
+    Cart.quantities.forEach((product, qty) {
+      total += product.price * qty;
+    });
+    return total;
   }
 
   @override
@@ -149,6 +147,7 @@ class _BookingPageState extends State<BookingPage> {
     );
   }
 
+  /// ✅ SERVICE SUMMARY WITH QUANTITY
   Widget _serviceSummaryCard() {
     return Container(
       width: double.infinity,
@@ -172,13 +171,15 @@ class _BookingPageState extends State<BookingPage> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          ...Cart.items.map(
-            (item) => ListTile(
+          ...Cart.quantities.entries.map((entry) {
+            final product = entry.key;
+            final qty = entry.value;
+            return ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text(item.name),
-              trailing: Text("₹${item.price}"),
-            ),
-          ),
+              title: Text('${product.name}  x$qty'),
+              trailing: Text('₹${product.price * qty}'),
+            );
+          }),
           const Divider(),
           Text(
             'Total Amount: ₹${totalAmount.toStringAsFixed(0)}',
@@ -271,7 +272,9 @@ class _BookingPageState extends State<BookingPage> {
 
     final order = OrderModel(
       id: Random().nextInt(999999).toString(),
-      services: Cart.items.map((e) => e.name).toList(),
+      services: Cart.quantities.entries
+          .map((e) => '${e.key.name} x${e.value}')
+          .toList(),
       date: selectedDate!,
       time: selectedTime!.format(context),
       address: addressController.text,
@@ -281,10 +284,12 @@ class _BookingPageState extends State<BookingPage> {
     );
 
     OrdersData.orders.add(order);
+    Cart.quantities.clear();
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Booking Confirmed')),
     );
-    Cart.items.clear();
+
     Navigator.pop(context);
   }
 }

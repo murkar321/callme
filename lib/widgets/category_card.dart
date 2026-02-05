@@ -2,20 +2,27 @@ import 'package:flutter/material.dart';
 
 class CategoryCard extends StatelessWidget {
   final String name;
-  final String imagePath;
+
+  // HomePage uses this
+  final String? imagePath;
+
+  // BusinessPage uses this
+  final IconData? icon;
+
   final bool showName; // true = horizontal, false = vertical
 
   const CategoryCard({
     super.key,
     required this.name,
-    required this.imagePath,
+    this.imagePath,
+    this.icon,
     this.showName = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    // 🔹 HORIZONTAL CARD
     if (showName) {
-      // 🔹 HORIZONTAL CARD (UNCHANGED LOGIC)
       return Container(
         width: 90,
         margin: const EdgeInsets.symmetric(horizontal: 6),
@@ -35,13 +42,18 @@ class CategoryCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                imagePath,
-                height: 55,
-                width: 55,
-                fit: BoxFit.cover,
-                cacheWidth: 200,
-              ),
+              child: (imagePath != null && imagePath!.isNotEmpty)
+                  ? Image.asset(
+                      imagePath!,
+                      height: 55,
+                      width: 55,
+                      fit: BoxFit.cover,
+                    )
+                  : Icon(
+                      icon ?? Icons.miscellaneous_services,
+                      size: 40,
+                      color: Theme.of(context).primaryColor,
+                    ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -57,7 +69,7 @@ class CategoryCard extends StatelessWidget {
       );
     }
 
-    // 🔹 VERTICAL CARD (YOUTUBE STYLE)
+    // 🔹 VERTICAL CARD
     return Card(
       elevation: 2,
       margin: EdgeInsets.zero,
@@ -68,39 +80,40 @@ class CategoryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 🖼 Thumbnail (16:9)
+          // 🖼 Thumbnail
           AspectRatio(
             aspectRatio: 16 / 9,
-            child: Image.asset(
-              imagePath,
-              fit: BoxFit.cover,
-              cacheWidth: 800,
-              errorBuilder: (_, __, ___) => const Center(
-                child: Icon(Icons.image_not_supported),
-              ),
+            child: Center(
+              child: (imagePath != null && imagePath!.isNotEmpty)
+                  ? Image.asset(
+                      imagePath!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                    )
+                  : Icon(
+                      icon ?? Icons.miscellaneous_services,
+                      size: 48,
+                      color: Theme.of(context).primaryColor,
+                    ),
             ),
           ),
 
-          // 📄 Info section (like YouTube)
+          // 📄 Info section
           Padding(
             padding: const EdgeInsets.all(10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Left icon (channel-style)
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 18,
-                  backgroundColor: Colors.blueAccent,
+                  backgroundColor: Theme.of(context).primaryColor,
                   child: Icon(
-                    Icons.miscellaneous_services,
+                    icon ?? Icons.miscellaneous_services,
                     size: 18,
                     color: Colors.white,
                   ),
                 ),
-
                 const SizedBox(width: 10),
-
-                // Title + subtitle
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,8 +138,6 @@ class CategoryCard extends StatelessWidget {
                     ],
                   ),
                 ),
-
-                // More options icon
                 const Icon(
                   Icons.more_vert,
                   size: 18,

@@ -12,30 +12,27 @@ class BusinessPage extends StatefulWidget {
 }
 
 class _BusinessPageState extends State<BusinessPage> {
-  List<ServiceCategory> businessCategories = [
-    ServiceCategory(name: 'Plumbing', imagePath: 'assets/images/plumbing.png'),
-    ServiceCategory(
-        name: 'Electrician', imagePath: 'assets/images/electrician.png'),
-  ];
-
   final ImagePicker _picker = ImagePicker();
 
-  // Function to show dialog to add new service
-  void _showAddServiceDialog() {
+  // Services using Flutter icons
+  List<ServiceCategory> businessCategories = [
+    ServiceCategory(name: 'Bakery', icon: Icons.bakery_dining),
+    ServiceCategory(name: 'Photography', icon: Icons.camera_alt),
+    ServiceCategory(name: 'Cleaning', icon: Icons.cleaning_services),
+    ServiceCategory(name: 'Carpenter', icon: Icons.carpenter),
+    ServiceCategory(name: 'Gym', icon: Icons.fitness_center),
+    ServiceCategory(name: 'Laundry', icon: Icons.local_laundry_service),
+    ServiceCategory(name: 'Mechanic', icon: Icons.car_repair),
+    ServiceCategory(name: 'Water Service', icon: Icons.water_drop),
+  ];
+
+  void _showAddServiceDialog(ServiceCategory service) {
     final TextEditingController nameController = TextEditingController();
     final TextEditingController mobileController = TextEditingController();
     final TextEditingController emailController = TextEditingController();
     final TextEditingController addressController = TextEditingController();
-    File? pickedImage;
-    String? selectedCategory; // Dropdown selection
 
-    // Predefined categories
-    List<String> categories = [
-      'Plumbing',
-      'Electrician',
-      'Carpentry',
-      'Cleaning'
-    ];
+    File? pickedImage;
 
     showDialog(
       context: context,
@@ -43,42 +40,24 @@ class _BusinessPageState extends State<BusinessPage> {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
-              title: const Text('Add New Service'),
+              title: Text('Add ${service.name} Details'),
               content: SingleChildScrollView(
                 child: Column(
                   children: [
-                    // Dropdown for selecting category
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedCategory,
-                      decoration: const InputDecoration(
-                        labelText: 'Select Category',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: categories.map((category) {
-                        return DropdownMenuItem(
-                          value: category,
-                          child: Text(category),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setStateDialog(() {
-                          selectedCategory = value;
-                        });
-                      },
+                    Icon(
+                      service.icon,
+                      size: 60,
+                      color: Theme.of(context).primaryColor,
                     ),
-                    const SizedBox(height: 10),
-
-                    // Service Name
+                    const SizedBox(height: 12),
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(
-                        labelText: 'Service Name',
+                        labelText: 'Business Name',
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 10),
-
-                    // Mobile
                     TextField(
                       controller: mobileController,
                       keyboardType: TextInputType.phone,
@@ -88,8 +67,6 @@ class _BusinessPageState extends State<BusinessPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
-
-                    // Email
                     TextField(
                       controller: emailController,
                       keyboardType: TextInputType.emailAddress,
@@ -99,8 +76,6 @@ class _BusinessPageState extends State<BusinessPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
-
-                    // Address
                     TextField(
                       controller: addressController,
                       decoration: const InputDecoration(
@@ -109,12 +84,11 @@ class _BusinessPageState extends State<BusinessPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
-
-                    // Image picker
                     GestureDetector(
                       onTap: () async {
                         final XFile? image = await _picker.pickImage(
-                            source: ImageSource.gallery);
+                          source: ImageSource.gallery,
+                        );
                         if (image != null) {
                           setStateDialog(() {
                             pickedImage = File(image.path);
@@ -122,7 +96,7 @@ class _BusinessPageState extends State<BusinessPage> {
                         }
                       },
                       child: Container(
-                        height: 150,
+                        height: 140,
                         width: double.infinity,
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey),
@@ -143,28 +117,18 @@ class _BusinessPageState extends State<BusinessPage> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    if (nameController.text.isNotEmpty &&
-                        selectedCategory != null) {
-                      setState(() {
-                        businessCategories.add(
-                          ServiceCategory(
-                            name:
-                                '${selectedCategory!} - ${nameController.text}',
-                            imagePath: pickedImage?.path ??
-                                'assets/images/default.png',
-                          ),
-                        );
-                      });
+                    if (nameController.text.isNotEmpty) {
+                      // Save logic later
                       Navigator.pop(context);
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                            content:
-                                Text('Please enter name and select category')),
+                          content: Text('Please enter business name'),
+                        ),
                       );
                     }
                   },
-                  child: const Text('Add'),
+                  child: const Text('Save'),
                 ),
               ],
             );
@@ -178,7 +142,7 @@ class _BusinessPageState extends State<BusinessPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Business Services'),
+        title: const Text('Select Your Business Service'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -188,22 +152,21 @@ class _BusinessPageState extends State<BusinessPage> {
             crossAxisCount: 2,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: 1,
           ),
           itemBuilder: (context, index) {
             final category = businessCategories[index];
-            return CategoryCard(
-              name: category.name,
-              imagePath: category.imagePath,
+            return GestureDetector(
+              onTap: () => _showAddServiceDialog(category),
+              child: CategoryCard(
+                name: category.name,
+                icon: category.icon,
+                showName: true,
+                imagePath: '',
+              ),
             );
           },
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddServiceDialog,
-        child: const Icon(Icons.add),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }
