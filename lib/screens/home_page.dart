@@ -23,6 +23,7 @@ class _HomePageState extends State<HomePage> {
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
     ServiceCategory(name: 'Mechanic', imagePath: 'assets/mechanic.png'),
     ServiceCategory(name: 'Water Service', imagePath: 'assets/water.png'),
+    ServiceCategory(name: 'Real Estate', imagePath: 'assets/real_estate.png'), // ✅ corrected path
   ];
 
   String searchQuery = '';
@@ -125,7 +126,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 Horizontal Categories (showName = true)
+            // 🔹 Horizontal Categories
             SizedBox(
               height: 110,
               child: NotificationListener<ScrollNotification>(
@@ -172,7 +173,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 Vertical YouTube-Style Feed (showName = false)
+            // 🔹 Vertical Feed
             Expanded(
               child: ListView.builder(
                 itemCount: filteredCategories.length,
@@ -197,7 +198,7 @@ class _HomePageState extends State<HomePage> {
                       child: CategoryCard(
                         name: category.name,
                         imagePath: category.imagePath,
-                        showName: false, // 👈 YouTube style
+                        showName: false,
                       ),
                     ),
                   );
