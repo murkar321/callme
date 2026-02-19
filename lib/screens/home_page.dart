@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/screens/service_detail_page.dart';
+import 'package:callme/screens/real_estate_interactive_page.dart';
 import 'package:callme/widgets/category_card.dart';
 
 class HomePage extends StatefulWidget {
@@ -23,7 +24,7 @@ class _HomePageState extends State<HomePage> {
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
     ServiceCategory(name: 'Mechanic', imagePath: 'assets/mechanic.png'),
     ServiceCategory(name: 'Water Service', imagePath: 'assets/water.png'),
-    ServiceCategory(name: 'Real Estate', imagePath: 'assets/real_estate.png'), // ✅ corrected path
+    ServiceCategory(name: 'Real Estate', imagePath: 'assets/real_estate.png'), // ✅ added
   ];
 
   String searchQuery = '';
@@ -104,7 +105,7 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            // 🔍 Search
+            // 🔍 Search bar
             TextField(
               decoration: InputDecoration(
                 hintText: 'Search for a service...',
@@ -126,7 +127,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 Horizontal Categories
+            // 🔹 Horizontal category list
             SizedBox(
               height: 110,
               child: NotificationListener<ScrollNotification>(
@@ -173,7 +174,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 Vertical Feed
+            // 🔹 Vertical category list
             Expanded(
               child: ListView.builder(
                 itemCount: filteredCategories.length,
@@ -186,14 +187,23 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.only(bottom: 14),
                     child: GestureDetector(
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ServiceDetailPage(
-                              serviceName: category.name,
+                        // ✅ Custom navigation for Real Estate
+                      if (category.name == 'Real Estate') {
+                          Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const RealEstateInteractivePage()),
+                  );
+                }
+                else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ServiceDetailPage(
+                                serviceName: category.name,
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        }
                       },
                       child: CategoryCard(
                         name: category.name,
