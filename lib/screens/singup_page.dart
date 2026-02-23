@@ -15,37 +15,55 @@ class SignupPage extends StatefulWidget {
 class _SignupPageState extends State<SignupPage> {
   final TextEditingController phoneController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
   bool loading = false;
 
-  // 🔹 Google Sign-In
+  // ✅ Google Sign-In Function
   Future<void> signInWithGoogle() async {
     try {
       setState(() => loading = true);
 
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      // 🔴 IMPORTANT: Use your WEB client ID here
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        serverClientId:
+            "240198181802-nj610u1pv5e5gp0lec2bk7pno88dnb8u.apps.googleusercontent.com",
+      );
 
-      if (googleUser == null) return;
+      // Start sign in
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
+      // User cancelled
+      if (googleUser == null) {
+        setState(() => loading = false);
+        return;
+      }
+
+      // Get authentication
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
+      // Create Firebase credential
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final userCredential = await _auth.signInWithCredential(credential);
+      // Sign in to Firebase
+      final UserCredential userCredential =
+          await _auth.signInWithCredential(credential);
 
-      // Save user to Firestore
+      // Save user in Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
           .set({
         'email': userCredential.user!.email,
+        'name': userCredential.user!.displayName,
         'provider': 'google',
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+      // Navigate
       Navigator.pushReplacementNamed(context, '/bottomnav');
     } catch (e) {
       ScaffoldMessenger.of(context)
@@ -76,7 +94,7 @@ class _SignupPageState extends State<SignupPage> {
               ),
               const SizedBox(height: 40),
 
-              // 📞 Phone input
+              // 📞 Phone Input
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
@@ -92,13 +110,14 @@ class _SignupPageState extends State<SignupPage> {
 
               const SizedBox(height: 24),
 
-              // 📲 Send OTP
+              // 📲 Send OTP Button
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {
                     final phone = phoneController.text.trim();
+
                     if (phone.length != 10) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -106,6 +125,7 @@ class _SignupPageState extends State<SignupPage> {
                       );
                       return;
                     }
+
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -116,15 +136,19 @@ class _SignupPageState extends State<SignupPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color.fromARGB(255, 63, 81, 181),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: const Text("Send OTP", style: TextStyle(fontSize: 18,color: Color.fromARGB(255, 255, 255, 255),)),
+                  child: const Text(
+                    "Send OTP",
+                    style: TextStyle(fontSize: 18, color: Colors.white),
+                  ),
                 ),
               ),
 
               const SizedBox(height: 20),
 
-              // 🔹 Divider
+              // Divider
               Row(
                 children: const [
                   Expanded(child: Divider()),
@@ -138,7 +162,7 @@ class _SignupPageState extends State<SignupPage> {
 
               const SizedBox(height: 20),
 
-              // 🔐 Google login
+              // 🔐 Google Login Button
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -147,8 +171,10 @@ class _SignupPageState extends State<SignupPage> {
                     "assets/google.png",
                     height: 22,
                   ),
-                  label: const Text("Continue with Google"),
-                  onPressed: signInWithGoogle,
+                  label: loading
+                      ? const CircularProgressIndicator()
+                      : const Text("Continue with Google"),
+                  onPressed: loading ? null : signInWithGoogle,
                 ),
               ),
 
