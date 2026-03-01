@@ -11,58 +11,55 @@ class MapPickerPage extends StatefulWidget {
 }
 
 class _MapPickerPageState extends State<MapPickerPage> {
-  // ignore: unused_field
   GoogleMapController? _mapController;
-  LatLng? _selectedLatLng;
-  String _selectedAddress = '';
+  LatLng? _currentLatLng;
+  String _currentAddress = '';
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _initLocation();
+    _getCurrentLocation();
   }
 
-  Future<void> _initLocation() async {
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
+  Future<void> _getCurrentLocation() async {
+    LocationPermission permission = await Geolocator.checkPermission();
 
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        _showError('Location permission permanently denied');
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      setState(() {
-        _selectedLatLng = LatLng(position.latitude, position.longitude);
-        _loading = false;
-      });
-    } catch (e) {
-      _showError('Unable to fetch location');
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
     }
+
+    if (permission == LocationPermission.deniedForever) {
+      _showError("Location permission denied forever");
+      return;
+    }
+
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    _currentLatLng = LatLng(position.latitude, position.longitude);
+    await _getAddressFromLatLng(_currentLatLng!);
+
+    setState(() {
+      _loading = false;
+    });
   }
 
-  Future<void> _fetchAddress(LatLng latLng) async {
+  Future<void> _getAddressFromLatLng(LatLng latLng) async {
     try {
-      final placemarks =
+      List<Placemark> placemarks =
           await placemarkFromCoordinates(latLng.latitude, latLng.longitude);
 
-      final place = placemarks.first;
+      Placemark place = placemarks.first;
 
       setState(() {
-        _selectedLatLng = latLng;
-        _selectedAddress =
-            '${place.street}, ${place.locality}, ${place.administrativeArea}, ${place.postalCode}';
+        _currentLatLng = latLng;
+        _currentAddress =
+            "${place.street}, ${place.locality}, ${place.administrativeArea}, ${place.postalCode}";
       });
-    } catch (_) {
-      _showError('Unable to fetch address');
+    } catch (e) {
+      _showError("Unable to fetch address");
     }
   }
 
@@ -74,7 +71,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading || _selectedLatLng == null) {
+    if (_loading || _currentLatLng == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -82,37 +79,78 @@ class _MapPickerPageState extends State<MapPickerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Select Address'),
+        title: const Text("Select Address"),
         centerTitle: true,
       ),
       body: Stack(
         children: [
           GoogleMap(
             initialCameraPosition: CameraPosition(
-              target: _selectedLatLng!,
+              target: _currentLatLng!,
               zoom: 16,
             ),
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
-            onMapCreated: (controller) => _mapController = controller,
-            onTap: _fetchAddress,
-            markers: {
-              Marker(
-                markerId: const MarkerId('selected'),
-                position: _selectedLatLng!,
-              ),
+            zoomControlsEnabled: false,
+            onMapCreated: (controller) {
+              _mapController = controller;
+            },
+
+            // 🔥 REAL-TIME ADDRESS UPDATE
+            onCameraIdle: () async {
+              if (_mapController != null) {
+                LatLngBounds bounds = await _mapController!.getVisibleRegion();
+
+                LatLng center = LatLng(
+                  (bounds.northeast.latitude + bounds.southwest.latitude) / 2,
+                  (bounds.northeast.longitude + bounds.southwest.longitude) / 2,
+                );
+
+                await _getAddressFromLatLng(center);
+              }
             },
           ),
 
-          // 🔹 Confirm button
+          // 🔹 Center Pin
+          const Center(
+            child: Icon(
+              Icons.location_pin,
+              size: 40,
+              color: Colors.red,
+            ),
+          ),
+
+          // 🔹 Address Card
+          Positioned(
+            bottom: 90,
+            left: 16,
+            right: 16,
+            child: Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 5,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  _currentAddress.isEmpty
+                      ? "Move map to select address"
+                      : _currentAddress,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            ),
+          ),
+
+          // 🔹 Confirm Button
           Positioned(
             bottom: 20,
             left: 16,
             right: 16,
             child: ElevatedButton(
-              onPressed: _selectedAddress.isEmpty
+              onPressed: _currentAddress.isEmpty
                   ? null
-                  : () => Navigator.pop(context, _selectedAddress),
+                  : () => Navigator.pop(context, _currentAddress),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
@@ -120,7 +158,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
                 ),
               ),
               child: const Text(
-                'Confirm Address',
+                "Confirm Address",
                 style: TextStyle(fontSize: 16),
               ),
             ),

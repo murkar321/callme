@@ -15,62 +15,68 @@ class SignupPage extends StatefulWidget {
 class _SignupPageState extends State<SignupPage> {
   final TextEditingController phoneController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   bool loading = false;
 
-  // ✅ Google Sign-In Function
+  // ✅ Google Sign-In (Android + Web)
   Future<void> signInWithGoogle() async {
     try {
       setState(() => loading = true);
 
-      // 🔴 IMPORTANT: Use your WEB client ID here
-      final GoogleSignIn googleSignIn = GoogleSignIn(
-        serverClientId:
-            "240198181802-nj610u1pv5e5gp0lec2bk7pno88dnb8u.apps.googleusercontent.com",
-      );
+      // 🔹 Start Google Sign-In
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
-      // Start sign in
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-
-      // User cancelled
+      // If user cancels
       if (googleUser == null) {
         setState(() => loading = false);
         return;
       }
 
-      // Get authentication
+      // 🔹 Get authentication details
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      // Create Firebase credential
-      final credential = GoogleAuthProvider.credential(
+      // 🔹 Create Firebase credential
+      final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // Sign in to Firebase
+      // 🔹 Sign in to Firebase
       final UserCredential userCredential =
           await _auth.signInWithCredential(credential);
 
-      // Save user in Firestore
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .set({
-        'email': userCredential.user!.email,
-        'name': userCredential.user!.displayName,
-        'provider': 'google',
-        'createdAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      final User? user = userCredential.user;
 
-      // Navigate
+      if (user != null) {
+        // 🔹 Save user data in Firestore
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'uid': user.uid,
+          'email': user.email,
+          'name': user.displayName,
+          'photo': user.photoURL,
+          'provider': 'google',
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      if (!mounted) return;
+
       Navigator.pushReplacementNamed(context, '/bottomnav');
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Login Failed: $e")),
+      );
     } finally {
       setState(() => loading = false);
     }
+  }
+
+  @override
+  void dispose() {
+    phoneController.dispose();
+    super.dispose();
   }
 
   @override
@@ -134,7 +140,7 @@ class _SignupPageState extends State<SignupPage> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color.fromARGB(255, 63, 81, 181),
+                    backgroundColor: const Color(0xFF3F51B5),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -172,7 +178,13 @@ class _SignupPageState extends State<SignupPage> {
                     height: 22,
                   ),
                   label: loading
-                      ? const CircularProgressIndicator()
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Text("Continue with Google"),
                   onPressed: loading ? null : signInWithGoogle,
                 ),

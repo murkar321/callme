@@ -16,7 +16,7 @@ class _BusinessPageState extends State<BusinessPage> {
 
   // Services using Flutter icons
   List<ServiceCategory> businessCategories = [
-    ServiceCategory(name: 'Bakery', icon: Icons.bakery_dining),
+    ServiceCategory(name: 'Real Estate', icon: Icons.bakery_dining),
     ServiceCategory(name: 'Photography', icon: Icons.camera_alt),
     ServiceCategory(name: 'Cleaning', icon: Icons.cleaning_services),
     ServiceCategory(name: 'Carpenter', icon: Icons.carpenter),

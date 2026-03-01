@@ -410,128 +410,48 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
     ],
   },
 
-  // 🧁 BAKERY
-  'Bakery': {
-    'Bread': [
+  // REAL ESTATE
+  'Real Estate': {
+    '1BHK': [
       ServiceProduct(
-        name: 'Bread',
-        price: 40,
-        imagePath: 'assets/1b.jpg',
-        description: 'Freshly baked white bread loaf.',
+        name: '1BHK',
+        price: 15000,
+        imagePath: 'assets/1bhk.jfif',
+        description: 'Complete 1BHK interior design and decoration service.',
       ),
       ServiceProduct(
-        name: 'Bread',
-        price: 40,
-        imagePath: 'assets/2b.jpg',
-        description: 'Whole wheat multigrain bread.',
-      ),
-      ServiceProduct(
-        name: 'Bread',
-        price: 40,
-        imagePath: 'assets/3b.jpg',
-        description: 'Soft milk bread baked fresh daily.',
-      ),
-      ServiceProduct(
-        name: 'Bread',
-        price: 40,
-        imagePath: 'assets/4b.jpg',
-        description: 'Healthy oats bread loaf.',
+        name: '1BHK',
+        price: 15000,
+        imagePath: 'assets/1bhk.jfif',
+        description: 'Complete 1BHK interior design and decoration service.',
       ),
     ],
-    'Cakes': [
+    '2BHK': [
       ServiceProduct(
-        name: 'Chocolate',
-        price: 350,
-        imagePath: 'assets/1c.jpg',
-        description: 'Delicious chocolate cake with frosting.',
+        name: '2BHK',
+        price: 25000,
+        imagePath: 'assets/2bhk.jfif',
+        description: 'Complete 2BHK interior design and decoration service.',
       ),
       ServiceProduct(
-        name: 'Strawberry',
-        price: 60,
-        imagePath: 'assets/2c.jpg',
-        description: 'Soft sponge cake with strawberry flavor.',
-      ),
-      ServiceProduct(
-        name: 'Minion Shape',
-        price: 60,
-        imagePath: 'assets/3c.jpg',
-        description: 'Cartoon-themed minion shape cake.',
-      ),
-      ServiceProduct(
-        name: 'Berry',
-        price: 60,
-        imagePath: 'assets/4c.jpg',
-        description: 'Berry-flavored cream cake.',
-      ),
-      ServiceProduct(
-        name: 'Mango',
-        price: 60,
-        imagePath: 'assets/5c.jpg',
-        description: 'Seasonal mango cake with whipped cream.',
+        name: '2BHK',
+        price: 25000,
+        imagePath: 'assets/2bhk.jfif',
+        description: 'Complete 2BHK interior design and decoration service.',
       ),
     ],
-    'Cupcakes': [
+    '3BHK': [
       ServiceProduct(
-        name: 'Chocolate',
-        price: 350,
-        imagePath: 'assets/cupcake.jpg',
-        description: 'Chocolate cupcake topped with rich frosting.',
+        name: '3BHK',
+        price: 35000,
+        imagePath: 'assets/3bhk.jfif',
+        description: 'Complete 3BHK interior design and decoration service.',
       ),
       ServiceProduct(
-        name: 'Creamy',
-        price: 60,
-        imagePath: 'assets/creamy.jpg',
-        description: 'Soft vanilla cupcake with creamy icing.',
-      ),
-      ServiceProduct(
-        name: 'Mixfruit',
-        price: 60,
-        imagePath: 'assets/mfruit.jpg',
-        description: 'Cupcake topped with fresh mixed fruits.',
-      ),
-      ServiceProduct(
-        name: 'Redvelvet',
-        price: 60,
-        imagePath: 'assets/red velvet.jpg',
-        description: 'Classic red velvet cupcake with cream cheese frosting.',
-      ),
-      ServiceProduct(
-        name: 'Carmel',
-        price: 60,
-        imagePath: 'assets/carmel.jpg',
-        description: 'Caramel-drizzled cupcake for sweet lovers.',
-      ),
-      ServiceProduct(
-        name: 'Berry',
-        price: 60,
-        imagePath: 'assets/cherry.jpg',
-        description: 'Berry-flavored cupcake with cherry topping.',
-      ),
-    ],
-    'Pastries': [
-      ServiceProduct(
-        name: 'Chocolate',
-        price: 60,
-        imagePath: 'assets/choco.jpg',
-        description: 'Rich chocolate pastry slice.',
-      ),
-      ServiceProduct(
-        name: 'Strawberry',
-        price: 60,
-        imagePath: 'assets/straw.jpg',
-        description: 'Strawberry cream pastry with soft layers.',
-      ),
-      ServiceProduct(
-        name: 'Truffle',
-        price: 60,
-        imagePath: 'assets/trufle.jpg',
-        description: 'Chocolate truffle pastry with dark cocoa.',
-      ),
-      ServiceProduct(
-        name: 'Browniee',
-        price: 60,
-        imagePath: 'assets/browniee.jpg',
-        description: 'Fudgy brownie pastry topped with nuts.',
+        name: '3BHK',
+        price: 35000,
+        imagePath: 'assets/3bhk.jfif',
+        description: 'Complete 3BHK interior design and decoration service.',
       ),
     ],
   },
