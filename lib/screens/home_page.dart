@@ -1,3 +1,4 @@
+import 'package:callme/screens/salon_page.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/screens/service_detail_page.dart';
@@ -15,14 +16,13 @@ class _HomePageState extends State<HomePage> {
   double _offset = 0.0;
 
   final List<ServiceCategory> categories = [
-    ServiceCategory(name: 'Bakery', imagePath: 'assets/bakery.png'),
+    ServiceCategory(name: 'Salon Service', imagePath: 'assets/salon.png'),
     ServiceCategory(name: 'Photography', imagePath: 'assets/photo.png'),
     ServiceCategory(name: 'Cleaning', imagePath: 'assets/k1.jpg'),
     ServiceCategory(name: 'Carpenter', imagePath: 'assets/carpt.png'),
     ServiceCategory(name: 'Gym', imagePath: 'assets/gym.jfif'),
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
     ServiceCategory(name: 'Mechanic', imagePath: 'assets/mechanic.png'),
-    ServiceCategory(name: 'Water Service', imagePath: 'assets/water.png'),
     ServiceCategory(name: 'Real Estate', imagePath: 'assets/real_estate.png'),
   ];
 
@@ -86,6 +86,17 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  // 🔹 Service Router
+  Widget getServicePage(String serviceName) {
+    switch (serviceName) {
+      case "Salon Service":
+        return const SalonPage();
+
+      default:
+        return ServiceDetailPage(serviceName: serviceName);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -104,6 +115,7 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
+
             // 🔍 Search bar
             TextField(
               decoration: InputDecoration(
@@ -140,10 +152,12 @@ class _HomePageState extends State<HomePage> {
                   physics: const BouncingScrollPhysics(),
                   itemCount: filteredHorizontal.length,
                   itemBuilder: (context, index) {
+
                     final category = filteredHorizontal[index];
                     final isSelected = selectedCategory == category.name;
 
                     final width = 106.0;
+
                     final scale = 1 -
                         (((_offset / width) - index).abs() * 0.18)
                             .clamp(0.0, 0.18);
@@ -180,21 +194,24 @@ class _HomePageState extends State<HomePage> {
                 cacheExtent: 700,
                 padding: const EdgeInsets.only(bottom: 12),
                 itemBuilder: (context, index) {
+
                   final category = filteredCategories[index];
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
                     child: GestureDetector(
+
                       onTap: () {
+
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => ServiceDetailPage(
-                              serviceName: category.name,
-                            ),
+                            builder: (_) => getServicePage(category.name),
                           ),
                         );
+
                       },
+
                       child: CategoryCard(
                         name: category.name,
                         imagePath: category.imagePath,
