@@ -19,12 +19,18 @@ class ServiceDetailPage extends StatefulWidget {
 class _ServiceDetailPageState extends State<ServiceDetailPage> {
   late String selectedCategory;
 
-  final Color primaryColor = const Color(0xFF7B1FA2);
+  final Color primaryColor = const Color.fromARGB(255, 174, 145, 186);
 
   @override
   void initState() {
     super.initState();
     selectedCategory = serviceProducts[widget.serviceName]!.keys.first;
+
+    if (widget.serviceName == "Laundry") {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showLaundryBottomSheet();
+      });
+    }
   }
 
   int get totalItems {
@@ -38,9 +44,93 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   double get totalAmount {
     double total = 0;
     Cart.quantities.forEach((product, qty) {
-      total += product.price * qty;
+      total += product.calculatedFinalPrice * qty;
     });
     return total;
+  }
+
+  void showLaundryBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.local_laundry_service, color: Colors.blue),
+                  SizedBox(width: 10),
+                  Text(
+                    "Laundry Guide",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildLaundryRow(Icons.checkroom, "Cotton", "₹50 / item"),
+              _buildLaundryRow(Icons.auto_awesome, "Silk", "₹120 / item"),
+              _buildLaundryRow(Icons.ac_unit, "Wool", "₹100 / item"),
+              _buildLaundryRow(Icons.work, "Denim", "₹80 / item"),
+              _buildLaundryRow(Icons.star, "Delicate", "₹150 / item"),
+              const SizedBox(height: 16),
+              const Text(
+                "Prices may vary based on fabric condition & service type.",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: primaryColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text("Got it"),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLaundryRow(IconData icon, String fabric, String price) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.blue),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              fabric,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          Text(
+            price,
+            style: const TextStyle(
+              color: Colors.blue,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -50,6 +140,8 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
+
+      /// APP BAR
       appBar: AppBar(
         title: Text(widget.serviceName),
         backgroundColor: primaryColor,
@@ -92,8 +184,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
         ],
       ),
 
+      /// BODY
       body: Row(
         children: [
+
           /// LEFT CATEGORY PANEL
           Container(
             width: 92,
@@ -125,7 +219,6 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundColor: Colors.grey.shade200,
                           backgroundImage:
                               AssetImage(categoryProducts.first.imagePath),
                         ),
@@ -138,7 +231,9 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color: isSelected ? primaryColor : Colors.black,
+                            color: isSelected
+                                ? primaryColor
+                                : Colors.grey,
                           ),
                         ),
                       ],
@@ -149,13 +244,13 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
             ),
           ),
 
-          /// RIGHT PRODUCT GRID
+          /// RIGHT PRODUCTS GRID
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(12),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 0.68, // 🔥 FIXED FOR REAL DEVICES
+                childAspectRatio: 0.72,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
@@ -168,57 +263,95 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
+                      BoxShadow(color: Colors.black12, blurRadius: 8),
                     ],
                   ),
                   child: Column(
                     children: [
+
                       /// IMAGE
                       ClipRRect(
                         borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(18),
                         ),
-                        child: AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: Image.asset(
-                            product.imagePath,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
+                        child: Image.asset(
+                          product.imagePath,
+                          height: 90,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
                         ),
                       ),
 
-                      /// CONTENT (FLEXIBLE – NO OVERFLOW)
+                      /// CONTENT
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.all(10),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
+
+                              if (product.discount != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    "${product.discount}% OFF",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+
+                              const SizedBox(height: 4),
+
                               Text(
                                 product.name,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+
+                              if (product.slogan != null)
+                                Text(
+                                  product.slogan!,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.grey),
+                                ),
+
+                              const Spacer(),
+
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    "₹${product.price}",
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "₹${product.calculatedFinalPrice}",
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      if (product.discount != null)
+                                        Text(
+                                          "₹${product.price}",
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            decoration:
+                                                TextDecoration.lineThrough,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                   ElevatedButton(
                                     onPressed: () {
@@ -227,6 +360,9 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                                             (Cart.quantities[product] ?? 0) + 1;
                                       });
                                     },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryColor,
+                                    ),
                                     child: const Text("ADD"),
                                   ),
                                 ],
@@ -244,14 +380,25 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
         ],
       ),
 
-      /// VIEW CART (UNCHANGED)
+      /// ✅ FIXED VIEW CART BUTTON
       bottomNavigationBar: totalItems == 0
           ? null
-          : SafeArea(
+          : InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => BookingPage(
+                      serviceName: widget.serviceName,
+                      cartItems: Cart.quantities,
+                      product: widget.firstProduct,
+                    ),
+                  ),
+                );
+              },
               child: Container(
                 margin: const EdgeInsets.all(12),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: primaryColor,
                   borderRadius: BorderRadius.circular(16),
@@ -261,31 +408,11 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                   children: [
                     Text(
                       "$totalItems items",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(color: Colors.white),
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BookingPage(
-                              serviceName: widget.serviceName,
-                              cartItems: Cart.quantities,
-                              product: widget.firstProduct,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Text(
-                        "₹${totalAmount.toStringAsFixed(0)}  View Cart →",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                    Text(
+                      "₹${totalAmount.toStringAsFixed(0)} View Cart →",
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ],
                 ),

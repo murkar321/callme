@@ -376,24 +376,60 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
       price: 120,
       imagePath: 'assets/shirt.jpg',
       description: 'Professional dry cleaning for shirts with stain removal.',
+      time: '48 Hours',
+      discount: 10,
+      slogan: 'Professional dry cleaning for shirts.',
+      includes: [
+        'Deep stain removal',
+        'Premium fabric care',
+        'Safe chemical cleaning',
+        'Professional finishing',
+      ],
     ),
     ServiceProduct(
       name: 'Suit Dry Cleaning',
       price: 350,
       imagePath: 'assets/blazzer.jpg',
       description: 'Premium cleaning service for formal suits.',
+      time: '72 Hours',
+      discount: 15,
+      slogan: 'Premium cleaning for formal suits.',
+      includes: [
+        'Luxury fabric care',
+        'Deep stain removal',
+        'Shape retention',
+        'Professional finishing',
+      ],
     ),
     ServiceProduct(
       name: 'Saree Dry Cleaning',
       price: 250,
       imagePath: 'assets/saree.jpg',
       description: 'Safe cleaning for delicate sarees with color protection.',
+      time: '72 Hours',
+      discount: 12,
+      slogan: 'Safe dry cleaning for delicate sarees.',
+      includes: [
+        'Color protection',
+        'Fabric-safe cleaning',
+        'Soft finishing',
+        'Premium care',
+      ],
     ),
     ServiceProduct(
       name: 'Curtain Dry Cleaning',
       price: 220,
       imagePath: 'assets/curtain.jpg',
-      description: 'Professional dry cleaning for curtains and large fabrics.',
+      description: 'Professional dry cleaning for curtains.',
+      time: '72 Hours',
+      discount: 10,
+      slogan: 'Deep cleaning for large fabrics.',
+      includes: [
+        'Dust removal',
+        'Fabric protection',
+        'Odor removal',
+        'Fresh finish',
+      ],
     ),
   ],
 
@@ -404,46 +440,56 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
       price: 15,
       imagePath: 'assets/ironing.jpg',
       description: 'Crisp and wrinkle-free shirt ironing.',
+      time: 'Same Day',
+      discount: 5,
+      slogan: 'Crisp and wrinkle-free shirts.',
+      includes: [
+        'Smooth finish',
+        'Fabric-safe heat',
+        'Neat folding',
+      ],
     ),
     ServiceProduct(
       name: 'Pant Ironing',
       price: 20,
       imagePath: 'assets/pant.jpg',
-      description: 'Perfectly pressed pants with sharp crease.',
+      description: 'Perfectly pressed pants.',
+      time: 'Same Day',
+      discount: 5,
+      slogan: 'Perfectly pressed pants.',
+      includes: [
+        'Sharp crease',
+        'Wrinkle-free',
+        'Professional finish',
+      ],
     ),
     ServiceProduct(
       name: 'Saree Ironing',
       price: 40,
       imagePath: 'assets/saree.jpg',
-      description: 'Smooth and neat saree ironing service.',
+      description: 'Smooth and neat saree ironing.',
+      time: 'Same Day',
+      discount: 8,
+      slogan: 'Smooth and neat saree ironing.',
+      includes: [
+        'Delicate handling',
+        'Even pressing',
+        'No fabric damage',
+      ],
     ),
     ServiceProduct(
       name: 'Dress Ironing',
       price: 30,
       imagePath: 'assets/dress.jpg',
-      description: 'Wrinkle-free ironing for all dresses.',
-    ),
-  ],
-
-  /// 🔹 SHOE CLEANING
-  'Shoe Cleaning': [
-    ServiceProduct(
-      name: 'Sports Shoe Cleaning',
-      price: 150,
-      imagePath: 'assets/shoe.jpg',
-      description: 'Deep cleaning for sports shoes.',
-    ),
-    ServiceProduct(
-      name: 'Leather Shoe Cleaning',
-      price: 200,
-      imagePath: 'assets/leather.jpg',
-      description: 'Premium care for leather shoes.',
-    ),
-    ServiceProduct(
-      name: 'Sneaker Cleaning',
-      price: 180,
-      imagePath: 'assets/dry.jpg',
-      description: 'Deep cleaning for trendy sneakers.',
+      description: 'Wrinkle-free dresses.',
+      time: 'Same Day',
+      discount: 5,
+      slogan: 'Wrinkle-free dresses every time.',
+      includes: [
+        'Soft pressing',
+        'Neat finish',
+        'Quick service',
+      ],
     ),
   ],
 
@@ -453,21 +499,116 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
       name: 'Window Curtain Cleaning',
       price: 120,
       imagePath: 'assets/curtain.jpg',
-      description: 'Dust-free and fresh curtain cleaning.',
+      description: 'Dust-free curtain cleaning.',
+      time: '48 Hours',
+      discount: 10,
+      slogan: 'Dust-free and fresh curtains.',
+      includes: [
+        'Deep dust removal',
+        'Fabric-safe wash',
+        'Fresh fragrance',
+      ],
     ),
     ServiceProduct(
       name: 'Heavy Curtain Cleaning',
       price: 200,
       imagePath: 'assets/curtain.jpg',
       description: 'Deep cleaning for heavy curtains.',
+      time: '72 Hours',
+      discount: 12,
+      slogan: 'Deep cleaning for heavy curtains.',
+      includes: [
+        'Heavy fabric care',
+        'Stain removal',
+        'Odor removal',
+      ],
     ),
     ServiceProduct(
       name: 'Dry Curtain Cleaning',
       price: 220,
       imagePath: 'assets/curtain.jpg',
-      description: 'Professional dry cleaning for curtains.',
+      description: 'Dry cleaning for curtains.',
+      time: '72 Hours',
+      discount: 10,
+      slogan: 'Professional curtain dry cleaning.',
+      includes: [
+        'No water damage',
+        'Color protection',
+        'Premium finish',
+      ],
     ),
   ],
+
+  'Shoe Cleaning': [
+  ServiceProduct(
+    name: 'Sports Shoe Cleaning',
+    price: 150,
+    imagePath: 'assets/shoe.jpg',
+    description:
+        'Deep cleaning for sports shoes with stain and odor removal.',
+    time: '48 Hours',
+    discount: 10,
+    slogan: 'Restore the freshness of sports shoes.',
+    includes: [
+      'Dirt and stain removal',
+      'Odor cleaning',
+      'Deep washing process',
+      'Proper drying'
+    ],
+    process: [
+      'Step 1: Inspection',
+      'Step 2: Cleaning',
+      'Step 3: Drying',
+      'Step 4: Final check'
+    ],
+  ),
+
+  ServiceProduct(
+    name: 'Leather Shoe Cleaning',
+    price: 200,
+    imagePath: 'assets/leather.jpg',
+    description:
+        'Premium cleaning service for leather shoes with special care.',
+    time: '48 Hours',
+    discount: 12,
+    slogan: 'Premium care for leather shoes.',
+    includes: [
+      'Dirt removal',
+      'Leather-safe cleaning',
+      'Odor treatment',
+      'Proper drying'
+    ],
+    process: [
+      'Step 1: Inspection',
+      'Step 2: Leather-safe cleaning',
+      'Step 3: Conditioning',
+      'Step 4: Drying'
+    ],
+  ),
+
+  ServiceProduct(
+    name: 'Sneaker Cleaning',
+    price: 180,
+    imagePath: 'assets/shoe.jpg',
+    description:
+        'Deep cleaning for sneakers to maintain style and hygiene.',
+    time: '48 Hours',
+    discount: 10,
+    slogan: 'Deep cleaning for trendy sneakers.',
+    includes: [
+      'Stain removal',
+      'Odor cleaning',
+      'Deep wash',
+      'Drying'
+    ],
+    process: [
+      'Step 1: Inspection',
+      'Step 2: Cleaning',
+      'Step 3: Drying',
+      'Step 4: Finishing'
+    ],
+  ),
+],
 
   /// 🔹 BEDSHEET CLEANING
   'Bedsheet Cleaning': [
@@ -475,306 +616,310 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
       name: 'Single Bedsheet Cleaning',
       price: 80,
       imagePath: 'assets/sheets.jpg',
-      description: 'Fresh and hygienic single bedsheet cleaning.',
+      description: 'Hygienic bedsheet cleaning.',
+      time: '24 Hours',
+      discount: 8,
+      slogan: 'Fresh and hygienic bedsheets.',
+      includes: [
+        'Hygienic wash',
+        'Soft fabric care',
+        'Proper drying',
+      ],
     ),
     ServiceProduct(
       name: 'Double Bedsheet Cleaning',
       price: 120,
       imagePath: 'assets/sheets.jpg',
-      description: 'Soft and clean double bedsheets.',
+      description: 'Soft and clean bedsheets.',
+      time: '24 Hours',
+      discount: 10,
+      slogan: 'Soft and clean double bedsheets.',
+      includes: [
+        'Deep cleaning',
+        'Soft finish',
+        'Fresh fragrance',
+      ],
     ),
     ServiceProduct(
       name: 'Bedsheet Deep Cleaning',
       price: 180,
-     imagePath: 'assets/sheets.jpg',
-      description: 'Deep hygienic cleaning for bedsheets.',
+      imagePath: 'assets/sheets.jpg',
+      description: 'Deep hygienic cleaning.',
+      time: '48 Hours',
+      discount: 12,
+      slogan: 'Deep hygienic cleaning for bedsheets.',
+      includes: [
+        'Bacteria removal',
+        'Deep stain cleaning',
+        'Premium wash',
+      ],
     ),
   ],
 },
-
-  // REAL ESTATE
-  'Real Estate': {
-    '1BHK': [
-      ServiceProduct(
-        name: '1BHK',
-        price: 15000,
-        imagePath: 'assets/1bhk.jfif',
-        description: 'Complete 1BHK interior design and decoration service.',
-      ),
-      ServiceProduct(
-        name: '1BHK',
-        price: 15000,
-        imagePath: 'assets/1bhk.jfif',
-        description: 'Complete 1BHK interior design and decoration service.',
-      ),
-    ],
-    '2BHK': [
-      ServiceProduct(
-        name: '2BHK',
-        price: 25000,
-        imagePath: 'assets/2bhk.jfif',
-        description: 'Complete 2BHK interior design and decoration service.',
-      ),
-      ServiceProduct(
-        name: '2BHK',
-        price: 25000,
-        imagePath: 'assets/2bhk.jfif',
-        description: 'Complete 2BHK interior design and decoration service.',
-      ),
-    ],
-    '3BHK': [
-      ServiceProduct(
-        name: '3BHK',
-        price: 35000,
-        imagePath: 'assets/3bhk.jfif',
-        description: 'Complete 3BHK interior design and decoration service.',
-      ),
-      ServiceProduct(
-        name: '3BHK',
-        price: 35000,
-        imagePath: 'assets/3bhk.jfif',
-        description: 'Complete 3BHK interior design and decoration service.',
-      ),
-    ],
-  },
-
-  // 🔧 MECHANIC
-  'Mechanic': {
-    'Bike': [
-      ServiceProduct(
-        name: 'Bike Service',
-        price: 800,
-        imagePath: 'assets/oil.jpg',
-        description: 'Basic bike servicing including oil change.',
-      ),
-    ],
-    'Car': [
-      ServiceProduct(
-        name: 'Car Service',
-        price: 2500,
-        imagePath: 'assets/tin.jpg',
-        description: 'Full car service with oil and filter replacement.',
-      ),
-    ],
-  },
+  
+  
 // 🚰 PLUMBING
 'Plumbing': {
+
+  /// 🔹 PIPE REPAIR
   'Pipe Repair': [
     ServiceProduct(
       name: 'Pipe Leakage Repair',
       price: 400,
       imagePath: 'assets/pipe_repair.jpg',
-      description: 'Quick fix for leaking pipes with proper sealing.',
+      description: 'Fix leaking pipes and restore smooth water flow.',
+      time: '30-60 mins',
+      discount: 15,
+      slogan: 'Quick fix for leaking pipes.',
+      includes: [
+        'Pipe inspection',
+        'Leak detection',
+        'Repair work',
+        'Testing',
+      ],
+      process: [
+        'Inspection',
+        'Problem identification',
+        'Repair',
+        'Testing',
+      ],
     ),
     ServiceProduct(
       name: 'Broken Pipe Fix',
       price: 600,
       imagePath: 'assets/tap_install.jpg',
-      description: 'Reliable repair for damaged pipes.',
+      description: 'Repair damaged pipes efficiently.',
+      time: '45-90 mins',
+      discount: 20,
+      slogan: 'Reliable pipe repair solution.',
+      includes: [
+        'Damage inspection',
+        'Pipe fixing',
+        'Seal testing',
+      ],
+      process: [
+        'Inspect damage',
+        'Repair pipe',
+        'Test flow',
+      ],
     ),
     ServiceProduct(
       name: 'Pipe Replacement',
       price: 1200,
       imagePath: 'assets/tap_install.jpg',
-      description: 'Complete pipe replacement for long-lasting use.',
-    ),
-    ServiceProduct(
-      name: 'Pipe Joint Repair',
-      price: 350,
-      imagePath: 'assets/pipe_repair.jpg',
-      description: 'Fix leaking pipe joints with precision.',
-    ),
-    ServiceProduct(
-      name: 'Wall Pipe Repair',
-      price: 700,
-      imagePath: 'assets/tap.jpg',
-      description: 'Safe repair of concealed wall pipes.',
+      description: 'Complete pipe replacement service.',
+      time: '60-90 mins',
+      discount: 20,
+      slogan: 'Long-lasting pipe replacement.',
+      includes: [
+        'Old pipe removal',
+        'New pipe installation',
+        'Testing',
+      ],
+      process: [
+        'Remove old pipe',
+        'Install new pipe',
+        'Testing',
+      ],
     ),
   ],
 
+  /// 🔹 LEAKAGE FIX
   'Leakage Fix': [
     ServiceProduct(
       name: 'Kitchen Pipe Leakage Fix',
       price: 400,
       imagePath: 'assets/kitchen.jpg',
-      description: 'Stop kitchen pipe leaks quickly.',
+      description: 'Stop kitchen leakage instantly.',
+      time: '40-60 mins',
+      discount: 10,
+      slogan: 'Quick kitchen leak solution.',
+      includes: [
+        'Leak detection',
+        'Seal fixing',
+        'Testing',
+      ],
+      process: [
+        'Detect leak',
+        'Fix leakage',
+        'Testing',
+      ],
     ),
     ServiceProduct(
-      name: 'Bathroom Pipe Leakage Fix',
+      name: 'Bathroom Leakage Fix',
       price: 450,
       imagePath: 'assets/bathroom.jpg',
-      description: 'Efficient bathroom leakage repair.',
-    ),
-    ServiceProduct(
-      name: 'Pipe Joint Leakage Fix',
-      price: 350,
-      imagePath: 'assets/pipe_repair.jpg',
-      description: 'Seal pipe joint leaks properly.',
-    ),
-    ServiceProduct(
-      name: 'Tank Pipe Leakage Fix',
-      price: 600,
-      imagePath: 'assets/pipe_repair.jpg',
-      description: 'Fix water tank pipe leakage permanently.',
+      description: 'Fix bathroom pipe leakages.',
+      time: '40-60 mins',
+      discount: 12,
+      slogan: 'Bathroom leak repair experts.',
+      includes: [
+        'Inspection',
+        'Leak fixing',
+        'Testing',
+      ],
     ),
   ],
 
+  /// 🔹 TAP INSTALLATION
   'Tap Installation': [
     ServiceProduct(
       name: 'New Tap Installation',
       price: 300,
       imagePath: 'assets/tap_install.jpg',
-      description: 'Install new taps with precision.',
+      description: 'Install new taps professionally.',
+      time: '20-40 mins',
+      discount: 10,
+      slogan: 'Smooth tap installation.',
+      includes: [
+        'Tap fitting',
+        'Connection setup',
+        'Testing',
+      ],
     ),
     ServiceProduct(
       name: 'Tap Replacement',
       price: 350,
       imagePath: 'assets/pipe_repair.jpg',
       description: 'Replace old taps easily.',
-    ),
-    ServiceProduct(
-      name: 'Tap Leakage Fix',
-      price: 200,
-      imagePath: 'assets/pipe_repair.jpg',
-      description: 'Fix dripping taps instantly.',
-    ),
-    ServiceProduct(
-      name: 'Mixer Tap Installation',
-      price: 500,
-      imagePath: 'assets/pipe_repair.jpg',
-      description: 'Install modern mixer taps.',
-    ),
-    ServiceProduct(
-      name: 'Kitchen Tap Installation',
-      price: 350,
-      imagePath: 'assets/kitchen.jpg',
-      description: 'Perfect kitchen tap setup.',
+      time: '20-40 mins',
+      discount: 12,
+      slogan: 'Upgrade your tap easily.',
+      includes: [
+        'Remove old tap',
+        'Install new tap',
+        'Testing',
+      ],
     ),
   ],
 
+  /// 🔹 DRAIN CLEANING
   'Drain Cleaning': [
     ServiceProduct(
       name: 'Kitchen Drain Cleaning',
       price: 400,
       imagePath: 'assets/cleaning.png',
-      description: 'Remove kitchen blockages quickly.',
-    ),
-    ServiceProduct(
-      name: 'Bathroom Drain Cleaning',
-      price: 400,
-      imagePath: 'assets/clean.jfif',
-      description: 'Keep bathroom drains clean.',
+      description: 'Remove kitchen blockages.',
+      time: '45-60 mins',
+      discount: 10,
+      slogan: 'Clog-free kitchen drains.',
+      includes: [
+        'Drain cleaning',
+        'Block removal',
+        'Pipe flushing',
+      ],
     ),
     ServiceProduct(
       name: 'Blocked Drain Fix',
       price: 600,
       imagePath: 'assets/drain.jpg',
-      description: 'Clear heavily blocked drains.',
-    ),
-    ServiceProduct(
-      name: 'Drain Pipe Cleaning',
-      price: 500,
-      imagePath: 'assets/drain.jpg',
-      description: 'Deep cleaning for drain pipes.',
+      description: 'Clear heavy blockages.',
+      time: '60 mins',
+      discount: 15,
+      slogan: 'Heavy blockage solution.',
+      includes: [
+        'Inspection',
+        'Cleaning',
+        'Testing',
+      ],
     ),
   ],
 
+  /// 🔹 BATHROOM REPAIR
   'Bathroom Repair': [
     ServiceProduct(
       name: 'Shower Repair',
       price: 400,
       imagePath: 'assets/bathroom.jpg',
-      description: 'Fix faulty showers quickly.',
+      description: 'Fix shower issues quickly.',
+      time: '40-60 mins',
+      discount: 10,
+      slogan: 'Quick shower repair.',
+      includes: [
+        'Inspection',
+        'Repair',
+        'Testing',
+      ],
     ),
     ServiceProduct(
       name: 'Bathroom Pipe Repair',
       price: 600,
       imagePath: 'assets/tap.jpg',
-      description: 'Repair bathroom pipes efficiently.',
-    ),
-    ServiceProduct(
-      name: 'Shower Installation',
-      price: 500,
-      imagePath: 'assets/sink.jpg',
-      description: 'Install new showers professionally.',
-    ),
-    ServiceProduct(
-      name: 'Wash Basin Pipe Repair',
-      price: 400,
-      imagePath: 'assets/sink.jpg',
-      description: 'Fix wash basin pipe issues.',
+      description: 'Repair bathroom pipes.',
+      time: '45-60 mins',
+      discount: 15,
+      slogan: 'Reliable bathroom repair.',
+      includes: [
+        'Pipe repair',
+        'Leak fix',
+        'Testing',
+      ],
     ),
   ],
 
+  /// 🔹 TOILET REPAIR
   'Toilet Repair': [
     ServiceProduct(
       name: 'Toilet Flush Repair',
       price: 300,
       imagePath: 'assets/tap.jpg',
-      description: 'Fix flush issues quickly.',
+      description: 'Fix flush problems.',
+      time: '30-45 mins',
+      discount: 10,
+      slogan: 'Quick flush repair.',
+      includes: [
+        'Flush repair',
+        'Testing',
+      ],
     ),
     ServiceProduct(
       name: 'Toilet Leakage Fix',
       price: 450,
       imagePath: 'assets/tap.jpg',
-      description: 'Stop toilet leaks effectively.',
-    ),
-    ServiceProduct(
-      name: 'Toilet Seat Replacement',
-      price: 350,
-     imagePath: 'assets/tap.jpg',
-      description: 'Replace damaged toilet seats.',
-    ),
-    ServiceProduct(
-      name: 'Toilet Pipe Repair',
-      price: 500,
-      imagePath: 'assets/plumbing.jpg',
-      description: 'Repair toilet pipe connections.',
-    ),
-    ServiceProduct(
-      name: 'Flush Tank Repair',
-      price: 400,
-      imagePath: 'assets/sink.jpg',
-      description: 'Fix flush tank problems.',
+      description: 'Stop toilet leakage.',
+      time: '30-45 mins',
+      discount: 10,
+      slogan: 'Leak-free toilet solution.',
+      includes: [
+        'Leak fixing',
+        'Seal check',
+        'Testing',
+      ],
     ),
   ],
 
+  /// 🔹 SINK INSTALLATION
   'Sink Installation': [
     ServiceProduct(
       name: 'Kitchen Sink Installation',
       price: 800,
       imagePath: 'assets/kitchen.jpg',
       description: 'Install kitchen sinks perfectly.',
-    ),
-    ServiceProduct(
-      name: 'Wash Basin Installation',
-      price: 700,
-      imagePath: 'assets/tap.jpg',
-      description: 'Professional basin installation.',
+      time: '40-60 mins',
+      discount: 15,
+      slogan: 'Perfect sink installation.',
+      includes: [
+        'Sink setup',
+        'Pipe connection',
+        'Testing',
+      ],
     ),
     ServiceProduct(
       name: 'Sink Replacement',
       price: 900,
       imagePath: 'assets/sink.jpg',
       description: 'Replace old sinks easily.',
-    ),
-    ServiceProduct(
-      name: 'Sink Pipe Connection',
-      price: 400,
-      imagePath: 'assets/pipe_repair.jpg',
-      description: 'Proper sink pipe connections.',
-    ),
-    ServiceProduct(
-      name: 'Sink Leakage Repair',
-      price: 400,
-      imagePath: 'assets/sink.jpg',
-      description: 'Fix sink leakage issues quickly.',
+      time: '40-60 mins',
+      discount: 20,
+      slogan: 'Upgrade your sink.',
+      includes: [
+        'Remove old sink',
+        'Install new sink',
+        'Testing',
+      ],
     ),
   ],
 },
-
-
-
        
 };
 

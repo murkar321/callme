@@ -7,7 +7,7 @@ class ServiceProduct {
   final String? category;
 
   final String? time;
-  final int? discount;
+  final int? discount; // in percentage
   final int? finalPrice;
 
   final String? slogan;
@@ -28,4 +28,34 @@ class ServiceProduct {
     this.includes,
     this.process,
   });
+
+  /// ✅ Auto calculated final price (if not given)
+  int get calculatedFinalPrice {
+    if (finalPrice != null) return finalPrice!;
+    if (discount != null) {
+      return price - ((price * discount!) ~/ 100);
+    }
+    return price;
+  }
+
+  /// ✅ Discount label (for UI)
+  String get discountLabel {
+    if (discount == null || discount == 0) return '';
+    return '$discount% OFF';
+  }
+
+  /// ✅ Time fallback
+  String get serviceTime {
+    return time ?? 'Standard Time';
+  }
+
+  /// ✅ Safe includes list
+  List<String> get safeIncludes {
+    return includes ?? [];
+  }
+
+  /// ✅ Safe process list
+  List<String> get safeProcess {
+    return process ?? [];
+  }
 }

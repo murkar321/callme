@@ -1,10 +1,10 @@
 import 'dart:io';
-import 'package:callme/screens/plumbing_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+
 import 'package:callme/models/service_category.dart';
 import 'package:callme/widgets/category_card.dart';
-import 'package:callme/screens/salon_provider_form.dart';
+import 'package:callme/screens/service_provider_form.dart'; // ✅ COMMON FORM
 
 class BusinessPage extends StatefulWidget {
   const BusinessPage({super.key});
@@ -17,17 +17,41 @@ class _BusinessPageState extends State<BusinessPage> {
   final ImagePicker _picker = ImagePicker();
 
   List<ServiceCategory> businessCategories = [
-  ServiceCategory(name: 'Salon', icon: Icons.content_cut),
-  ServiceCategory(name: 'Plumbing', icon: Icons.plumbing), 
-  ServiceCategory(name: 'Real Estate', icon: Icons.house),
-  ServiceCategory(name: 'Photography', icon: Icons.camera_alt),
-  ServiceCategory(name: 'Cleaning', icon: Icons.cleaning_services),
-  ServiceCategory(name: 'Carpenter', icon: Icons.carpenter),
-  ServiceCategory(name: 'Laundry', icon: Icons.local_laundry_service),
-  ServiceCategory(name: 'Mechanic', icon: Icons.car_repair),
-  
-];
+    ServiceCategory(name: 'Salon', icon: Icons.content_cut),
+    ServiceCategory(name: 'Plumbing', icon: Icons.plumbing),
+    ServiceCategory(name: 'Real Estate', icon: Icons.house),
+    ServiceCategory(name: 'Photography', icon: Icons.camera_alt),
+    ServiceCategory(name: 'Cleaning', icon: Icons.cleaning_services),
+    ServiceCategory(name: 'Carpenter', icon: Icons.carpenter),
+    ServiceCategory(name: 'Laundry', icon: Icons.local_laundry_service),
+    ServiceCategory(name: 'Mechanic', icon: Icons.car_repair),
+  ];
 
+  /// 🔥 COMMON NAVIGATION HANDLER
+  void _handleCategoryTap(ServiceCategory service) {
+    // Convert name → type (dynamic)
+    String type = service.name.toLowerCase();
+
+    /// Supported services → common form
+    if (type == "salon" || type == "plumbing" || type == "laundry") {
+      // Fix naming (plumbing → plumber)
+      if (type == "plumbing") type = "plumber";
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ServiceProviderForm(type: type),
+        ),
+      );
+    } 
+    
+    /// Other services → dialog
+    else {
+      _showAddServiceDialog(service);
+    }
+  }
+
+  /// 🔹 DIALOG (unchanged)
   void _showAddServiceDialog(ServiceCategory service) {
     final TextEditingController nameController = TextEditingController();
     final TextEditingController mobileController = TextEditingController();
@@ -52,6 +76,7 @@ class _BusinessPageState extends State<BusinessPage> {
                       color: Theme.of(context).primaryColor,
                     ),
                     const SizedBox(height: 12),
+
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(
@@ -60,6 +85,7 @@ class _BusinessPageState extends State<BusinessPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
+
                     TextField(
                       controller: mobileController,
                       keyboardType: TextInputType.phone,
@@ -69,6 +95,7 @@ class _BusinessPageState extends State<BusinessPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
+
                     TextField(
                       controller: emailController,
                       keyboardType: TextInputType.emailAddress,
@@ -78,6 +105,7 @@ class _BusinessPageState extends State<BusinessPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
+
                     TextField(
                       controller: addressController,
                       decoration: const InputDecoration(
@@ -86,10 +114,13 @@ class _BusinessPageState extends State<BusinessPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
+
+                    /// IMAGE PICKER
                     GestureDetector(
                       onTap: () async {
                         final XFile? image = await _picker.pickImage(
-                            source: ImageSource.gallery);
+                          source: ImageSource.gallery,
+                        );
 
                         if (image != null) {
                           setStateDialog(() {
@@ -138,34 +169,6 @@ class _BusinessPageState extends State<BusinessPage> {
       },
     );
   }
-
-
-   void _handleCategoryTap(ServiceCategory service) {
-  /// Salon flow
-  if (service.name == "Salon") {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const SalonProviderForm(),
-      ),
-    );
-  }
-
-  /// ✅ Plumbing flow (NEW)
-  else if (service.name == "Plumbing") {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PlumbingProvider(), // 👈 new screen
-      ),
-    );
-  }
-
-  /// Other services → dialog
-  else {
-    _showAddServiceDialog(service);
-  }
-}
 
   @override
   Widget build(BuildContext context) {
