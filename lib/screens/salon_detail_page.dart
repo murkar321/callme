@@ -9,15 +9,18 @@ class SalonDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       appBar: AppBar(
         title: Text(service.name),
       ),
+
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// IMAGE
+
+            /// SERVICE IMAGE
             Image.asset(
               "assets/salon.png",
               width: double.infinity,
@@ -29,10 +32,12 @@ class SalonDetailPage extends StatelessWidget {
 
             Padding(
               padding: const EdgeInsets.all(16),
+
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  /// NAME
+
+                  /// SERVICE NAME
                   Text(
                     service.name,
                     style: const TextStyle(
@@ -68,9 +73,10 @@ class SalonDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  /// PRICE
+                  /// PRICE SECTION
                   Row(
                     children: [
+
                       Text(
                         "₹${service.finalPrice}",
                         style: const TextStyle(
@@ -79,7 +85,9 @@ class SalonDetailPage extends StatelessWidget {
                           color: Colors.green,
                         ),
                       ),
+
                       const SizedBox(width: 10),
+
                       Text(
                         "₹${service.price}",
                         style: const TextStyle(
@@ -88,14 +96,18 @@ class SalonDetailPage extends StatelessWidget {
                           fontSize: 16,
                         ),
                       ),
+
                       const SizedBox(width: 10),
+
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
+
                         decoration: BoxDecoration(
                           color: Colors.orange,
                           borderRadius: BorderRadius.circular(6),
                         ),
+
                         child: Text(
                           "${service.discount}% OFF",
                           style: const TextStyle(
@@ -127,7 +139,7 @@ class SalonDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 25),
 
-                  /// INCLUDED
+                  /// WHAT'S INCLUDED
                   const Text(
                     "What's Included",
                     style: TextStyle(
@@ -140,6 +152,7 @@ class SalonDetailPage extends StatelessWidget {
 
                   Column(
                     children: service.includes.map((item) {
+
                       return ListTile(
                         leading: const Icon(
                           Icons.check_circle,
@@ -148,12 +161,13 @@ class SalonDetailPage extends StatelessWidget {
                         title: Text(item),
                         dense: true,
                       );
+
                     }).toList(),
                   ),
 
                   const SizedBox(height: 20),
 
-                  /// PROCESS
+                  /// SERVICE PROCESS
                   const Text(
                     "Service Process",
                     style: TextStyle(
@@ -166,6 +180,7 @@ class SalonDetailPage extends StatelessWidget {
 
                   Column(
                     children: service.process.asMap().entries.map((entry) {
+
                       int index = entry.key + 1;
                       String step = entry.value;
 
@@ -182,6 +197,7 @@ class SalonDetailPage extends StatelessWidget {
                         title: Text(step),
                         dense: true,
                       );
+
                     }).toList(),
                   ),
 
@@ -190,34 +206,38 @@ class SalonDetailPage extends StatelessWidget {
                   /// BOOK BUTTON
                   SizedBox(
                     width: double.infinity,
+
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.all(14),
-                        backgroundColor: Colors.purple,
+                        backgroundColor:
+                            const Color.fromARGB(255, 143, 134, 157),
                       ),
+
                       onPressed: () {
+
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => SalonBookingPage(
-                              service: service,
-                              serviceName: service.name,
+                              serviceName: service.name, service: service,
                             ),
                           ),
                         );
                       },
+
                       child: const Text(
                         "Book Appointment",
                         style: TextStyle(fontSize: 16),
                       ),
                     ),
-                  ),
+                  )
                 ],
               ),
-            ),
+            )
           ],
         ),
       ),
     );
   }
-}
+} 

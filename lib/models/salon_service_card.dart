@@ -1,232 +1,201 @@
-import 'package:callme/data/salon_data.dart';
 import 'package:flutter/material.dart';
+import 'package:callme/data/salon_data.dart';
+import 'package:callme/screens/salon_detail_page.dart';
+import 'package:callme/screens/salon_booking_page.dart';
 
+class SalonServiceCard extends StatelessWidget {
+  final SalonService service;
 
-class SalonServiceCard extends StatefulWidget {
-  const SalonServiceCard({super.key, required SalonService service});
-
-  @override
-  State<SalonServiceCard> createState() => _SalonServiceCardState();
-}
-
-class _SalonServiceCardState extends State<SalonServiceCard> {
-  String selectedCategory = salonCategories[0];
+  const SalonServiceCard({super.key, required this.service});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Salon Services"),
-      ),
-
-      body: Row(
-        children: [
-
-          /// 🔴 LEFT SIDE CATEGORY LIST (UNCHANGED)
-          Container(
-            width: 110,
-            color: Colors.grey.shade100,
-            child: ListView.builder(
-              itemCount: salonCategories.length,
-              itemBuilder: (context, index) {
-                final category = salonCategories[index];
-
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      selectedCategory = category;
-                    });
-                  },
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SalonDetailPage(service: service),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 8,
+              spreadRadius: 1,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// 🔹 Image + Discount Badge
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  child: Image.asset(
+                    'assets/salon.png',
+                    height: 150,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    decoration: BoxDecoration(
-                      color: selectedCategory == category
-                          ? Colors.white
-                          : Colors.grey.shade100,
-                      border: Border(
-                        left: BorderSide(
-                          color: selectedCategory == category
-                              ? Colors.pink
-                              : Colors.transparent,
-                          width: 4,
-                        ),
-                      ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
                     ),
-                    child: Center(
-                      child: Text(
-                        category,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: selectedCategory == category
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      "${service.discount}% OFF",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-          ),
-
-          /// 🔵 RIGHT SIDE GRID SERVICES
-          Expanded(
-            child: ListView(
-              children: [
-                _buildCategorySection(selectedCategory),
+                ),
               ],
             ),
-          ),
-        ],
+
+            /// 🔹 Content
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  /// Service Name
+                  Text(
+                    service.name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  /// Slogan
+                  Text(
+                    service.slogan,
+                    style: TextStyle(
+                      color: Colors.grey[700],
+                      fontSize: 13,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  /// Rating + Time
+                  Row(
+                    children: [
+                      const Icon(Icons.star, color: Colors.orange, size: 18),
+                      const SizedBox(width: 4),
+                      const Text(
+                        "4.5",
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 16),
+                      const Icon(Icons.access_time,
+                          size: 18, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(service.time),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  /// 🔹 Price + Buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      /// Price
+                      Text(
+                        "₹${service.price}",
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+
+                      Row(
+                        children: [
+                          /// 🔹 View Details Button
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25),
+                              ),
+                            ),
+                            child: const Text(
+                              "Details",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      SalonDetailPage(service: service),
+                                ),
+                              );
+                            },
+                          ),
+
+                          const SizedBox(width: 10),
+
+                          /// 🔹 Book Now Button
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25),
+                              ),
+                            ),
+                            child: const Text(
+                              "Book Now",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => SalonBookingPage(
+                                      service: service,
+                                      serviceName: service.name),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
-
-  /// 🔥 CATEGORY SECTION WITH GRID
-  Widget _buildCategorySection(String category) {
-    final filteredServices = salonServices
-        .where((service) => service.category == category)
-        .toList();
-
-    return Padding(
-      padding: const EdgeInsets.all(10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-
-          /// CATEGORY TITLE
-          Text(
-            category,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          /// 🔥 GRID VIEW (MAIN FIX)
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: filteredServices.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2, // ✅ 2 COLUMN GRID
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 0.65,
-            ),
-            itemBuilder: (context, index) {
-              final service = filteredServices[index];
-              return _buildServiceCard(service);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 🟢 SERVICE CARD (UNCHANGED DESIGN + BUTTONS)
-  Widget _buildServiceCard(SalonService service) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-
-          /// IMAGE
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.asset(
-              service.image,
-              height: 90,
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          /// NAME
-          Text(
-            service.name,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-
-          const SizedBox(height: 4),
-
-          /// TIME
-          Text(
-            service.time,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-
-          const SizedBox(height: 4),
-
-          /// PRICE + ORIGINAL PRICE
-          Row(
-            children: [
-              Text(
-                "₹${service.finalPrice}",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                "₹${service.price}",
-                style: const TextStyle(
-                  decoration: TextDecoration.lineThrough,
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 4),
-
-          /// DISCOUNT
-          Text(
-            "${service.discount}% OFF",
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.red,
-            ),
-          ),
-
-          const Spacer(),
-
-          /// 🔥 BUTTONS (AS YOU REQUIRED)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-
-              /// VIEW DETAILS
-              TextButton(
-                onPressed: () {
-                  // Navigate to details page
-                },
-                child: const Text("View Details"),
-              ),
-
-              /// BOOK NOW
-              ElevatedButton(
-                onPressed: () {
-                  // Booking logic
-                },
-                child: const Text("Book Now"),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
+} 

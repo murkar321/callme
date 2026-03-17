@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_product.dart';
-import 'package:callme/models/service_products.dart';
+import 'package:callme/models/service_product_details.dart';
 import 'booking_page.dart';
 import 'package:callme/models/cart.dart';
 
