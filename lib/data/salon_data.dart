@@ -24,6 +24,8 @@ class SalonService {
     required this.includes,
     required this.process,
   });
+
+  get variants => null;
 }
 
 List<String> salonCategories = [

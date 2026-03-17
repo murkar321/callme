@@ -366,23 +366,131 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
     ],
   },
 
-  // 👕 LAUNDRY
-  'Laundry': {
-    'Clothes': [
-      ServiceProduct(
-        name: 'Wash & Iron',
-        price: 30,
-        imagePath: 'assets/laundry.png',
-        description: 'Standard wash and ironing service per cloth.',
-      ),
-      ServiceProduct(
-        name: 'Dry Cleaning',
-        price: 80,
-        imagePath: 'assets/laundry.png',
-        description: 'Professional dry cleaning for delicate fabrics.',
-      ),
-    ],
-  },
+ // 👕 LAUNDRY
+'Laundry': {
+
+  /// 🔹 DRY CLEANING
+  'Dry Cleaning': [
+    ServiceProduct(
+      name: 'Shirt Dry Cleaning',
+      price: 120,
+      imagePath: 'assets/shirt.jpg',
+      description: 'Professional dry cleaning for shirts with stain removal.',
+    ),
+    ServiceProduct(
+      name: 'Suit Dry Cleaning',
+      price: 350,
+      imagePath: 'assets/blazzer.jpg',
+      description: 'Premium cleaning service for formal suits.',
+    ),
+    ServiceProduct(
+      name: 'Saree Dry Cleaning',
+      price: 250,
+      imagePath: 'assets/saree.jpg',
+      description: 'Safe cleaning for delicate sarees with color protection.',
+    ),
+    ServiceProduct(
+      name: 'Curtain Dry Cleaning',
+      price: 220,
+      imagePath: 'assets/curtain.jpg',
+      description: 'Professional dry cleaning for curtains and large fabrics.',
+    ),
+  ],
+
+  /// 🔹 IRONING
+  'Ironing': [
+    ServiceProduct(
+      name: 'Shirt Ironing',
+      price: 15,
+      imagePath: 'assets/ironing.jpg',
+      description: 'Crisp and wrinkle-free shirt ironing.',
+    ),
+    ServiceProduct(
+      name: 'Pant Ironing',
+      price: 20,
+      imagePath: 'assets/pant.jpg',
+      description: 'Perfectly pressed pants with sharp crease.',
+    ),
+    ServiceProduct(
+      name: 'Saree Ironing',
+      price: 40,
+      imagePath: 'assets/saree.jpg',
+      description: 'Smooth and neat saree ironing service.',
+    ),
+    ServiceProduct(
+      name: 'Dress Ironing',
+      price: 30,
+      imagePath: 'assets/dress.jpg',
+      description: 'Wrinkle-free ironing for all dresses.',
+    ),
+  ],
+
+  /// 🔹 SHOE CLEANING
+  'Shoe Cleaning': [
+    ServiceProduct(
+      name: 'Sports Shoe Cleaning',
+      price: 150,
+      imagePath: 'assets/shoe.jpg',
+      description: 'Deep cleaning for sports shoes.',
+    ),
+    ServiceProduct(
+      name: 'Leather Shoe Cleaning',
+      price: 200,
+      imagePath: 'assets/leather.jpg',
+      description: 'Premium care for leather shoes.',
+    ),
+    ServiceProduct(
+      name: 'Sneaker Cleaning',
+      price: 180,
+      imagePath: 'assets/dry.jpg',
+      description: 'Deep cleaning for trendy sneakers.',
+    ),
+  ],
+
+  /// 🔹 CURTAIN CLEANING
+  'Curtain Cleaning': [
+    ServiceProduct(
+      name: 'Window Curtain Cleaning',
+      price: 120,
+      imagePath: 'assets/curtain.jpg',
+      description: 'Dust-free and fresh curtain cleaning.',
+    ),
+    ServiceProduct(
+      name: 'Heavy Curtain Cleaning',
+      price: 200,
+      imagePath: 'assets/curtain.jpg',
+      description: 'Deep cleaning for heavy curtains.',
+    ),
+    ServiceProduct(
+      name: 'Dry Curtain Cleaning',
+      price: 220,
+      imagePath: 'assets/curtain.jpg',
+      description: 'Professional dry cleaning for curtains.',
+    ),
+  ],
+
+  /// 🔹 BEDSHEET CLEANING
+  'Bedsheet Cleaning': [
+    ServiceProduct(
+      name: 'Single Bedsheet Cleaning',
+      price: 80,
+      imagePath: 'assets/sheets.jpg',
+      description: 'Fresh and hygienic single bedsheet cleaning.',
+    ),
+    ServiceProduct(
+      name: 'Double Bedsheet Cleaning',
+      price: 120,
+      imagePath: 'assets/sheets.jpg',
+      description: 'Soft and clean double bedsheets.',
+    ),
+    ServiceProduct(
+      name: 'Bedsheet Deep Cleaning',
+      price: 180,
+     imagePath: 'assets/sheets.jpg',
+      description: 'Deep hygienic cleaning for bedsheets.',
+    ),
+  ],
+},
 
   // REAL ESTATE
   'Real Estate': {
@@ -449,36 +557,224 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
       ),
     ],
   },
+// 🚰 PLUMBING
+'Plumbing': {
+  'Pipe Repair': [
+    ServiceProduct(
+      name: 'Pipe Leakage Repair',
+      price: 400,
+      imagePath: 'assets/pipe_repair.jpg',
+      description: 'Quick fix for leaking pipes with proper sealing.',
+    ),
+    ServiceProduct(
+      name: 'Broken Pipe Fix',
+      price: 600,
+      imagePath: 'assets/tap_install.jpg',
+      description: 'Reliable repair for damaged pipes.',
+    ),
+    ServiceProduct(
+      name: 'Pipe Replacement',
+      price: 1200,
+      imagePath: 'assets/tap_install.jpg',
+      description: 'Complete pipe replacement for long-lasting use.',
+    ),
+    ServiceProduct(
+      name: 'Pipe Joint Repair',
+      price: 350,
+      imagePath: 'assets/pipe_repair.jpg',
+      description: 'Fix leaking pipe joints with precision.',
+    ),
+    ServiceProduct(
+      name: 'Wall Pipe Repair',
+      price: 700,
+      imagePath: 'assets/tap.jpg',
+      description: 'Safe repair of concealed wall pipes.',
+    ),
+  ],
 
-  // 💧 WATER SERVICE
-  'Water Service': {
-    'Drinking Water': [
-      ServiceProduct(
-        name: 'Water Can (20L)',
-        price: 50,
-        imagePath: 'assets/can.jpg',
-        description: '20-liter purified water can delivered to your door.',
-      ),
-      ServiceProduct(
-        name: 'Water Bottle',
-        price: 10,
-        imagePath: 'assets/bottle.jpg',
-        description: '1-liter sealed water bottles for quick hydration.',
-      ),
-    ],
-    'Supply': [
-      ServiceProduct(
-        name: 'Monthly Supply',
-        price: 1200,
-        imagePath: 'assets/tank.jpg',
-        description: 'Monthly subscription for water supply delivery.',
-      ),
-      ServiceProduct(
-        name: 'Aqua Guard',
-        price: 1200,
-        imagePath: 'assets/acqua.jpg',
-        description: 'Aqua guard servicing and filter replacement.',
-      ),
-    ],
-  },
+  'Leakage Fix': [
+    ServiceProduct(
+      name: 'Kitchen Pipe Leakage Fix',
+      price: 400,
+      imagePath: 'assets/kitchen.jpg',
+      description: 'Stop kitchen pipe leaks quickly.',
+    ),
+    ServiceProduct(
+      name: 'Bathroom Pipe Leakage Fix',
+      price: 450,
+      imagePath: 'assets/bathroom.jpg',
+      description: 'Efficient bathroom leakage repair.',
+    ),
+    ServiceProduct(
+      name: 'Pipe Joint Leakage Fix',
+      price: 350,
+      imagePath: 'assets/pipe_repair.jpg',
+      description: 'Seal pipe joint leaks properly.',
+    ),
+    ServiceProduct(
+      name: 'Tank Pipe Leakage Fix',
+      price: 600,
+      imagePath: 'assets/pipe_repair.jpg',
+      description: 'Fix water tank pipe leakage permanently.',
+    ),
+  ],
+
+  'Tap Installation': [
+    ServiceProduct(
+      name: 'New Tap Installation',
+      price: 300,
+      imagePath: 'assets/tap_install.jpg',
+      description: 'Install new taps with precision.',
+    ),
+    ServiceProduct(
+      name: 'Tap Replacement',
+      price: 350,
+      imagePath: 'assets/pipe_repair.jpg',
+      description: 'Replace old taps easily.',
+    ),
+    ServiceProduct(
+      name: 'Tap Leakage Fix',
+      price: 200,
+      imagePath: 'assets/pipe_repair.jpg',
+      description: 'Fix dripping taps instantly.',
+    ),
+    ServiceProduct(
+      name: 'Mixer Tap Installation',
+      price: 500,
+      imagePath: 'assets/pipe_repair.jpg',
+      description: 'Install modern mixer taps.',
+    ),
+    ServiceProduct(
+      name: 'Kitchen Tap Installation',
+      price: 350,
+      imagePath: 'assets/kitchen.jpg',
+      description: 'Perfect kitchen tap setup.',
+    ),
+  ],
+
+  'Drain Cleaning': [
+    ServiceProduct(
+      name: 'Kitchen Drain Cleaning',
+      price: 400,
+      imagePath: 'assets/cleaning.png',
+      description: 'Remove kitchen blockages quickly.',
+    ),
+    ServiceProduct(
+      name: 'Bathroom Drain Cleaning',
+      price: 400,
+      imagePath: 'assets/clean.jfif',
+      description: 'Keep bathroom drains clean.',
+    ),
+    ServiceProduct(
+      name: 'Blocked Drain Fix',
+      price: 600,
+      imagePath: 'assets/drain.jpg',
+      description: 'Clear heavily blocked drains.',
+    ),
+    ServiceProduct(
+      name: 'Drain Pipe Cleaning',
+      price: 500,
+      imagePath: 'assets/drain.jpg',
+      description: 'Deep cleaning for drain pipes.',
+    ),
+  ],
+
+  'Bathroom Repair': [
+    ServiceProduct(
+      name: 'Shower Repair',
+      price: 400,
+      imagePath: 'assets/bathroom.jpg',
+      description: 'Fix faulty showers quickly.',
+    ),
+    ServiceProduct(
+      name: 'Bathroom Pipe Repair',
+      price: 600,
+      imagePath: 'assets/tap.jpg',
+      description: 'Repair bathroom pipes efficiently.',
+    ),
+    ServiceProduct(
+      name: 'Shower Installation',
+      price: 500,
+      imagePath: 'assets/sink.jpg',
+      description: 'Install new showers professionally.',
+    ),
+    ServiceProduct(
+      name: 'Wash Basin Pipe Repair',
+      price: 400,
+      imagePath: 'assets/sink.jpg',
+      description: 'Fix wash basin pipe issues.',
+    ),
+  ],
+
+  'Toilet Repair': [
+    ServiceProduct(
+      name: 'Toilet Flush Repair',
+      price: 300,
+      imagePath: 'assets/tap.jpg',
+      description: 'Fix flush issues quickly.',
+    ),
+    ServiceProduct(
+      name: 'Toilet Leakage Fix',
+      price: 450,
+      imagePath: 'assets/tap.jpg',
+      description: 'Stop toilet leaks effectively.',
+    ),
+    ServiceProduct(
+      name: 'Toilet Seat Replacement',
+      price: 350,
+     imagePath: 'assets/tap.jpg',
+      description: 'Replace damaged toilet seats.',
+    ),
+    ServiceProduct(
+      name: 'Toilet Pipe Repair',
+      price: 500,
+      imagePath: 'assets/plumbing.jpg',
+      description: 'Repair toilet pipe connections.',
+    ),
+    ServiceProduct(
+      name: 'Flush Tank Repair',
+      price: 400,
+      imagePath: 'assets/sink.jpg',
+      description: 'Fix flush tank problems.',
+    ),
+  ],
+
+  'Sink Installation': [
+    ServiceProduct(
+      name: 'Kitchen Sink Installation',
+      price: 800,
+      imagePath: 'assets/kitchen.jpg',
+      description: 'Install kitchen sinks perfectly.',
+    ),
+    ServiceProduct(
+      name: 'Wash Basin Installation',
+      price: 700,
+      imagePath: 'assets/tap.jpg',
+      description: 'Professional basin installation.',
+    ),
+    ServiceProduct(
+      name: 'Sink Replacement',
+      price: 900,
+      imagePath: 'assets/sink.jpg',
+      description: 'Replace old sinks easily.',
+    ),
+    ServiceProduct(
+      name: 'Sink Pipe Connection',
+      price: 400,
+      imagePath: 'assets/pipe_repair.jpg',
+      description: 'Proper sink pipe connections.',
+    ),
+    ServiceProduct(
+      name: 'Sink Leakage Repair',
+      price: 400,
+      imagePath: 'assets/sink.jpg',
+      description: 'Fix sink leakage issues quickly.',
+    ),
+  ],
+},
+
+
+
+       
 };
+

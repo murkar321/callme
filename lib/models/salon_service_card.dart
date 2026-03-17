@@ -1,7 +1,8 @@
+import 'package:callme/models/cart.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/data/salon_data.dart';
+import 'package:callme/models/service_product.dart';
 import 'package:callme/screens/salon_detail_page.dart';
-import 'package:callme/screens/salon_booking_page.dart';
 
 class SalonServiceCard extends StatelessWidget {
   final SalonService service;
@@ -10,192 +11,185 @@ class SalonServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => SalonDetailPage(service: service),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 6,
           ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              spreadRadius: 1,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            /// 🔹 Image + Discount Badge
-            Stack(
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          /// IMAGE
+          Expanded(
+            flex: 5,
+            child: Stack(
               children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
+                    top: Radius.circular(14),
                   ),
                   child: Image.asset(
                     'assets/salon.png',
-                    height: 150,
                     width: double.infinity,
                     fit: BoxFit.cover,
                   ),
                 ),
+
+                /// DISCOUNT
                 Positioned(
-                  top: 10,
-                  right: 10,
+                  top: 6,
+                  right: 6,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
+                        horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.green,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      "${service.discount}% OFF",
+                      "${service.discount}%",
                       style: const TextStyle(
                         color: Colors.white,
+                        fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12,
                       ),
                     ),
                   ),
                 ),
               ],
             ),
+          ),
 
-            /// 🔹 Content
-            Padding(
-              padding: const EdgeInsets.all(12),
+          /// CONTENT
+          Expanded(
+            flex: 5,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  /// Service Name
+
+                  /// NAME
                   Text(
                     service.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
 
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
 
-                  /// Slogan
+                  /// SLOGAN
                   Text(
                     service.slogan,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.grey[700],
-                      fontSize: 13,
+                      fontSize: 11,
+                      color: Colors.grey[600],
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  const Spacer(),
 
-                  /// Rating + Time
-                  Row(
-                    children: [
-                      const Icon(Icons.star, color: Colors.orange, size: 18),
-                      const SizedBox(width: 4),
-                      const Text(
-                        "4.5",
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 16),
-                      const Icon(Icons.access_time,
-                          size: 18, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Text(service.time),
-                    ],
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  /// 🔹 Price + Buttons
+                  /// PRICE + ADD BUTTON
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      /// Price
+
                       Text(
                         "₹${service.price}",
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black,
                         ),
                       ),
 
-                      Row(
-                        children: [
-                          /// 🔹 View Details Button
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.black,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(25),
-                              ),
-                            ),
-                            child: const Text(
-                              "Details",
-                              style: TextStyle(color: Colors.white),
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      SalonDetailPage(service: service),
-                                ),
-                              );
-                            },
-                          ),
+                      /// ➕ ADD BUTTON (FIXED)
+                      InkWell(
+                        onTap: () {
 
-                          const SizedBox(width: 10),
+                          final product = ServiceProduct(
+                            name: service.name,
+                            price: service.price,
+                            imagePath: "assets/salon.png",
+                            description: service.description,
+                            time: service.time,
+                            discount: service.discount,
+                            finalPrice: service.finalPrice,
+                          );
 
-                          /// 🔹 Book Now Button
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(25),
-                              ),
+                          Cart.add(product);
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("${service.name} added to cart"),
+                              duration: const Duration(seconds: 1),
                             ),
-                            child: const Text(
-                              "Book Now",
-                              style: TextStyle(color: Colors.white),
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => SalonBookingPage(
-                                      service: service,
-                                      serviceName: service.name),
-                                ),
-                              );
-                            },
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        ],
+                          child: const Icon(
+                            Icons.add,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
                       ),
                     ],
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  /// VIEW BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    height: 30,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            const Color.fromARGB(255, 210, 160, 231),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                SalonDetailPage(service: service),
+                          ),
+                        );
+                      },
+                      child: const Text(
+                        "View",
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
-} 
+}

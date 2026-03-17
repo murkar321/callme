@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:callme/screens/plumbing_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:callme/models/service_category.dart';
@@ -15,18 +16,17 @@ class BusinessPage extends StatefulWidget {
 class _BusinessPageState extends State<BusinessPage> {
   final ImagePicker _picker = ImagePicker();
 
-  // Business Categories
   List<ServiceCategory> businessCategories = [
-    ServiceCategory(name: 'Salon', icon: Icons.content_cut), // NEW SALON
-    ServiceCategory(name: 'Real Estate', icon: Icons.house),
-    ServiceCategory(name: 'Photography', icon: Icons.camera_alt),
-    ServiceCategory(name: 'Cleaning', icon: Icons.cleaning_services),
-    ServiceCategory(name: 'Carpenter', icon: Icons.carpenter),
-    ServiceCategory(name: 'Gym', icon: Icons.fitness_center),
-    ServiceCategory(name: 'Laundry', icon: Icons.local_laundry_service),
-    ServiceCategory(name: 'Mechanic', icon: Icons.car_repair),
-    ServiceCategory(name: 'Water Service', icon: Icons.water_drop),
-  ];
+  ServiceCategory(name: 'Salon', icon: Icons.content_cut),
+  ServiceCategory(name: 'Plumbing', icon: Icons.plumbing), 
+  ServiceCategory(name: 'Real Estate', icon: Icons.house),
+  ServiceCategory(name: 'Photography', icon: Icons.camera_alt),
+  ServiceCategory(name: 'Cleaning', icon: Icons.cleaning_services),
+  ServiceCategory(name: 'Carpenter', icon: Icons.carpenter),
+  ServiceCategory(name: 'Laundry', icon: Icons.local_laundry_service),
+  ServiceCategory(name: 'Mechanic', icon: Icons.car_repair),
+  
+];
 
   void _showAddServiceDialog(ServiceCategory service) {
     final TextEditingController nameController = TextEditingController();
@@ -139,22 +139,33 @@ class _BusinessPageState extends State<BusinessPage> {
     );
   }
 
-  void _handleCategoryTap(ServiceCategory service) {
-    /// If Salon clicked → open Salon Provider Form
-    if (service.name == "Salon") {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const SalonProviderForm(),
-        ),
-      );
-    }
 
-    /// Other services → open dialog
-    else {
-      _showAddServiceDialog(service);
-    }
+   void _handleCategoryTap(ServiceCategory service) {
+  /// Salon flow
+  if (service.name == "Salon") {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SalonProviderForm(),
+      ),
+    );
   }
+
+  /// ✅ Plumbing flow (NEW)
+  else if (service.name == "Plumbing") {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PlumbingProvider(), // 👈 new screen
+      ),
+    );
+  }
+
+  /// Other services → dialog
+  else {
+    _showAddServiceDialog(service);
+  }
+}
 
   @override
   Widget build(BuildContext context) {
