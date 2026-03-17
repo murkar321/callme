@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/widgets/category_card.dart';
+import 'package:callme/screens/salon_provider_form.dart';
 
 class BusinessPage extends StatefulWidget {
   const BusinessPage({super.key});
@@ -14,9 +15,10 @@ class BusinessPage extends StatefulWidget {
 class _BusinessPageState extends State<BusinessPage> {
   final ImagePicker _picker = ImagePicker();
 
-  // Services using Flutter icons
+  // Business Categories
   List<ServiceCategory> businessCategories = [
-    ServiceCategory(name: 'Real Estate', icon: Icons.bakery_dining),
+    ServiceCategory(name: 'Salon', icon: Icons.content_cut), // NEW SALON
+    ServiceCategory(name: 'Real Estate', icon: Icons.house),
     ServiceCategory(name: 'Photography', icon: Icons.camera_alt),
     ServiceCategory(name: 'Cleaning', icon: Icons.cleaning_services),
     ServiceCategory(name: 'Carpenter', icon: Icons.carpenter),
@@ -87,8 +89,8 @@ class _BusinessPageState extends State<BusinessPage> {
                     GestureDetector(
                       onTap: () async {
                         final XFile? image = await _picker.pickImage(
-                          source: ImageSource.gallery,
-                        );
+                            source: ImageSource.gallery);
+
                         if (image != null) {
                           setStateDialog(() {
                             pickedImage = File(image.path);
@@ -118,7 +120,6 @@ class _BusinessPageState extends State<BusinessPage> {
                 ElevatedButton(
                   onPressed: () {
                     if (nameController.text.isNotEmpty) {
-                      // Save logic later
                       Navigator.pop(context);
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -138,6 +139,23 @@ class _BusinessPageState extends State<BusinessPage> {
     );
   }
 
+  void _handleCategoryTap(ServiceCategory service) {
+    /// If Salon clicked → open Salon Provider Form
+    if (service.name == "Salon") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const SalonProviderForm(),
+        ),
+      );
+    }
+
+    /// Other services → open dialog
+    else {
+      _showAddServiceDialog(service);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -145,7 +163,7 @@ class _BusinessPageState extends State<BusinessPage> {
         title: const Text('Select Your Business Service'),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(12),
         child: GridView.builder(
           itemCount: businessCategories.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -155,8 +173,9 @@ class _BusinessPageState extends State<BusinessPage> {
           ),
           itemBuilder: (context, index) {
             final category = businessCategories[index];
+
             return GestureDetector(
-              onTap: () => _showAddServiceDialog(category),
+              onTap: () => _handleCategoryTap(category),
               child: CategoryCard(
                 name: category.name,
                 icon: category.icon,

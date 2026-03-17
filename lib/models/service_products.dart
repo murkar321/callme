@@ -366,32 +366,6 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
     ],
   },
 
-  // 🏋️ GYM
-  'Gym': {
-    'Membership': [
-      ServiceProduct(
-        name: 'Monthly Membership',
-        price: 1500,
-        imagePath: 'assets/member.jpg',
-        description: '1-month full gym access with personal trainer guidance.',
-      ),
-      ServiceProduct(
-        name: 'Yearly Membership',
-        price: 15000,
-        imagePath: 'assets/gym.jpg',
-        description: '12-month membership with free nutrition consultation.',
-      ),
-    ],
-    'Training': [
-      ServiceProduct(
-        name: 'Personal Training',
-        price: 3000,
-        imagePath: 'assets/personal.jpg',
-        description: 'Customized workout and diet plan by certified trainer.',
-      ),
-    ],
-  },
-
   // 👕 LAUNDRY
   'Laundry': {
     'Clothes': [

@@ -1,17 +1,17 @@
+import 'package:callme/data/salon_data.dart';
 import 'package:flutter/material.dart';
 
 class SalonBookingPage extends StatefulWidget {
-
   final String serviceName;
 
-  const SalonBookingPage({super.key, required this.serviceName});
+  const SalonBookingPage(
+      {super.key, required this.serviceName, required SalonService service});
 
   @override
   State<SalonBookingPage> createState() => _SalonBookingPageState();
 }
 
 class _SalonBookingPageState extends State<SalonBookingPage> {
-
   bool homeVisit = false;
 
   final nameController = TextEditingController();
@@ -26,19 +26,15 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.serviceName),
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             /// SERVICE IMAGE
             Image.asset(
               "assets/salon.png",
@@ -53,7 +49,6 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-
                 ChoiceChip(
                   label: const Text("Salon Appointment"),
                   selected: !homeVisit,
@@ -63,9 +58,7 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
                     });
                   },
                 ),
-
                 const SizedBox(width: 10),
-
                 ChoiceChip(
                   label: const Text("Home Visit"),
                   selected: homeVisit,
@@ -106,21 +99,18 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
 
             /// HOME VISIT EXTRA FIELDS
             if (homeVisit) ...[
-
               TextField(
                 controller: addressController,
                 decoration: const InputDecoration(
                   labelText: "Full Address",
                 ),
               ),
-
               TextField(
                 controller: cityController,
                 decoration: const InputDecoration(
                   labelText: "City",
                 ),
               ),
-
               TextField(
                 controller: pincodeController,
                 decoration: const InputDecoration(
@@ -136,11 +126,8 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
               title: Text(selectedDate == null
                   ? "Select Appointment Date"
                   : selectedDate.toString().split(" ")[0]),
-
               trailing: const Icon(Icons.calendar_today),
-
               onTap: () async {
-
                 final date = await showDatePicker(
                   context: context,
                   firstDate: DateTime.now(),
@@ -153,7 +140,6 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
                     selectedDate = date;
                   });
                 }
-
               },
             ),
 
@@ -162,11 +148,8 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
               title: Text(selectedTime == null
                   ? "Select Time"
                   : selectedTime!.format(context)),
-
               trailing: const Icon(Icons.access_time),
-
               onTap: () async {
-
                 final time = await showTimePicker(
                   context: context,
                   initialTime: TimeOfDay.now(),
@@ -177,7 +160,6 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
                     selectedTime = time;
                   });
                 }
-
               },
             ),
 
@@ -191,17 +173,13 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
                   padding: const EdgeInsets.all(15),
                   backgroundColor: const Color.fromARGB(255, 185, 169, 212),
                 ),
-
                 onPressed: () {
-
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("Booking Confirmed"),
                     ),
                   );
-
                 },
-
                 child: const Text(
                   "Confirm Booking",
                   style: TextStyle(fontSize: 16),
