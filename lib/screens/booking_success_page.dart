@@ -24,7 +24,7 @@ class BookingSuccessPage extends StatelessWidget {
   int get totalPrice {
     return services.fold(
       0,
-      (sum, item) => sum + (item.finalPrice ?? item.price),
+      (sum, item) => sum + (item.finalPrice),
     );
   }
 
@@ -117,7 +117,7 @@ class BookingSuccessPage extends StatelessWidget {
                                       contentPadding: EdgeInsets.zero,
                                       title: Text(service.name),
                                       trailing: Text(
-                                        "₹${service.finalPrice ?? service.price}",
+                                        "₹${service.finalPrice}",
                                       ),
                                     )),
 
