@@ -10,7 +10,11 @@ class SalonBookingPage extends StatefulWidget {
   const SalonBookingPage({
     super.key,
     required this.services,
-    required this.isHomeVisitDefault, required SalonService service, required String serviceName,
+    required this.isHomeVisitDefault,
+    required SalonService service,
+    required String serviceName,
+    required int adults,
+    required int children,
   });
 
   @override
@@ -18,7 +22,6 @@ class SalonBookingPage extends StatefulWidget {
 }
 
 class _SalonBookingPageState extends State<SalonBookingPage> {
-
   late bool isHomeVisit;
 
   final nameController = TextEditingController();
@@ -52,13 +55,11 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
       appBar: AppBar(
         title: const Text("Booking"),
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             /// 🔹 HOME / SALON TOGGLE
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -96,8 +97,7 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
 
             _readOnlyField("Salon Name", salonName),
 
-            if (!isHomeVisit)
-              _readOnlyField("Salon Address", salonAddress),
+            if (!isHomeVisit) _readOnlyField("Salon Address", salonAddress),
 
             const SizedBox(height: 15),
 
@@ -156,8 +156,8 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
               ),
               TextField(
                 controller: instructionController,
-                decoration: const InputDecoration(
-                    labelText: "Special Instructions"),
+                decoration:
+                    const InputDecoration(labelText: "Special Instructions"),
               ),
             ],
 
@@ -180,9 +180,7 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
               child: ElevatedButton(
                 onPressed: _confirmBooking,
                 child: Text(
-                  isHomeVisit
-                      ? "Confirm Booking"
-                      : "Confirm Appointment",
+                  isHomeVisit ? "Confirm Booking" : "Confirm Appointment",
                 ),
               ),
             ),
@@ -204,14 +202,12 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
 
   /// ✅ VALIDATION + NAVIGATION
   void _confirmBooking() {
-
     if (selectedDate == null || selectedTime == null) {
       _showError("Please select date & time");
       return;
     }
 
-    if (nameController.text.isEmpty ||
-        phoneController.text.isEmpty) {
+    if (nameController.text.isEmpty || phoneController.text.isEmpty) {
       _showError("Please enter name & phone number");
       return;
     }

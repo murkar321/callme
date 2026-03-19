@@ -1,10 +1,14 @@
 import 'dart:io';
+import 'package:callme/models/resort_provider.dart';
+import 'package:callme/screens/plumbing_provider.dart';
+import 'package:callme/screens/resort_provider_page.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-
+import 'package:callme/models/cleaning_provider.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/widgets/category_card.dart';
-import 'package:callme/screens/service_provider_form.dart'; // ✅ COMMON FORM
+import 'package:callme/screens/service_provider_form.dart';
+import 'package:provider/provider.dart'; // ✅ COMMON FORM
 
 class BusinessPage extends StatefulWidget {
   const BusinessPage({super.key});
@@ -19,6 +23,7 @@ class _BusinessPageState extends State<BusinessPage> {
   List<ServiceCategory> businessCategories = [
     ServiceCategory(name: 'Salon', icon: Icons.content_cut),
     ServiceCategory(name: 'Plumbing', icon: Icons.plumbing),
+    ServiceCategory(name: 'Resorts', icon: Icons.hotel),
     ServiceCategory(name: 'Real Estate', icon: Icons.house),
     ServiceCategory(name: 'Photography', icon: Icons.camera_alt),
     ServiceCategory(name: 'Cleaning', icon: Icons.cleaning_services),
@@ -27,25 +32,53 @@ class _BusinessPageState extends State<BusinessPage> {
     ServiceCategory(name: 'Mechanic', icon: Icons.car_repair),
   ];
 
-  /// 🔥 COMMON NAVIGATION HANDLER
   void _handleCategoryTap(ServiceCategory service) {
-    // Convert name → type (dynamic)
     String type = service.name.toLowerCase();
 
-    /// Supported services → common form
-    if (type == "salon" || type == "plumbing" || type == "laundry") {
-      // Fix naming (plumbing → plumber)
-      if (type == "plumbing") type = "plumber";
+    /// ✅ CLEANING → separate page
+    if (type == "cleaning") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const CleaningProvider(),
+        ),
+      );
+    }
 
+    /// ✅ PLUMBING → separate page
+    else if (type == "plumbing") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PlumbingProvider(),
+        ),
+      );
+    }
+
+    /// ✅ RESORTS → MULTI-STEP FORM (YOUR WIREFRAME)
+    else if (type == "resorts") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChangeNotifierProvider(
+            create: (_) => ResortProvider(),
+            child: const ResortProviderPage(),
+          ),
+        ),
+      );
+    }
+
+    /// ✅ COMMON FORM SERVICES
+    else if (type == "salon" || type == "laundry") {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => ServiceProviderForm(type: type),
         ),
       );
-    } 
-    
-    /// Other services → dialog
+    }
+
+    /// ❌ OTHER SERVICES → dialog
     else {
       _showAddServiceDialog(service);
     }

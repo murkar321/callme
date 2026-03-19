@@ -11,14 +11,19 @@ class ServiceProduct {
   final int? finalPrice;
 
   final String? slogan;
+  final double? rating; // ✅ made optional
 
   final List<String>? includes;
+  final List<String>? excludes;
   final List<String>? process;
+  final List<String>? steps;
+  final String? tools;
 
   ServiceProduct({
     required this.name,
     required this.price,
     required this.imagePath,
+    this.rating,
     this.description,
     this.category,
     this.time,
@@ -27,12 +32,15 @@ class ServiceProduct {
     this.slogan,
     this.includes,
     this.process,
+    this.steps,
+    this.tools,
+    this.excludes,
   });
 
-  /// ✅ Auto calculated final price (if not given)
+  /// ✅ Auto calculated final price (safe)
   int get calculatedFinalPrice {
     if (finalPrice != null) return finalPrice!;
-    if (discount != null) {
+    if (discount != null && discount! > 0 && discount! <= 100) {
       return price - ((price * discount!) ~/ 100);
     }
     return price;
@@ -57,5 +65,15 @@ class ServiceProduct {
   /// ✅ Safe process list
   List<String> get safeProcess {
     return process ?? [];
+  }
+
+  /// ✅ Safe rating
+  double get safeRating {
+    return rating ?? 0.0;
+  }
+
+  /// ✅ UI formatted price
+  String get formattedPrice {
+    return '₹$calculatedFinalPrice';
   }
 }

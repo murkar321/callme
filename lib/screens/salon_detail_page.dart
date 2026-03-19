@@ -17,22 +17,18 @@ class SalonDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             Image.asset(
               "assets/salon.png",
               width: double.infinity,
               height: 230,
               fit: BoxFit.cover,
             ),
-
             const SizedBox(height: 15),
-
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
                   Text(
                     service.name,
                     style: const TextStyle(
@@ -137,7 +133,6 @@ class SalonDetailPage extends StatelessWidget {
           title: const Text("Choose Booking Type"),
           content: const Text("Select how you want the service"),
           actions: [
-
             /// SALON
             TextButton(
               onPressed: () {
@@ -147,7 +142,11 @@ class SalonDetailPage extends StatelessWidget {
                   MaterialPageRoute(
                     builder: (_) => SalonBookingPage(
                       service: service,
-                      isHomeVisitDefault: false, serviceName: service.name, services: [],
+                      isHomeVisitDefault: false,
+                      serviceName: service.name,
+                      services: [],
+                      adults: 1,
+                      children: 1,
                     ),
                   ),
                 );
@@ -164,7 +163,11 @@ class SalonDetailPage extends StatelessWidget {
                   MaterialPageRoute(
                     builder: (_) => SalonBookingPage(
                       service: service,
-                      isHomeVisitDefault: true, serviceName: '', services: [],
+                      isHomeVisitDefault: true,
+                      serviceName: '',
+                      services: [],
+                      adults: 1,
+                      children: 1,
                     ),
                   ),
                 );

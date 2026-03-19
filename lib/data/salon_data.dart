@@ -25,7 +25,9 @@ class SalonService {
     required this.process,
   });
 
-  get variants => null;
+  Null get variants => null;
+
+  double? get rating => 5;
 }
 
 List<String> salonCategories = [

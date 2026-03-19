@@ -261,17 +261,48 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                   ),
                   child: Column(
                     children: [
-                      /// IMAGE
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(18),
-                        ),
-                        child: Image.asset(
-                          product.imagePath,
-                          height: 90,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
+                      Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(18),
+                            ),
+                            child: Image.asset(
+                              product.imagePath,
+                              height: 90,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+
+                          /// ⭐ RATING BADGE
+                          Positioned(
+                            bottom: 6,
+                            left: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.black87,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.star,
+                                      color: Colors.amber, size: 12),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    (product.rating).toString(), // ✅ SAFE
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
 
                       /// CONTENT

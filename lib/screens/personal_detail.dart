@@ -8,10 +8,10 @@ class PersonalDetail extends StatefulWidget {
   final String type;
 
   const PersonalDetail({
-    Key? key,
+    super.key,
     required this.selectedServices,
     required this.type,
-  }) : super(key: key);
+  });
 
   @override
   State<PersonalDetail> createState() => _PersonalDetailState();
@@ -31,8 +31,7 @@ class _PersonalDetailState extends State<PersonalDetail> {
   final ImagePicker _picker = ImagePicker();
 
   Future<void> pickImage() async {
-    final XFile? image =
-        await _picker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
       setState(() {
@@ -45,14 +44,12 @@ class _PersonalDetailState extends State<PersonalDetail> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Personal Details")),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-
               /// 🔹 TYPE + SERVICES (Top Info)
               Container(
                 padding: const EdgeInsets.all(12),
@@ -106,8 +103,7 @@ class _PersonalDetailState extends State<PersonalDetail> {
                       ? const Center(child: Icon(Icons.camera_alt, size: 40))
                       : ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.file(profileImage!,
-                              fit: BoxFit.cover),
+                          child: Image.file(profileImage!, fit: BoxFit.cover),
                         ),
                 ),
               ),
@@ -151,8 +147,7 @@ class _PersonalDetailState extends State<PersonalDetail> {
       child: TextFormField(
         controller: controller,
         keyboardType: keyboard,
-        validator: (value) =>
-            value!.isEmpty ? "Enter $label" : null,
+        validator: (value) => value!.isEmpty ? "Enter $label" : null,
         decoration: InputDecoration(
           labelText: label,
           filled: true,

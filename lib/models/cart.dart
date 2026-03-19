@@ -6,14 +6,23 @@ class Cart {
   // product -> quantity
   static Map<ServiceProduct, int> quantities = {};
 
+  /// 🆕 STORE GUEST DATA (NEW - SAFE ADDITION)
+  static Map<ServiceProduct, Map<String, int>> guestData = {};
+
   /// ➕ ADD TO CART
-  static void add(ServiceProduct product) {
+  static void add(ServiceProduct product, {int adults = 1, int children = 0}) {
     if (quantities.containsKey(product)) {
       quantities[product] = quantities[product]! + 1;
     } else {
       items.add(product);
       quantities[product] = 1;
     }
+
+    /// ✅ SAVE GUEST DATA
+    guestData[product] = {
+      "adults": adults,
+      "children": children,
+    };
   }
 
   /// ➖ REMOVE FROM CART
@@ -25,6 +34,9 @@ class Cart {
     } else {
       quantities.remove(product);
       items.remove(product);
+
+      /// ✅ ALSO REMOVE GUEST DATA
+      guestData.remove(product);
     }
   }
 
@@ -32,6 +44,7 @@ class Cart {
   static void clear() {
     items.clear();
     quantities.clear();
+    guestData.clear(); // ✅ clear guests also
   }
 
   /// 💰 TOTAL PRICE

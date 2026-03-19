@@ -1,7 +1,8 @@
-import 'package:callme/screens/salon_page.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/screens/service_detail_page.dart';
+import 'package:callme/screens/salon_page.dart';
+import 'package:callme/screens/resort_list.dart'; // ✅ NEW
 import 'package:callme/widgets/category_card.dart';
 
 class HomePage extends StatefulWidget {
@@ -19,6 +20,7 @@ class _HomePageState extends State<HomePage> {
     ServiceCategory(name: 'Salon Service', imagePath: 'assets/salon.png'),
     ServiceCategory(name: 'Photography', imagePath: 'assets/photo.png'),
     ServiceCategory(name: 'Cleaning', imagePath: 'assets/k1.jpg'),
+    ServiceCategory(name: 'Resorts', imagePath: 'assets/resort.jfif'),
     ServiceCategory(name: 'Carpenter', imagePath: 'assets/carpt.png'),
     ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpg'),
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
@@ -86,11 +88,16 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // 🔹 Service Router
+  // 🔹 SERVICE ROUTER (UPDATED)
   Widget getServicePage(String serviceName) {
     switch (serviceName) {
+      case "Cleaning":
+        return const ServiceDetailPage(serviceName: 'Cleaning');
       case "Salon Service":
         return const SalonPage();
+
+      case "Resorts":
+        return const ResortListPage(); // ✅ FIXED FLOW
 
       default:
         return ServiceDetailPage(serviceName: serviceName);
@@ -115,8 +122,7 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-
-            // 🔍 Search bar
+            // 🔍 SEARCH BAR
             TextField(
               decoration: InputDecoration(
                 hintText: 'Search for a service...',
@@ -138,7 +144,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 Horizontal category list
+            // 🔹 HORIZONTAL LIST
             SizedBox(
               height: 110,
               child: NotificationListener<ScrollNotification>(
@@ -152,11 +158,10 @@ class _HomePageState extends State<HomePage> {
                   physics: const BouncingScrollPhysics(),
                   itemCount: filteredHorizontal.length,
                   itemBuilder: (context, index) {
-
                     final category = filteredHorizontal[index];
                     final isSelected = selectedCategory == category.name;
 
-                    final width = 106.0;
+                    const width = 106.0;
 
                     final scale = 1 -
                         (((_offset / width) - index).abs() * 0.18)
@@ -187,31 +192,26 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 Vertical category list
+            // 🔹 VERTICAL LIST
             Expanded(
               child: ListView.builder(
                 itemCount: filteredCategories.length,
                 cacheExtent: 700,
                 padding: const EdgeInsets.only(bottom: 12),
                 itemBuilder: (context, index) {
-
                   final category = filteredCategories[index];
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
                     child: GestureDetector(
-
                       onTap: () {
-
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => getServicePage(category.name),
                           ),
                         );
-
                       },
-
                       child: CategoryCard(
                         name: category.name,
                         imagePath: category.imagePath,

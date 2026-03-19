@@ -1,8 +1,9 @@
 import 'package:callme/screens/service_selection.dart';
 import 'package:flutter/material.dart';
 
-
 class PlumbingProvider extends StatelessWidget {
+  const PlumbingProvider({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -11,11 +12,9 @@ class PlumbingProvider extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-
             buildOption(context, "Agency"),
             buildOption(context, "Individual"),
             buildOption(context, "Business"),
-
           ],
         ),
       ),

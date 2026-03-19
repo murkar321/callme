@@ -25,7 +25,6 @@ class SalonServiceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           /// IMAGE
           Expanded(
             flex: 5,
@@ -47,8 +46,8 @@ class SalonServiceCard extends StatelessWidget {
                   top: 6,
                   right: 6,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.green,
                       borderRadius: BorderRadius.circular(12),
@@ -75,7 +74,6 @@ class SalonServiceCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
                   /// NAME
                   Text(
                     service.name,
@@ -106,7 +104,6 @@ class SalonServiceCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-
                       Text(
                         "₹${service.price}",
                         style: const TextStyle(
@@ -118,7 +115,6 @@ class SalonServiceCard extends StatelessWidget {
                       /// ➕ ADD BUTTON (FIXED)
                       InkWell(
                         onTap: () {
-
                           final product = ServiceProduct(
                             name: service.name,
                             price: service.price,
@@ -127,6 +123,7 @@ class SalonServiceCard extends StatelessWidget {
                             time: service.time,
                             discount: service.discount,
                             finalPrice: service.finalPrice,
+                            rating: 4.5,
                           );
 
                           Cart.add(product);
@@ -173,8 +170,7 @@ class SalonServiceCard extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                SalonDetailPage(service: service),
+                            builder: (_) => SalonDetailPage(service: service),
                           ),
                         );
                       },

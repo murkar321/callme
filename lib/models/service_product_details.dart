@@ -2,159 +2,6 @@ import '../models/service_product.dart';
 
 // Master data for all services and their subcategories
 final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
-  // 📸 PHOTOGRAPHY
-  'Photography': {
-    'Album': [
-      ServiceProduct(
-        name: 'Single Photo Half Day',
-        price: 250,
-        imagePath: 'assets/a1.jpg',
-        description:
-            'A half-day single photo session perfect for solo portraits or quick shoots.',
-      ),
-      ServiceProduct(
-        name: 'Children Photo Full Day',
-        price: 500,
-        imagePath: 'assets/a2.jpg',
-        description:
-            'Full-day children photography service capturing fun and candid moments.',
-      ),
-      ServiceProduct(
-        name: 'Single Photo Half Day',
-        price: 250,
-        imagePath: 'assets/a3.jpg',
-        description:
-            'Professional indoor or outdoor photo session lasting half a day.',
-      ),
-      ServiceProduct(
-        name: 'Children Photo Full Day',
-        price: 500,
-        imagePath: 'assets/a4.jpg',
-        description:
-            'A full-day children’s shoot with props and creative lighting setups.',
-      ),
-    ],
-    'Wedding': [
-      ServiceProduct(
-        name: 'Wedding Photography',
-        price: 10000,
-        imagePath: 'assets/w1.jpg',
-        description:
-            'Full-day wedding photography with candid and traditional shots.',
-      ),
-      ServiceProduct(
-        name: 'Pre Wedding Shoot',
-        price: 5000,
-        imagePath: 'assets/w2.jpg',
-        description:
-            'Creative outdoor pre-wedding shoot with location guidance.',
-      ),
-      ServiceProduct(
-        name: 'Wedding Photography',
-        price: 10000,
-        imagePath: 'assets/w3.jpg',
-        description:
-            'Premium wedding coverage with photo editing and digital album.',
-      ),
-      ServiceProduct(
-        name: 'Pre Wedding Shoot',
-        price: 5000,
-        imagePath: 'assets/w4.jpg',
-        description:
-            'Romantic pre-wedding session with cinematic photography style.',
-      ),
-    ],
-    'Event': [
-      ServiceProduct(
-        name: 'Event Photography',
-        price: 5000,
-        imagePath: 'assets/event.jpg',
-        description: 'Photography coverage for events, functions, or launches.',
-      ),
-      ServiceProduct(
-        name: 'Corporate Event',
-        price: 7000,
-        imagePath: 'assets/e1.jpg',
-        description:
-            'Professional photography for corporate meetings, expos, and seminars.',
-      ),
-      ServiceProduct(
-        name: 'House Event',
-        price: 9000,
-        imagePath: 'assets/e2.jpg',
-        description: 'Event photography for private functions and home events.',
-      ),
-      ServiceProduct(
-        name: 'Wedding Event',
-        price: 8000,
-        imagePath: 'assets/e3.jpg',
-        description:
-            'Capture wedding-related events such as receptions or mehendi.',
-      ),
-      ServiceProduct(
-        name: 'College Event',
-        price: 1000,
-        imagePath: 'assets/e4.jpg',
-        description:
-            'Budget-friendly photography for college events and fests.',
-      ),
-    ],
-    'Birthday': [
-      ServiceProduct(
-        name: 'Birthday Shoot Half Day',
-        price: 1000,
-        imagePath: 'assets/bi1.jpg',
-        description:
-            'Half-day birthday shoot including decorations and cake-cutting.',
-      ),
-      ServiceProduct(
-        name: 'Birthday Shoot Full Day',
-        price: 2000,
-        imagePath: 'assets/bi2.jpg',
-        description:
-            'Full-day birthday photography covering preparation to celebrations.',
-      ),
-      ServiceProduct(
-        name: 'Birthday Shoot Half Day',
-        price: 1000,
-        imagePath: 'assets/bi3.jpg',
-        description: 'Indoor/outdoor birthday shoot for kids or adults.',
-      ),
-      ServiceProduct(
-        name: 'Birthday Shoot Full Day',
-        price: 2000,
-        imagePath: 'assets/bi4.jpg',
-        description: 'Candid birthday photography with props and lighting.',
-      ),
-      ServiceProduct(
-        name: 'Birthday Shoot Full Day',
-        price: 2000,
-        imagePath: 'assets/bi5.jpg',
-        description: 'Professional full-day birthday photo session.',
-      ),
-    ],
-    'Baby Shower': [
-      ServiceProduct(
-        name: 'Baby Shower Photography',
-        price: 3000,
-        imagePath: 'assets/bs1.jpg',
-        description: 'Beautiful maternity and baby shower photography.',
-      ),
-      ServiceProduct(
-        name: 'Baby Shower Photography',
-        price: 5000,
-        imagePath: 'assets/bs2.jpg',
-        description: 'Full-event coverage for baby shower celebrations.',
-      ),
-      ServiceProduct(
-        name: 'Baby Shower Photography',
-        price: 10000,
-        imagePath: 'assets/bs3.jpg',
-        description: 'Premium baby shower photoshoot with creative backdrops.',
-      ),
-    ],
-  },
-
 // 👕 LAUNDRY
   'Laundry': {
     /// WASHING
@@ -174,6 +21,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fabric softener treatment',
           'Fresh fragrance finish',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Pant Washing',
@@ -190,6 +38,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fabric softener treatment',
           'Proper drying process',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Suit Washing',
@@ -206,6 +55,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Shape retention',
           'Professional finishing',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Saree Washing',
@@ -222,6 +72,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Color-safe cleaning',
           'Fresh fragrance finish',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Curtain Washing',
@@ -238,6 +89,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Color protection',
           'Fresh fragrance',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Shoe Washing',
@@ -254,6 +106,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Odor cleaning',
           'Proper drying',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Bedsheet Washing',
@@ -270,6 +123,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fresh fragrance finish',
           'Proper drying and folding',
         ],
+        rating: 4.3,
       ),
     ],
 
@@ -289,6 +143,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Safe chemical cleaning',
           'Professional finishing',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Suit Dry Cleaning',
@@ -304,6 +159,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Shape retention',
           'Professional finishing',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Saree Dry Cleaning',
@@ -319,6 +175,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Soft finishing',
           'Premium care',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Blazer Dry Cleaning',
@@ -333,6 +190,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Shape retention',
           'Soft fabric care',
         ],
+        rating: 4.3,
       ),
     ],
 
@@ -351,6 +209,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fabric-safe heat',
           'Neat folding',
         ],
+        rating: 4.5,
       ),
       ServiceProduct(
         name: 'Pant Ironing',
@@ -365,6 +224,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Wrinkle-free',
           'Professional finish',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Dress Ironing',
@@ -379,6 +239,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Neat finish',
           'Quick service',
         ],
+        rating: 4.5,
       ),
       ServiceProduct(
         name: 'Kids Clothes Ironing',
@@ -392,6 +253,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Delicate handling',
           'Smooth finish',
         ],
+        rating: 4.3,
       ),
     ],
 
@@ -410,6 +272,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fabric-safe wash',
           'Fresh fragrance',
         ],
+        rating: 4.5,
       ),
       ServiceProduct(
         name: 'Heavy Curtain Cleaning',
@@ -424,6 +287,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Stain removal',
           'Odor removal',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Luxury Curtain Cleaning',
@@ -438,6 +302,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Premium fabric care',
           'Fresh scent',
         ],
+        rating: 4.5,
       ),
     ],
 
@@ -464,6 +329,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Step 3: Drying',
           'Step 4: Final check'
         ],
+        rating: 4.5,
       ),
       ServiceProduct(
         name: 'Leather Shoe Cleaning',
@@ -480,6 +346,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Odor treatment',
           'Proper drying'
         ],
+        rating: 4.3,
         process: [
           'Step 1: Inspection',
           'Step 2: Leather-safe cleaning',
@@ -503,6 +370,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Step 3: Drying',
           'Step 4: Finishing'
         ],
+        rating: 4.5,
       ),
       ServiceProduct(
         name: 'Boot Cleaning',
@@ -517,6 +385,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Polish treatment',
           'Proper drying',
         ],
+        rating: 4.3,
       ),
     ],
 
@@ -535,6 +404,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Soft fabric care',
           'Proper drying',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Double Bedsheet Cleaning',
@@ -549,6 +419,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Soft finish',
           'Fresh fragrance',
         ],
+        rating: 4.5,
       ),
       ServiceProduct(
         name: 'Bedsheet Deep Cleaning',
@@ -563,6 +434,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Deep stain cleaning',
           'Premium wash',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Luxury Bedsheet Cleaning',
@@ -577,6 +449,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Premium finishing',
           'Fresh fragrance',
         ],
+        rating: 5,
       ),
     ],
   },
@@ -604,6 +477,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Repair',
           'Testing',
         ],
+        rating: 4.5,
       ),
       ServiceProduct(
         name: 'Broken Pipe Fix',
@@ -623,6 +497,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Repair pipe',
           'Test flow',
         ],
+        rating: 4.3,
       ),
       ServiceProduct(
         name: 'Pipe Replacement',
@@ -637,6 +512,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'New pipe installation',
           'Testing',
         ],
+        rating: 4.3,
         process: [
           'Remove old pipe',
           'Install new pipe',
@@ -660,6 +536,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Seal fixing',
           'Testing',
         ],
+        rating: 4.5,
         process: [
           'Detect leak',
           'Fix leakage',
@@ -679,6 +556,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Leak fixing',
           'Testing',
         ],
+        rating: 4.5,
       ),
     ],
 
@@ -697,6 +575,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Connection setup',
           'Testing',
         ],
+        rating: 4.5,
       ),
       ServiceProduct(
         name: 'Tap Replacement',
@@ -711,6 +590,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Install new tap',
           'Testing',
         ],
+        rating: 4.5,
       ),
     ],
 
@@ -729,6 +609,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Block removal',
           'Pipe flushing',
         ],
+        rating: 4.5,
       ),
       ServiceProduct(
         name: 'Blocked Drain Fix',
@@ -743,6 +624,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Cleaning',
           'Testing',
         ],
+        rating: 4.5,
       ),
     ],
 
@@ -761,6 +643,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Repair',
           'Testing',
         ],
+        rating: 4.5,
       ),
       ServiceProduct(
         name: 'Bathroom Pipe Repair',
@@ -775,6 +658,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Leak fix',
           'Testing',
         ],
+        rating: 4.3,
       ),
     ],
 
@@ -792,6 +676,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Flush repair',
           'Testing',
         ],
+        rating: 4.4,
       ),
       ServiceProduct(
         name: 'Toilet Leakage Fix',
@@ -806,6 +691,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Seal check',
           'Testing',
         ],
+        rating: 4.5,
       ),
     ],
 
@@ -824,6 +710,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Pipe connection',
           'Testing',
         ],
+        rating: 4.4,
       ),
       ServiceProduct(
         name: 'Sink Replacement',
@@ -838,307 +725,289 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Install new sink',
           'Testing',
         ],
+        rating: 4.5,
       ),
     ],
   },
 
-// 🧹 CLEANING SERVICES
-  'Cleaning': {
-    /// 🔹 HOME CLEANING
-    'Home Cleaning': [
+  /// 🧹 CLEANING SERVICES
+  "Cleaning": {
+    /// 🏠 HOME CLEANING
+    "Home Cleaning": [
       ServiceProduct(
-        name: '1 BHK Full Cleaning',
+        name: "1 BHK Full Cleaning",
         price: 999,
-        imagePath: 'assets/1bhk.jfif',
-        description:
-            'Complete cleaning solution for small homes with proper dust removal and hygiene care.',
-        time: '2–3 Hours',
+        imagePath: "assets/cleaning.png",
+        description: "Complete cleaning for small homes",
+        includes: [],
+        excludes: [],
+        steps: [],
+        tools: "",
+        time: "2–3 Hours",
         discount: 20,
-        slogan: 'Complete cleaning for small homes',
-        includes: [
-          'Floor sweeping & mopping',
-          'Furniture dusting',
-          'Kitchen surface cleaning',
-          'Bathroom cleaning',
-          'Cobweb removal',
-        ],
+        finalPrice: 799,
+        rating: 4.5,
       ),
       ServiceProduct(
-        name: '2 BHK Full Cleaning',
+        name: "2 BHK Full Cleaning",
         price: 1499,
-        imagePath: 'assets/2bhk.jfif',
-        description:
-            'Ideal for medium homes with detailed cleaning of all rooms and common areas.',
-        time: '3–4 Hours',
+        imagePath: "assets/cleaning.png",
+        description: "Perfect cleaning for medium homes",
+        includes: [],
+        excludes: [],
+        steps: [],
+        tools: "",
+        time: "3–4 Hours",
         discount: 20,
-        slogan: 'Perfect cleaning for medium homes',
-        includes: [
-          'Full house cleaning',
-          'Kitchen & bathroom cleaning',
-          'Dust removal from all surfaces',
-        ],
+        finalPrice: 1199,
+        rating: 4.5,
       ),
       ServiceProduct(
-        name: '3 BHK Full Cleaning',
+        name: "3 BHK Full Cleaning",
         price: 1999,
-        imagePath: 'assets/3bhk.jfif',
-        description:
-            'Deep and detailed cleaning for large homes ensuring every corner is covered.',
-        time: '4–5 Hours',
+        imagePath: "assets/cleaning.png",
+        description: "Deep cleaning for large homes",
+        includes: [],
+        excludes: [],
+        steps: [],
+        tools: "",
+        time: "4–5 Hours",
         discount: 25,
-        slogan: 'Deep cleaning for large homes',
-        includes: [
-          'Complete house cleaning',
-          'Deep dusting',
-          'Mopping',
-          'Bathroom & kitchen cleaning',
-        ],
+        finalPrice: 1499,
+        rating: 4.5,
       ),
       ServiceProduct(
-        name: 'Living Room Cleaning',
+        name: "Living Room Cleaning",
         price: 399,
-        imagePath: 'assets/living.jfif',
-        description:
-            'Focused cleaning of your living space to maintain freshness and hygiene.',
-        time: '60 Minutes',
+        imagePath: "assets/cleaning.png",
+        description: "Fresh and dust free living space",
+        includes: [],
+        excludes: [],
+        steps: [],
+        tools: "",
+        time: "60 minutes",
         discount: 10,
-        slogan: 'Fresh and dust free living space',
-        includes: [
-          'Sofa dusting',
-          'Table cleaning',
-          'TV unit cleaning',
-          'Floor mopping',
-        ],
-      ),
-      ServiceProduct(
-        name: 'Bedroom Cleaning',
-        price: 349,
-        imagePath: 'assets/bedroom.jfif',
-        description:
-            'Clean and relaxing bedroom environment with proper dust removal.',
-        time: '45 Minutes',
-        discount: 10,
-        slogan: 'Clean and relaxing bedroom',
-        includes: [
-          'Bed area cleaning',
-          'Furniture dusting',
-          'Floor cleaning',
-        ],
+        finalPrice: 359,
+        rating: 4.5,
       ),
     ],
 
-    /// 🔹 KITCHEN CLEANING
-    'Kitchen Cleaning': [
+    /// 🍳 KITCHEN CLEANING
+    "Kitchen Cleaning": [
       ServiceProduct(
-        name: 'Basic Kitchen Cleaning',
+        name: "Basic Kitchen Cleaning",
         price: 499,
-        imagePath: 'assets/kitchen.jpg',
-        description: 'Quick cleaning for daily kitchen maintenance.',
-        time: '60 Minutes',
+        imagePath: "assets/cleaning.png",
+        description: "Quick kitchen refresh",
+        includes: [],
+        excludes: [],
+        steps: [],
+        tools: "",
+        time: "60 minutes",
         discount: 10,
-        slogan: 'Quick kitchen refresh',
-        includes: [
-          'Slab cleaning',
-          'Sink wash',
-          'Basic surface cleaning',
-        ],
+        finalPrice: 449,
+        rating: 4.5,
       ),
       ServiceProduct(
-        name: 'Deep Kitchen Cleaning',
+        name: "Deep Kitchen Cleaning",
         price: 1199,
-        imagePath: 'assets/kitchen.jpg',
-        description:
-            'Complete grease and stain removal for a hygienic kitchen.',
-        time: '2–3 Hours',
+        imagePath: "assets/cleaning.png",
+        description: "Remove grease and tough stains",
+        includes: [],
+        excludes: [],
+        steps: [],
+        tools: "",
+        time: "2–3 Hours",
         discount: 20,
-        slogan: 'Remove grease and tough stains',
-        includes: [
-          'Grease removal',
-          'Slab, tiles cleaning',
-          'Cabinet exterior cleaning',
-        ],
-      ),
-      ServiceProduct(
-        name: 'Chimney Cleaning',
-        price: 599,
-        imagePath: 'assets/chimney.jfif',
-        description: 'Improves airflow and removes oil buildup from chimney.',
-        time: '60 Minutes',
-        discount: 15,
-        slogan: 'Smoke free kitchen experience',
-        includes: [
-          'Filter cleaning',
-          'Outer body cleaning',
-        ],
-      ),
-      ServiceProduct(
-        name: 'Stove Cleaning',
-        price: 299,
-        imagePath: 'assets/stove.jfif',
-        description: 'Makes your stove shine by removing oil and stains.',
-        time: '30 Minutes',
-        discount: 10,
-        slogan: 'Sparkling clean stove',
-        includes: [
-          'Burner cleaning',
-          'Surface cleaning',
-        ],
-      ),
-      ServiceProduct(
-        name: 'Kitchen Cabinet Cleaning',
-        price: 399,
-        imagePath: 'assets/cabinet.jfif',
-        description: 'Clean and organized cabinets inside and outside.',
-        time: '45 Minutes',
-        discount: 10,
-        slogan: 'Clean and organized cabinets',
-        includes: [
-          'Internal cleaning',
-          'External cleaning',
-        ],
+        finalPrice: 959,
+        rating: 4.5,
       ),
     ],
 
-    /// 🔹 BATHROOM CLEANING
-    'Bathroom Cleaning': [
+    /// 🚿 BATHROOM CLEANING
+    "Bathroom Cleaning": [
       ServiceProduct(
-        name: 'Basic Bathroom Cleaning',
+        name: "Basic Bathroom Cleaning",
         price: 399,
-        imagePath: 'assets/bathroom.jpg',
-        description: 'Regular cleaning to maintain hygiene.',
-        time: '45 Minutes',
+        imagePath: "assets/cleaning.png",
+        description: "Quick bathroom refresh",
+        includes: [],
+        excludes: [],
+        steps: [],
+        tools: "",
+        time: "45 minutes",
         discount: 10,
-        slogan: 'Quick bathroom refresh',
-        includes: [
-          'Toilet cleaning',
-          'Sink & mirror cleaning',
-          'Floor cleaning',
-        ],
+        finalPrice: 359,
+        rating: 4.5,
       ),
       ServiceProduct(
-        name: 'Deep Bathroom Cleaning',
+        name: "Deep Bathroom Cleaning",
         price: 799,
-        imagePath: 'assets/bathroom.jpg',
-        description: 'Removes tough stains and bacteria for deep hygiene.',
-        time: '90 Minutes',
+        imagePath: "assets/cleaning.png",
+        description: "Remove stains and bacteria",
+        includes: [],
+        excludes: [],
+        steps: [],
+        tools: "",
+        time: "90 minutes",
         discount: 15,
-        slogan: 'Remove stains and bacteria',
-        includes: [
-          'Tile scrubbing',
-          'Stain removal',
-          'Full sanitization',
-        ],
-      ),
-      ServiceProduct(
-        name: 'Toilet Cleaning',
-        price: 299,
-        imagePath: 'assets/toilet.jfif',
-        description: 'Focused cleaning for toilet hygiene.',
-        time: '30 Minutes',
-        discount: 10,
-        slogan: 'Hygienic toilet cleaning',
-        includes: [
-          'Toilet seat cleaning',
-          'Pot cleaning',
-          'Area cleaning',
-        ],
-      ),
-      ServiceProduct(
-        name: 'Tile & Grout Cleaning',
-        price: 499,
-        imagePath: 'assets/tiles.jfif',
-        description: 'Restores shine of tiles by removing dirt from gaps.',
-        time: '60 Minutes',
-        discount: 10,
-        slogan: 'Shine your bathroom tiles',
-        includes: [
-          'Tile cleaning',
-          'Grout cleaning',
-        ],
-      ),
-      ServiceProduct(
-        name: 'Hard Water Stain Removal',
-        price: 599,
-        imagePath: 'assets/stain.jfif',
-        description: 'Removes white and yellow stains caused by hard water.',
-        time: '60 Minutes',
-        discount: 15,
-        slogan: 'Remove tough water stains',
-        includes: [
-          'Tap cleaning',
-          'Tile cleaning',
-          'Fittings cleaning',
-        ],
+        finalPrice: 679,
+        rating: 4.5,
       ),
     ],
 
-    /// 🔹 SOFA CLEANING
-    'Sofa Cleaning': [
+    /// 🛋 SOFA CLEANING
+    "Sofa Cleaning": [
       ServiceProduct(
-        name: 'Fabric Sofa Cleaning',
+        name: "Fabric Sofa Cleaning",
         price: 599,
-        imagePath: 'assets/sofa.jfif',
-        description: 'Fresh and dust free sofa cleaning.',
-        time: '60 Minutes',
+        imagePath: "assets/cleaning.png",
+        description: "Deep cleaning using shampoo and vacuum extraction",
+        includes: ["Dust removal", "Shampoo wash", "Drying"],
+        excludes: ["Fabric repair"],
+        steps: ["Vacuum", "Shampoo", "Dry"],
+        tools: "Machine, shampoo solution",
+        time: "60 Minutes",
         discount: 15,
-        slogan: 'Fresh and dust free sofa',
-        includes: [
-          'Dust removal',
-          'Fabric cleaning',
-        ],
+        finalPrice: 509,
+        rating: 4.5,
       ),
       ServiceProduct(
-        name: 'Leather Sofa Cleaning',
+        name: "Leather Sofa Cleaning",
         price: 699,
-        imagePath: 'assets/sofa.jpg',
-        description: 'Safe care for leather sofas.',
-        time: '60 Minutes',
+        imagePath: "assets/cleaning.png",
+        description: "Safe cleaning for leather surfaces",
+        includes: ["Cleaning and polishing"],
+        excludes: ["Crack repair"],
+        steps: ["Wipe", "Condition", "Polish"],
+        tools: "Leather cleaner",
+        time: "45 Minutes",
         discount: 15,
-        slogan: 'Safe care for leather sofas',
-        includes: [
-          'Leather safe cleaning',
-          'Polishing',
-        ],
-      ),
-      ServiceProduct(
-        name: 'L-Shaped Sofa Cleaning',
-        price: 999,
-        imagePath: 'assets/sofa.jfif',
-        description: 'Deep clean for large sofas.',
-        time: '90 Minutes',
-        discount: 20,
-        slogan: 'Deep clean for large sofas',
-        includes: [
-          'Deep vacuuming',
-          'Full surface cleaning',
-        ],
-      ),
-      ServiceProduct(
-        name: 'Cushion Cleaning',
-        price: 299,
-        imagePath: 'assets/cushion.jfif',
-        description: 'Clean and fresh cushions.',
-        time: '30 Minutes',
-        discount: 10,
-        slogan: 'Clean and fresh cushions',
-        includes: [
-          'Dust removal',
-          'Fabric cleaning',
-        ],
-      ),
-      ServiceProduct(
-        name: 'Sofa Stain Removal',
-        price: 399,
-        imagePath: 'assets/stain.jfif',
-        description: 'Remove stubborn stains easily.',
-        time: '45 Minutes',
-        discount: 10,
-        slogan: 'Remove stubborn stains easily',
-        includes: [
-          'Stain treatment',
-          'Spot cleaning',
-        ],
+        finalPrice: 594,
+        rating: 4.5,
       ),
     ],
-  }
+
+    /// 🧹 CARPET CLEANING
+    "Carpet Cleaning": [
+      ServiceProduct(
+        name: "Dry Carpet Cleaning",
+        price: 399,
+        imagePath: "assets/cleaning.png",
+        description: "Quick dust removal cleaning",
+        includes: ["Vacuum cleaning"],
+        excludes: ["Wet wash"],
+        steps: ["Vacuum", "Finish"],
+        tools: "Vacuum",
+        time: "30 Minutes",
+        discount: 10,
+        finalPrice: 359,
+        rating: 4.5,
+      ),
+    ],
+
+    /// 🪟 WINDOW CLEANING
+    "Window Cleaning": [
+      ServiceProduct(
+        name: "Glass Cleaning",
+        price: 299,
+        imagePath: "assets/cleaning.png",
+        description: "Streak-free glass cleaning",
+        includes: ["Glass wipe"],
+        excludes: ["High-rise work"],
+        steps: ["Spray", "Wipe", "Polish"],
+        tools: "Glass cleaner",
+        time: "30 Minutes",
+        discount: 10,
+        finalPrice: 269,
+        rating: 4.5,
+      ),
+    ],
+
+    /// 🧽 DEEP CLEANING
+    "Deep Cleaning": [
+      ServiceProduct(
+        name: "Full Home Deep Cleaning",
+        price: 3999,
+        imagePath: "assets/cleaning.png",
+        description: "Complete deep cleaning of entire home",
+        includes: ["All rooms deep cleaning"],
+        excludes: ["Repair"],
+        steps: ["Inspection", "Deep clean", "Finish"],
+        tools: "Machines",
+        time: "5–6 Hours",
+        discount: 25,
+        finalPrice: 2999,
+        rating: 4.5,
+      ),
+    ],
+
+    /// 🏢 CORPORATE CLEANING
+    "Corporate Office Cleaning": [
+      ServiceProduct(
+        name: "Office Deep Cleaning",
+        price: 4999,
+        imagePath: "assets/cleaning.png",
+        description: "Full office cleaning service",
+        includes: ["All areas"],
+        excludes: ["IT repair"],
+        steps: ["Clean", "Sanitize"],
+        tools: "Machines",
+        time: "4–5 Hours",
+        discount: 20,
+        finalPrice: 3999,
+        rating: 4.5,
+      ),
+    ],
+
+    /// 🔌 ELECTRONIC CLEANING
+    "Electronic Cleaning": [
+      ServiceProduct(
+        name: "AC Cleaning",
+        price: 599,
+        imagePath: "assets/cleaning.png",
+        description: "Improves AC performance",
+        includes: ["Filter cleaning"],
+        excludes: ["Gas refill"],
+        steps: ["Open", "Clean", "Close"],
+        tools: "AC kit",
+        time: "60 Minutes",
+        discount: 15,
+        finalPrice: 509,
+        rating: 4.5,
+      ),
+    ],
+
+    /// 📦 MONTHLY PACKAGES
+    "Monthly Packages": [
+      ServiceProduct(
+        name: "Basic Plan",
+        price: 1499,
+        imagePath: "assets/cleaning.png",
+        description: "Weekly cleaning plan",
+        includes: ["4 visits/month"],
+        excludes: ["Deep cleaning"],
+        steps: [],
+        tools: "",
+        time: "60–90 min/visit",
+        discount: 20,
+        finalPrice: 1199,
+        rating: 4.5,
+      ),
+      ServiceProduct(
+        name: "Premium Plan",
+        price: 4999,
+        imagePath: "assets/cleaning.png",
+        description: "Deep + regular cleaning",
+        includes: ["12 visits + deep cleaning"],
+        excludes: ["Repair work"],
+        steps: [],
+        tools: "",
+        time: "2–3 hrs/visit",
+        discount: 30,
+        finalPrice: 3499,
+        rating: 4.5,
+      ),
+    ],
+  },
 };
