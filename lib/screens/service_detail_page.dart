@@ -21,16 +21,12 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
 
   final Color primaryColor = const Color.fromARGB(255, 174, 145, 186);
 
+  bool isLaundryGuideShown = false; // ✅ NEW FLAG
+
   @override
   void initState() {
     super.initState();
     selectedCategory = serviceProducts[widget.serviceName]!.keys.first;
-
-    if (widget.serviceName == "Laundry") {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        showLaundryBottomSheet();
-      });
-    }
   }
 
   int get totalItems {
@@ -187,7 +183,6 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
       /// BODY
       body: Row(
         children: [
-
           /// LEFT CATEGORY PANEL
           Container(
             width: 92,
@@ -231,9 +226,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color: isSelected
-                                ? primaryColor
-                                : Colors.grey,
+                            color: isSelected ? primaryColor : Colors.grey,
                           ),
                         ),
                       ],
@@ -268,7 +261,6 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                   ),
                   child: Column(
                     children: [
-
                       /// IMAGE
                       ClipRRect(
                         borderRadius: const BorderRadius.vertical(
@@ -289,7 +281,6 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-
                               if (product.discount != null)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
@@ -306,9 +297,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                                     ),
                                   ),
                                 ),
-
                               const SizedBox(height: 4),
-
                               Text(
                                 product.name,
                                 maxLines: 2,
@@ -317,16 +306,13 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-
                               if (product.slogan != null)
                                 Text(
                                   product.slogan!,
                                   style: const TextStyle(
                                       fontSize: 11, color: Colors.grey),
                                 ),
-
                               const Spacer(),
-
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
@@ -353,8 +339,17 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                                         ),
                                     ],
                                   ),
+
+                                  /// ✅ UPDATED ADD BUTTON
                                   ElevatedButton(
-                                    onPressed: () {
+                                    onPressed: () async {
+                                      // Show popup BEFORE adding item
+                                      if (widget.serviceName == "Laundry" &&
+                                          !isLaundryGuideShown) {
+                                        isLaundryGuideShown = true;
+                                        showLaundryBottomSheet();
+                                      }
+
                                       setState(() {
                                         Cart.quantities[product] =
                                             (Cart.quantities[product] ?? 0) + 1;
@@ -380,7 +375,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
         ],
       ),
 
-      /// ✅ FIXED VIEW CART BUTTON
+      /// ✅ VIEW CART BUTTON
       bottomNavigationBar: totalItems == 0
           ? null
           : InkWell(
