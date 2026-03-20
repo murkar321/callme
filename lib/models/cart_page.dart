@@ -1,30 +1,45 @@
 import 'package:callme/screens/booking_page.dart';
 import 'package:flutter/material.dart';
 import '../models/cart.dart';
-import '../models/service_product.dart';
 
 class CartPage extends StatefulWidget {
-  const CartPage({super.key, required String serviceName});
+  const CartPage(
+      {super.key, required String service, required String serviceName});
 
   @override
   State<CartPage> createState() => _CartPageState();
 }
 
 class _CartPageState extends State<CartPage> {
+  /// 🔥 GROUP ITEMS BY SERVICE
+  Map<String, List<CartItem>> groupByService(List<CartItem> items) {
+    final Map<String, List<CartItem>> data = {};
+
+    for (var item in items) {
+      if (!data.containsKey(item.service)) {
+        data[item.service] = [];
+      }
+      data[item.service]!.add(item);
+    }
+
+    return data;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final cartData = Cart.serviceItems;
+    final items = Cart.allItems;
+    final cartData = groupByService(items);
 
     return Scaffold(
       appBar: AppBar(title: const Text("Your Cart")),
 
-      body: cartData.isEmpty
+      body: items.isEmpty
           ? const Center(child: Text("Cart is empty"))
           : ListView(
               padding: const EdgeInsets.all(12),
               children: cartData.entries.map((entry) {
                 String service = entry.key;
-                List<ServiceProduct> items = entry.value;
+                List<CartItem> serviceItems = entry.value;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,29 +56,29 @@ class _CartPageState extends State<CartPage> {
                     const SizedBox(height: 8),
 
                     /// 🔹 ITEMS LIST
-                    ...items.map((item) {
-                      int qty = Cart.getQuantity(item);
-
+                    ...serviceItems.map((item) {
                       return Card(
                         child: ListTile(
-                          leading: Image.asset(
-                            item.imagePath,
-                            width: 50,
-                            height: 50,
-                            fit: BoxFit.cover,
-                          ),
+                          leading: item.image != null
+                              ? Image.asset(
+                                  item.image!,
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                )
+                              : const Icon(Icons.shopping_bag),
 
                           title: Text(item.name),
 
                           subtitle: Text(
-                            "${item.serviceTime} • ${item.discountLabel}",
+                            "Category: ${item.category}",
                           ),
 
-                          /// 🔥 PRICE + QUANTITY CONTROLS
+                          /// 🔥 PRICE + QUANTITY
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text("₹${item.calculatedFinalPrice}"),
+                              Text("₹${item.price}"),
                               const SizedBox(height: 4),
                               Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -72,7 +87,7 @@ class _CartPageState extends State<CartPage> {
                                   GestureDetector(
                                     onTap: () {
                                       setState(() {
-                                        Cart.remove(item);
+                                        Cart.removeById(item.id, item.service);
                                       });
                                     },
                                     child: const Icon(Icons.remove_circle),
@@ -81,14 +96,24 @@ class _CartPageState extends State<CartPage> {
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 6),
-                                    child: Text(qty.toString()),
+                                    child: Text(item.quantity.toString()),
                                   ),
 
                                   /// ➕
                                   GestureDetector(
                                     onTap: () {
                                       setState(() {
-                                        Cart.add(item, service: '');
+                                        Cart.add(
+                                          CartItem(
+                                            id: item.id,
+                                            name: item.name,
+                                            price: item.price,
+                                            service: item.service,
+                                            category: item.category,
+                                            image: item.image,
+                                          ),
+                                          service: item.service,
+                                        );
                                       });
                                     },
                                     child: const Icon(Icons.add_circle),
@@ -114,15 +139,13 @@ class _CartPageState extends State<CartPage> {
 
                     const SizedBox(height: 10),
 
-                    /// 🔹 BOOK BUTTON (SERVICE-WISE)
+                    /// 🔹 BOOK BUTTON
                     ElevatedButton(
                       onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => BookingPage(
-                              serviceName: '',
-                            ),
+                            builder: (_) => BookingPage(serviceName: service),
                           ),
                         );
                       },
@@ -135,8 +158,8 @@ class _CartPageState extends State<CartPage> {
               }).toList(),
             ),
 
-      /// 🔥 BOTTOM TOTAL BAR (ALL SERVICES)
-      bottomNavigationBar: cartData.isEmpty
+      /// 🔥 TOTAL BAR
+      bottomNavigationBar: items.isEmpty
           ? null
           : Container(
               padding: const EdgeInsets.all(16),

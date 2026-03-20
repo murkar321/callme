@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
+
+import 'models/cart_provider.dart'; // ✅ NEW
 
 import 'screens/logo_page.dart';
 import 'screens/signup_page.dart';
@@ -12,7 +15,7 @@ import 'screens/salon_provider_form.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase safely
+  /// 🔹 Firebase Init
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -29,27 +32,43 @@ class CallMeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'CallMe',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CartProvider()), // ✅ GLOBAL CART
+      ],
+      child: MaterialApp(
+        title: 'CallMe',
+        debugShowCheckedModeBanner: false,
+
+        /// 🔹 THEME
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xffAE91BA),
+          ),
+          appBarTheme: const AppBarTheme(
+            centerTitle: true,
+            elevation: 0,
+          ),
         ),
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-        ),
+
+        /// 🔹 ROUTES
+        initialRoute: '/logo',
+        routes: {
+          '/logo': (context) => const LogoPage(),
+          '/signup': (context) => const SignupPage(),
+          '/bottomnav': (context) => const BottomNavPage(),
+          '/home': (context) => const HomePage(),
+          '/salonRegister': (context) => const SalonProviderForm(),
+        },
+
+        /// 🔹 SAFETY (UNKNOWN ROUTES)
+        onUnknownRoute: (settings) {
+          return MaterialPageRoute(
+            builder: (_) => const LogoPage(),
+          );
+        },
       ),
-      initialRoute: '/logo',
-      routes: {
-        '/logo': (context) => const LogoPage(),
-        '/signup': (context) => const SignupPage(),
-        '/bottomnav': (context) => const BottomNavPage(),
-        '/home': (context) => const HomePage(),
-        '/salonRegister': (context) => const SalonProviderForm(),
-      },
     );
   }
 }

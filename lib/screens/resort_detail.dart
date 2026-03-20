@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/service_product.dart';
-import 'booking_page.dart'; // ✅ ADD THIS
+import 'booking_page.dart';
 
 class ResortDetailPage extends StatefulWidget {
   final ServiceProduct service;
@@ -15,7 +15,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   int adultCount = 1;
   int childCount = 0;
 
-  /// ✅ MODERN POPUP
+  /// 🔹 GUEST POPUP (UNCHANGED)
   void showGuestSelectionPopup() {
     showModalBottomSheet(
       context: context,
@@ -30,31 +30,22 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 10),
-                ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  /// 🔹 TITLE
-                  Row(
-                    children: const [
-                      Icon(Icons.people, color: Colors.black87),
+                  const Row(
+                    children: [
+                      Icon(Icons.people),
                       SizedBox(width: 8),
                       Text(
                         "Select Guests",
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
-                  /// 🔹 ADULT
                   _modernCounterCard(
                     label: "Adult",
                     subtitle: "Above 10 years",
@@ -66,10 +57,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                       }
                     },
                   ),
-
                   const SizedBox(height: 12),
-
-                  /// 🔹 CHILD
                   _modernCounterCard(
                     label: "Child",
                     subtitle: "3 to 9 years",
@@ -81,21 +69,16 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                       }
                     },
                   ),
-
-                  const SizedBox(height: 18),
-
-                  /// 🔹 CONTINUE BUTTON (UPDATED)
+                  const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.pop(context);
-
-                        /// ✅ NAVIGATE TO EXISTING BOOKING PAGE
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => BookingPage(
+                            builder: (_) => BookingPage(
                               serviceName: widget.service.name,
                             ),
                           ),
@@ -103,15 +86,8 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xffAE91BA),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
                       ),
-                      child: const Text(
-                        "Continue",
-                        style: TextStyle(fontSize: 16),
-                      ),
+                      child: const Text("Continue"),
                     ),
                   ),
                 ],
@@ -123,7 +99,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
     );
   }
 
-  /// 🔹 MODERN CARD
+  /// 🔹 COUNTER CARD
   Widget _modernCounterCard({
     required String label,
     required String subtitle,
@@ -139,52 +115,32 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
       ),
       child: Row(
         children: [
-          /// TEXT
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
-                ),
+                Text(label,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(subtitle,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             ),
           ),
-
-          /// COUNTER
           Row(
             children: [
               _circleButton(Icons.remove, onRemove),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Text(
-                  count.toString(),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: Text("$count"),
               ),
               _circleButton(Icons.add, onAdd),
             ],
-          ),
+          )
         ],
       ),
     );
   }
 
-  /// 🔹 ROUND BUTTON
   Widget _circleButton(IconData icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -194,7 +150,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
           color: const Color(0xffAE91BA).withOpacity(0.2),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, size: 18, color: Colors.black),
+        child: Icon(icon, size: 18),
       ),
     );
   }
@@ -208,174 +164,116 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
         title: Text(service.name),
         backgroundColor: const Color(0xffAE91BA),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            /// IMAGE
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                service.imagePath,
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-            ),
 
-            const SizedBox(height: 15),
-
-            /// NAME
-            Text(
-              service.name,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            /// RATING
-            Row(
-              children: [
-                const Icon(Icons.star, color: Colors.orange, size: 18),
-                const SizedBox(width: 5),
-                Text(
-                  service.safeRating.toString(),
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            /// PRICE
-            Row(
-              children: [
-                Text(
-                  service.formattedPrice,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                if (service.discount != null && service.discount! > 0)
-                  Text(
-                    "₹${service.price}",
-                    style: const TextStyle(
-                      decoration: TextDecoration.lineThrough,
-                      color: Colors.grey,
-                    ),
-                  ),
-                const SizedBox(width: 10),
-                if (service.discountLabel.isNotEmpty)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade100,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      service.discountLabel,
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            /// TIME
-            Text(
-              "Duration: ${service.serviceTime}",
-              style: const TextStyle(color: Colors.grey),
-            ),
-
-            const SizedBox(height: 15),
-
-            /// DESCRIPTION
-            if (service.description != null && service.description!.isNotEmpty)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Description",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    service.description!,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                ],
-              ),
-
-            const SizedBox(height: 15),
-
-            /// INCLUDES
-            if (service.safeIncludes.isNotEmpty)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Includes",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Column(
-                    children: service.safeIncludes.map((item) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.check,
-                                color: Colors.green, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(item)),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-
-            const SizedBox(height: 25),
-
-            /// BOOK BUTTON
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: showGuestSelectionPopup,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  backgroundColor: const Color(0xffAE91BA),
-                ),
-                child: const Text(
-                  "Book Now",
-                  style: TextStyle(fontSize: 16),
-                ),
-              ),
-            ),
-          ],
+      /// 🔹 BOOK BUTTON
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(12),
+        child: ElevatedButton(
+          onPressed: showGuestSelectionPopup,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xffAE91BA),
+          ),
+          child: const Text("Book Now"),
         ),
+      ),
+
+      /// 🔥 LEFT + RIGHT PANEL UI
+      body: Row(
+        children: [
+          /// 🔹 LEFT PANEL (INFO)
+          Container(
+            width: 100,
+            color: Colors.white,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _sideItem(Icons.star, service.safeRating.toString()),
+                _sideItem(Icons.access_time, service.serviceTime),
+                _sideItem(Icons.currency_rupee,
+                    service.formattedPrice.replaceAll("₹", "")),
+              ],
+            ),
+          ),
+
+          /// 🔹 RIGHT PANEL (DETAILS)
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  /// IMAGE
+                  Image.asset(
+                    service.imagePath,
+                    height: 220,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        /// TITLE
+                        Text(
+                          service.name,
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        /// DESCRIPTION
+                        if (service.description != null)
+                          Text(
+                            service.description!,
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+
+                        const SizedBox(height: 20),
+
+                        /// INCLUDES
+                        if (service.safeIncludes.isNotEmpty)
+                          const Text(
+                            "Includes",
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+
+                        const SizedBox(height: 10),
+
+                        ...service.safeIncludes.map(
+                          (e) => Row(
+                            children: [
+                              const Icon(Icons.check,
+                                  size: 16, color: Colors.green),
+                              const SizedBox(width: 6),
+                              Text(e),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 🔹 SIDE ITEM
+  Widget _sideItem(IconData icon, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        children: [
+          Icon(icon, color: Colors.black87),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(fontSize: 12)),
+        ],
       ),
     );
   }

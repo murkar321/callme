@@ -1,3 +1,4 @@
+import 'package:callme/models/hotel_services.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/screens/service_detail_page.dart';
@@ -18,13 +19,11 @@ class _HomePageState extends State<HomePage> {
 
   final List<ServiceCategory> categories = [
     ServiceCategory(name: 'Salon Service', imagePath: 'assets/salon.png'),
-    ServiceCategory(name: 'Photography', imagePath: 'assets/photo.png'),
     ServiceCategory(name: 'Cleaning', imagePath: 'assets/k1.jpg'),
     ServiceCategory(name: 'Resorts', imagePath: 'assets/resort.jfif'),
-    ServiceCategory(name: 'Carpenter', imagePath: 'assets/carpt.png'),
     ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpg'),
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
-    ServiceCategory(name: 'Mechanic', imagePath: 'assets/mechanic.png'),
+    ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
     ServiceCategory(name: 'Real Estate', imagePath: 'assets/real_estate.png'),
   ];
 
@@ -93,11 +92,15 @@ class _HomePageState extends State<HomePage> {
     switch (serviceName) {
       case "Cleaning":
         return const ServiceDetailPage(serviceName: 'Cleaning');
+
       case "Salon Service":
         return const SalonPage();
 
       case "Resorts":
-        return const ResortListPage(); // ✅ FIXED FLOW
+        return const ResortListPage();
+
+      case "Hotel":
+        return const HotelServicePage(); // ✅ FIXED
 
       default:
         return ServiceDetailPage(serviceName: serviceName);

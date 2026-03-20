@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:callme/models/cart_page.dart';
-import 'package:callme/screens/resort_detail.dart';
+import 'package:provider/provider.dart';
 import '../models/service_product.dart';
+import '../models/cart_provider.dart';
+import 'resort_detail.dart';
 
 class ResortListPage extends StatefulWidget {
   const ResortListPage({super.key});
@@ -14,10 +16,13 @@ class _ResortListPageState extends State<ResortListPage> {
   final Color primaryColor = const Color(0xffAE91BA);
 
   String selectedLocation = 'Virar';
+  String searchQuery = '';
 
-  /// 🔹 SAME DATA
+  final TextEditingController searchController = TextEditingController();
+  Timer? _debounce;
+
   final Map<String, List<ServiceProduct>> resorts = {
-    'Virar': [
+    'Vasai': [
       ServiceProduct(
         name: 'Rajhans Water Park',
         price: 700,
@@ -55,7 +60,7 @@ class _ResortListPageState extends State<ResortListPage> {
         service: '',
       ),
     ],
-    'Lonavala': [
+    'Virar': [
       ServiceProduct(
         name: 'Hill View Resort',
         price: 900,
@@ -93,7 +98,7 @@ class _ResortListPageState extends State<ResortListPage> {
         service: '',
       ),
     ],
-    'Goa': [
+    'Safale': [
       ServiceProduct(
         name: 'Beach Side Resort',
         price: 1000,
@@ -131,7 +136,45 @@ class _ResortListPageState extends State<ResortListPage> {
         service: '',
       ),
     ],
-    'Thane': [
+    'Palghar': [
+      ServiceProduct(
+        name: 'Lake View Resort',
+        price: 800,
+        finalPrice: 700,
+        discount: 10,
+        rating: 3.9,
+        imagePath: 'assets/lakeview.jfif',
+        time: 'Full Day',
+        description: 'Lake view and peaceful stay.',
+        includes: [
+          'Lake View',
+          'A/C & Non A/C Rooms',
+          'Restaurant',
+          'Garden Area',
+        ],
+        id: '',
+        service: '',
+      ),
+      ServiceProduct(
+        name: 'Paradise Resort',
+        price: 850,
+        finalPrice: 750,
+        discount: 12,
+        rating: 4.0,
+        imagePath: 'assets/paradise.jfif',
+        time: 'Full Day',
+        description: 'Great for parties and outings.',
+        includes: [
+          'Swimming Pool',
+          'A/C Rooms',
+          'Restaurant',
+          'Party Area',
+        ],
+        id: '',
+        service: '',
+      ),
+    ],
+    'Nalasopara': [
       ServiceProduct(
         name: 'Lake View Resort',
         price: 800,
@@ -171,9 +214,23 @@ class _ResortListPageState extends State<ResortListPage> {
     ],
   };
 
+  /// ✅ CLEAN FILTER
+  List<ServiceProduct> getFilteredList() {
+    if (searchQuery.isEmpty) {
+      return resorts[selectedLocation] ?? [];
+    }
+
+    return resorts.entries
+        .where((entry) =>
+            entry.key.toLowerCase().contains(searchQuery.toLowerCase()))
+        .expand((e) => e.value)
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final list = resorts[selectedLocation]!;
+    final cart = Provider.of<CartProvider>(context);
+    final list = getFilteredList();
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
@@ -182,68 +239,68 @@ class _ResortListPageState extends State<ResortListPage> {
       appBar: AppBar(
         title: const Text("Resorts"),
         backgroundColor: primaryColor,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.shopping_cart),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const CartPage(
-                          serviceName: '',
-                        )),
-              );
-            },
-          )
-        ],
       ),
 
-      body: Row(
+      /// 🔹 BODY
+      body: Column(
         children: [
-          /// 🔹 LEFT SIDEBAR
-          Container(
-            width: 90,
-            color: Colors.white,
+          /// SEARCH
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: TextField(
+              controller: searchController,
+              onChanged: (val) {
+                if (_debounce?.isActive ?? false) _debounce!.cancel();
+                _debounce = Timer(const Duration(milliseconds: 300), () {
+                  setState(() {
+                    searchQuery = val;
+                  });
+                });
+              },
+              decoration: InputDecoration(
+                hintText: "Enter Your City",
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.grey.shade200,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+
+          /// LOCATION CHIPS
+          SizedBox(
+            height: 40,
             child: ListView(
-              children: resorts.keys.map((location) {
-                final isSelected = location == selectedLocation;
+              scrollDirection: Axis.horizontal,
+              children: resorts.keys.map((loc) {
+                final isSelected = loc == selectedLocation;
 
                 return GestureDetector(
                   onTap: () {
                     setState(() {
-                      selectedLocation = location;
+                      selectedLocation = loc;
+                      searchQuery = '';
+                      searchController.clear();
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: isSelected ? primaryColor.withOpacity(0.1) : null,
-                      border: Border(
-                        left: BorderSide(
-                          color: isSelected ? primaryColor : Colors.transparent,
-                          width: 4,
-                        ),
-                      ),
+                      color: isSelected ? primaryColor : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: primaryColor.withOpacity(0.2),
-                          child: const Icon(Icons.location_on, size: 18),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          location,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      loc,
+                      style: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : const Color.fromARGB(255, 189, 166, 219),
+                      ),
                     ),
                   ),
                 );
@@ -251,113 +308,139 @@ class _ResortListPageState extends State<ResortListPage> {
             ),
           ),
 
-          /// 🔹 RIGHT SIDE CONTENT
+          const SizedBox(height: 10),
+
+          /// MAIN
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(12),
+            child: Row(
               children: [
-                /// TITLE
-                Text(
-                  selectedLocation,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold),
+                /// LEFT PANEL
+                SizedBox(
+                  width: 90,
+                  child: ListView(
+                    children: const [
+                      _SideItem("Rooms"),
+                      _SideItem("Lockers"),
+                      _SideItem("Bar"),
+                      _SideItem("Event Hall"),
+                      _SideItem("Costume"),
+                    ],
+                  ),
                 ),
 
-                const SizedBox(height: 10),
-
-                /// LIST
-                ...list.map((resort) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black12, blurRadius: 6)
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        /// IMAGE
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.asset(
-                            resort.imagePath,
-                            height: 90,
-                            width: 90,
-                            fit: BoxFit.cover,
+                /// RIGHT GRID
+                Expanded(
+                  child: list.isEmpty
+                      ? const Center(child: Text("No Data"))
+                      : GridView.builder(
+                          padding: const EdgeInsets.all(10),
+                          itemCount: list.length,
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 0.9,
                           ),
-                        ),
-
-                        const SizedBox(width: 10),
-
-                        /// DETAILS
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(resort.name,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold)),
-                              Row(
-                                children: [
-                                  const Icon(Icons.star,
-                                      size: 14, color: Colors.orange),
-                                  Text(" ${resort.safeRating}"),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Text("₹${resort.finalPrice}",
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                  const SizedBox(width: 6),
-                                  Text("₹${resort.price}",
-                                      style: const TextStyle(
-                                          decoration:
-                                              TextDecoration.lineThrough,
-                                          fontSize: 12)),
-                                  const SizedBox(width: 6),
-                                  Text("${resort.discount}% OFF",
-                                      style: const TextStyle(
-                                          color: Colors.green, fontSize: 12)),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                resort.includes!.take(2).join(", "),
-                                style: const TextStyle(
-                                    fontSize: 11, color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        /// BUTTON
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor,
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    ResortDetailPage(service: resort),
-                              ),
-                            );
+                          itemBuilder: (context, i) {
+                            return _Card(item: list[i]);
                           },
-                          child: const Text("Book"),
                         ),
-                      ],
-                    ),
-                  );
-                }),
+                ),
               ],
             ),
           ),
+        ],
+      ),
+
+      /// CART BAR
+      bottomNavigationBar: cart.count == 0
+          ? null
+          : Container(
+              padding: const EdgeInsets.all(15),
+              color: Colors.blue,
+              child: Text(
+                "View Cart (${cart.count})",
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+    );
+  }
+}
+
+/// LEFT ITEM
+class _SideItem extends StatelessWidget {
+  final String title;
+  const _SideItem(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        children: [
+          const CircleAvatar(radius: 18),
+          const SizedBox(height: 5),
+          Text(title, style: const TextStyle(fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+/// CARD (NO STACK = NO OVERFLOW)
+class _Card extends StatelessWidget {
+  final ServiceProduct item;
+  const _Card({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = Provider.of<CartProvider>(context);
+    final isAdded = cart.isAdded(item);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade300,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          const Spacer(),
+
+          /// BUTTONS ROW (SAFE)
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    cart.toggle(item);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isAdded
+                        ? Colors.green
+                        : const Color.fromARGB(255, 153, 149, 149),
+                  ),
+                  child: Text(isAdded ? "Added" : "Add"),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ResortDetailPage(service: item),
+                      ),
+                    );
+                  },
+                  child: const Text("View"),
+                ),
+              ),
+            ],
+          )
         ],
       ),
     );

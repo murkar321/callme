@@ -10,7 +10,7 @@ import 'package:callme/models/order_model.dart';
 class BookingPage extends StatefulWidget {
   final String serviceName;
 
-  /// OPTIONAL (single service / resort)
+  /// OPTIONAL (single service)
   final ServiceProduct? product;
   final int? adults;
   final int? children;
@@ -34,8 +34,10 @@ class _BookingPageState extends State<BookingPage> {
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
 
-  /// ✅ FLOW DETECTION
-  bool get isCartFlow => Cart.getItems(widget.serviceName).isNotEmpty;
+  /// ✅ NEW CART FLOW
+  List<CartItem> get cartItems => Cart.getByService(widget.serviceName);
+
+  bool get isCartFlow => cartItems.isNotEmpty;
 
   bool get isSingleService => widget.product != null && !isCartFlow;
 
@@ -44,7 +46,7 @@ class _BookingPageState extends State<BookingPage> {
   /// ✅ TOTAL
   double get totalAmount {
     if (isCartFlow) {
-      return Cart.getTotal(widget.serviceName).toDouble();
+      return Cart.totalPrice(widget.serviceName).toDouble();
     }
 
     if (isSingleService) {
@@ -64,16 +66,13 @@ class _BookingPageState extends State<BookingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.serviceName),
-      ),
+      appBar: AppBar(title: Text(widget.serviceName)),
       backgroundColor: const Color(0xFFF5F7FB),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             _serviceSummaryCard(),
-
             const SizedBox(height: 20),
 
             if (isResort) _guestCard(),
@@ -161,24 +160,20 @@ class _BookingPageState extends State<BookingPage> {
     return const SizedBox();
   }
 
-  /// 🔹 CART SUMMARY
+  /// 🔹 CART SUMMARY (FIXED)
   Widget _cartSummary() {
-    final items = Cart.getItems(widget.serviceName);
-
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Selected Services'),
           const SizedBox(height: 8),
-          ...items.map((item) {
-            final qty = Cart.getQuantity(item);
-
+          ...cartItems.map((item) {
             return ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text('${item.name} x$qty'),
+              title: Text('${item.name} x${item.quantity}'),
               trailing: Text(
-                '₹${item.calculatedFinalPrice * qty}',
+                '₹${item.price * item.quantity}',
               ),
             );
           }),
@@ -311,9 +306,7 @@ class _BookingPageState extends State<BookingPage> {
     final order = OrderModel(
       id: Random().nextInt(999999).toString(),
       services: isCartFlow
-          ? Cart.getItems(widget.serviceName)
-              .map((item) => '${item.name} x${Cart.getQuantity(item)}')
-              .toList()
+          ? cartItems.map((item) => "${item.name} x${item.quantity}").toList()
           : [widget.product?.name ?? widget.serviceName],
       date: selectedDate!,
       time: selectedTime!.format(context),
@@ -325,8 +318,8 @@ class _BookingPageState extends State<BookingPage> {
 
     OrdersData.orders.add(order);
 
-    /// 🔥 ONLY CLEAR CURRENT SERVICE
-    Cart.clearService(widget.serviceName);
+    /// ✅ CLEAR ONLY CURRENT SERVICE
+    Cart.clear(widget.serviceName);
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Booking Confirmed')),

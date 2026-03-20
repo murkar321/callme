@@ -20,7 +20,7 @@ class ServiceProduct {
   final String? tools;
 
   ServiceProduct({
-    String? id, // ✅ CHANGED (optional now)
+    String? id,
     required this.service,
     required this.name,
     required this.price,
@@ -37,43 +37,52 @@ class ServiceProduct {
     this.steps,
     this.tools,
     this.excludes,
-  }) : id = id == null || id.isEmpty
-            ? _generateId(service, name) // ✅ AUTO GENERATE
-            : id;
+  }) : id = (id == null || id.trim().isEmpty)
+            ? _generateId(service, name)
+            : id.trim();
 
-  /// 🔥 AUTO ID GENERATOR
+  /// 🔥 AUTO ID GENERATOR (SAFE)
   static String _generateId(String service, String name) {
-    return "${service}_${name}"
+    return "${service.trim()}_${name.trim()}"
         .toLowerCase()
         .replaceAll(' ', '_')
         .replaceAll(RegExp(r'[^a-z0-9_]'), '');
   }
 
+  /// ✅ FINAL PRICE (MAIN LOGIC)
   int get calculatedFinalPrice {
-    if (finalPrice != null) return finalPrice!;
+    if (finalPrice != null && finalPrice! > 0) return finalPrice!;
     if (discount != null && discount! > 0 && discount! <= 100) {
       return price - ((price * discount!) ~/ 100);
     }
     return price;
   }
 
+  /// ✅ ORIGINAL PRICE (FOR STRIKE UI)
+  int get originalPrice {
+    if (discount != null && discount! > 0) return price;
+    return price;
+  }
+
+  /// ✅ DISCOUNT LABEL
   String get discountLabel {
     if (discount == null || discount == 0) return '';
     return '$discount% OFF';
   }
 
+  /// ✅ SAFE VALUES (NO CRASH UI)
   String get serviceTime => time ?? 'Standard Time';
+  double get safeRating => rating ?? 4.5;
 
   List<String> get safeIncludes => includes ?? [];
   List<String> get safeProcess => process ?? [];
   List<String> get safeSteps => steps ?? [];
   List<String> get safeExcludes => excludes ?? [];
 
-  double get safeRating => rating ?? 0.0;
-
+  /// ✅ FORMATTED PRICE
   String get formattedPrice => '₹$calculatedFinalPrice';
 
-  /// 🔥 KEEP THIS (now safe because ID is unique)
+  /// ✅ EQUALITY (IMPORTANT FOR CART)
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

@@ -23,9 +23,9 @@ class SalonServiceCard extends StatelessWidget {
       finalPrice: service.finalPrice,
       rating: 4.5,
     );
-
-    int qty = Cart.getQuantity(product);
-
+    final qty = Cart.allItems
+        .where((e) => e.id == product.id && e.service == product.service)
+        .fold(0, (sum, e) => sum + e.quantity);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       padding: const EdgeInsets.all(10),
@@ -90,7 +90,7 @@ class SalonServiceCard extends StatelessWidget {
           qty == 0
               ? ElevatedButton(
                   onPressed: () {
-                    Cart.add(product, service: '');
+                    Cart.add(product as CartItem, service: '');
                     (context as Element).markNeedsBuild();
                   },
                   child: const Text("ADD"),
@@ -99,7 +99,7 @@ class SalonServiceCard extends StatelessWidget {
                   children: [
                     IconButton(
                       onPressed: () {
-                        Cart.remove(product);
+                        Cart.remove(product as CartItem);
                         (context as Element).markNeedsBuild();
                       },
                       icon: const Icon(Icons.remove),
@@ -107,7 +107,7 @@ class SalonServiceCard extends StatelessWidget {
                     Text(qty.toString()),
                     IconButton(
                       onPressed: () {
-                        Cart.add(product, service: '');
+                        Cart.add(product as CartItem, service: '');
                         (context as Element).markNeedsBuild();
                       },
                       icon: const Icon(Icons.add),

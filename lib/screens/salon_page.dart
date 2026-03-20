@@ -69,7 +69,10 @@ class _SalonPageState extends State<SalonPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const CartPage(serviceName: "Salon"),
+                        builder: (_) => const CartPage(
+                          serviceName: "Salon",
+                          service: '',
+                        ),
                       ),
                     );
                   },

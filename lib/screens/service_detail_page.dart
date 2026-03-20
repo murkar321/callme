@@ -23,18 +23,17 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     selectedCategory = serviceProducts[widget.serviceName]!.keys.first;
   }
 
-  /// ✅ SERVICE-WISE ITEMS
+  /// ✅ TOTAL ITEMS
   int get totalItems {
     int count = 0;
     final items = Cart.getItems(widget.serviceName);
-
     for (var item in items) {
-      count += Cart.getQuantity(item);
+      count += Cart.getQuantity(item.id, widget.serviceName);
     }
     return count;
   }
 
-  /// ✅ SERVICE-WISE TOTAL
+  /// ✅ TOTAL AMOUNT
   int get totalAmount => Cart.getTotal(widget.serviceName);
 
   @override
@@ -42,13 +41,12 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     final categories = serviceProducts[widget.serviceName]!.keys.toList();
     final products = serviceProducts[widget.serviceName]![selectedCategory]!;
 
-    final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
 
-      /// APP BAR
+      /// 🔹 APP BAR
       appBar: AppBar(
         title: Text(widget.serviceName),
         backgroundColor: primaryColor,
@@ -62,9 +60,8 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => BookingPage(
-                          serviceName: widget.serviceName,
-                        ),
+                        builder: (_) =>
+                            BookingPage(serviceName: widget.serviceName),
                       ),
                     );
                   },
@@ -86,10 +83,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
         ],
       ),
 
-      /// BODY
+      /// 🔹 BODY
       body: Row(
         children: [
-          /// LEFT PANEL
+          /// 🔹 LEFT CATEGORY PANEL
           Container(
             width: screenWidth * 0.22,
             color: Colors.white,
@@ -143,20 +140,22 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
             ),
           ),
 
-          /// RIGHT GRID
+          /// 🔹 RIGHT GRID
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 90),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 100),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: screenHeight < 700 ? 0.62 : 0.70,
+                childAspectRatio: 0.58,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
               ),
               itemCount: products.length,
               itemBuilder: (context, index) {
                 final product = products[index];
-                final qty = Cart.getQuantity(product);
+
+                /// ✅ FIXED
+                final qty = Cart.getQuantity(product.id, widget.serviceName);
 
                 return Container(
                   decoration: BoxDecoration(
@@ -167,54 +166,55 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     ],
                   ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      /// 🔹 IMAGE
                       ClipRRect(
                         borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(16)),
                         child: Image.asset(
                           product.imagePath,
-                          height: 80,
+                          height: 85,
                           width: double.infinity,
                           fit: BoxFit.cover,
                         ),
                       ),
+
+                      /// 🔹 CONTENT
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.all(8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                product.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600),
-                              ),
+                              Text(product.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
                               const Spacer(),
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    product.formattedPrice,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  Text("₹${product.calculatedFinalPrice}"),
 
-                                  /// ✅ ADD / COUNTER
+                                  /// ✅ FIXED ADD/REMOVE
                                   qty == 0
                                       ? ElevatedButton(
                                           onPressed: () {
                                             setState(() {
-                                              Cart.add(product,
-                                                  service: widget.serviceName);
+                                              Cart.add(
+                                                CartItem(
+                                                  id: product.id,
+                                                  name: product.name,
+                                                  price: product
+                                                      .calculatedFinalPrice,
+                                                  service: widget.serviceName,
+                                                  category: selectedCategory,
+                                                ),
+                                                service: widget.serviceName,
+                                              );
                                             });
                                           },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: primaryColor,
-                                          ),
                                           child: const Text("ADD"),
                                         )
                                       : Row(
@@ -223,7 +223,8 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                                               icon: const Icon(Icons.remove),
                                               onPressed: () {
                                                 setState(() {
-                                                  Cart.remove(product);
+                                                  Cart.removeById(product.id,
+                                                      widget.serviceName);
                                                 });
                                               },
                                             ),
@@ -232,20 +233,30 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                                               icon: const Icon(Icons.add),
                                               onPressed: () {
                                                 setState(() {
-                                                  Cart.add(product,
+                                                  Cart.add(
+                                                    CartItem(
+                                                      id: product.id,
+                                                      name: product.name,
+                                                      price: product
+                                                          .calculatedFinalPrice,
                                                       service:
-                                                          widget.serviceName);
+                                                          widget.serviceName,
+                                                      category:
+                                                          selectedCategory,
+                                                    ),
+                                                    service: widget.serviceName,
+                                                  );
                                                 });
                                               },
                                             ),
                                           ],
                                         ),
                                 ],
-                              )
+                              ),
                             ],
                           ),
                         ),
-                      )
+                      ),
                     ],
                   ),
                 );
@@ -255,7 +266,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
         ],
       ),
 
-      /// BOTTOM BAR
+      /// 🔹 BOTTOM BAR
       bottomNavigationBar: totalItems == 0
           ? null
           : InkWell(
@@ -263,9 +274,8 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => BookingPage(
-                      serviceName: widget.serviceName,
-                    ),
+                    builder: (_) =>
+                        BookingPage(serviceName: widget.serviceName),
                   ),
                 );
               },
@@ -279,14 +289,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      "$totalItems items",
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    Text(
-                      "₹$totalAmount View Cart →",
-                      style: const TextStyle(color: Colors.white),
-                    ),
+                    Text("$totalItems items",
+                        style: const TextStyle(color: Colors.white)),
+                    Text("₹$totalAmount View Cart →",
+                        style: const TextStyle(color: Colors.white)),
                   ],
                 ),
               ),

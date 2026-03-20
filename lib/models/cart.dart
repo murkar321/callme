@@ -1,136 +1,194 @@
-import 'service_product.dart';
+import 'package:flutter/foundation.dart';
 
+/// 🌍 UNIVERSAL CART ITEM
+class CartItem {
+  final String id;
+  final String name;
+  final int price;
+  final String service; // Salon / Hotel / Cleaning etc
+  final String category;
+  final String? image;
+
+  int quantity;
+  int adults;
+  int children;
+
+  CartItem({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.service,
+    required this.category,
+    this.image,
+    this.quantity = 1,
+    this.adults = 1,
+    this.children = 0,
+  });
+}
+
+/// 🛒 MAIN CART
 class Cart {
-  /// 🔥 SERVICE-WISE CART
-  static Map<String, List<ServiceProduct>> serviceItems = {};
+  static final List<CartItem> _items = [];
 
-  /// 🔢 quantities → service → productId → qty
-  static Map<String, Map<String, int>> quantities = {};
-
-  /// 👨‍👩‍👧 guest data → service → productId → {adults, children}
-  static Map<String, Map<String, Map<String, int>>> guestData = {};
-
+  /// =========================
   /// ➕ ADD ITEM
-  static void add(
-    ServiceProduct product, {
-    int adults = 1,
-    int children = 0,
-    required String service,
-  }) {
-    final String service = product.service;
-    final String id = product.id;
+  /// =========================
+  static void add(CartItem item, {required String service}) {
+    final index = _items.indexWhere(
+      (e) => e.id == item.id && e.service == item.service,
+    );
 
-    serviceItems.putIfAbsent(service, () => []);
-    quantities.putIfAbsent(service, () => {});
-    guestData.putIfAbsent(service, () => {});
-
-    if (quantities[service]!.containsKey(id)) {
-      quantities[service]![id] = quantities[service]![id]! + 1;
+    if (index != -1) {
+      _items[index].quantity++;
     } else {
-      serviceItems[service]!.add(product);
-      quantities[service]![id] = 1;
+      _items.add(item);
     }
 
-    /// 🔹 store guest info (used mainly for Resort)
-    guestData[service]![id] = {
-      "adults": adults,
-      "children": children,
-    };
+    debugPrint("Added: ${item.name} (${item.service})");
   }
 
-  /// ➖ REMOVE ITEM
-  static void remove(ServiceProduct product) {
-    final String service = product.service;
-    final String id = product.id;
+  /// =========================
+  /// ➖ REMOVE (DECREASE QTY)
+  /// =========================
+  static void remove(CartItem item) {
+    final index = _items.indexWhere(
+      (e) => e.id == item.id && e.service == item.service,
+    );
 
-    if (!quantities.containsKey(service) ||
-        !quantities[service]!.containsKey(id)) {
-      return;
-    }
+    if (index == -1) return;
 
-    if (quantities[service]![id]! > 1) {
-      quantities[service]![id] = quantities[service]![id]! - 1;
+    if (_items[index].quantity > 1) {
+      _items[index].quantity--;
     } else {
-      quantities[service]!.remove(id);
-      serviceItems[service]!.removeWhere((p) => p.id == id);
-      guestData[service]!.remove(id);
-    }
-
-    /// 🧹 CLEAN EMPTY SERVICE
-    if (serviceItems[service]?.isEmpty ?? false) {
-      serviceItems.remove(service);
-      quantities.remove(service);
-      guestData.remove(service);
+      _items.removeAt(index);
     }
   }
 
-  /// 📦 GET ITEMS BY SERVICE
-  static List<ServiceProduct> getItems(String service) {
-    return serviceItems[service] ?? [];
+  /// =========================
+  /// ❌ REMOVE BY ID
+  /// =========================
+  static void removeById(String id, String service) {
+    final index = _items.indexWhere(
+      (e) => e.id == id && e.service == service,
+    );
+
+    if (index == -1) return;
+
+    if (_items[index].quantity > 1) {
+      _items[index].quantity--;
+    } else {
+      _items.removeAt(index);
+    }
   }
 
-  /// 🔢 GET QUANTITY
-  static int getQuantity(ServiceProduct product) {
-    return quantities[product.service]?[product.id] ?? 0;
+  /// =========================
+  /// ❌ DELETE COMPLETELY
+  /// =========================
+  static void delete(CartItem item) {
+    _items.removeWhere(
+      (e) => e.id == item.id && e.service == item.service,
+    );
   }
 
-  /// 👨‍👩‍👧 GET GUEST DATA (Resort use)
-  static Map<String, int> getGuestData(ServiceProduct product) {
-    return guestData[product.service]?[product.id] ??
-        {"adults": 1, "children": 0};
+  /// =========================
+  /// 📦 GET ALL ITEMS
+  /// =========================
+  static List<CartItem> get allItems => _items;
+
+  /// =========================
+  /// 🎯 FILTER BY SERVICE
+  /// =========================
+  static List<CartItem> getItems(String service) {
+    return _items.where((e) => e.service == service).toList();
   }
 
-  /// 💰 TOTAL PER SERVICE (UPDATED 🔥)
+  /// 🔁 Alias (safe use anywhere)
+  static List<CartItem> getByService(String serviceName) {
+    return getItems(serviceName);
+  }
+
+  /// =========================
+  /// 🔢 TOTAL ITEMS
+  /// =========================
+  static int getTotalItems([String? service]) {
+    if (service == null) {
+      return _items.fold(0, (sum, e) => sum + e.quantity);
+    }
+
+    return _items
+        .where((e) => e.service == service)
+        .fold(0, (sum, e) => sum + e.quantity);
+  }
+
+  /// =========================
+  /// 💰 TOTAL PRICE (SERVICE)
+  /// =========================
   static int getTotal(String service) {
-    int total = 0;
-
-    final items = serviceItems[service] ?? [];
-
-    for (var item in items) {
-      int qty = quantities[service]?[item.id] ?? 1;
-
-      /// ✅ USE YOUR MODEL LOGIC
-      total += item.calculatedFinalPrice * qty;
-    }
-
-    return total;
+    return _items
+        .where((e) => e.service == service)
+        .fold(0, (sum, e) => sum + (e.price * e.quantity));
   }
 
+  /// 🔁 Alias
+  static int totalPrice(String serviceName) {
+    return getTotal(serviceName);
+  }
+
+  /// =========================
   /// 💰 GRAND TOTAL
+  /// =========================
   static int getGrandTotal() {
-    int total = 0;
+    return _items.fold(
+      0,
+      (sum, e) => sum + (e.price * e.quantity),
+    );
+  }
 
-    for (var service in serviceItems.keys) {
-      total += getTotal(service);
+  /// =========================
+  /// 🔍 FIND ITEM
+  /// =========================
+  static CartItem? find(String id, String service) {
+    try {
+      return _items.firstWhere(
+        (e) => e.id == id && e.service == service,
+      );
+    } catch (e) {
+      return null;
     }
-
-    return total;
   }
 
-  /// 🔢 TOTAL ITEMS COUNT
-  static int getTotalItems() {
-    int count = 0;
+  /// =========================
+  /// 🔢 GET QUANTITY
+  /// =========================
+  static int getQuantity(String id, String service) {
+    final item = find(id, service);
+    return item?.quantity ?? 0;
+  }
 
-    for (var service in quantities.keys) {
-      for (var qty in quantities[service]!.values) {
-        count += qty;
-      }
+  /// =========================
+  /// 👨‍👩‍👧 UPDATE GUESTS (HOTEL USE)
+  /// =========================
+  static void updateGuests(
+    String id,
+    String service, {
+    int? adults,
+    int? children,
+  }) {
+    final item = find(id, service);
+    if (item == null) return;
+
+    if (adults != null) item.adults = adults;
+    if (children != null) item.children = children;
+  }
+
+  /// =========================
+  /// 🧹 CLEAR CART
+  /// =========================
+  static void clear([String? service]) {
+    if (service == null) {
+      _items.clear();
+    } else {
+      _items.removeWhere((e) => e.service == service);
     }
-
-    return count;
-  }
-
-  /// 🗑 CLEAR ONE SERVICE
-  static void clearService(String service) {
-    serviceItems.remove(service);
-    quantities.remove(service);
-    guestData.remove(service);
-  }
-
-  /// 🧹 CLEAR ALL
-  static void clearAll() {
-    serviceItems.clear();
-    quantities.clear();
-    guestData.clear();
   }
 }
