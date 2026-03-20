@@ -22,6 +22,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fresh fragrance finish',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Pant Washing',
@@ -39,6 +41,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Proper drying process',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Suit Washing',
@@ -56,6 +60,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Professional finishing',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Saree Washing',
@@ -73,6 +79,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fresh fragrance finish',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Curtain Washing',
@@ -90,6 +98,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fresh fragrance',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Shoe Washing',
@@ -107,6 +117,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Proper drying',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Bedsheet Washing',
@@ -124,6 +136,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Proper drying and folding',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -144,6 +158,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Professional finishing',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Suit Dry Cleaning',
@@ -160,6 +176,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Professional finishing',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Saree Dry Cleaning',
@@ -176,6 +194,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Premium care',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Blazer Dry Cleaning',
@@ -191,6 +211,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Soft fabric care',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -210,6 +232,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Neat folding',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Pant Ironing',
@@ -225,6 +249,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Professional finish',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Dress Ironing',
@@ -240,6 +266,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Quick service',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Kids Clothes Ironing',
@@ -254,6 +282,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Smooth finish',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -273,6 +303,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fresh fragrance',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Heavy Curtain Cleaning',
@@ -288,6 +320,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Odor removal',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Luxury Curtain Cleaning',
@@ -303,6 +337,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fresh scent',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -330,6 +366,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Step 4: Final check'
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Leather Shoe Cleaning',
@@ -353,6 +391,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Step 3: Conditioning',
           'Step 4: Drying'
         ],
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Sneaker Cleaning',
@@ -371,6 +411,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Step 4: Finishing'
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Boot Cleaning',
@@ -386,6 +428,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Proper drying',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -405,6 +449,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Proper drying',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Double Bedsheet Cleaning',
@@ -420,6 +466,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fresh fragrance',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Bedsheet Deep Cleaning',
@@ -435,6 +483,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Premium wash',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Luxury Bedsheet Cleaning',
@@ -450,6 +500,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fresh fragrance',
         ],
         rating: 5,
+        id: '',
+        service: '',
       ),
     ],
   },
@@ -478,6 +530,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Broken Pipe Fix',
@@ -498,6 +552,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Test flow',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Pipe Replacement',
@@ -518,6 +574,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Install new pipe',
           'Testing',
         ],
+        id: '',
+        service: '',
       ),
     ],
 
@@ -542,6 +600,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Fix leakage',
           'Testing',
         ],
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Bathroom Leakage Fix',
@@ -557,6 +617,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -576,6 +638,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Tap Replacement',
@@ -591,6 +655,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -610,6 +676,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Pipe flushing',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Blocked Drain Fix',
@@ -625,6 +693,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -644,6 +714,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Bathroom Pipe Repair',
@@ -659,6 +731,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.3,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -677,6 +751,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.4,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Toilet Leakage Fix',
@@ -692,6 +768,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -711,6 +789,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.4,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Sink Replacement',
@@ -726,6 +806,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
           'Testing',
         ],
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
   },
@@ -747,6 +829,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 20,
         finalPrice: 799,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: "2 BHK Full Cleaning",
@@ -761,6 +845,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 20,
         finalPrice: 1199,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: "3 BHK Full Cleaning",
@@ -775,6 +861,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 25,
         finalPrice: 1499,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: "Living Room Cleaning",
@@ -789,6 +877,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 10,
         finalPrice: 359,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -807,6 +897,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 10,
         finalPrice: 449,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: "Deep Kitchen Cleaning",
@@ -821,6 +913,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 20,
         finalPrice: 959,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -839,6 +933,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 10,
         finalPrice: 359,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: "Deep Bathroom Cleaning",
@@ -853,6 +949,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 15,
         finalPrice: 679,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -871,6 +969,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 15,
         finalPrice: 509,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: "Leather Sofa Cleaning",
@@ -885,6 +985,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 15,
         finalPrice: 594,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -903,6 +1005,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 10,
         finalPrice: 359,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -921,6 +1025,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 10,
         finalPrice: 269,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -939,6 +1045,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 25,
         finalPrice: 2999,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -957,6 +1065,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 20,
         finalPrice: 3999,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -975,6 +1085,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 15,
         finalPrice: 509,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
 
@@ -993,6 +1105,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 20,
         finalPrice: 1199,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: "Premium Plan",
@@ -1007,6 +1121,8 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
         discount: 30,
         finalPrice: 3499,
         rating: 4.5,
+        id: '',
+        service: '',
       ),
     ],
   },

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:callme/models/service_product.dart';
 import 'package:callme/models/service_product_details.dart';
 import 'booking_page.dart';
 import 'package:callme/models/cart.dart';
@@ -8,9 +7,6 @@ class ServiceDetailPage extends StatefulWidget {
   final String serviceName;
 
   const ServiceDetailPage({super.key, required this.serviceName});
-
-  ServiceProduct get firstProduct =>
-      serviceProducts[serviceName]!.values.first.first;
 
   @override
   State<ServiceDetailPage> createState() => _ServiceDetailPageState();
@@ -21,118 +17,33 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
 
   final Color primaryColor = const Color.fromARGB(255, 174, 145, 186);
 
-  bool isLaundryGuideShown = false; // ✅ NEW FLAG
-
   @override
   void initState() {
     super.initState();
     selectedCategory = serviceProducts[widget.serviceName]!.keys.first;
   }
 
+  /// ✅ SERVICE-WISE ITEMS
   int get totalItems {
     int count = 0;
-    Cart.quantities.forEach((_, qty) {
-      count += qty;
-    });
+    final items = Cart.getItems(widget.serviceName);
+
+    for (var item in items) {
+      count += Cart.getQuantity(item);
+    }
     return count;
   }
 
-  double get totalAmount {
-    double total = 0;
-    Cart.quantities.forEach((product, qty) {
-      total += product.calculatedFinalPrice * qty;
-    });
-    return total;
-  }
-
-  void showLaundryBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: const [
-                  Icon(Icons.local_laundry_service, color: Colors.blue),
-                  SizedBox(width: 10),
-                  Text(
-                    "Laundry Guide",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildLaundryRow(Icons.checkroom, "Cotton", "₹50 / item"),
-              _buildLaundryRow(Icons.auto_awesome, "Silk", "₹120 / item"),
-              _buildLaundryRow(Icons.ac_unit, "Wool", "₹100 / item"),
-              _buildLaundryRow(Icons.work, "Denim", "₹80 / item"),
-              _buildLaundryRow(Icons.star, "Delicate", "₹150 / item"),
-              const SizedBox(height: 16),
-              const Text(
-                "Prices may vary based on fabric condition & service type.",
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: primaryColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text("Got it"),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildLaundryRow(IconData icon, String fabric, String price) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.blue),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              fabric,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-          Text(
-            price,
-            style: const TextStyle(
-              color: Colors.blue,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  /// ✅ SERVICE-WISE TOTAL
+  int get totalAmount => Cart.getTotal(widget.serviceName);
 
   @override
   Widget build(BuildContext context) {
     final categories = serviceProducts[widget.serviceName]!.keys.toList();
     final products = serviceProducts[widget.serviceName]![selectedCategory]!;
+
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
@@ -153,8 +64,6 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                       MaterialPageRoute(
                         builder: (_) => BookingPage(
                           serviceName: widget.serviceName,
-                          cartItems: Cart.quantities,
-                          product: widget.firstProduct,
                         ),
                       ),
                     );
@@ -168,10 +77,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     backgroundColor: Colors.red,
                     child: Text(
                       totalItems.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
                     ),
                   ),
                 ),
@@ -183,9 +89,9 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
       /// BODY
       body: Row(
         children: [
-          /// LEFT CATEGORY PANEL
+          /// LEFT PANEL
           Container(
-            width: 92,
+            width: screenWidth * 0.22,
             color: Colors.white,
             child: ListView.builder(
               itemCount: categories.length,
@@ -202,7 +108,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     });
                   },
                   child: Container(
-                    margin: const EdgeInsets.all(8),
+                    margin: const EdgeInsets.all(6),
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: isSelected
@@ -213,16 +119,16 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     child: Column(
                       children: [
                         CircleAvatar(
-                          radius: 24,
+                          radius: 20,
                           backgroundImage:
                               AssetImage(categoryProducts.first.imagePath),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Text(
                           category,
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
@@ -237,166 +143,109 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
             ),
           ),
 
-          /// RIGHT PRODUCTS GRID
+          /// RIGHT GRID
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 90),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 0.72,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+                childAspectRatio: screenHeight < 700 ? 0.62 : 0.70,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
               ),
               itemCount: products.length,
               itemBuilder: (context, index) {
                 final product = products[index];
+                final qty = Cart.getQuantity(product);
 
                 return Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(16),
                     boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 8),
+                      BoxShadow(color: Colors.black12, blurRadius: 6),
                     ],
                   ),
                   child: Column(
                     children: [
-                      Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(18),
-                            ),
-                            child: Image.asset(
-                              product.imagePath,
-                              height: 90,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-
-                          /// ⭐ RATING BADGE
-                          Positioned(
-                            bottom: 6,
-                            left: 6,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.black87,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.star,
-                                      color: Colors.amber, size: 12),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    (product.rating).toString(), // ✅ SAFE
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(16)),
+                        child: Image.asset(
+                          product.imagePath,
+                          height: 80,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
                       ),
-
-                      /// CONTENT
                       Expanded(
                         child: Padding(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (product.discount != null)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    "${product.discount}% OFF",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ),
-                              const SizedBox(height: 4),
                               Text(
                                 product.name,
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                    fontWeight: FontWeight.w600),
                               ),
-                              if (product.slogan != null)
-                                Text(
-                                  product.slogan!,
-                                  style: const TextStyle(
-                                      fontSize: 11, color: Colors.grey),
-                                ),
                               const Spacer(),
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "₹${product.calculatedFinalPrice}",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      if (product.discount != null)
-                                        Text(
-                                          "₹${product.price}",
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            decoration:
-                                                TextDecoration.lineThrough,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-
-                                  /// ✅ UPDATED ADD BUTTON
-                                  ElevatedButton(
-                                    onPressed: () async {
-                                      // Show popup BEFORE adding item
-                                      if (widget.serviceName == "Laundry" &&
-                                          !isLaundryGuideShown) {
-                                        isLaundryGuideShown = true;
-                                        showLaundryBottomSheet();
-                                      }
-
-                                      setState(() {
-                                        Cart.quantities[product] =
-                                            (Cart.quantities[product] ?? 0) + 1;
-                                      });
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: primaryColor,
+                                  Text(
+                                    product.formattedPrice,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                    child: const Text("ADD"),
                                   ),
+
+                                  /// ✅ ADD / COUNTER
+                                  qty == 0
+                                      ? ElevatedButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              Cart.add(product,
+                                                  service: widget.serviceName);
+                                            });
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: primaryColor,
+                                          ),
+                                          child: const Text("ADD"),
+                                        )
+                                      : Row(
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.remove),
+                                              onPressed: () {
+                                                setState(() {
+                                                  Cart.remove(product);
+                                                });
+                                              },
+                                            ),
+                                            Text(qty.toString()),
+                                            IconButton(
+                                              icon: const Icon(Icons.add),
+                                              onPressed: () {
+                                                setState(() {
+                                                  Cart.add(product,
+                                                      service:
+                                                          widget.serviceName);
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
                                 ],
-                              ),
+                              )
                             ],
                           ),
                         ),
-                      ),
+                      )
                     ],
                   ),
                 );
@@ -406,7 +255,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
         ],
       ),
 
-      /// ✅ VIEW CART BUTTON
+      /// BOTTOM BAR
       bottomNavigationBar: totalItems == 0
           ? null
           : InkWell(
@@ -416,8 +265,6 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                   MaterialPageRoute(
                     builder: (_) => BookingPage(
                       serviceName: widget.serviceName,
-                      cartItems: Cart.quantities,
-                      product: widget.firstProduct,
                     ),
                   ),
                 );
@@ -437,7 +284,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                       style: const TextStyle(color: Colors.white),
                     ),
                     Text(
-                      "₹${totalAmount.toStringAsFixed(0)} View Cart →",
+                      "₹$totalAmount View Cart →",
                       style: const TextStyle(color: Colors.white),
                     ),
                   ],

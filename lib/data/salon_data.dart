@@ -47,7 +47,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Men Hair Cut",
     category: "Hair Cut",
-    image: "assets/men_haircut.png",
+    image: "assets/salon.png",
     time: "30 minutes",
     price: 300,
     discount: 20,
@@ -72,7 +72,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Women Hair Cut",
     category: "Hair Cut",
-    image: "assets/women_haircut.png",
+    image: "assets/salon.png",
     time: "45 minutes",
     price: 600,
     discount: 15,
@@ -97,7 +97,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Kids Hair Cut",
     category: "Hair Cut",
-    image: "assets/kids_haircut.png",
+    image: "assets/salon.png",
     time: "20 minutes",
     price: 200,
     discount: 10,
@@ -121,7 +121,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Hair Trim",
     category: "Hair Cut",
-    image: "assets/hair_trim.png",
+    image: "assets/salon.png",
     time: "20 minutes",
     price: 250,
     discount: 10,
@@ -137,7 +137,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Hair Blow Dry",
     category: "Hair Styling",
-    image: "assets/blowdry.png",
+    image: "assets/salon.png",
     time: "30 minutes",
     price: 400,
     discount: 15,
@@ -151,7 +151,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Hair Curling",
     category: "Hair Styling",
-    image: "assets/hair_curling.png",
+    image: "assets/salon.png",
     time: "40 minutes",
     price: 700,
     discount: 20,
@@ -165,7 +165,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Hair Straightening",
     category: "Hair Styling",
-    image: "assets/hair_straightening.png",
+    image: "assets/salon.png",
     time: "45 minutes",
     price: 800,
     discount: 15,
@@ -179,7 +179,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Party Hair Styling",
     category: "Hair Styling",
-    image: "assets/party_hairstyle.png",
+    image: "assets/salon.png",
     time: "45 minutes",
     price: 900,
     discount: 20,
@@ -195,7 +195,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Hair Smoothening",
     category: "Hair Treatments",
-    image: "assets/hair_smoothening.png",
+    image: "assets/salon.png",
     time: "2 hours",
     price: 3500,
     discount: 25,
@@ -209,7 +209,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Hair Rebonding",
     category: "Hair Treatments",
-    image: "assets/hair_rebonding.png",
+    image: "assets/salon.png",
     time: "3 hours",
     price: 4500,
     discount: 20,
@@ -223,7 +223,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Hair Botox Treatment",
     category: "Hair Treatments",
-    image: "assets/hair_botox.png",
+    image: "assets/salon.png",
     time: "90 minutes",
     price: 3000,
     discount: 20,
@@ -237,7 +237,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Keratin Treatment",
     category: "Hair Treatments",
-    image: "assets/keratin.png",
+    image: "assets/salon.png",
     time: "2 hours",
     price: 4000,
     discount: 25,
@@ -272,7 +272,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Root Touch-up",
     category: "Hair Color",
-    image: "assets/root_touchup.png",
+    image: "assets/salon.png",
     time: "60 minutes",
     price: 1200,
     discount: 15,
@@ -298,7 +298,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Global Hair Color",
     category: "Hair Color",
-    image: "assets/global_hair_color.png",
+    image: "assets/salon.png",
     time: "2 hours",
     price: 3500,
     discount: 20,
@@ -324,7 +324,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Hair Highlights",
     category: "Hair Color",
-    image: "assets/hair_highlights.png",
+    image: "assets/salon.png",
     time: "2 hours",
     price: 4000,
     discount: 20,
@@ -350,7 +350,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Balayage",
     category: "Hair Color",
-    image: "assets/balayage.png",
+    image: "assets/salon.png",
     time: "2.5 hours",
     price: 5000,
     discount: 20,
@@ -376,7 +376,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Ombre Hair Color",
     category: "Hair Color",
-    image: "assets/ombre_hair_color.png",
+    image: "assets/salon.png",
     time: "2.5 hours",
     price: 4800,
     discount: 20,
@@ -403,7 +403,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Basic Facial",
     category: "Facial",
-    image: "assets/basic_facial.png",
+    image: "assets/salon.png",
     time: "40 minutes",
     price: 700,
     discount: 15,
@@ -417,7 +417,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Fruit Facial",
     category: "Facial",
-    image: "assets/fruit_facial.png",
+    image: "assets/salon.png",
     time: "45 minutes",
     price: 900,
     discount: 15,
@@ -432,7 +432,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Gold Facial",
     category: "Facial",
-    image: "assets/gold_facial.png",
+    image: "assets/salon.png",
     time: "60 minutes",
     price: 1500,
     discount: 20,
@@ -460,7 +460,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Diamond Facial",
     category: "Facial",
-    image: "assets/diamond_facial.png",
+    image: "assets/salon.png",
     time: "60 minutes",
     price: 2000,
     discount: 20,
@@ -488,7 +488,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Anti Aging Facial",
     category: "Facial",
-    image: "assets/anti_aging_facial.png",
+    image: "assets/salon.png",
     time: "60 minutes",
     price: 1800,
     discount: 20,
@@ -516,7 +516,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Hydrating Facial",
     category: "Facial",
-    image: "assets/hydrating_facial.png",
+    image: "assets/salon.png",
     time: "50 minutes",
     price: 1200,
     discount: 15,
@@ -544,7 +544,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Detan Facial",
     category: "Facial",
-    image: "assets/detan_facial.png",
+    image: "assets/salon.png",
     time: "45 minutes",
     price: 1000,
     discount: 15,
@@ -573,7 +573,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Party Makeup",
     category: "Makeup",
-    image: "assets/party_makeup.png",
+    image: "assets/salon.png",
     time: "60 minutes",
     price: 2500,
     discount: 20,
@@ -592,7 +592,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Bridal Makeup",
     category: "Makeup",
-    image: "assets/bridal_makeup.png",
+    image: "assets/salon.png",
     time: "2 hours",
     price: 12000,
     discount: 15,
@@ -612,7 +612,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Engagement Makeup",
     category: "Makeup",
-    image: "assets/engagement_makeup.png",
+    image: "assets/salon.png",
     time: "90 minutes",
     price: 5000,
     discount: 15,
@@ -639,7 +639,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Reception Makeup",
     category: "Makeup",
-    image: "assets/reception_makeup.png",
+    image: "assets/salon.png",
     time: "90 minutes",
     price: 6000,
     discount: 15,
@@ -666,7 +666,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Light Makeup",
     category: "Makeup",
-    image: "assets/light_makeup.png",
+    image: "assets/salon.png",
     time: "40 minutes",
     price: 1500,
     discount: 10,
@@ -692,7 +692,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Spa Manicure",
     category: "Manicure",
-    image: "assets/spa_manicure.png",
+    image: "assets/salon.png",
     time: "45 minutes",
     price: 700,
     discount: 15,
@@ -721,7 +721,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Gel Manicure",
     category: "Manicure",
-    image: "assets/gel_manicure.png",
+    image: "assets/salon.png",
     time: "50 minutes",
     price: 900,
     discount: 15,
@@ -749,7 +749,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "French Manicure",
     category: "Manicure",
-    image: "assets/french_manicure.png",
+    image: "assets/salon.png",
     time: "45 minutes",
     price: 800,
     discount: 10,
@@ -775,7 +775,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Spa Pedicure",
     category: "Pedicure",
-    image: "assets/spa_pedicure.png",
+    image: "assets/salon.png",
     time: "60 minutes",
     price: 900,
     discount: 15,
@@ -803,7 +803,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Gel Pedicure",
     category: "Pedicure",
-    image: "assets/gel_pedicure.png",
+    image: "assets/salon.png",
     time: "60 minutes",
     price: 1000,
     discount: 15,
@@ -831,7 +831,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Foot Spa Pedicure",
     category: "Pedicure",
-    image: "assets/foot_spa_pedicure.png",
+    image: "assets/salon.png",
     time: "60 minutes",
     price: 1200,
     discount: 20,
@@ -859,7 +859,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Full Legs Wax",
     category: "Waxing",
-    image: "assets/full_legs_wax.png",
+    image: "assets/salon.png",
     time: "40 minutes",
     price: 600,
     discount: 10,
@@ -884,7 +884,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Underarms Wax",
     category: "Waxing",
-    image: "assets/underarms_wax.png",
+    image: "assets/salon.png",
     time: "15 minutes",
     price: 200,
     discount: 10,
@@ -909,7 +909,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Face Wax",
     category: "Waxing",
-    image: "assets/face_wax.png",
+    image: "assets/salon.png",
     time: "15 minutes",
     price: 250,
     discount: 10,
@@ -934,7 +934,7 @@ List<SalonService> salonServices = [
   SalonService(
     name: "Bikini Wax",
     category: "Waxing",
-    image: "assets/bikini_wax.png",
+    image: "assets/salon.png",
     time: "30 minutes",
     price: 1200,
     discount: 15,

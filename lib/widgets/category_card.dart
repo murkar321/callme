@@ -3,13 +3,17 @@ import 'package:flutter/material.dart';
 class CategoryCard extends StatelessWidget {
   final String name;
 
-  // HomePage uses this
+  /// HomePage
   final String? imagePath;
 
-  // BusinessPage uses this
+  /// BusinessPage
   final IconData? icon;
 
-  final bool showName; // true = horizontal, false = vertical
+  /// Layout
+  final bool showName;
+
+  /// 🔥 NEW: navigation callback
+  final VoidCallback? onTap;
 
   const CategoryCard({
     super.key,
@@ -17,13 +21,16 @@ class CategoryCard extends StatelessWidget {
     this.imagePath,
     this.icon,
     this.showName = true,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    // 🔹 HORIZONTAL CARD
+    Widget content;
+
+    /// 🔹 HORIZONTAL CARD
     if (showName) {
-      return Container(
+      content = Container(
         width: 90,
         margin: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
@@ -42,18 +49,7 @@ class CategoryCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: (imagePath != null && imagePath!.isNotEmpty)
-                  ? Image.asset(
-                      imagePath!,
-                      height: 55,
-                      width: 55,
-                      fit: BoxFit.cover,
-                    )
-                  : Icon(
-                      icon ?? Icons.miscellaneous_services,
-                      size: 40,
-                      color: Theme.of(context).primaryColor,
-                    ),
+              child: _buildImageOrIcon(context, 55),
             ),
             const SizedBox(height: 6),
             Text(
@@ -69,85 +65,104 @@ class CategoryCard extends StatelessWidget {
       );
     }
 
-    // 🔹 VERTICAL CARD
-    return Card(
-      elevation: 2,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 🖼 Thumbnail
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Center(
-              child: (imagePath != null && imagePath!.isNotEmpty)
-                  ? Image.asset(
-                      imagePath!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    )
-                  : Icon(
-                      icon ?? Icons.miscellaneous_services,
-                      size: 48,
-                      color: Theme.of(context).primaryColor,
-                    ),
+    /// 🔹 VERTICAL CARD
+    else {
+      content = Card(
+        elevation: 2,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// 🖼 Thumbnail
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: _buildImageOrIcon(context, double.infinity),
             ),
-          ),
 
-          // 📄 Info section
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Theme.of(context).primaryColor,
-                  child: Icon(
-                    icon ?? Icons.miscellaneous_services,
+            /// 📄 Info
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Theme.of(context).primaryColor,
+                    child: Icon(
+                      icon ?? Icons.miscellaneous_services,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Available nearby • Fast service',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.more_vert,
                     size: 18,
-                    color: Colors.white,
+                    color: Colors.grey,
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Available nearby • Fast service',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(
-                  Icons.more_vert,
-                  size: 18,
-                  color: Colors.grey,
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+      );
+    }
+
+    /// 🔥 MAKE CARD CLICKABLE
+    return GestureDetector(
+      onTap: onTap,
+      child: content,
+    );
+  }
+
+  /// 🔥 SAFE IMAGE BUILDER (prevents crash)
+  Widget _buildImageOrIcon(BuildContext context, double size) {
+    if (imagePath != null && imagePath!.isNotEmpty) {
+      return Image.asset(
+        imagePath!,
+        height: size == double.infinity ? null : size,
+        width: size == double.infinity ? double.infinity : size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(
+          icon ?? Icons.miscellaneous_services,
+          size: 40,
+          color: Theme.of(context).primaryColor,
+        ),
+      );
+    }
+
+    return Icon(
+      icon ?? Icons.miscellaneous_services,
+      size: 40,
+      color: Theme.of(context).primaryColor,
     );
   }
 }

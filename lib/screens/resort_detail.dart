@@ -97,7 +97,6 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                           MaterialPageRoute(
                             builder: (context) => BookingPage(
                               serviceName: widget.service.name,
-                              cartItems: {},
                             ),
                           ),
                         );

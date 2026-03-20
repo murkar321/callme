@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'singup_page.dart';
+import 'signup_page.dart';
 
 class LogoPage extends StatefulWidget {
   const LogoPage({super.key});

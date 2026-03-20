@@ -1,112 +1,160 @@
+import 'package:callme/screens/booking_page.dart';
 import 'package:flutter/material.dart';
-import 'package:callme/models/cart.dart';
-import 'package:callme/screens/salon_booking_page.dart';
-import 'package:callme/data/salon_data.dart';
+import '../models/cart.dart';
+import '../models/service_product.dart';
 
-class CartPage extends StatelessWidget {
-  const CartPage({super.key});
+class CartPage extends StatefulWidget {
+  const CartPage({super.key, required String serviceName});
 
   @override
+  State<CartPage> createState() => _CartPageState();
+}
+
+class _CartPageState extends State<CartPage> {
+  @override
   Widget build(BuildContext context) {
+    final cartData = Cart.serviceItems;
+
     return Scaffold(
       appBar: AppBar(title: const Text("Your Cart")),
-      body: Cart.items.isEmpty
+
+      body: cartData.isEmpty
           ? const Center(child: Text("Cart is empty"))
-          : ListView.builder(
-              itemCount: Cart.items.length,
-              itemBuilder: (context, index) {
-                final item = Cart.items[index];
-                final guests = Cart.guestData[item];
-
-                return ListTile(
-                  leading: Image.asset(item.imagePath, width: 50),
-                  title: Text(item.name),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("₹${item.price}"),
-                      if (guests != null)
-                        Text(
-                          "Adults: ${guests["adults"]}, Children: ${guests["children"]}",
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-      bottomNavigationBar: Cart.items.isNotEmpty
-          ? Padding(
+          : ListView(
               padding: const EdgeInsets.all(12),
-              child: ElevatedButton(
-                onPressed: () {
-                  final firstItem = Cart.items.first;
-                  final guests = Cart.guestData[firstItem];
+              children: cartData.entries.map((entry) {
+                String service = entry.key;
+                List<ServiceProduct> items = entry.value;
 
-                  /// 🔥 MAP CART → SALON SERVICES
-                  final selectedServices = salonServices
-                      .where(
-                          (s) => Cart.items.any((item) => item.name == s.name))
-                      .toList();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    /// 🔹 SERVICE TITLE
+                    Text(
+                      service,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
 
-                  /// 🔥 SHOW HOME / SALON OPTION
-                  showModalBottomSheet(
-                    context: context,
-                    builder: (_) {
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            title: const Text("Salon Appointment"),
-                            onTap: () {
-                              Navigator.pop(context);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => SalonBookingPage(
-                                    services: selectedServices,
-                                    isHomeVisitDefault: false,
-                                    service: selectedServices.first,
-                                    serviceName: selectedServices.first.name,
+                    const SizedBox(height: 8),
 
-                                    /// ✅ PASS GUESTS
-                                    adults: guests?["adults"] ?? 1,
-                                    children: guests?["children"] ?? 0,
-                                  ),
-                                ),
-                              );
-                            },
+                    /// 🔹 ITEMS LIST
+                    ...items.map((item) {
+                      int qty = Cart.getQuantity(item);
+
+                      return Card(
+                        child: ListTile(
+                          leading: Image.asset(
+                            item.imagePath,
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.cover,
                           ),
-                          ListTile(
-                            title: const Text("Home Visit"),
-                            onTap: () {
-                              Navigator.pop(context);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => SalonBookingPage(
-                                    services: selectedServices,
-                                    isHomeVisitDefault: true,
-                                    service: selectedServices.first,
-                                    serviceName: selectedServices.first.name,
 
-                                    /// ✅ PASS GUESTS
-                                    adults: guests?["adults"] ?? 1,
-                                    children: guests?["children"] ?? 0,
-                                  ),
-                                ),
-                              );
-                            },
+                          title: Text(item.name),
+
+                          subtitle: Text(
+                            "${item.serviceTime} • ${item.discountLabel}",
                           ),
-                        ],
+
+                          /// 🔥 PRICE + QUANTITY CONTROLS
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text("₹${item.calculatedFinalPrice}"),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  /// ➖
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        Cart.remove(item);
+                                      });
+                                    },
+                                    child: const Icon(Icons.remove_circle),
+                                  ),
+
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6),
+                                    child: Text(qty.toString()),
+                                  ),
+
+                                  /// ➕
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        Cart.add(item, service: '');
+                                      });
+                                    },
+                                    child: const Icon(Icons.add_circle),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       );
-                    },
-                  );
-                },
-                child: const Text("Proceed to Booking"),
+                    }),
+
+                    const SizedBox(height: 10),
+
+                    /// 🔹 SERVICE TOTAL
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        "Subtotal: ₹${Cart.getTotal(service)}",
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    /// 🔹 BOOK BUTTON (SERVICE-WISE)
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BookingPage(
+                              serviceName: '',
+                            ),
+                          ),
+                        );
+                      },
+                      child: Text("Book $service"),
+                    ),
+
+                    const Divider(thickness: 2),
+                  ],
+                );
+              }).toList(),
+            ),
+
+      /// 🔥 BOTTOM TOTAL BAR (ALL SERVICES)
+      bottomNavigationBar: cartData.isEmpty
+          ? null
+          : Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.black,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "${Cart.getTotalItems()} items",
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  Text(
+                    "Total: ₹${Cart.getGrandTotal()}",
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ],
               ),
-            )
-          : null,
+            ),
     );
   }
 }

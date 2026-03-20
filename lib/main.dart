@@ -4,17 +4,22 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
 import 'screens/logo_page.dart';
-import 'screens/singup_page.dart';
+import 'screens/signup_page.dart';
 import 'screens/home_page.dart';
 import 'screens/bottom_nav_page.dart';
 import 'screens/salon_provider_form.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Initialize Firebase safely
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('Firebase initialization error: $e');
+  }
 
   runApp(const CallMeApp());
 }
@@ -26,9 +31,7 @@ class CallMeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'CallMe',
-
       debugShowCheckedModeBanner: false,
-
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -39,21 +42,12 @@ class CallMeApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-
-      /// First screen
       initialRoute: '/logo',
-
-      /// All routes
       routes: {
         '/logo': (context) => const LogoPage(),
-
         '/signup': (context) => const SignupPage(),
-
         '/bottomnav': (context) => const BottomNavPage(),
-
-        '/home': (context) => HomePage(),
-
-        /// Salon Provider Registration
+        '/home': (context) => const HomePage(),
         '/salonRegister': (context) => const SalonProviderForm(),
       },
     );

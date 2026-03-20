@@ -33,6 +33,8 @@ class _ResortListPageState extends State<ResortListPage> {
           'A/C & Non A/C Rooms',
           'Bar Facility',
         ],
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Sagar Resort',
@@ -49,6 +51,8 @@ class _ResortListPageState extends State<ResortListPage> {
           'Bar Facility',
           'Garden Area',
         ],
+        id: '',
+        service: '',
       ),
     ],
     'Lonavala': [
@@ -67,6 +71,8 @@ class _ResortListPageState extends State<ResortListPage> {
           'Restaurant',
           'Hill View',
         ],
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Green Valley Resort',
@@ -83,6 +89,8 @@ class _ResortListPageState extends State<ResortListPage> {
           'Restaurant',
           'Parking',
         ],
+        id: '',
+        service: '',
       ),
     ],
     'Goa': [
@@ -101,6 +109,8 @@ class _ResortListPageState extends State<ResortListPage> {
           'Bar Facility',
           'Beach Access',
         ],
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Ocean Paradise Resort',
@@ -117,6 +127,8 @@ class _ResortListPageState extends State<ResortListPage> {
           'Bar Facility',
           'Luxury Rooms',
         ],
+        id: '',
+        service: '',
       ),
     ],
     'Thane': [
@@ -135,6 +147,8 @@ class _ResortListPageState extends State<ResortListPage> {
           'Restaurant',
           'Garden Area',
         ],
+        id: '',
+        service: '',
       ),
       ServiceProduct(
         name: 'Paradise Resort',
@@ -151,6 +165,8 @@ class _ResortListPageState extends State<ResortListPage> {
           'Restaurant',
           'Party Area',
         ],
+        id: '',
+        service: '',
       ),
     ],
   };
@@ -172,7 +188,10 @@ class _ResortListPageState extends State<ResortListPage> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const CartPage()),
+                MaterialPageRoute(
+                    builder: (_) => const CartPage(
+                          serviceName: '',
+                        )),
               );
             },
           )
