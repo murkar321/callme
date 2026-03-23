@@ -1,4 +1,6 @@
 import 'package:callme/models/hotel_services.dart';
+import 'package:callme/models/service_product.dart';
+import 'package:callme/screens/civil_services_page.dart';
 import 'package:callme/screens/water_services_page.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_category.dart';
@@ -27,6 +29,7 @@ class _HomePageState extends State<HomePage> {
     ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
     ServiceCategory(name: 'Real Estate', imagePath: 'assets/real_estate.png'),
     ServiceCategory(name: 'Water Services', imagePath: 'assets/water.png'),
+    ServiceCategory(name: 'Civil Services', imagePath: 'assets/civil.png'),
 
   ];
 
@@ -53,6 +56,8 @@ class _HomePageState extends State<HomePage> {
           .contains(searchQuery.toLowerCase().trim());
     }).toList();
   }
+
+  List<ServiceProduct>? get civilServicesList => null;
 
   @override
   void initState() {
@@ -108,7 +113,10 @@ class _HomePageState extends State<HomePage> {
        case "Water Services":
         return const WaterServicesPage();// ✅ FIXED
 
+           case "Civil Services":
+        return const CivilServicesPage();// ✅ FIXED
 
+   
 
       default:
         return ServiceDetailPage(serviceName: serviceName);

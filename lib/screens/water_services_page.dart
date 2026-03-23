@@ -117,7 +117,7 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
                           style: TextStyle(
                             fontSize: 11,
                             color: isSelected
-                                ? Colors.purple
+                                ? const Color.fromARGB(255, 207, 143, 219)
                                 : Colors.grey,
                           ),
                         )

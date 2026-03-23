@@ -30,6 +30,8 @@ class CartItem {
 class Cart {
   static final List<CartItem> _items = [];
 
+
+
   /// =========================
   /// ➕ ADD ITEM
   /// =========================
@@ -95,7 +97,9 @@ class Cart {
   /// =========================
   static List<CartItem> get allItems => _items;
 
-  static get quantities => null;
+  static Null get quantities => null;
+
+  
 
   /// =========================
   /// 🎯 FILTER BY SERVICE
