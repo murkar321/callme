@@ -1,4 +1,5 @@
 import 'package:callme/models/hotel_services.dart';
+import 'package:callme/screens/water_services_page.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/screens/service_detail_page.dart';
@@ -25,6 +26,8 @@ class _HomePageState extends State<HomePage> {
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
     ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
     ServiceCategory(name: 'Real Estate', imagePath: 'assets/real_estate.png'),
+    ServiceCategory(name: 'Water Services', imagePath: 'assets/water.png'),
+
   ];
 
   String searchQuery = '';
@@ -100,7 +103,12 @@ class _HomePageState extends State<HomePage> {
         return const ResortListPage();
 
       case "Hotel":
-        return const HotelServicePage(); // ✅ FIXED
+        return const HotelServicePage(); 
+        
+       case "Water Services":
+        return const WaterServicesPage();// ✅ FIXED
+
+
 
       default:
         return ServiceDetailPage(serviceName: serviceName);

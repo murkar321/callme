@@ -79,7 +79,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => BookingPage(
-                              serviceName: widget.service.name,
+                              serviceName: widget.service.name, products: null,
                             ),
                           ),
                         );

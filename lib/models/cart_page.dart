@@ -145,7 +145,7 @@ class _CartPageState extends State<CartPage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => BookingPage(serviceName: service),
+                            builder: (_) => BookingPage(serviceName: service, products: null,),
                           ),
                         );
                       },

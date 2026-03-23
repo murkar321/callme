@@ -95,6 +95,8 @@ class Cart {
   /// =========================
   static List<CartItem> get allItems => _items;
 
+  static get quantities => null;
+
   /// =========================
   /// 🎯 FILTER BY SERVICE
   /// =========================

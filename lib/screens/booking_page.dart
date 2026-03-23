@@ -20,7 +20,7 @@ class BookingPage extends StatefulWidget {
     required this.serviceName,
     this.product,
     this.adults,
-    this.children,
+    this.children, Object? service, required products,
   });
 
   @override
