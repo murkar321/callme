@@ -1,6 +1,7 @@
 import 'package:callme/models/hotel_services.dart';
 import 'package:callme/models/service_product.dart';
 import 'package:callme/screens/civil_services_page.dart';
+import 'package:callme/screens/cleaning_detail_page.dart';
 import 'package:callme/screens/water_services_page.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_category.dart';
@@ -22,7 +23,7 @@ class _HomePageState extends State<HomePage> {
 
   final List<ServiceCategory> categories = [
     ServiceCategory(name: 'Salon Service', imagePath: 'assets/salon.png'),
-    ServiceCategory(name: 'Cleaning', imagePath: 'assets/k1.jpg'),
+    ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jpg'),
     ServiceCategory(name: 'Resorts', imagePath: 'assets/resort.jfif'),
     ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpg'),
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
@@ -99,7 +100,7 @@ class _HomePageState extends State<HomePage> {
   Widget getServicePage(String serviceName) {
     switch (serviceName) {
       case "Cleaning":
-        return const ServiceDetailPage(serviceName: 'Cleaning');
+        return const CleaningDetailPage(serviceName: 'Cleaning');
 
       case "Salon Service":
         return const SalonPage();
