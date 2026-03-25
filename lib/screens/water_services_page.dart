@@ -107,7 +107,7 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
                       children: [
                         const CircleAvatar(
                           backgroundImage:
-                              AssetImage("assets/water.png"),
+                              AssetImage("assets/water services.png"),
                           radius: 25,
                         ),
                         const SizedBox(height: 6),

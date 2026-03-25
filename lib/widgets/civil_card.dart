@@ -20,116 +20,132 @@ class CivilServiceCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        height: 170,
         margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 4,
-            )
+            BoxShadow(color: Colors.black26, blurRadius: 5)
           ],
         ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            children: [
 
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-
-            /// 🖼 IMAGE
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.asset(
-                service.imagePath,
-                height: 90,
-                width: 90,
-                fit: BoxFit.cover,
+              /// IMAGE
+              Positioned.fill(
+                child: Image.asset(
+                  service.imagePath,
+                  fit: BoxFit.cover,
+                ),
               ),
-            ),
 
-            const SizedBox(width: 10),
-
-            /// 📋 DETAILS
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-                  /// NAME
-                  Text(
-                    service.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+              /// GRADIENT
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.center,
+                      colors: [
+                        Colors.black.withOpacity(0.7),
+                        Colors.transparent,
+                      ],
                     ),
                   ),
+                ),
+              ),
 
-                  const SizedBox(height: 5),
+              /// VIEW DETAILS (TOP LEFT)
+              Positioned(
+                left: 10,
+                top: 10,
+                child: GestureDetector(
+                  onTap: onTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black45,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      "View Details",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
-                  /// PRICE
-                  Text(
+              /// PRICE (TOP RIGHT)
+              Positioned(
+                right: 10,
+                top: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
                     displayPrice ?? "₹${service.price}",
                     style: const TextStyle(
-                      color: Colors.green,
+                      color: Colors.white,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-
-                  const SizedBox(height: 5),
-
-                  /// RATING
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.star,
-                        size: 14,
-                        color: Colors.orange,
-                      ),
-                      const SizedBox(width: 4),
-                      Text("${service.rating ?? 0}"),
-                    ],
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  /// BUTTONS
-                  Row(
-                    children: [
-
-                      /// VIEW BUTTON
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: onTap,
-                          child: const Text(
-                            "View",
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 8),
-
-                      /// ADD BUTTON
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: onAddCart,
-                          child: Text(
-                            service.category == "Renovation"
-                                ? "Custom"
-                                : "Add",
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                ],
+                ),
               ),
-            ),
-          ],
+
+              /// SERVICE NAME
+              Positioned(
+                left: 12,
+                bottom: 12,
+                right: 70,
+                child: Text(
+                  service.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              /// BOOK BUTTON (BOTTOM RIGHT)
+              Positioned(
+                right: 10,
+                bottom: 10,
+                child: GestureDetector(
+                  onTap: onAddCart,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      "BOOK",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

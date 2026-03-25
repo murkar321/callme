@@ -15,22 +15,19 @@ class CivilServicesPage extends StatefulWidget {
 }
 
 class _CivilServicesPageState extends State<CivilServicesPage> {
+
   int selectedIndex = 0;
 
   void refresh() => setState(() {});
 
-  /// ✅ PRICE FIX
+  /// PRICE FIX
   int extractPrice(String price) {
     final numbers = price.replaceAll(RegExp(r'[^0-9]'), '');
     if (numbers.isEmpty) return 0;
-
-    if (numbers.length > 4) {
-      return int.tryParse(numbers.substring(0, numbers.length ~/ 2)) ?? 0;
-    }
     return int.tryParse(numbers) ?? 0;
   }
 
-  /// 🔄 CONVERT DATA
+  /// CONVERT
   ServiceProduct convert(SubService sub, String category) {
     return ServiceProduct(
       id: sub.id,
@@ -44,8 +41,9 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     );
   }
 
-  /// 🛒 ADD TO CART
+  /// ADD TO CART
   void addToCart(ServiceProduct service) {
+
     Cart.add(
       CartItem(
         id: "civil_${service.id}",
@@ -65,8 +63,9 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     );
   }
 
-  /// 🔥 BOOK HANDLER
+  /// BOOK HANDLER
   void handleBooking(ServiceProduct service) {
+
     if (service.category == "Renovation") {
       showModalBottomSheet(
         context: context,
@@ -81,7 +80,7 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     }
   }
 
-  /// 🔍 OPEN DETAILS
+  /// OPEN DETAILS
   void openDetails(SubService sub, String mainId) {
     Navigator.push(
       context,
@@ -96,6 +95,7 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
 
   @override
   Widget build(BuildContext context) {
+
     final categories = civilServices;
     final selectedService = categories[selectedIndex];
     final subServices = selectedService.subServices;
@@ -105,71 +105,91 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     final totalPrice =
         Cart.getTotal("Civil Contract Services");
 
-    final screenWidth = MediaQuery.of(context).size.width;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text("Civil Contract Services"),
       ),
 
-      /// ✅ SAFE + FLEXIBLE LAYOUT
       body: SafeArea(
         child: Column(
           children: [
 
-            /// 🔥 MAIN CONTENT
+            /// MAIN CONTENT
             Expanded(
               child: Row(
                 children: [
 
-                  /// 🔵 LEFT CATEGORY PANEL
+                  /// LEFT CATEGORY PANEL
                   Container(
-                    width: screenWidth * 0.22,
+                    width: 90,
                     color: Colors.grey.shade100,
                     child: ListView.builder(
                       itemCount: categories.length,
                       itemBuilder: (context, index) {
+
+                        final category = categories[index];
                         final isSelected =
                             selectedIndex == index;
 
                         return GestureDetector(
                           onTap: () {
-                            setState(() => selectedIndex = index);
+                            setState(() =>
+                                selectedIndex = index);
                           },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 10),
+
+                          child: Container(
+                            padding:
+                                const EdgeInsets.symmetric(
+                                    vertical: 12),
+
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              border: Border(
+                                left: BorderSide(
+                                  color: isSelected
+                                      ? Colors.blue
+                                      : Colors.transparent,
+                                  width: 4,
+                                ),
+                              ),
+                            ),
+
                             child: Column(
                               children: [
+
                                 CircleAvatar(
-                                  radius: screenWidth * 0.05,
-                                  backgroundColor: isSelected
-                                      ? Colors.blue
-                                      : Colors.grey.shade300,
-                                  child: CircleAvatar(
-                                    radius: screenWidth * 0.045,
-                                    backgroundImage:
-                                        const AssetImage(
-                                            "assets/civil.png"),
-                                  ),
+                                  radius: 24,
+                                  backgroundImage:
+                                      AssetImage(
+                                          category.image),
                                 ),
+
                                 const SizedBox(height: 6),
+
                                 Padding(
                                   padding:
-                                      const EdgeInsets.symmetric(
-                                          horizontal: 4),
+                                      const EdgeInsets
+                                          .symmetric(
+                                              horizontal:
+                                                  4),
                                   child: Text(
-                                    categories[index].name,
-                                    textAlign: TextAlign.center,
+                                    category.name,
+                                    textAlign:
+                                        TextAlign.center,
                                     maxLines: 2,
                                     overflow:
-                                        TextOverflow.ellipsis,
+                                        TextOverflow
+                                            .ellipsis,
                                     style: TextStyle(
-                                      fontSize:
-                                          screenWidth * 0.028,
-                                      fontWeight: isSelected
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
+                                      fontSize: 11,
+                                      fontWeight:
+                                          isSelected
+                                              ? FontWeight
+                                                  .bold
+                                              : FontWeight
+                                                  .normal,
                                     ),
                                   ),
                                 ),
@@ -181,46 +201,31 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                     ),
                   ),
 
-                  /// 🟢 RIGHT GRID PANEL
+                  /// RIGHT SERVICE LIST
                   Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        int crossAxis =
-                            constraints.maxWidth > 900
-                                ? 4
-                                : constraints.maxWidth > 600
-                                    ? 3
-                                    : 2;
+                    child: ListView.builder(
+                      padding: EdgeInsets.fromLTRB(
+                          10,
+                          10,
+                          10,
+                          totalItems > 0 ? 90 : 10),
+                      itemCount: subServices.length,
+                      itemBuilder: (context, index) {
 
-                        return GridView.builder(
-                          padding: EdgeInsets.fromLTRB(
-                              10, 10, 10,
-                              totalItems > 0 ? 90 : 10),
-                          itemCount: subServices.length,
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: crossAxis,
-                            childAspectRatio:
-                                constraints.maxWidth < 400
-                                    ? 0.68
-                                    : 0.75,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                          ),
-                          itemBuilder: (context, index) {
-                            final sub = subServices[index];
-                            final service = convert(
-                                sub, selectedService.name);
+                        final sub =
+                            subServices[index];
 
-                            return CivilServiceCard(
-                              service: service,
-                              displayPrice: sub.price,
-                              onAddCart: () =>
-                                  handleBooking(service),
-                              onTap: () => openDetails(
-                                  sub, selectedService.id),
-                            );
-                          },
+                        final service = convert(
+                            sub, selectedService.name);
+
+                        return CivilServiceCard(
+                          service: service,
+                          displayPrice: sub.price,
+                          onAddCart: () =>
+                              handleBooking(service),
+                          onTap: () => openDetails(
+                              sub,
+                              selectedService.id),
                         );
                       },
                     ),
@@ -229,53 +234,58 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
               ),
             ),
 
-            /// 🛒 BOTTOM CART BAR
+            /// CART BAR
             if (totalItems > 0)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
-                decoration: const BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(16)),
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Row(
-                    children: [
-                      Text(
-                        "$totalItems items",
-                        style: const TextStyle(
-                            color: Colors.white),
+                padding:
+                    const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10),
+                color: Colors.black,
+                child: Row(
+                  children: [
+
+                    Text(
+                      "$totalItems items",
+                      style: const TextStyle(
+                          color: Colors.white),
+                    ),
+
+                    const Spacer(),
+
+                    Text(
+                      "₹$totalPrice",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight:
+                            FontWeight.bold,
                       ),
-                      const Spacer(),
-                      Text(
-                        "₹$totalPrice",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    ),
+
+                    const SizedBox(width: 10),
+
+                    ElevatedButton(
+                      style:
+                          ElevatedButton.styleFrom(
+                        backgroundColor:
+                            Colors.orange,
                       ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  const CivilBookingPage(
-                                      serviceName: ''),
-                            ),
-                          ).then((_) => refresh());
-                        },
-                        child: const Text("View Cart"),
-                      ),
-                    ],
-                  ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const CivilBookingPage(
+                                    serviceName: ''),
+                          ),
+                        ).then(
+                            (_) => refresh());
+                      },
+                      child:
+                          const Text("View Cart"),
+                    ),
+                  ],
                 ),
               ),
           ],
