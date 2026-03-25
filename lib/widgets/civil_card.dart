@@ -18,37 +18,41 @@ class CivilServiceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap, // whole card clickable
+      onTap: onTap,
       child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 4)
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+            )
           ],
         ),
-        child: Column(
+
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            /// 🖼️ IMAGE (FIXED)
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(14)),
-                child: Image.asset(
-                  service.imagePath,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
+            /// 🖼 IMAGE
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                service.imagePath,
+                height: 90,
+                width: 90,
+                fit: BoxFit.cover,
               ),
             ),
 
+            const SizedBox(width: 10),
+
             /// 📋 DETAILS
-            Padding(
-              padding: const EdgeInsets.all(8),
+            Expanded(
               child: Column(
-                mainAxisSize: MainAxisSize.min, // 🔥 IMPORTANT
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
@@ -59,11 +63,11 @@ class CivilServiceCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      fontSize: 14,
                     ),
                   ),
 
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 5),
 
                   /// PRICE
                   Text(
@@ -74,31 +78,30 @@ class CivilServiceCard extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 5),
 
                   /// RATING
                   Row(
                     children: [
-                      const Icon(Icons.star,
-                          size: 14, color: Colors.orange),
-                      const SizedBox(width: 2),
+                      const Icon(
+                        Icons.star,
+                        size: 14,
+                        color: Colors.orange,
+                      ),
+                      const SizedBox(width: 4),
                       Text("${service.rating ?? 0}"),
                     ],
                   ),
 
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
 
                   /// BUTTONS
                   Row(
                     children: [
 
-                      /// VIEW
+                      /// VIEW BUTTON
                       Expanded(
                         child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(0, 32),
-                          ),
                           onPressed: onTap,
                           child: const Text(
                             "View",
@@ -107,15 +110,11 @@ class CivilServiceCard extends StatelessWidget {
                         ),
                       ),
 
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
 
-                      /// ADD / CUSTOM
+                      /// ADD BUTTON
                       Expanded(
                         child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(0, 32),
-                          ),
                           onPressed: onAddCart,
                           child: Text(
                             service.category == "Renovation"
@@ -126,7 +125,7 @@ class CivilServiceCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                  ),
+                  )
                 ],
               ),
             ),

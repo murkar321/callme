@@ -15,15 +15,15 @@ class ServiceDetailPage extends StatefulWidget {
 class _ServiceDetailPageState extends State<ServiceDetailPage> {
   late String selectedCategory;
 
-  final Color primaryColor = const Color.fromARGB(255, 174, 145, 186);
+  final Color primaryColor = const Color(0xFFAE91BA);
 
   @override
   void initState() {
     super.initState();
-    selectedCategory = serviceProducts[widget.serviceName]!.keys.first;
+    selectedCategory =
+        serviceProducts[widget.serviceName]!.keys.first;
   }
 
-  /// ✅ TOTAL ITEMS
   int get totalItems {
     int count = 0;
     final items = Cart.getItems(widget.serviceName);
@@ -33,13 +33,14 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     return count;
   }
 
-  /// ✅ TOTAL AMOUNT
   int get totalAmount => Cart.getTotal(widget.serviceName);
 
   @override
   Widget build(BuildContext context) {
-    final categories = serviceProducts[widget.serviceName]!.keys.toList();
-    final products = serviceProducts[widget.serviceName]![selectedCategory]!;
+    final categories =
+        serviceProducts[widget.serviceName]!.keys.toList();
+    final products =
+        serviceProducts[widget.serviceName]![selectedCategory]!;
 
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -60,8 +61,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            BookingPage(serviceName: widget.serviceName, products: null,),
+                        builder: (_) => BookingPage(
+                          serviceName: widget.serviceName,
+                          products: null,
+                        ),
                       ),
                     );
                   },
@@ -74,7 +77,8 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     backgroundColor: Colors.red,
                     child: Text(
                       totalItems.toString(),
-                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 10),
                     ),
                   ),
                 ),
@@ -86,11 +90,13 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
       /// 🔹 BODY
       body: Row(
         children: [
-          /// 🔹 LEFT CATEGORY PANEL
+
+          /// 🔹 LEFT MENU (IMPROVED)
           Container(
             width: screenWidth * 0.22,
-            color: Colors.white,
+            color: Colors.grey.shade100,
             child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 10),
               itemCount: categories.length,
               itemBuilder: (context, index) {
                 final category = categories[index];
@@ -98,29 +104,39 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                 final categoryProducts =
                     serviceProducts[widget.serviceName]![category]!;
 
-                return InkWell(
+                return GestureDetector(
                   onTap: () {
                     setState(() {
                       selectedCategory = category;
                     });
                   },
-                  child: Container(
-                    margin: const EdgeInsets.all(6),
-                    padding: const EdgeInsets.all(6),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(
+                        vertical: 6, horizontal: 6),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? primaryColor.withOpacity(0.15)
-                          : Colors.white,
+                          ? Colors.white
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
+                      boxShadow: isSelected
+                          ? [
+                              const BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 4)
+                            ]
+                          : [],
                     ),
                     child: Column(
                       children: [
                         CircleAvatar(
                           radius: 20,
-                          backgroundImage:
-                              AssetImage(categoryProducts.first.imagePath),
+                          backgroundImage: AssetImage(
+                              categoryProducts.first.imagePath),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
                           category,
                           textAlign: TextAlign.center,
@@ -129,7 +145,9 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color: isSelected ? primaryColor : Colors.grey,
+                            color: isSelected
+                                ? primaryColor
+                                : Colors.grey,
                           ),
                         ),
                       ],
@@ -140,116 +158,177 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
             ),
           ),
 
-          /// 🔹 RIGHT GRID
+          /// 🔹 RIGHT GRID (FINAL FIX)
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 100),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              padding:
+                  const EdgeInsets.fromLTRB(10, 10, 10, 100),
+
+              gridDelegate:
+                  const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 0.58,
+
+                /// 🔥 FIXED HEIGHT (NO OVERFLOW)
+                mainAxisExtent: 220,
+
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
               ),
+
               itemCount: products.length,
+
               itemBuilder: (context, index) {
                 final product = products[index];
-
-                /// ✅ FIXED
-                final qty = Cart.getQuantity(product.id, widget.serviceName);
+                final qty = Cart.getQuantity(
+                    product.id, widget.serviceName);
 
                 return Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius:
+                        BorderRadius.circular(16),
                     boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 6),
+                      BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 6),
                     ],
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
-                      /// 🔹 IMAGE
+
+                      /// IMAGE
                       ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16)),
+                        borderRadius:
+                            const BorderRadius.vertical(
+                                top: Radius.circular(16)),
                         child: Image.asset(
                           product.imagePath,
-                          height: 85,
+                          height: 80,
                           width: double.infinity,
                           fit: BoxFit.cover,
                         ),
                       ),
 
-                      /// 🔹 CONTENT
+                      /// CONTENT
                       Expanded(
                         child: Padding(
-                          padding: const EdgeInsets.all(8),
+                          padding:
+                              const EdgeInsets.all(8),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(product.name,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600)),
-                              const Spacer(),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text("₹${product.calculatedFinalPrice}"),
 
-                                  /// ✅ FIXED ADD/REMOVE
+                              /// NAME
+                              Text(
+                                product.name,
+                                maxLines: 1,
+                                overflow:
+                                    TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight:
+                                        FontWeight.w600),
+                              ),
+
+                              /// PRICE + BUTTON
+                              Row(
+                                children: [
+
+                                  /// PRICE
+                                  Expanded(
+                                    child: Text(
+                                      "₹${product.calculatedFinalPrice}",
+                                      style: const TextStyle(
+                                          fontWeight:
+                                              FontWeight.bold),
+                                    ),
+                                  ),
+
+                                  const SizedBox(width: 6),
+
+                                  /// ADD / QTY
                                   qty == 0
-                                      ? ElevatedButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              Cart.add(
-                                                CartItem(
-                                                  id: product.id,
-                                                  name: product.name,
-                                                  price: product
-                                                      .calculatedFinalPrice,
-                                                  service: widget.serviceName,
-                                                  category: selectedCategory,
-                                                ),
-                                                service: widget.serviceName,
-                                              );
-                                            });
-                                          },
-                                          child: const Text("ADD"),
+                                      ? SizedBox(
+                                          height: 28,
+                                          child:
+                                              ElevatedButton(
+                                            onPressed: () {
+                                              setState(() {
+                                                Cart.add(
+                                                  CartItem(
+                                                    id: product.id,
+                                                    name:
+                                                        product.name,
+                                                    price: product
+                                                        .calculatedFinalPrice,
+                                                    service: widget
+                                                        .serviceName,
+                                                    category:
+                                                        selectedCategory,
+                                                  ),
+                                                  service: widget
+                                                      .serviceName,
+                                                );
+                                              });
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                                            ),
+                                            child: const Text(
+                                              "ADD",
+                                              style: TextStyle(fontSize: 11),
+                                            ),
+                                          ),
                                         )
-                                      : Row(
-                                          children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.remove),
-                                              onPressed: () {
-                                                setState(() {
-                                                  Cart.removeById(product.id,
-                                                      widget.serviceName);
-                                                });
-                                              },
-                                            ),
-                                            Text(qty.toString()),
-                                            IconButton(
-                                              icon: const Icon(Icons.add),
-                                              onPressed: () {
-                                                setState(() {
-                                                  Cart.add(
-                                                    CartItem(
-                                                      id: product.id,
-                                                      name: product.name,
-                                                      price: product
-                                                          .calculatedFinalPrice,
-                                                      service:
-                                                          widget.serviceName,
-                                                      category:
-                                                          selectedCategory,
-                                                    ),
-                                                    service: widget.serviceName,
-                                                  );
-                                                });
-                                              },
-                                            ),
-                                          ],
+                                      : Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: primaryColor),
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+
+                                              GestureDetector(
+                                                onTap: () {
+                                                  setState(() {
+                                                    Cart.removeById(product.id, widget.serviceName);
+                                                  });
+                                                },
+                                                child: Icon(Icons.remove, size: 16, color: primaryColor),
+                                              ),
+
+                                              const SizedBox(width: 6),
+
+                                              Text(qty.toString(),
+                                                  style: const TextStyle(fontSize: 12)),
+
+                                              const SizedBox(width: 6),
+
+                                              GestureDetector(
+                                                onTap: () {
+                                                  setState(() {
+                                                    Cart.add(
+                                                      CartItem(
+                                                        id: product.id,
+                                                        name: product.name,
+                                                        price: product.calculatedFinalPrice,
+                                                        service: widget.serviceName,
+                                                        category: selectedCategory,
+                                                      ),
+                                                      service: widget.serviceName,
+                                                    );
+                                                  });
+                                                },
+                                                child: Icon(Icons.add, size: 16, color: primaryColor),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                 ],
                               ),
@@ -274,8 +353,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        BookingPage(serviceName: widget.serviceName, products: null,),
+                    builder: (_) => BookingPage(
+                      serviceName: widget.serviceName,
+                      products: null,
+                    ),
                   ),
                 );
               },
@@ -287,12 +368,15 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
                   children: [
                     Text("$totalItems items",
-                        style: const TextStyle(color: Colors.white)),
+                        style: const TextStyle(
+                            color: Colors.white)),
                     Text("₹$totalAmount View Cart →",
-                        style: const TextStyle(color: Colors.white)),
+                        style: const TextStyle(
+                            color: Colors.white)),
                   ],
                 ),
               ),

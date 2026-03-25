@@ -29,7 +29,7 @@ class _HomePageState extends State<HomePage> {
     ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpg'),
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
     ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
-    ServiceCategory(name: 'Water Services', imagePath: 'assets/water.png'),
+    ServiceCategory(name: 'Water Services', imagePath: 'assets/water services.png'),
     ServiceCategory(name: 'Civil Services', imagePath: 'assets/civil.png'),
 
   ];

@@ -10,6 +10,8 @@ class CivilService {
     required this.image,
     required this.subServices,
   });
+
+  get category => null;
 }
 
 class SubService {

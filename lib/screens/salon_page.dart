@@ -43,29 +43,17 @@ class _SalonPageState extends State<SalonPage> {
 
     final width = MediaQuery.of(context).size.width;
 
-    /// responsive category width
-    double categoryWidth = 90;
+    /// CATEGORY WIDTH
+    double categoryWidth = width < 600 ? 85 : 100;
 
-    if (width < 600) {
-      categoryWidth = 85;
-    } else if (width < 1000) {
-      categoryWidth = 95;
-    } else {
-      categoryWidth = 110;
-    }
-
-    /// responsive grid columns
-    int gridCount = 2;
-
-    if (width < 600) {
-      gridCount = 1;
-    } else if (width < 900) {
-      gridCount = 2;
-    } else if (width < 1200) {
-      gridCount = 3;
-    } else {
-      gridCount = 4;
-    }
+    /// GRID COUNT
+    int gridCount = width < 600
+        ? 1
+        : width < 900
+            ? 2
+            : width < 1200
+                ? 3
+                : 4;
 
     final items = salonServices
         .where((s) => s.category == selectedCategory)
@@ -74,14 +62,10 @@ class _SalonPageState extends State<SalonPage> {
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
 
-      /// =========================
-      /// APPBAR
-      /// =========================
-
+      /// ================= APPBAR =================
       appBar: AppBar(
         title: const Text("Salon Services"),
         backgroundColor: primaryColor,
-
         actions: [
 
           if (totalItems > 0)
@@ -91,7 +75,6 @@ class _SalonPageState extends State<SalonPage> {
                 IconButton(
                   icon: const Icon(Icons.shopping_cart),
                   onPressed: () {
-
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -100,9 +83,7 @@ class _SalonPageState extends State<SalonPage> {
                           service: '',
                         ),
                       ),
-                    ).then((_) {
-                      setState(() {});
-                    });
+                    ).then((_) => setState(() {}));
                   },
                 ),
 
@@ -126,25 +107,19 @@ class _SalonPageState extends State<SalonPage> {
         ],
       ),
 
-      /// =========================
-      /// BODY
-      /// =========================
-
+      /// ================= BODY =================
       body: Row(
         children: [
 
-          /// =========================
-          /// LEFT CATEGORY PANEL
-          /// =========================
-
+          /// 🔹 LEFT MENU (FIXED UI)
           Container(
             width: categoryWidth,
-            color: Colors.white,
-
+            color: Colors.grey.shade100,
             child: ListView.builder(
+              shrinkWrap: true,
+              physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: salonCategories.length,
-
               itemBuilder: (context, index) {
 
                 final category = salonCategories[index];
@@ -158,30 +133,27 @@ class _SalonPageState extends State<SalonPage> {
                     ? firstItem.first.image
                     : "assets/salon.png";
 
-                return InkWell(
+                return GestureDetector(
                   onTap: () {
                     setState(() {
                       selectedCategory = category;
                     });
                   },
 
-                  child: Container(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 6,
-                    ),
-                    padding: const EdgeInsets.all(6),
+                        horizontal: 6, vertical: 6),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
 
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? primaryColor.withOpacity(0.15)
-                          : Colors.white,
+                          ? Colors.white
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected
-                            ? primaryColor
-                            : Colors.grey.shade200,
-                      ),
+                      boxShadow: isSelected
+                          ? [const BoxShadow(color: Colors.black12, blurRadius: 4)]
+                          : [],
                     ),
 
                     child: Column(
@@ -192,14 +164,13 @@ class _SalonPageState extends State<SalonPage> {
                           backgroundImage: AssetImage(image),
                         ),
 
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 6),
 
                         Text(
                           category,
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: isSelected
@@ -218,35 +189,32 @@ class _SalonPageState extends State<SalonPage> {
             ),
           ),
 
-          /// =========================
-          /// RIGHT SERVICES PANEL
-          /// =========================
-
+          /// 🔹 RIGHT GRID (FINAL FIX)
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(12),
-
               itemCount: items.length,
 
-              gridDelegate:
-                  SliverGridDelegateWithFixedCrossAxisCount(
-
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: gridCount,
 
-                childAspectRatio: width < 600
-                    ? 3.2
+                /// 🔥 FIXED HEIGHT (NO OVERFLOW)
+                mainAxisExtent: width < 600
+                    ? 110
                     : width < 1000
-                        ? 3
-                        : 2.8,
+                        ? 120
+                        : 130,
 
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
 
               itemBuilder: (context, index) {
-
-                return SalonServiceCard(
-                  service: items[index],
+                return SizedBox(
+                  height: width < 600 ? 110 : 120,
+                  child: SalonServiceCard(
+                    service: items[index],
+                  ),
                 );
               },
             ),
@@ -254,16 +222,12 @@ class _SalonPageState extends State<SalonPage> {
         ],
       ),
 
-      /// =========================
-      /// BOTTOM CART BAR
-      /// =========================
-
+      /// ================= BOTTOM BAR =================
       bottomNavigationBar: totalItems == 0
           ? null
           : SafeArea(
               child: InkWell(
                 onTap: () {
-
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -272,40 +236,29 @@ class _SalonPageState extends State<SalonPage> {
                         service: '',
                       ),
                     ),
-                  ).then((_) {
-                    setState(() {});
-                  });
+                  ).then((_) => setState(() {}));
                 },
-
                 child: Container(
                   margin: const EdgeInsets.all(12),
                   padding: const EdgeInsets.all(14),
-
                   decoration: BoxDecoration(
                     color: primaryColor,
                     borderRadius: BorderRadius.circular(16),
                   ),
-
                   child: Row(
                     mainAxisAlignment:
                         MainAxisAlignment.spaceBetween,
                     children: [
-
                       Text(
                         "$totalItems items",
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                        ),
+                            color: Colors.white),
                       ),
-
                       Text(
                         "₹$totalAmount View Cart →",
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold),
                       )
                     ],
                   ),
