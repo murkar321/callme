@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../screens/booking_page.dart';
+import '../screens/cleaning_service_detail_page.dart'; 
 import '../models/cleaning_service.dart';
 
 class CleaningServiceCard extends StatelessWidget {
@@ -27,6 +27,7 @@ class CleaningServiceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 240, // ✅ FIXED HEIGHT (prevents overflow)
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -34,7 +35,6 @@ class CleaningServiceCard extends StatelessWidget {
           BoxShadow(color: Colors.black12, blurRadius: 6)
         ],
       ),
-
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -48,7 +48,7 @@ class CleaningServiceCard extends StatelessWidget {
                 ),
                 child: Image.asset(
                   product.image,
-                  height: 95,
+                  height: 90,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
@@ -83,20 +83,21 @@ class CleaningServiceCard extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(8),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
                   /// NAME
                   Text(
                     product.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
                   ),
 
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
 
                   /// DESCRIPTION
                   Text(
@@ -109,7 +110,7 @@ class CleaningServiceCard extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
 
                   /// TIME
                   Text(
@@ -122,7 +123,7 @@ class CleaningServiceCard extends StatelessWidget {
 
                   const Spacer(),
 
-                  /// PRICE
+                  /// PRICE + BUTTON
                   Row(
                     mainAxisAlignment:
                         MainAxisAlignment.spaceBetween,
@@ -132,64 +133,53 @@ class CleaningServiceCard extends StatelessWidget {
                         crossAxisAlignment:
                             CrossAxisAlignment.start,
                         children: [
-
                           Text(
                             "₹${product.price}",
                             style: const TextStyle(
                               decoration:
-                                  TextDecoration
-                                      .lineThrough,
+                                  TextDecoration.lineThrough,
                               color: Colors.grey,
-                              fontSize: 12,
+                              fontSize: 11,
                             ),
                           ),
-
                           Text(
                             "₹${product.finalPrice}",
                             style: const TextStyle(
-                              fontWeight:
-                                  FontWeight.bold,
-                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
                             ),
                           ),
                         ],
                       ),
 
-                      /// ADD / REMOVE
                       qty == 0
-                          ? ElevatedButton(
-                              onPressed: onAdd,
-                              style: ElevatedButton
-                                  .styleFrom(
-                                backgroundColor:
-                                    primaryColor,
-                                padding:
-                                    const EdgeInsets
-                                        .symmetric(
-                                  horizontal: 10,
+                          ? SizedBox(
+                              height: 30,
+                              child: ElevatedButton(
+                                onPressed: onAdd,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10),
+                                ),
+                                child: const Text(
+                                  "ADD",
+                                  style: TextStyle(fontSize: 11),
                                 ),
                               ),
-                              child:
-                                  const Text("ADD"),
                             )
                           : Row(
                               children: [
-
                                 IconButton(
-                                  icon: const Icon(
-                                    Icons.remove,
-                                    size: 18,
-                                  ),
+                                  icon: const Icon(Icons.remove, size: 18),
                                   onPressed: onRemove,
                                 ),
-
-                                Text(qty.toString()),
-
+                                Text(
+                                  qty.toString(),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                                 IconButton(
-                                  icon: const Icon(
-                                    Icons.add,
-                                    size: 18,
-                                  ),
+                                  icon: const Icon(Icons.add, size: 18),
                                   onPressed: onAdd,
                                 ),
                               ],
@@ -197,33 +187,36 @@ class CleaningServiceCard extends StatelessWidget {
                     ],
                   ),
 
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
 
-                  /// VIEW DETAILS
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                BookingPage(
-                              serviceName:
-                                  serviceName,
-                              products: product,
-                            ),
-                          ),
-                        );
-                      },
-                      child:
-                          const Text("View Details"),
-                    ),
-                  ),
-                ],
+               
+
+/// VIEW DETAILS
+SizedBox(
+  width: double.infinity,
+  height: 32,
+  child: OutlinedButton(
+    onPressed: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CleaningServiceDetailPage(
+            product: product,          // ✅ pass object
+            serviceName: serviceName,  // ✅ pass name
+          ),
+        ),
+      );
+    },
+    child: const Text(
+      "View Details",
+      style: TextStyle(fontSize: 11),
+    ),
+  ),
+),
+                ]
               ),
             ),
-          )
+          ),
         ],
       ),
     );
