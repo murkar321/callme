@@ -135,7 +135,7 @@ Map<String, List<CleaningService>> cleaningServices = {
     ),
     CleaningService(
       name: "Kitchen Cabinet Cleaning",
-      image: "assets/ Kitchen Cleaning.jpg",
+      image: "assets/Kitchen Cleaning.jpg",
       description: "Clean and organised cabinets",
       includes: [],
       excludes: [],

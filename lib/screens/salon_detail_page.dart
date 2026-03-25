@@ -1,243 +1,275 @@
 import 'package:flutter/material.dart';
-import 'package:callme/data/salon_data.dart';
+import '../data/salon_data.dart';
+import '../models/cart.dart';
 import 'salon_booking_page.dart';
 
-class SalonDetailPage extends StatelessWidget {
+class SalonDetailPage extends StatefulWidget {
   final SalonService service;
 
-  const SalonDetailPage({super.key, required this.service});
+  const SalonDetailPage({
+    super.key,
+    required this.service,
+  });
+
+  @override
+  State<SalonDetailPage> createState() => _SalonDetailPageState();
+}
+
+class _SalonDetailPageState extends State<SalonDetailPage> {
+
+  static const String serviceName = "Salon";
 
   @override
   Widget build(BuildContext context) {
+
+    final String id = "Salon_${widget.service.name}";
+    final int qty = Cart.getQuantity(id, serviceName);
+
     return Scaffold(
+
       appBar: AppBar(
-        title: Text(service.name),
+        title: Text(widget.service.name),
+        backgroundColor: const Color(0xFFAE91BA),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 20), // 🔥 overflow fix
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              /// IMAGE
-              Image.asset(
-                service.image, // ✅ dynamic image
+
+      body: SingleChildScrollView(
+
+        padding: const EdgeInsets.all(16),
+
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            /// =========================
+            /// IMAGE
+            /// =========================
+
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.asset(
+                widget.service.image,
                 width: double.infinity,
-                height: 220,
+                height: 200,
                 fit: BoxFit.cover,
               ),
+            ),
 
-              const SizedBox(height: 15),
+            const SizedBox(height: 20),
 
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            /// =========================
+            /// NAME
+            /// =========================
+
+            Text(
+              widget.service.name,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            Text(
+              widget.service.slogan,
+              style: const TextStyle(
+                color: Colors.grey,
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            /// =========================
+            /// PRICE
+            /// =========================
+
+            Row(
+              children: [
+
+                Text(
+                  "₹${widget.service.finalPrice}",
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                Text(
+                  "₹${widget.service.price}",
+                  style: const TextStyle(
+                    decoration: TextDecoration.lineThrough,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            /// =========================
+            /// DESCRIPTION
+            /// =========================
+
+            const Text(
+              "Description",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(widget.service.description),
+
+            const SizedBox(height: 20),
+
+            /// =========================
+            /// INCLUDES
+            /// =========================
+
+            const Text(
+              "Includes",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            ...widget.service.includes.map(
+              (e) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
                   children: [
-                    /// NAME
-                    Text(
-                      service.name,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    /// SLOGAN
-                    Text(
-                      service.slogan,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    /// TIME
-                    Row(
-                      children: [
-                        const Icon(Icons.timer, size: 18),
-                        const SizedBox(width: 6),
-                        Text("Duration: ${service.time}"),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    /// PRICE
-                    Row(
-                      children: [
-                        Text(
-                          "₹${service.finalPrice}",
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          "₹${service.price}",
-                          style: const TextStyle(
-                            decoration: TextDecoration.lineThrough,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.orange,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            "${service.discount}% OFF",
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 12),
-                          ),
-                        )
-                      ],
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    /// DESCRIPTION
-                    const Text(
-                      "Service Description",
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(service.description),
-
-                    const SizedBox(height: 20),
-
-                    /// ✅ INCLUDES SECTION
-                    const Text(
-                      "What's Included",
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-
-                    ...service.includes.map((item) => _buildPoint(item)),
-
-                    const SizedBox(height: 20),
-
-                    /// ✅ PROCESS SECTION
-                    const Text(
-                      "Service Process",
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-
-                    ...service.process.map((step) => _buildStep(step)),
-
-                    const SizedBox(height: 30),
-
-                    /// BOOK BUTTON
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          _showBookingTypeDialog(context);
-                        },
-                        child: const Text("Book Appointment"),
-                      ),
-                    )
+                    const Icon(Icons.check, color: Colors.green, size: 18),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(e)),
                   ],
                 ),
-              )
-            ],
-          ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            /// =========================
+            /// BOOK BUTTON
+            /// =========================
+
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+
+              child: ElevatedButton(
+
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFAE91BA),
+                ),
+
+                onPressed: () {
+
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+
+                      return AlertDialog(
+
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+
+                        title: const Text("Choose Appointment"),
+
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+
+                            /// HOME
+                            ListTile(
+                              leading: const Icon(
+                                Icons.home,
+                                color: Colors.purple,
+                              ),
+                              title: const Text("Home Appointment"),
+
+                              onTap: () {
+
+                                Navigator.pop(context);
+
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        SalonBookingPage(
+                                      services: [widget.service],
+                                      isHomeVisitDefault: true,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+
+                            const Divider(),
+
+                            /// SALON
+                            ListTile(
+                              leading: const Icon(
+                                Icons.store,
+                                color: Colors.green,
+                              ),
+                              title: const Text("Salon Appointment"),
+
+                              onTap: () {
+
+                                Cart.add(
+                                  CartItem(
+                                    id: id,
+                                    name: widget.service.name,
+                                    price: widget.service.finalPrice,
+                                    service: serviceName,
+                                    category: widget.service.category,
+                                    image: widget.service.image,
+                                  ),
+                                  service: serviceName,
+                                );
+
+                                Navigator.pop(context);
+
+                                setState(() {});
+
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      "${widget.service.name} added to cart",
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+
+                child: Text(
+                  qty == 0
+                      ? "Book Service"
+                      : "Added ($qty) • Add More",
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+          ],
         ),
       ),
-    );
-  }
-
-  /// 🔹 BULLET POINT (INCLUDES)
-  Widget _buildPoint(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle, color: Colors.green, size: 18),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text)),
-        ],
-      ),
-    );
-  }
-
-  /// 🔹 STEP POINT (PROCESS)
-  Widget _buildStep(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          const Icon(Icons.radio_button_checked, size: 16, color: Colors.blue),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text)),
-        ],
-      ),
-    );
-  }
-
-  /// 🔥 POPUP
-  void _showBookingTypeDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Choose Booking Type"),
-          content: const Text("Select how you want the service"),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SalonBookingPage(
-                      service: service,
-                      isHomeVisitDefault: false,
-                      serviceName: service.name,
-                      services: [],
-                      adults: 1,
-                      children: 1,
-                    ),
-                  ),
-                );
-              },
-              child: const Text("Salon Appointment"),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SalonBookingPage(
-                      service: service,
-                      isHomeVisitDefault: true,
-                      serviceName: '',
-                      services: [],
-                      adults: 1,
-                      children: 1,
-                    ),
-                  ),
-                );
-              },
-              child: const Text("Home Service"),
-            ),
-          ],
-        );
-      },
     );
   }
 }

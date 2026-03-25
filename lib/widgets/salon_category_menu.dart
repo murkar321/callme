@@ -1,78 +1,113 @@
 import 'package:flutter/material.dart';
+import '../data/salon_data.dart';
 
 class SalonCategoryMenu extends StatelessWidget {
-
   final List<String> categories;
   final String selectedCategory;
   final Function(String) onCategorySelected;
+  final Color primaryColor;
 
   const SalonCategoryMenu({
     super.key,
     required this.categories,
     required this.selectedCategory,
     required this.onCategorySelected,
+    required this.primaryColor,
   });
 
   @override
   Widget build(BuildContext context) {
 
+    final width = MediaQuery.of(context).size.width;
+
+    /// responsive menu width
+    double menuWidth = 100;
+
+    if (width < 600) {
+      menuWidth = 85;
+    } else if (width < 1000) {
+      menuWidth = 95;
+    } else {
+      menuWidth = 110;
+    }
+
     return Container(
-      width: 100,
-      color: Colors.grey.shade100,
+      width: menuWidth,
+      color: Colors.white,
 
       child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: categories.length,
 
         itemBuilder: (context, index) {
 
-          String category = categories[index];
-          bool selected = category == selectedCategory;
+          final category = categories[index];
+          final isSelected = category == selectedCategory;
 
-          return GestureDetector(
+          /// safe first service
+          final firstService = salonServices
+              .where((s) => s.category == category)
+              .toList();
 
-            onTap: () {
-              onCategorySelected(category);
-            },
+          final image = firstService.isNotEmpty
+              ? firstService.first.image
+              : "assets/salon.png";
 
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+          return InkWell(
+            onTap: () => onCategorySelected(category),
+
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+
+              margin: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 6,
+              ),
+
+              padding: const EdgeInsets.symmetric(
+                vertical: 8,
+                horizontal: 6,
+              ),
+
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? primaryColor.withOpacity(0.15)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected
+                      ? primaryColor
+                      : Colors.grey.shade200,
+                ),
+              ),
 
               child: Column(
                 children: [
 
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: selected
-                          ? Border.all(
-                              color: Colors.purple,
-                              width: 3,
-                            )
-                          : null,
-                    ),
-
-                    child: const CircleAvatar(
-                      radius: 30,
-                      backgroundImage: AssetImage("assets/salon.png"),
-                    ),
+                  /// IMAGE
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Colors.grey.shade100,
+                    backgroundImage: AssetImage(image),
                   ),
 
                   const SizedBox(height: 6),
 
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Text(
-                      category,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: selected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        color: selected
-                            ? Colors.purple
-                            : Colors.black,
-                      ),
+                  /// CATEGORY TEXT
+                  Text(
+                    category,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.w500,
+                      color: isSelected
+                          ? primaryColor
+                          : Colors.grey.shade700,
                     ),
                   ),
                 ],

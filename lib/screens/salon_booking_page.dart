@@ -1,6 +1,4 @@
-import 'package:callme/screens/booking_success_page.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../data/salon_data.dart';
 
 class SalonBookingPage extends StatefulWidget {
@@ -10,11 +8,7 @@ class SalonBookingPage extends StatefulWidget {
   const SalonBookingPage({
     super.key,
     required this.services,
-    required this.isHomeVisitDefault,
-    required SalonService service,
-    required String serviceName,
-    required int adults,
-    required int children,
+    this.isHomeVisitDefault = false,
   });
 
   @override
@@ -22,223 +16,333 @@ class SalonBookingPage extends StatefulWidget {
 }
 
 class _SalonBookingPageState extends State<SalonBookingPage> {
-  late bool isHomeVisit;
 
-  final nameController = TextEditingController();
-  final phoneController = TextEditingController();
-  final addressController = TextEditingController();
-  final instructionController = TextEditingController();
+  String selectedVisit = "Home";
+  DateTime selectedDate = DateTime.now();
+  TimeOfDay selectedTime = TimeOfDay.now();
 
-  DateTime? selectedDate;
-  TimeOfDay? selectedTime;
-
-  final String salonName = "Beauty Glow Salon";
-  final String salonAddress = "45, MG Road, Pune, Maharashtra";
+  final TextEditingController addressController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    isHomeVisit = widget.isHomeVisitDefault;
+
+    if (widget.isHomeVisitDefault) {
+      selectedVisit = "Home";
+    }
   }
 
-  /// ✅ TOTAL PRICE
-  int get totalPrice {
-    return widget.services.fold(
-      0,
-      (sum, item) => sum + (item.finalPrice),
+  /// 📅 PICK DATE
+  Future<void> pickDate() async {
+
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2030),
     );
+
+    if (picked != null) {
+      setState(() {
+        selectedDate = picked;
+      });
+    }
+  }
+
+  /// ⏰ PICK TIME
+  Future<void> pickTime() async {
+
+    TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: selectedTime,
+    );
+
+    if (picked != null) {
+      setState(() {
+        selectedTime = picked;
+      });
+    }
+  }
+
+  /// 💰 TOTAL
+  int get totalPrice {
+
+    int total = 0;
+
+    for (var service in widget.services) {
+      total += service.finalPrice;
+    }
+
+    return total;
   }
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
+
       appBar: AppBar(
-        title: const Text("Booking"),
+        title: const Text("Salon Booking"),
+        backgroundColor: const Color(0xFFAE91BA),
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
+
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// 🔹 HOME / SALON TOGGLE
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ChoiceChip(
-                  label: const Text("Salon Appointment"),
-                  selected: !isHomeVisit,
-                  onSelected: (_) => setState(() => isHomeVisit = false),
+
+            /// =========================
+            /// SELECTED SERVICES
+            /// =========================
+
+            const Text(
+              "Selected Services",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            ...widget.services.map(
+              (service) => Card(
+                child: ListTile(
+                  leading: Image.asset(
+                    service.image,
+                    width: 50,
+                  ),
+                  title: Text(service.name),
+                  subtitle: Text("₹${service.finalPrice}"),
                 ),
-                const SizedBox(width: 10),
-                ChoiceChip(
-                  label: const Text("Home Visit"),
-                  selected: isHomeVisit,
-                  onSelected: (_) => setState(() => isHomeVisit = true),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            /// =========================
+            /// VISIT TYPE
+            /// =========================
+
+            const Text(
+              "Appointment Type",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            Row(
+              children: [
+
+                Expanded(
+                  child: RadioListTile(
+                    value: "Home",
+                    groupValue: selectedVisit,
+                    title: const Text("Home Visit"),
+                    onChanged: (val) {
+                      setState(() {
+                        selectedVisit = val!;
+                      });
+                    },
+                  ),
+                ),
+
+                Expanded(
+                  child: RadioListTile(
+                    value: "Salon",
+                    groupValue: selectedVisit,
+                    title: const Text("Salon Visit"),
+                    onChanged: (val) {
+                      setState(() {
+                        selectedVisit = val!;
+                      });
+                    },
+                  ),
                 ),
               ],
             ),
 
             const SizedBox(height: 20),
 
-            /// 🔥 SERVICES LIST
-            const Text(
-              "Selected Services",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            /// =========================
+            /// DATE
+            /// =========================
 
-            ...widget.services.map((service) => ListTile(
-                  title: Text(service.name),
-                  trailing: Text(
-                    "₹${service.finalPrice}",
-                  ),
-                )),
-
-            const SizedBox(height: 10),
-
-            _readOnlyField("Salon Name", salonName),
-
-            if (!isHomeVisit) _readOnlyField("Salon Address", salonAddress),
-
-            const SizedBox(height: 15),
-
-            /// 📅 DATE
             ListTile(
-              title: Text(selectedDate == null
-                  ? "Select Date"
-                  : DateFormat('dd MMM yyyy').format(selectedDate!)),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now(),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime(2030),
-                );
-                if (date != null) setState(() => selectedDate = date);
-              },
+              leading: const Icon(Icons.calendar_today),
+              title: const Text("Select Date"),
+              subtitle: Text(
+                "${selectedDate.day}-${selectedDate.month}-${selectedDate.year}",
+              ),
+              onTap: pickDate,
             ),
 
-            /// ⏰ TIME
+            /// =========================
+            /// TIME
+            /// =========================
+
             ListTile(
-              title: Text(selectedTime == null
-                  ? "Select Time"
-                  : selectedTime!.format(context)),
-              trailing: const Icon(Icons.access_time),
-              onTap: () async {
-                final time = await showTimePicker(
-                  context: context,
-                  initialTime: TimeOfDay.now(),
-                );
-                if (time != null) setState(() => selectedTime = time);
-              },
+              leading: const Icon(Icons.access_time),
+              title: const Text("Select Time"),
+              subtitle: Text(selectedTime.format(context)),
+              onTap: pickTime,
             ),
-
-            const SizedBox(height: 15),
-
-            /// 👤 NAME
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: "Full Name"),
-            ),
-
-            /// 📱 PHONE
-            TextField(
-              controller: phoneController,
-              decoration: const InputDecoration(labelText: "Phone Number"),
-              keyboardType: TextInputType.phone,
-            ),
-
-            /// 🏠 ADDRESS (ONLY FOR HOME VISIT)
-            if (isHomeVisit) ...[
-              TextField(
-                controller: addressController,
-                decoration: const InputDecoration(labelText: "Address"),
-              ),
-              TextField(
-                controller: instructionController,
-                decoration:
-                    const InputDecoration(labelText: "Special Instructions"),
-              ),
-            ],
 
             const SizedBox(height: 20),
 
-            /// 💰 TOTAL
-            Text(
-              "Total Price: ₹$totalPrice",
-              style: const TextStyle(
-                fontSize: 18,
+            /// =========================
+            /// ADDRESS (HOME ONLY)
+            /// =========================
+
+            if (selectedVisit == "Home") ...[
+
+              const Text(
+                "Address",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              TextField(
+                controller: addressController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: "Enter Home Address",
+                ),
+              ),
+
+              const SizedBox(height: 20),
+            ],
+
+            /// =========================
+            /// PHONE
+            /// =========================
+
+            const Text(
+              "Phone Number",
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
               ),
             ),
 
+            const SizedBox(height: 8),
+
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: "Enter Phone Number",
+              ),
+            ),
+
             const SizedBox(height: 20),
 
-            /// ✅ CONFIRM BUTTON
+            /// =========================
+            /// TOTAL
+            /// =========================
+
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+
+                    const Text(
+                      "Total",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    Text(
+                      "₹$totalPrice",
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            /// =========================
+            /// BOOK BUTTON
+            /// =========================
+
             SizedBox(
               width: double.infinity,
+              height: 50,
+
               child: ElevatedButton(
-                onPressed: _confirmBooking,
-                child: Text(
-                  isHomeVisit ? "Confirm Booking" : "Confirm Appointment",
+
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFAE91BA),
+                ),
+
+                onPressed: () {
+
+                  if (phoneController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Enter phone number"),
+                      ),
+                    );
+                    return;
+                  }
+
+                  if (selectedVisit == "Home" &&
+                      addressController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Enter address"),
+                      ),
+                    );
+                    return;
+                  }
+
+                  /// SUCCESS
+
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text("Booking Confirmed"),
+                      content: const Text(
+                        "Your salon appointment is booked successfully.",
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            Navigator.pop(context);
+                          },
+                          child: const Text("OK"),
+                        )
+                      ],
+                    ),
+                  );
+                },
+
+                child: const Text(
+                  "Confirm Booking",
+                  style: TextStyle(fontSize: 16),
                 ),
               ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _readOnlyField(String label, String value) {
-    return TextField(
-      readOnly: true,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: value,
-      ),
-    );
-  }
-
-  /// ✅ VALIDATION + NAVIGATION
-  void _confirmBooking() {
-    if (selectedDate == null || selectedTime == null) {
-      _showError("Please select date & time");
-      return;
-    }
-
-    if (nameController.text.isEmpty || phoneController.text.isEmpty) {
-      _showError("Please enter name & phone number");
-      return;
-    }
-
-    if (isHomeVisit && addressController.text.isEmpty) {
-      _showError("Please enter address");
-      return;
-    }
-
-    String bookingId =
-        "SLN${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}";
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => BookingSuccessPage(
-          services: widget.services,
-          bookingId: bookingId,
-          date: selectedDate!,
-          time: selectedTime!,
-          isHomeVisit: isHomeVisit,
-          address: addressController.text,
-        ),
-      ),
-    );
-  }
-
-  /// 🔥 ERROR SNACKBAR
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
     );
   }
 }

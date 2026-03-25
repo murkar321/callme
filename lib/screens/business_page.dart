@@ -24,12 +24,9 @@ class _BusinessPageState extends State<BusinessPage> {
     ServiceCategory(name: 'Salon', icon: Icons.content_cut),
     ServiceCategory(name: 'Plumbing', icon: Icons.plumbing),
     ServiceCategory(name: 'Resorts', icon: Icons.hotel),
-    ServiceCategory(name: 'Real Estate', icon: Icons.house),
-    ServiceCategory(name: 'Photography', icon: Icons.camera_alt),
     ServiceCategory(name: 'Cleaning', icon: Icons.cleaning_services),
-    ServiceCategory(name: 'Carpenter', icon: Icons.carpenter),
     ServiceCategory(name: 'Laundry', icon: Icons.local_laundry_service),
-    ServiceCategory(name: 'Mechanic', icon: Icons.car_repair),
+   
   ];
 
   void _handleCategoryTap(ServiceCategory service) {
