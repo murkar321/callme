@@ -1,235 +1,336 @@
 import 'package:flutter/material.dart';
-import '../models/service_product.dart';
-import 'package:callme/screens/booking_page.dart';
+import '../data/resorts_data.dart';
+import '../models/cart.dart';
+import 'package:callme/widgets/rbooking_popup.dart';
 
-class ResortDetailPage extends StatefulWidget {
-  final ServiceProduct service;
+class ResortDetailPage extends StatelessWidget {
+  final Resort resort;
 
-  const ResortDetailPage({super.key, required this.service});
+  const ResortDetailPage({
+    super.key,
+    required this.resort, Object? service,
+  });
 
   @override
-  State<ResortDetailPage> createState() => _ResortDetailPageState();
-}
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
 
-class _ResortDetailPageState extends State<ResortDetailPage> {
-  int adults = 1;
-  int children = 0;
+      body: Stack(
+        children: [
 
-  void _showGuestPicker() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Select Guests"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Adults
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          /// SCROLLABLE CONTENT
+          SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 100),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
-                const Text("Adults"),
-                Row(
+
+                /// IMAGE BANNER
+                Stack(
                   children: [
-                    IconButton(
-                        onPressed: () {
-                          if (adults > 1) setState(() => adults--);
-                        },
-                        icon: const Icon(Icons.remove)),
-                    Text(adults.toString()),
-                    IconButton(
-                        onPressed: () => setState(() => adults++),
-                        icon: const Icon(Icons.add)),
+                    Image.asset(
+                      resort.image,
+                      height: 260,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+
+                    Positioned(
+                      top: 40,
+                      left: 12,
+                      child: CircleAvatar(
+                        backgroundColor:
+                            Colors.black54,
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                          ),
+                          onPressed: () =>
+                              Navigator.pop(context),
+                        ),
+                      ),
+                    ),
+
+                    Positioned(
+                      bottom: 10,
+                      left: 10,
+                      child: Container(
+                        padding:
+                            const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius:
+                              BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          "${resort.discount}% OFF",
+                          style: const TextStyle(
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
-                )
-              ],
-            ),
-            // Children
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text("Children"),
-                Row(
-                  children: [
-                    IconButton(
-                        onPressed: () {
-                          if (children > 0) setState(() => children--);
-                        },
-                        icon: const Icon(Icons.remove)),
-                    Text(children.toString()),
-                    IconButton(
-                        onPressed: () => setState(() => children++),
-                        icon: const Icon(Icons.add)),
-                  ],
-                )
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel")),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BookingPage(
-                    service: widget.service,
-                    adults: adults,
-                    children: children,
-                    serviceName:
-                        '${widget.service.name} - $adults Adults, $children Children',
-                    products: [],
+                ),
+
+                /// CONTENT
+                Padding(
+                  padding:
+                      const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+
+                      /// NAME
+                      Text(
+                        resort.name,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      /// CITY
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on,
+                            color: Colors.red,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(resort.city),
+                        ],
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      /// RATING
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.star,
+                            color: Colors.amber,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            "${resort.rating} Rating",
+                            style: const TextStyle(
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 15),
+
+                      /// PRICE CARD
+                      _card(
+                        child: Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment
+                                  .spaceBetween,
+                          children: [
+
+                            const Text(
+                              "Price per person",
+                              style: TextStyle(
+                                fontSize: 16,
+                              ),
+                            ),
+
+                            Row(
+                              children: [
+                                Text(
+                                  "₹${resort.price}",
+                                  style:
+                                      const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight:
+                                        FontWeight.bold,
+                                    color:
+                                        Colors.green,
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                    width: 8),
+
+                                Text(
+                                  "₹${resort.originalPrice}",
+                                  style:
+                                      const TextStyle(
+                                    decoration:
+                                        TextDecoration
+                                            .lineThrough,
+                                    color:
+                                        Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      /// DESCRIPTION
+                      const Text(
+                        "About Resort",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      Text(
+                        resort.description,
+                        style:
+                            const TextStyle(
+                          color: Colors.black54,
+                          height: 1.5,
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      /// FACILITIES
+                      const Text(
+                        "Facilities",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: resort.facilities
+                            .map(
+                              (f) => Chip(
+                                label: Text(f),
+                                backgroundColor:
+                                    Colors.white,
+                              ),
+                            )
+                            .toList(),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      /// ADD TO CART
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+
+                            Cart.addItem(
+                              name: resort.name,
+                              price: resort.price,
+                              category: "Resort",
+                              service: "Resort",
+                              image: resort.image, id: '',
+                            );
+
+                            ScaffoldMessenger.of(
+                                    context)
+                                .showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                    "Added to cart"),
+                              ),
+                            );
+                          },
+                          style:
+                              ElevatedButton
+                                  .styleFrom(
+                            backgroundColor:
+                                Colors.orange,
+                            padding:
+                                const EdgeInsets
+                                    .all(14),
+                          ),
+                          child: const Text(
+                              "Add to Cart"),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
-            child: const Text("Proceed"),
+              ],
+            ),
+          ),
+
+          /// BOTTOM BOOK BUTTON
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding:
+                  const EdgeInsets.all(12),
+              color: Colors.white,
+              child: ElevatedButton(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) =>
+                        ResortBookingPopup(
+                      resort: resort, id: '', name: '', price: 0, image: '',
+                    ),
+                  );
+                },
+                style: ElevatedButton
+                    .styleFrom(
+                  backgroundColor:
+                      Colors.green,
+                  padding:
+                      const EdgeInsets.all(14),
+                ),
+                child: const Text(
+                  "Book Now",
+                  style: TextStyle(
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final service = widget.service;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(service.name),
-        backgroundColor: Colors.teal,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 90),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image + Discount
-            Stack(
-              children: [
-                SizedBox(
-                    width: double.infinity,
-                    height: 220,
-                    child: Image.asset(service.imagePath, fit: BoxFit.cover)),
-                if (service.discount != null && service.discount! > 0)
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                          color: Colors.redAccent,
-                          borderRadius: BorderRadius.circular(6)),
-                      child: Text(
-                        '${service.discount}% OFF',
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-
-            // Details
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Name + Rating
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          service.name,
-                          style: const TextStyle(
-                              fontSize: 22, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          const Icon(Icons.star,
-                              color: Colors.orange, size: 18),
-                          const SizedBox(width: 4),
-                          Text(service.rating.toString(),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Price
-                  Row(
-                    children: [
-                      Text(
-                        '₹${service.finalPrice}',
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.teal),
-                      ),
-                      const SizedBox(width: 8),
-                      if (service.price != service.finalPrice)
-                        Text(
-                          '₹${service.price}',
-                          style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                              decoration: TextDecoration.lineThrough),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Includes
-                  if (service.includes != null &&
-                      service.includes!.isNotEmpty) ...[
-                    const Text("Includes",
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    ...service.includes!
-                        .map((e) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.check,
-                                      size: 16, color: Colors.green),
-                                  const SizedBox(width: 6),
-                                  Expanded(child: Text(e)),
-                                ],
-                              ),
-                            ))
-                        .toList(),
-                    const SizedBox(height: 16),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-
-      // Bottom Booking Button
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
+  /// CARD
+  Widget _card({required Widget child}) {
+    return Container(
+      padding:
+          const EdgeInsets.all(14),
+      decoration: BoxDecoration(
         color: Colors.white,
-        child: ElevatedButton(
-          onPressed: _showGuestPicker,
-          child: const Text("Book Now"),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orangeAccent,
-            minimumSize: const Size.fromHeight(50),
-          ),
-        ),
+        borderRadius:
+            BorderRadius.circular(14),
       ),
+      child: child,
     );
   }
 }

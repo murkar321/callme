@@ -5,7 +5,7 @@ class CartItem {
   final String id;
   final String name;
   final int price;
-  final String service; // Salon / Hotel / Cleaning etc
+  final String service; // Salon / Cleaning / Resort / Water etc
   final String category;
   final String? image;
 
@@ -26,7 +26,7 @@ class CartItem {
   });
 }
 
-/// 🛒 MAIN CART
+/// 🛒 UNIVERSAL CART
 class Cart {
   static final List<CartItem> _items = [];
 
@@ -35,7 +35,7 @@ class Cart {
   /// =========================
   static void add(CartItem item, {required String service}) {
     final index = _items.indexWhere(
-      (e) => e.id == item.id && e.service == item.service,
+      (e) => e.id == item.id && e.service == service,
     );
 
     if (index != -1) {
@@ -84,9 +84,9 @@ class Cart {
   /// =========================
   /// ❌ DELETE COMPLETELY
   /// =========================
-  static void delete(CartItem item) {
+  static void delete(String id, String service) {
     _items.removeWhere(
-      (e) => e.id == item.id && e.service == item.service,
+      (e) => e.id == id && e.service == service,
     );
   }
 
@@ -95,17 +95,18 @@ class Cart {
   /// =========================
   static List<CartItem> get allItems => _items;
 
-  static Null get quantities => null;
-
   /// =========================
   /// 🎯 FILTER BY SERVICE
   /// =========================
   static List<CartItem> getItems(String service) {
-    return _items.where((e) => e.service == service).toList();
+    return _items
+        .where((e) => e.service == service)
+        .toList();
   }
 
-  /// 🔁 Alias (safe use anywhere)
-  static List<CartItem> getByService(String serviceName) {
+  /// 🔁 Alias
+  static List<CartItem> getByService(
+      String serviceName) {
     return getItems(serviceName);
   }
 
@@ -114,12 +115,21 @@ class Cart {
   /// =========================
   static int getTotalItems([String? service]) {
     if (service == null) {
-      return _items.fold(0, (sum, e) => sum + e.quantity);
+      return _items.fold(
+        0,
+        (sum, e) => sum + e.quantity,
+      );
     }
 
     return _items
         .where((e) => e.service == service)
-        .fold(0, (sum, e) => sum + e.quantity);
+        .fold(0,
+            (sum, e) => sum + e.quantity);
+  }
+
+  /// 🔁 Alias
+  static int totalItems(String service) {
+    return getTotalItems(service);
   }
 
   /// =========================
@@ -128,11 +138,21 @@ class Cart {
   static int getTotal(String service) {
     return _items
         .where((e) => e.service == service)
-        .fold(0, (sum, e) => sum + (e.price * e.quantity));
+        .fold(
+          0,
+          (sum, e) =>
+              sum +
+              (e.price *
+                  e.quantity *
+                  e.adults) +
+              ((e.price ~/ 2) *
+                  e.children),
+        );
   }
 
   /// 🔁 Alias
-  static int totalPrice(String serviceName) {
+  static int totalPrice(
+      String serviceName) {
     return getTotal(serviceName);
   }
 
@@ -142,17 +162,26 @@ class Cart {
   static int getGrandTotal() {
     return _items.fold(
       0,
-      (sum, e) => sum + (e.price * e.quantity),
+      (sum, e) =>
+          sum +
+          (e.price *
+              e.quantity *
+              e.adults) +
+          ((e.price ~/ 2) *
+              e.children),
     );
   }
 
   /// =========================
   /// 🔍 FIND ITEM
   /// =========================
-  static CartItem? find(String id, String service) {
+  static CartItem? find(
+      String id, String service) {
     try {
       return _items.firstWhere(
-        (e) => e.id == id && e.service == service,
+        (e) =>
+            e.id == id &&
+            e.service == service,
       );
     } catch (e) {
       return null;
@@ -162,13 +191,15 @@ class Cart {
   /// =========================
   /// 🔢 GET QUANTITY
   /// =========================
-  static int getQuantity(String id, String service) {
+  static int getQuantity(
+      String id, String service) {
     final item = find(id, service);
     return item?.quantity ?? 0;
   }
 
   /// =========================
-  /// 👨‍👩‍👧 UPDATE GUESTS (HOTEL USE)
+  /// 👨‍👩‍👧 UPDATE GUESTS
+  /// (Used in Resort Popup)
   /// =========================
   static void updateGuests(
     String id,
@@ -177,10 +208,45 @@ class Cart {
     int? children,
   }) {
     final item = find(id, service);
+
     if (item == null) return;
 
-    if (adults != null) item.adults = adults;
-    if (children != null) item.children = children;
+    if (adults != null) {
+      item.adults = adults;
+    }
+
+    if (children != null) {
+      item.children = children;
+    }
+  }
+
+  /// =========================
+  /// ➕ ADD DIRECT ITEM
+  /// (Shortcut)
+  /// =========================
+  static void addItem({
+    required String id,
+    required String name,
+    required int price,
+    required String service,
+    required String category,
+    String? image,
+    int adults = 1,
+    int children = 0,
+  }) {
+    add(
+      CartItem(
+        id: id,
+        name: name,
+        price: price,
+        service: service,
+        category: category,
+        image: image,
+        adults: adults,
+        children: children,
+      ),
+      service: service,
+    );
   }
 
   /// =========================
@@ -190,9 +256,8 @@ class Cart {
     if (service == null) {
       _items.clear();
     } else {
-      _items.removeWhere((e) => e.service == service);
+      _items.removeWhere(
+          (e) => e.service == service);
     }
   }
-
-  static totalItems(String s) {}
 }

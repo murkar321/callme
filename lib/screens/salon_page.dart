@@ -62,7 +62,7 @@ class _SalonPageState extends State<SalonPage> {
                       MaterialPageRoute(
                         builder: (_) => const CartPage(
                           serviceName: "Salon",
-                          service: '',
+                          service: '', cart: [],
                         ),
                       ),
                     ).then((_) => refresh());
@@ -193,7 +193,7 @@ class _SalonPageState extends State<SalonPage> {
                     MaterialPageRoute(
                       builder: (_) => const CartPage(
                         serviceName: "Salon",
-                        service: '',
+                        service: '', cart: [],
                       ),
                     ),
                   ).then((_) => refresh());

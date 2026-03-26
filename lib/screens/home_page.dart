@@ -1,14 +1,14 @@
 
 import 'package:callme/models/civil_services_page.dart';
-import 'package:callme/models/hotel_services.dart';
+import 'package:callme/models/hotel_service_page.dart';
 import 'package:callme/models/service_product.dart';
 import 'package:callme/screens/cleaning_detail_page.dart';
+import 'package:callme/screens/resort_page.dart';
 import 'package:callme/screens/water_services_page.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/screens/service_detail_page.dart';
-import 'package:callme/screens/salon_page.dart';
-import 'package:callme/screens/resort_list.dart'; // ✅ NEW
+import 'package:callme/screens/salon_page.dart';// ✅ NEW
 import 'package:callme/widgets/category_card.dart';
 
 class HomePage extends StatefulWidget {
@@ -25,7 +25,7 @@ class _HomePageState extends State<HomePage> {
   final List<ServiceCategory> categories = [
     ServiceCategory(name: 'Salon Service', imagePath: 'assets/salon.png'),
     ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jpg'),
-    ServiceCategory(name: 'Resorts', imagePath: 'assets/resort.jfif'),
+    ServiceCategory(name: 'Resorts', imagePath: 'assets/resort.jpg'),
     ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpg'),
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
     ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
@@ -106,7 +106,7 @@ class _HomePageState extends State<HomePage> {
         return const SalonPage();
 
       case "Resorts":
-        return const ResortListPage();
+        return const ResortPage(resorts: [],);
 
       case "Hotel":
         return const HotelServicePage(); 
