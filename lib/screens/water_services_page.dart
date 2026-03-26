@@ -22,12 +22,19 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    /// 🔥 RESPONSIVE
+    final isTablet = screenWidth > 600;
+    final leftWidth = isTablet ? 110.0 : screenWidth * 0.22;
+    final crossAxisCount = isTablet ? 3 : 2;
+
     List<ServiceProduct> services = waterServices[categories[selectedIndex]]!;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
 
-      /// APP BAR (UNCHANGED)
+      /// 🔹 APP BAR
       appBar: AppBar(
         backgroundColor: Colors.purple.shade200,
         title: const Text("Water Services"),
@@ -53,6 +60,8 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
                   );
                 },
               ),
+
+              /// 🔴 CART BADGE
               if (totalWaterItems > 0)
                 Positioned(
                   right: 6,
@@ -75,39 +84,62 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
         ],
       ),
 
-      /// BODY
+      /// 🔹 BODY
       body: Row(
         children: [
-          /// LEFT CATEGORY (UNCHANGED LOGIC)
+          /// 🔹 LEFT CATEGORY PANEL
           Container(
-            width: 90,
+            width: leftWidth,
             color: Colors.grey.shade200,
             child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: categories.length,
               itemBuilder: (context, index) {
-                bool isSelected = selectedIndex == index;
+                final isSelected = selectedIndex == index;
 
                 return GestureDetector(
                   onTap: () {
                     setState(() => selectedIndex = index);
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    color: isSelected ? Colors.white : Colors.transparent,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin:
+                        const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: isSelected
+                          ? [
+                              const BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 4,
+                              )
+                            ]
+                          : [],
+                    ),
                     child: Column(
                       children: [
                         const CircleAvatar(
+                          radius: 22,
                           backgroundImage:
                               AssetImage("assets/water services.png"),
-                          radius: 25,
                         ),
                         const SizedBox(height: 6),
-                        Text(
-                          categories[index],
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isSelected ? Colors.purple : Colors.grey,
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            categories[index],
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: isTablet ? 12 : 10,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isSelected ? Colors.purple : Colors.grey,
+                            ),
                           ),
                         )
                       ],
@@ -118,17 +150,21 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
             ),
           ),
 
-          /// RIGHT GRID (ONLY UI FIXED)
+          /// 🔹 RIGHT GRID
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.all(10),
-              itemCount: services.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.72,
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 100),
+
+              /// 🔥 FINAL FIX (NO OVERFLOW)
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                mainAxisExtent: isTablet ? 230 : 220,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
               ),
+
+              itemCount: services.length,
+
               itemBuilder: (context, index) {
                 return WaterServiceCard(
                   product: services[index],
@@ -140,7 +176,7 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
         ],
       ),
 
-      /// CART BAR (UNCHANGED LOGIC)
+      /// 🔹 BOTTOM CART BAR
       bottomNavigationBar: totalWaterItems == 0
           ? null
           : GestureDetector(
@@ -158,7 +194,7 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
               },
               child: Container(
                 height: 60,
-                margin: const EdgeInsets.all(10),
+                margin: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: const Color.fromARGB(255, 210, 166, 218),
                   borderRadius: BorderRadius.circular(30),
