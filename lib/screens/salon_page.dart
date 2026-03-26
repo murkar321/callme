@@ -12,16 +12,11 @@ class SalonPage extends StatefulWidget {
 }
 
 class _SalonPageState extends State<SalonPage> {
-
   final Color primaryColor = const Color(0xFFAE91BA);
 
-  late String selectedCategory;
+  int selectedIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    selectedCategory = salonCategories.first;
-  }
+  void refresh() => setState(() {});
 
   /// TOTAL ITEMS
   int get totalItems {
@@ -35,29 +30,16 @@ class _SalonPageState extends State<SalonPage> {
     return count;
   }
 
-  /// TOTAL AMOUNT
+  /// TOTAL PRICE
   int get totalAmount => Cart.getTotal("Salon");
 
   @override
   Widget build(BuildContext context) {
+    final categories = salonCategories;
+    final selectedCategory = categories[selectedIndex];
 
-    final width = MediaQuery.of(context).size.width;
-
-    /// CATEGORY WIDTH
-    double categoryWidth = width < 600 ? 85 : 100;
-
-    /// GRID COUNT
-    int gridCount = width < 600
-        ? 1
-        : width < 900
-            ? 2
-            : width < 1200
-                ? 3
-                : 4;
-
-    final items = salonServices
-        .where((s) => s.category == selectedCategory)
-        .toList();
+    final services =
+        salonServices.where((s) => s.category == selectedCategory).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
@@ -65,13 +47,13 @@ class _SalonPageState extends State<SalonPage> {
       /// ================= APPBAR =================
       appBar: AppBar(
         title: const Text("Salon Services"),
+        centerTitle: true,
         backgroundColor: primaryColor,
         actions: [
-
+          /// CART ICON
           if (totalItems > 0)
             Stack(
               children: [
-
                 IconButton(
                   icon: const Icon(Icons.shopping_cart),
                   onPressed: () {
@@ -83,10 +65,9 @@ class _SalonPageState extends State<SalonPage> {
                           service: '',
                         ),
                       ),
-                    ).then((_) => setState(() {}));
+                    ).then((_) => refresh());
                   },
                 ),
-
                 Positioned(
                   right: 6,
                   top: 6,
@@ -108,121 +89,100 @@ class _SalonPageState extends State<SalonPage> {
       ),
 
       /// ================= BODY =================
-      body: Row(
-        children: [
+      body: SafeArea(
+        child: Row(
+          children: [
+            /// ================= LEFT CATEGORY =================
+            Container(
+              width: 95,
+              color: Colors.grey.shade100,
+              child: ListView.builder(
+                itemCount: categories.length,
+                itemBuilder: (context, index) {
+                  final category = categories[index];
+                  final isSelected = selectedIndex == index;
 
-          /// 🔹 LEFT MENU (FIXED UI)
-          Container(
-            width: categoryWidth,
-            color: Colors.grey.shade100,
-            child: ListView.builder(
-              shrinkWrap: true,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: salonCategories.length,
-              itemBuilder: (context, index) {
+                  final firstItem = salonServices
+                      .where((s) => s.category == category)
+                      .toList();
 
-                final category = salonCategories[index];
-                final isSelected = category == selectedCategory;
+                  final image = firstItem.isNotEmpty
+                      ? firstItem.first.image
+                      : "assets/salon.png";
 
-                final firstItem = salonServices
-                    .where((s) => s.category == category)
-                    .toList();
-
-                final image = firstItem.isNotEmpty
-                    ? firstItem.first.image
-                    : "assets/salon.png";
-
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      selectedCategory = category;
-                    });
-                  },
-
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 6),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Colors.white
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: isSelected
-                          ? [const BoxShadow(color: Colors.black12, blurRadius: 4)]
-                          : [],
-                    ),
-
-                    child: Column(
-                      children: [
-
-                        CircleAvatar(
-                          radius: 22,
-                          backgroundImage: AssetImage(image),
-                        ),
-
-                        const SizedBox(height: 6),
-
-                        Text(
-                          category,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.w500,
-                            color: isSelected
-                                ? primaryColor
-                                : Colors.grey.shade700,
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        selectedIndex = index;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected ? Colors.white : Colors.transparent,
+                        border: Border(
+                          left: BorderSide(
+                            color:
+                                isSelected ? primaryColor : Colors.transparent,
+                            width: 4,
                           ),
-                        )
-                      ],
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundImage: AssetImage(image),
+                          ),
+                          const SizedBox(height: 6),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Text(
+                              category,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color:
+                                    isSelected ? primaryColor : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          /// 🔹 RIGHT GRID (FINAL FIX)
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: items.length,
-
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: gridCount,
-
-                /// 🔥 FIXED HEIGHT (NO OVERFLOW)
-                mainAxisExtent: width < 600
-                    ? 110
-                    : width < 1000
-                        ? 120
-                        : 130,
-
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+                  );
+                },
               ),
-
-              itemBuilder: (context, index) {
-                return SizedBox(
-                  height: width < 600 ? 110 : 120,
-                  child: SalonServiceCard(
-                    service: items[index],
-                  ),
-                );
-              },
             ),
-          ),
-        ],
+
+            /// ================= RIGHT SERVICE LIST =================
+            Expanded(
+              child: ListView.builder(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  12,
+                  12,
+                  totalItems > 0 ? 90 : 12,
+                ),
+                itemCount: services.length,
+                itemBuilder: (context, index) {
+                  return SalonServiceCard(
+                    service: services[index],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
 
-      /// ================= BOTTOM BAR =================
+      /// ================= BOTTOM CART =================
       bottomNavigationBar: totalItems == 0
           ? null
           : SafeArea(
@@ -236,7 +196,7 @@ class _SalonPageState extends State<SalonPage> {
                         service: '',
                       ),
                     ),
-                  ).then((_) => setState(() {}));
+                  ).then((_) => refresh());
                 },
                 child: Container(
                   margin: const EdgeInsets.all(12),
@@ -246,19 +206,20 @@ class _SalonPageState extends State<SalonPage> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         "$totalItems items",
                         style: const TextStyle(
-                            color: Colors.white),
+                          color: Colors.white,
+                        ),
                       ),
                       Text(
-                        "₹$totalAmount View Cart →",
+                        "₹$totalAmount  View Cart →",
                         style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold),
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       )
                     ],
                   ),

@@ -30,8 +30,6 @@ class CartItem {
 class Cart {
   static final List<CartItem> _items = [];
 
-
-
   /// =========================
   /// ➕ ADD ITEM
   /// =========================
@@ -98,8 +96,6 @@ class Cart {
   static List<CartItem> get allItems => _items;
 
   static Null get quantities => null;
-
-  
 
   /// =========================
   /// 🎯 FILTER BY SERVICE
@@ -197,4 +193,6 @@ class Cart {
       _items.removeWhere((e) => e.service == service);
     }
   }
+
+  static totalItems(String s) {}
 }

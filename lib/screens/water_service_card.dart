@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/service_product.dart';
 import '../models/cart.dart';
+import '../screens/water_detail_page.dart';
 
 class WaterServiceCard extends StatelessWidget {
   final ServiceProduct product;
@@ -12,7 +13,6 @@ class WaterServiceCard extends StatelessWidget {
     required this.onUpdate,
   });
 
-  /// 🔁 Convert ServiceProduct → CartItem
   CartItem get cartItem => CartItem(
         id: product.id,
         name: product.name,
@@ -24,8 +24,7 @@ class WaterServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    /// ✅ Get Quantity from Cart
-    int qty = Cart.getQuantity(product.id, "Water");
+    Cart.getQuantity(product.id, "Water");
 
     return Container(
       decoration: BoxDecoration(
@@ -42,146 +41,86 @@ class WaterServiceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// 🔷 IMAGE
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.asset(
-                  product.imagePath,
-                  height: 90,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-
-              /// 🔴 DISCOUNT
-              if (product.discount != null && product.discount! > 0)
-                Positioned(
-                  top: 5,
-                  left: 5,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      "${product.discount}% OFF",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+          /// IMAGE
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset(
+              product.imagePath,
+              height: 90,
+              width: double.infinity,
+              fit: BoxFit.cover,
+            ),
           ),
 
           const SizedBox(height: 6),
 
-          /// 🔷 NAME
+          /// NAME
           Text(
             product.name,
             style: const TextStyle(
               fontWeight: FontWeight.bold,
-              fontSize: 13,
+              fontSize: 12,
             ),
-            maxLines: 2,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
 
-          /// 🔷 DESCRIPTION
+          /// DESCRIPTION
           if (product.description != null)
             Text(
               product.description!,
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: 10,
                 color: Colors.grey,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
 
-          const Spacer(),
+          const SizedBox(height: 4),
 
-          /// 🔷 PRICE
-          Row(
-            children: [
-              Text(
-                "₹${product.calculatedFinalPrice}",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color.fromARGB(255, 178, 134, 186),
-                ),
-              ),
-              const SizedBox(width: 6),
-              if (product.discount != null && product.discount! > 0)
-                Text(
-                  "₹${product.price}",
-                  style: const TextStyle(
-                    fontSize: 11,
-                    decoration: TextDecoration.lineThrough,
-                    color: Colors.grey,
-                  ),
-                ),
-            ],
+          /// PRICE
+          Text(
+            "₹${product.calculatedFinalPrice}",
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.purple,
+            ),
           ),
 
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
 
-          /// 🔥 ADD / REMOVE
-          qty == 0
-              ? SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Cart.add(cartItem, service: "Water");
-                      onUpdate();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 184, 109, 198),
-                    ),
-                    child: const Text("Add"),
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    /// ➖ REMOVE
-                    IconButton(
-                      onPressed: () {
-                        Cart.remove(cartItem);
-                        onUpdate();
-                      },
-                      icon: const Icon(
-                        Icons.remove_circle,
-                        color: Colors.red,
+          /// BUTTONS (LOGIC SAME)
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => WaterDetailPage(product: product),
                       ),
-                    ),
-
-                    /// 🔢 QTY
-                    Text(
-                      qty.toString(),
-                      style: const TextStyle(fontSize: 16),
-                    ),
-
-                    /// ➕ ADD
-                    IconButton(
-                      onPressed: () {
-                        Cart.add(cartItem, service: "Water");
-                        onUpdate();
-                      },
-                      icon: const Icon(
-                        Icons.add_circle,
-                        color: Colors.green,
-                      ),
-                    ),
-                  ],
+                    );
+                  },
+                  child: const Text("Details", style: TextStyle(fontSize: 10)),
                 ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    Cart.add(cartItem, service: "Water");
+                    onUpdate();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                  ),
+                  child: const Text("Add", style: TextStyle(fontSize: 10)),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

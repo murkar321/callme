@@ -17,22 +17,31 @@ class CivilServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 170,
-        margin: const EdgeInsets.symmetric(vertical: 8),
+        height: width * 0.40, // responsive height
+        margin: const EdgeInsets.symmetric(
+          vertical: 8,
+          horizontal: 4,
+        ),
+
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
           boxShadow: const [
-            BoxShadow(color: Colors.black26, blurRadius: 5)
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 5,
+            )
           ],
         ),
+
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: Stack(
             children: [
-
               /// IMAGE
               Positioned.fill(
                 child: Image.asset(
@@ -57,17 +66,19 @@ class CivilServiceCard extends StatelessWidget {
                 ),
               ),
 
-              /// VIEW DETAILS (TOP LEFT)
+              /// VIEW DETAILS
               Positioned(
                 left: 10,
                 top: 10,
-                child: GestureDetector(
+                child: InkWell(
                   onTap: onTap,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.black45,
+                      color: Colors.black54,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Text(
@@ -81,13 +92,15 @@ class CivilServiceCard extends StatelessWidget {
                 ),
               ),
 
-              /// PRICE (TOP RIGHT)
+              /// PRICE
               Positioned(
                 right: 10,
                 top: 10,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(6),
@@ -106,8 +119,8 @@ class CivilServiceCard extends StatelessWidget {
               /// SERVICE NAME
               Positioned(
                 left: 12,
-                bottom: 12,
-                right: 70,
+                bottom: 14,
+                right: 90,
                 child: Text(
                   service.name,
                   maxLines: 2,
@@ -120,22 +133,24 @@ class CivilServiceCard extends StatelessWidget {
                 ),
               ),
 
-              /// BOOK BUTTON (BOTTOM RIGHT)
+              /// BOOK BUTTON
               Positioned(
                 right: 10,
                 bottom: 10,
-                child: GestureDetector(
+                child: InkWell(
                   onTap: onAddCart,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.red,
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Text(
-                      "BOOK",
-                      style: TextStyle(
+                    child: Text(
+                      service.category == "Renovation" ? "SELECT" : "BOOK",
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,

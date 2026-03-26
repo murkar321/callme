@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/booking_page.dart';
 import '../screens/water_service_card.dart';
-import '../screens/water_data.dart';
+import '../data/water_data.dart';
 import '../models/service_product.dart';
 import '../models/cart.dart';
 
@@ -17,25 +17,17 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
 
   List<String> categories = waterServices.keys.toList();
 
-  /// ✅ TOTAL WATER ITEMS
-  int get totalWaterItems {
-    return Cart.getTotalItems("Water");
-  }
-
-  /// ✅ TOTAL WATER PRICE
-  int get totalWaterPrice {
-    return Cart.totalPrice("Water");
-  }
+  int get totalWaterItems => Cart.getTotalItems("Water");
+  int get totalWaterPrice => Cart.totalPrice("Water");
 
   @override
   Widget build(BuildContext context) {
-    List<ServiceProduct> services =
-        waterServices[categories[selectedIndex]]!;
+    List<ServiceProduct> services = waterServices[categories[selectedIndex]]!;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
 
-      /// APP BAR
+      /// APP BAR (UNCHANGED)
       appBar: AppBar(
         backgroundColor: Colors.purple.shade200,
         title: const Text("Water Services"),
@@ -61,7 +53,6 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
                   );
                 },
               ),
-
               if (totalWaterItems > 0)
                 Positioned(
                   right: 6,
@@ -87,7 +78,7 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
       /// BODY
       body: Row(
         children: [
-          /// LEFT CATEGORY
+          /// LEFT CATEGORY (UNCHANGED LOGIC)
           Container(
             width: 90,
             color: Colors.grey.shade200,
@@ -116,9 +107,7 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 11,
-                            color: isSelected
-                                ? const Color.fromARGB(255, 207, 143, 219)
-                                : Colors.grey,
+                            color: isSelected ? Colors.purple : Colors.grey,
                           ),
                         )
                       ],
@@ -129,13 +118,12 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
             ),
           ),
 
-          /// RIGHT GRID
+          /// RIGHT GRID (ONLY UI FIXED)
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(10),
               itemCount: services.length,
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 childAspectRatio: 0.72,
                 crossAxisSpacing: 10,
@@ -152,7 +140,7 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
         ],
       ),
 
-      /// WATER CART BAR
+      /// CART BAR (UNCHANGED LOGIC)
       bottomNavigationBar: totalWaterItems == 0
           ? null
           : GestureDetector(
@@ -172,7 +160,7 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
                 height: 60,
                 margin: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 196, 129, 208),
+                  color: const Color.fromARGB(255, 210, 166, 218),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Center(
@@ -180,7 +168,6 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
                     "$totalWaterItems items   ₹$totalWaterPrice   View Cart →",
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

@@ -7,7 +7,10 @@ import '../screens/salon_booking_page.dart';
 class SalonServiceCard extends StatelessWidget {
   final SalonService service;
 
-  const SalonServiceCard({super.key, required this.service});
+  const SalonServiceCard({
+    super.key,
+    required this.service,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -16,159 +19,178 @@ class SalonServiceCard extends StatelessWidget {
     final qty = Cart.getQuantity(id, serviceName);
 
     return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: const [
           BoxShadow(color: Colors.black12, blurRadius: 6),
         ],
       ),
-
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           /// IMAGE
           ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             child: Stack(
               children: [
                 Image.asset(
                   service.image,
-                  height: 100,
+                  height: 140,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
-
-                /// DISCOUNT
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      "${service.discount}% OFF",
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 10),
+                if (service.discount > 0)
+                  Positioned(
+                    right: 10,
+                    top: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        "${service.discount}% OFF",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                        ),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
 
-          /// CONTENT
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(8),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    /// NAME
+                    Text(
+                      service.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
 
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                    const SizedBox(height: 4),
 
-                  /// NAME
-                  Text(
-                    service.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
+                    /// SLOGAN
+                    Text(
+                      service.slogan,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
 
-                  const SizedBox(height: 2),
+                    const SizedBox(height: 8),
 
-                  /// DESC
-                  Text(
-                    service.slogan,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 11, color: Colors.grey),
-                  ),
+                    /// RATING + TIME
+                    Row(
+                      children: [
+                        Icon(Icons.star, size: 14, color: Colors.orange),
+                        const SizedBox(width: 4),
+                        Text(
+                          service.rating.toString(),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(width: 10),
+                        Icon(Icons.access_time, size: 14, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            service.time,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
 
-                  const SizedBox(height: 4),
+                    const SizedBox(height: 10),
 
-                  /// BADGES
-                  Row(
-                    children: const [
-                      Icon(Icons.star, size: 12, color: Colors.orange),
-                      SizedBox(width: 2),
-                      Text("4.5", style: TextStyle(fontSize: 11)),
-                      SizedBox(width: 8),
-                      Icon(Icons.access_time,
-                          size: 12, color: Colors.grey),
-                      SizedBox(width: 2),
-                      Text("30 min", style: TextStyle(fontSize: 11)),
-                    ],
-                  ),
+                    /// PRICE
+                    Row(
+                      children: [
+                        Text(
+                          "₹${service.finalPrice}",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (service.discount > 0)
+                          Text(
+                            "₹${service.price}",
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                      ],
+                    ),
 
-                  const Spacer(),
+                    const SizedBox(height: 12),
 
-                  /// PRICE
-                  Text(
-                    "₹${service.finalPrice}",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-
-                  const SizedBox(height: 4),
-
-                  /// BUTTON ROW (FIXED)
-                  Row(
-                    children: [
-
-                      /// VIEW DETAILS
-                      Expanded(
-                        child: SizedBox(
-                          height: 30,
-                          child: OutlinedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      SalonDetailPage(service: service),
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              "View",
-                              style: TextStyle(fontSize: 10),
+                    /// BUTTONS
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 36,
+                            child: OutlinedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => SalonDetailPage(
+                                      service: service,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: const Text("View"),
                             ),
                           ),
                         ),
-                      ),
-
-                      const SizedBox(width: 6),
-
-                      /// BOOK BUTTON
-                      SizedBox(
-                        height: 30,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            _showBooking(context, service, id);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFAE91BA),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10),
-                          ),
-                          child: Text(
-                            qty == 0 ? "Book" : "$qty",
-                            style: const TextStyle(fontSize: 10),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SizedBox(
+                            height: 36,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                _showBooking(context, service, id);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFAE91BA),
+                              ),
+                              child: Text(
+                                qty == 0 ? "Book" : "$qty",
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -176,8 +198,7 @@ class SalonServiceCard extends StatelessWidget {
     );
   }
 
-  void _showBooking(
-      BuildContext context, SalonService service, String id) {
+  void _showBooking(BuildContext context, SalonService service, String id) {
     const serviceName = "Salon";
 
     showModalBottomSheet(
@@ -185,12 +206,12 @@ class SalonServiceCard extends StatelessWidget {
       builder: (_) {
         return Wrap(
           children: [
-
             ListTile(
               leading: const Icon(Icons.home),
               title: const Text("Home Appointment"),
               onTap: () {
                 Navigator.pop(context);
+
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -202,7 +223,6 @@ class SalonServiceCard extends StatelessWidget {
                 );
               },
             ),
-
             ListTile(
               leading: const Icon(Icons.store),
               title: const Text("Salon Appointment"),
@@ -218,6 +238,7 @@ class SalonServiceCard extends StatelessWidget {
                   ),
                   service: serviceName,
                 );
+
                 Navigator.pop(context);
               },
             ),

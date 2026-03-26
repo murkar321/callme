@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/service_product.dart';
-import 'booking_page.dart';
+import 'package:callme/screens/booking_page.dart';
 
 class ResortDetailPage extends StatefulWidget {
   final ServiceProduct service;
@@ -12,145 +12,83 @@ class ResortDetailPage extends StatefulWidget {
 }
 
 class _ResortDetailPageState extends State<ResortDetailPage> {
-  int adultCount = 1;
-  int childCount = 0;
+  int adults = 1;
+  int children = 0;
 
-  /// 🔹 GUEST POPUP (UNCHANGED)
-  void showGuestSelectionPopup() {
-    showModalBottomSheet(
+  void _showGuestPicker() {
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              margin: const EdgeInsets.all(12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.people),
-                      SizedBox(width: 8),
-                      Text(
-                        "Select Guests",
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _modernCounterCard(
-                    label: "Adult",
-                    subtitle: "Above 10 years",
-                    count: adultCount,
-                    onAdd: () => setModalState(() => adultCount++),
-                    onRemove: () {
-                      if (adultCount > 1) {
-                        setModalState(() => adultCount--);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _modernCounterCard(
-                    label: "Child",
-                    subtitle: "3 to 9 years",
-                    count: childCount,
-                    onAdd: () => setModalState(() => childCount++),
-                    onRemove: () {
-                      if (childCount > 0) {
-                        setModalState(() => childCount--);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BookingPage(
-                              serviceName: widget.service.name, products: null,
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xffAE91BA),
-                      ),
-                      child: const Text("Continue"),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  /// 🔹 COUNTER CARD
-  Widget _modernCounterCard({
-    required String label,
-    required String subtitle,
-    required int count,
-    required VoidCallback onAdd,
-    required VoidCallback onRemove,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xffF5F6FA),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (context) => AlertDialog(
+        title: const Text("Select Guests"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Adults
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(label,
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(subtitle,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                const Text("Adults"),
+                Row(
+                  children: [
+                    IconButton(
+                        onPressed: () {
+                          if (adults > 1) setState(() => adults--);
+                        },
+                        icon: const Icon(Icons.remove)),
+                    Text(adults.toString()),
+                    IconButton(
+                        onPressed: () => setState(() => adults++),
+                        icon: const Icon(Icons.add)),
+                  ],
+                )
               ],
             ),
-          ),
-          Row(
-            children: [
-              _circleButton(Icons.remove, onRemove),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Text("$count"),
-              ),
-              _circleButton(Icons.add, onAdd),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _circleButton(IconData icon, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: const Color(0xffAE91BA).withOpacity(0.2),
-          shape: BoxShape.circle,
+            // Children
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Children"),
+                Row(
+                  children: [
+                    IconButton(
+                        onPressed: () {
+                          if (children > 0) setState(() => children--);
+                        },
+                        icon: const Icon(Icons.remove)),
+                    Text(children.toString()),
+                    IconButton(
+                        onPressed: () => setState(() => children++),
+                        icon: const Icon(Icons.add)),
+                  ],
+                )
+              ],
+            ),
+          ],
         ),
-        child: Icon(icon, size: 18),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BookingPage(
+                    service: widget.service,
+                    adults: adults,
+                    children: children,
+                    serviceName:
+                        '${widget.service.name} - $adults Adults, $children Children',
+                    products: [],
+                  ),
+                ),
+              );
+            },
+            child: const Text("Proceed"),
+          ),
+        ],
       ),
     );
   }
@@ -162,118 +100,135 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(service.name),
-        backgroundColor: const Color(0xffAE91BA),
+        backgroundColor: Colors.teal,
       ),
-
-      /// 🔹 BOOK BUTTON
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(12),
-        child: ElevatedButton(
-          onPressed: showGuestSelectionPopup,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xffAE91BA),
-          ),
-          child: const Text("Book Now"),
-        ),
-      ),
-
-      /// 🔥 LEFT + RIGHT PANEL UI
-      body: Row(
-        children: [
-          /// 🔹 LEFT PANEL (INFO)
-          Container(
-            width: 100,
-            color: Colors.white,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 90),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image + Discount
+            Stack(
               children: [
-                _sideItem(Icons.star, service.safeRating.toString()),
-                _sideItem(Icons.access_time, service.serviceTime),
-                _sideItem(Icons.currency_rupee,
-                    service.formattedPrice.replaceAll("₹", "")),
+                SizedBox(
+                    width: double.infinity,
+                    height: 220,
+                    child: Image.asset(service.imagePath, fit: BoxFit.cover)),
+                if (service.discount != null && service.discount! > 0)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(6)),
+                      child: Text(
+                        '${service.discount}% OFF',
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
               ],
             ),
-          ),
 
-          /// 🔹 RIGHT PANEL (DETAILS)
-          Expanded(
-            child: SingleChildScrollView(
+            // Details
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  /// IMAGE
-                  Image.asset(
-                    service.imagePath,
-                    height: 220,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        /// TITLE
-                        Text(
+                  // Name + Rating
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
                           service.name,
                           style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold),
+                              fontSize: 22, fontWeight: FontWeight.bold),
                         ),
+                      ),
+                      Row(
+                        children: [
+                          const Icon(Icons.star,
+                              color: Colors.orange, size: 18),
+                          const SizedBox(width: 4),
+                          Text(service.rating.toString(),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
 
-                        const SizedBox(height: 10),
-
-                        /// DESCRIPTION
-                        if (service.description != null)
-                          Text(
-                            service.description!,
-                            style: const TextStyle(color: Colors.grey),
-                          ),
-
-                        const SizedBox(height: 20),
-
-                        /// INCLUDES
-                        if (service.safeIncludes.isNotEmpty)
-                          const Text(
-                            "Includes",
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-
-                        const SizedBox(height: 10),
-
-                        ...service.safeIncludes.map(
-                          (e) => Row(
-                            children: [
-                              const Icon(Icons.check,
-                                  size: 16, color: Colors.green),
-                              const SizedBox(width: 6),
-                              Text(e),
-                            ],
-                          ),
+                  // Price
+                  Row(
+                    children: [
+                      Text(
+                        '₹${service.finalPrice}',
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal),
+                      ),
+                      const SizedBox(width: 8),
+                      if (service.price != service.finalPrice)
+                        Text(
+                          '₹${service.price}',
+                          style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                              decoration: TextDecoration.lineThrough),
                         ),
-                      ],
-                    ),
-                  )
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Includes
+                  if (service.includes != null &&
+                      service.includes!.isNotEmpty) ...[
+                    const Text("Includes",
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    ...service.includes!
+                        .map((e) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.check,
+                                      size: 16, color: Colors.green),
+                                  const SizedBox(width: 6),
+                                  Expanded(child: Text(e)),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                    const SizedBox(height: 16),
+                  ],
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
 
-  /// 🔹 SIDE ITEM
-  Widget _sideItem(IconData icon, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        children: [
-          Icon(icon, color: Colors.black87),
-          const SizedBox(height: 4),
-          Text(value, style: const TextStyle(fontSize: 12)),
-        ],
+      // Bottom Booking Button
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(16),
+        color: Colors.white,
+        child: ElevatedButton(
+          onPressed: _showGuestPicker,
+          child: const Text("Book Now"),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orangeAccent,
+            minimumSize: const Size.fromHeight(50),
+          ),
+        ),
       ),
     );
   }
