@@ -1,145 +1,162 @@
-import 'package:callme/models/resort_detail_page.dart';
 import 'package:flutter/material.dart';
+import 'package:callme/widgets/resort_card.dart';
 import '../data/resorts_data.dart';
 
+class ResortPage extends StatefulWidget {
+  const ResortPage({super.key, required List<dynamic> resorts});
 
-class ResortPage extends StatelessWidget {
-  final List<Resort> resorts;
+  @override
+  State<ResortPage> createState() => _ResortPageState();
+}
 
-  const ResortPage({super.key, required this.resorts});
+class _ResortPageState extends State<ResortPage> {
+
+  String selectedCity = cities.first;
+  String searchText = "";
 
   @override
   Widget build(BuildContext context) {
+
+    List<Resort> filteredResorts =
+        getResortsByCity(selectedCity)
+            .where((resort) =>
+                resort.name
+                    .toLowerCase()
+                    .contains(searchText.toLowerCase()))
+            .toList();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Resorts'),
-        backgroundColor: Colors.teal,
+        title: const Text("Resorts"),
+        backgroundColor: Colors.blue,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: resorts.length,
-        itemBuilder: (context, index) {
-          final resort = resorts[index];
-          return Card(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
+
+      body: Column(
+        children: [
+
+          /// SEARCH BAR
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: "Search Resort...",
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  searchText = value;
+                });
+              },
             ),
-            elevation: 5,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+
+          Expanded(
+            child: Row(
               children: [
-                // Resort Image
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-                  child: Image.network(
-                    resort.image,
-                    height: 180,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
+
+                /// LEFT CITY PANEL
+                Container(
+                  width: 120,
+                  color: Colors.grey.shade200,
+
+                  child: ListView.builder(
+                    itemCount: cities.length,
+                    itemBuilder: (context, index) {
+
+                      final city = cities[index];
+
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            selectedCity = city;
+                          });
+                        },
+
+                        child: Container(
+                          margin:
+                              const EdgeInsets.all(8),
+
+                          padding:
+                              const EdgeInsets.all(10),
+
+                          decoration: BoxDecoration(
+                            color:
+                                selectedCity == city
+                                    ? Colors.blue
+                                    : Colors.white,
+
+                            borderRadius:
+                                BorderRadius
+                                    .circular(12),
+
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors
+                                    .grey.shade300,
+                                blurRadius: 3,
+                              )
+                            ],
+                          ),
+
+                          child: Center(
+                            child: Text(
+                              city,
+                              textAlign:
+                                  TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight:
+                                    FontWeight.bold,
+                                color:
+                                    selectedCity ==
+                                            city
+                                        ? Colors.white
+                                        : Colors.black,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Name & City
-                      Text(
-                        resort.name,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+
+                /// RIGHT RESORT LIST
+                Expanded(
+                  child: filteredResorts.isEmpty
+                      ? const Center(
+                          child: Text(
+                            "No Resorts Found",
+                            style: TextStyle(
+                                fontSize: 16),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding:
+                              const EdgeInsets.all(10),
+
+                          itemCount:
+                              filteredResorts.length,
+
+                          itemBuilder:
+                              (context, index) {
+
+                            return ResortCard(
+                              resort:
+                                  filteredResorts[
+                                      index],
+                            );
+                          },
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        resort.city,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Price & Discount
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "₹${resort.price}",
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
-                            ),
-                          ),
-                          if (resort.discount > 0)
-                            Text(
-                              "${resort.discount}% off",
-                              style: const TextStyle(
-                                color: Colors.redAccent,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      // Rating
-                      Row(
-                        children: List.generate(5, (i) {
-                          return Icon(
-                            i < resort.rating ? Icons.star : Icons.star_border,
-                            color: Colors.amber,
-                            size: 20,
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 12),
-                      // Buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ResortDetailPage(resort: resort),
-                                ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.teal,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Text('View Details'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              // Navigate to booking page or perform booking
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Booking functionality coming soon!")),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Text('Book Now'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }

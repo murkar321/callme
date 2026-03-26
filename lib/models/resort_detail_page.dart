@@ -1,10 +1,8 @@
-
-import 'package:callme/widgets/rbooking_popup.dart';
 import 'package:flutter/material.dart';
 import '../data/resorts_data.dart';
-import '../models/cart.dart';
+import '../widgets/rbooking_popup.dart';
 
-class ResortDetailPage extends StatefulWidget {
+class ResortDetailPage extends StatelessWidget {
   final Resort resort;
 
   const ResortDetailPage({
@@ -13,21 +11,13 @@ class ResortDetailPage extends StatefulWidget {
   });
 
   @override
-  State<ResortDetailPage> createState() => _ResortDetailPageState();
-}
-
-class _ResortDetailPageState extends State<ResortDetailPage> {
-
-  @override
   Widget build(BuildContext context) {
-
-    final resort = widget.resort;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
 
       appBar: AppBar(
-        title: Text(resort.name),
+        title: const Text("Resort Details"),
         backgroundColor: Colors.blue,
       ),
 
@@ -37,17 +27,39 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
           children: [
 
             /// IMAGE
-            Image.asset(
-              resort.image,
-              width: double.infinity,
-              height: 220,
-              fit: BoxFit.cover,
+            Stack(
+              children: [
+                Image.asset(
+                  resort.image,
+                  width: double.infinity,
+                  height: 240,
+                  fit: BoxFit.cover,
+                ),
+
+                Positioned(
+                  top: 15,
+                  right: 15,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      "${resort.discount}% OFF",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                )
+              ],
             ),
 
-            const SizedBox(height: 10),
-
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(15),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -61,59 +73,58 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                     ),
                   ),
 
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
 
-                  /// CITY
+                  /// CITY + RATING
                   Row(
                     children: [
-                      const Icon(Icons.location_on, color: Colors.red),
+                      const Icon(Icons.location_on,
+                          color: Colors.red),
+                      const SizedBox(width: 5),
                       Text(resort.city),
+
+                      const Spacer(),
+
+                      Row(
+                        children: List.generate(
+                          resort.rating,
+                          (index) => const Icon(
+                            Icons.star,
+                            color: Colors.orange,
+                            size: 18,
+                          ),
+                        ),
+                      )
                     ],
                   ),
 
-                  const SizedBox(height: 6),
-
-                  /// RATING
-                  Row(
-                    children: List.generate(
-                      resort.rating,
-                      (index) => const Icon(
-                        Icons.star,
-                        color: Colors.orange,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 15),
 
                   /// PRICE
                   Row(
                     children: [
-
                       Text(
                         "₹${resort.price}",
                         style: const TextStyle(
-                          fontSize: 20,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
+                          color: Colors.green,
                         ),
                       ),
-
                       const SizedBox(width: 10),
-
                       Text(
                         "₹${resort.originalPrice}",
                         style: const TextStyle(
-                          decoration: TextDecoration.lineThrough,
+                          decoration:
+                              TextDecoration.lineThrough,
                           color: Colors.grey,
                         ),
                       ),
-
                       const SizedBox(width: 10),
-
                       Text(
                         "${resort.discount}% OFF",
                         style: const TextStyle(
-                          color: Colors.green,
+                          color: Colors.red,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -134,10 +145,13 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                   const SizedBox(height: 10),
 
                   Wrap(
-                    spacing: 8,
+                    spacing: 10,
+                    runSpacing: 10,
                     children: resort.facilities.map((f) {
                       return Chip(
                         label: Text(f),
+                        backgroundColor:
+                            Colors.blue.shade50,
                       );
                     }).toList(),
                   ),
@@ -160,69 +174,41 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                     style: const TextStyle(fontSize: 15),
                   ),
 
-                  const SizedBox(height: 30),
-
-                  /// BUTTONS
-                  Row(
-                    children: [
-
-                      /// ADD TO CART
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-
-                            Cart.addItem(
-                              name: resort.name,
-                              price: resort.price,
-                              category: "Resort", id: '', service: '',
-                            );
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Added to cart"),
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          child: const Text("Add to Cart"),
-                        ),
-                      ),
-
-                      const SizedBox(width: 10),
-
-                      /// BOOK
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-
-                            showDialog(
-                              context: context,
-                              builder: (_) =>
-                                  ResortBookingPopup(resort: resort, id: '', name: '', price: 0, image: '',),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          child: const Text("Book"),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 40),
                 ],
               ),
-            )
+            ),
           ],
+        ),
+      ),
+
+      /// BOOK BUTTON
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(12),
+        color: Colors.white,
+        child: ElevatedButton(
+          onPressed: () {
+
+            showDialog(
+              context: context,
+              builder: (_) =>
+                  ResortBookingPopup(resort: resort),
+            );
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            padding:
+                const EdgeInsets.symmetric(vertical: 15),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: const Text(
+            "Book Now",
+            style: TextStyle(fontSize: 16),
+          ),
         ),
       ),
     );
   }
 }
-
-

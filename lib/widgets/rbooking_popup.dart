@@ -1,155 +1,217 @@
-import 'package:callme/screens/booking_page.dart';
 import 'package:flutter/material.dart';
 import '../data/resorts_data.dart';
-
+import '../models/cart.dart';
+import '../models/cart_page.dart';
 
 class ResortBookingPopup extends StatefulWidget {
   final Resort resort;
 
-  const ResortBookingPopup({super.key, required this.resort, required String id, required String name, required int price, required String image});
+  const ResortBookingPopup({
+    super.key,
+    required this.resort,
+  });
 
   @override
-  State<ResortBookingPopup> createState() => _ResortBookingPopupState();
+  State<ResortBookingPopup> createState() =>
+      _ResortBookingPopupState();
 }
 
-class _ResortBookingPopupState extends State<ResortBookingPopup> {
-  int adults = 1;
-  int children = 0;
+class _ResortBookingPopupState
+    extends State<ResortBookingPopup> {
+
+  int adult = 1;
+  int child = 0;
 
   int get totalPrice {
-    return (adults + children) * widget.resort.price;
+    return (widget.resort.price * adult) +
+        ((widget.resort.price ~/ 2) * child);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      insetPadding:
-          const EdgeInsets.symmetric(horizontal: 20),
+
+    return AlertDialog(
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        borderRadius: BorderRadius.circular(15),
+      ),
 
-            const Text(
-              "Select Guests",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            /// ADULTS
-            _guestCounter(
-              label: "Adults",
-              count: adults,
-              onIncrement: () {
-                setState(() => adults++);
-              },
-              onDecrement: () {
-                if (adults > 1) setState(() => adults--);
-              },
-            ),
-
-            const SizedBox(height: 10),
-
-            /// CHILDREN
-            _guestCounter(
-              label: "Children",
-              count: children,
-              onIncrement: () {
-                setState(() => children++);
-              },
-              onDecrement: () {
-                if (children > 0) setState(() => children--);
-              },
-            ),
-
-            const SizedBox(height: 20),
-
-            /// TOTAL PRICE
-            Text(
-              "Total: ₹$totalPrice",
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            /// CONTINUE BUTTON
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context); // Close popup
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookingPage(
-                        serviceName: widget.resort.name,
-                        adults: adults,
-                        children: children,
-                        product: null, products: null,
-                      ),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: const EdgeInsets.all(14),
-                ),
-                child: const Text(
-                  "Continue",
-                  style: TextStyle(fontSize: 16),
-                ),
-              ),
-            ),
-          ],
+      title: Text(
+        widget.resort.name,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
         ),
       ),
-    );
-  }
 
-  /// COUNTER WIDGET
-  Widget _guestCounter({
-    required String label,
-    required int count,
-    required VoidCallback onIncrement,
-    required VoidCallback onDecrement,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 16,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+
+          /// ADULT
+          Row(
+            mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+            children: [
+
+              const Text(
+                "Adults",
+                style: TextStyle(fontSize: 16),
+              ),
+
+              Row(
+                children: [
+
+                  IconButton(
+                    icon: const Icon(Icons.remove),
+                    onPressed: () {
+                      if (adult > 1) {
+                        setState(() => adult--);
+                      }
+                    },
+                  ),
+
+                  Text(
+                    adult.toString(),
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
+                  ),
+
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: () {
+                      setState(() => adult++);
+                    },
+                  ),
+                ],
+              )
+            ],
           ),
+
+          const SizedBox(height: 10),
+
+          /// CHILD
+          Row(
+            mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+            children: [
+
+              const Text(
+                "Children",
+                style: TextStyle(fontSize: 16),
+              ),
+
+              Row(
+                children: [
+
+                  IconButton(
+                    icon: const Icon(Icons.remove),
+                    onPressed: () {
+                      if (child > 0) {
+                        setState(() => child--);
+                      }
+                    },
+                  ),
+
+                  Text(
+                    child.toString(),
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
+                  ),
+
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: () {
+                      setState(() => child++);
+                    },
+                  ),
+                ],
+              )
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          /// TOTAL PRICE
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment:
+                  MainAxisAlignment.spaceBetween,
+              children: [
+
+                const Text(
+                  "Total Price",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                Text(
+                  "₹$totalPrice",
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+
+      actions: [
+
+        /// CANCEL
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          child: const Text("Cancel"),
         ),
-        Row(
-          children: [
-            IconButton(
-              onPressed: onDecrement,
-              icon: const Icon(Icons.remove_circle_outline),
-            ),
-            Text(
-              "$count",
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold),
-            ),
-            IconButton(
-              onPressed: onIncrement,
-              icon: const Icon(Icons.add_circle_outline),
-            ),
-          ],
+
+        /// PROCEED
+        ElevatedButton(
+          onPressed: () {
+
+            /// ADD TO CART
+            Cart.addResortBooking(
+              id: widget.resort.name,
+              name: widget.resort.name,
+              price: widget.resort.price,
+              adults: adult,
+              children: child,
+              image: widget.resort.image,
+            );
+
+            Navigator.pop(context);
+
+            /// GO TO CART PAGE
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const CartPage(
+                      serviceName: "Resort",
+                      cart: [],
+                    ),
+              ),
+            );
+          },
+
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+          ),
+
+          child: const Text(
+            "Proceed to Cart",
+            style: TextStyle(color: Colors.white),
+          ),
         ),
       ],
     );

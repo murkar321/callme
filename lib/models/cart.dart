@@ -30,6 +30,7 @@ class CartItem {
 class Cart {
   static final List<CartItem> _items = [];
 
+
   /// =========================
   /// ➕ ADD ITEM
   /// =========================
@@ -94,6 +95,10 @@ class Cart {
   /// 📦 GET ALL ITEMS
   /// =========================
   static List<CartItem> get allItems => _items;
+
+ 
+
+
 
   /// =========================
   /// 🎯 FILTER BY SERVICE
@@ -260,4 +265,6 @@ class Cart {
           (e) => e.service == service);
     }
   }
+
+  static void addResortBooking({required String id, required String name, required int price, required int adults, required int children, required String image}) {}
 }
