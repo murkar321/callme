@@ -1,23 +1,21 @@
-import 'package:callme/models/service_product.dart';
 import 'package:flutter/material.dart';
-import 'package:callme/models/service_product_details.dart';
-import 'package:callme/models/cart.dart';
+import '../models/service_product_details.dart';
+import '../models/cart.dart';
 import 'booking_page.dart';
-import 'package:callme/models/luandary_detail_page.dart';
 
-class ServiceDetailPage extends StatefulWidget {
+class PlumbingDetailPage extends StatefulWidget {
   final String serviceName;
 
-  const ServiceDetailPage({
+  const PlumbingDetailPage({
     super.key,
     required this.serviceName,
   });
 
   @override
-  State<ServiceDetailPage> createState() => _ServiceDetailPageState();
+  State<PlumbingDetailPage> createState() => _PlumbingDetailPageState();
 }
 
-class _ServiceDetailPageState extends State<ServiceDetailPage> {
+class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
   final Color primaryColor = const Color(0xFFAE91BA);
 
   late String selectedCategory;
@@ -29,7 +27,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     selectedCategory = serviceProducts[widget.serviceName]!.keys.first;
   }
 
-  /// CART ITEMS
+  /// TOTAL ITEMS
   int get totalItems {
     int count = 0;
 
@@ -48,39 +46,6 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   /// TOTAL AMOUNT
   int get totalAmount => Cart.getTotal(widget.serviceName);
 
-  /// ADD HANDLER
-  void handleAdd(ServiceProduct product) {
-    /// Laundry → Open Laundry Detail
-    if (widget.serviceName.toLowerCase().contains("laundry")) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => LaundryDetailPage(
-            product: product,
-            serviceName: widget.serviceName,
-            category: selectedCategory,
-          ),
-        ),
-      );
-
-      return;
-    }
-
-    /// Normal Add
-    setState(() {
-      Cart.add(
-        CartItem(
-          id: product.id,
-          name: product.name,
-          price: product.calculatedFinalPrice,
-          service: widget.serviceName,
-          category: selectedCategory,
-        ),
-        service: widget.serviceName,
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final categories = serviceProducts[widget.serviceName]!.keys.toList();
@@ -94,12 +59,11 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
 
       /// APPBAR
       appBar: AppBar(
-        backgroundColor: primaryColor,
         title: Text(widget.serviceName),
         centerTitle: true,
+        backgroundColor: primaryColor,
         elevation: 0,
         actions: [
-          /// CART
           Stack(
             children: [
               IconButton(
@@ -181,7 +145,9 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                       children: [
                         CircleAvatar(
                           radius: 20,
-                          backgroundImage: AssetImage(firstProduct.imagePath),
+                          backgroundImage: AssetImage(
+                            firstProduct.imagePath,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -211,18 +177,16 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
               itemBuilder: (context, index) {
                 final product = products[index];
 
-                Cart.getQuantity(
-                  product.id,
-                  widget.serviceName,
-                );
-
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 6),
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 6,
+                      ),
                     ],
                   ),
                   child: Column(
@@ -253,14 +217,6 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-
-                            if (product.slogan != null)
-                              Text(
-                                product.slogan!,
-                                style: const TextStyle(
-                                  color: Colors.grey,
-                                ),
-                              ),
 
                             const SizedBox(height: 8),
 
@@ -293,17 +249,25 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: () => handleAdd(product),
+                                onPressed: () {
+                                  setState(() {
+                                    Cart.add(
+                                      CartItem(
+                                        id: product.id,
+                                        name: product.name,
+                                        price: product.calculatedFinalPrice,
+                                        service: widget.serviceName,
+                                        category: selectedCategory,
+                                        image: product.imagePath,
+                                      ),
+                                      service: widget.serviceName,
+                                    );
+                                  });
+                                },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryColor,
                                 ),
-                                child: Text(
-                                  widget.serviceName
-                                          .toLowerCase()
-                                          .contains("laundry")
-                                      ? "View Details"
-                                      : "ADD",
-                                ),
+                                child: const Text("ADD"),
                               ),
                             )
                           ],

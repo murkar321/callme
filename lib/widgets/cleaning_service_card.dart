@@ -5,68 +5,64 @@ import '../models/cleaning_service.dart';
 class CleaningServiceCard extends StatelessWidget {
   final CleaningService product;
   final String serviceName;
-  final String category;
-  final String id;
-  final int qty;
   final Color primaryColor;
   final VoidCallback onAdd;
-  final VoidCallback onRemove;
 
   const CleaningServiceCard({
     super.key,
     required this.product,
     required this.serviceName,
-    required this.category,
-    required this.id,
-    required this.qty,
     required this.primaryColor,
     required this.onAdd,
-    required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6)
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 6,
+          )
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           /// IMAGE
           ClipRRect(
             borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(16),
+              top: Radius.circular(18),
             ),
             child: Stack(
               children: [
                 Image.asset(
                   product.image,
-                  height: 100,
+                  height: 130,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
 
+                /// DISCOUNT
                 Positioned(
-                  right: 8,
-                  top: 8,
+                  right: 10,
+                  top: 10,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       "${product.discount}% OFF",
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 10,
+                        fontSize: 11,
                       ),
                     ),
                   ),
@@ -76,192 +72,137 @@ class CleaningServiceCard extends StatelessWidget {
           ),
 
           /// CONTENT
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-                  /// TEXT
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        product.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      Text(
-                        product.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                        ),
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      Text(
-                        product.time,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                /// NAME
+                Text(
+                  product.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
+                ),
 
-                  /// PRICE + ACTION
-                  Column(
-                    children: [
+                const SizedBox(height: 4),
 
-                      Row(
-                        children: [
+                /// DESCRIPTION
+                Text(
+                  product.description,
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 13,
+                  ),
+                ),
 
-                          /// PRICE
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "₹${product.price}",
-                                  style: const TextStyle(
-                                    decoration:
-                                        TextDecoration.lineThrough,
-                                    color: Colors.grey,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                Text(
-                                  "₹${product.finalPrice}",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                const SizedBox(height: 8),
 
-                          /// BUTTON / QTY
-                          qty == 0
-                              ? SizedBox(
-                                  height: 30,
-                                  child: ElevatedButton(
-                                    onPressed: onAdd,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: primaryColor,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(20),
-                                      ),
-                                      padding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 12),
-                                    ),
-                                    child: const Text(
-                                      "ADD",
-                                      style:
-                                          TextStyle(fontSize: 11),
-                                    ),
-                                  ),
-                                )
-                              : Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                        color: primaryColor),
-                                    borderRadius:
-                                        BorderRadius.circular(20),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize:
-                                        MainAxisSize.min,
-                                    children: [
+                /// RATING + TIME
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.star,
+                      color: Colors.orange,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      "5.0",
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    const SizedBox(width: 12),
+                    const Icon(
+                      Icons.access_time,
+                      color: Colors.grey,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      product.time,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ],
+                ),
 
-                                      GestureDetector(
-                                        onTap: onRemove,
-                                        child: Icon(
-                                          Icons.remove,
-                                          size: 16,
-                                          color: primaryColor,
-                                        ),
-                                      ),
+                const SizedBox(height: 10),
 
-                                      const SizedBox(width: 6),
-
-                                      Text(
-                                        qty.toString(),
-                                        style: const TextStyle(
-                                            fontSize: 12),
-                                      ),
-
-                                      const SizedBox(width: 6),
-
-                                      GestureDetector(
-                                        onTap: onAdd,
-                                        child: Icon(
-                                          Icons.add,
-                                          size: 16,
-                                          color: primaryColor,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                        ],
+                /// PRICE
+                Row(
+                  children: [
+                    Text(
+                      "₹${product.finalPrice}",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
                       ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "₹${product.price}",
+                      style: const TextStyle(
+                        decoration: TextDecoration.lineThrough,
+                        color: Colors.grey,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
 
-                      const SizedBox(height: 6),
+                const SizedBox(height: 12),
 
-                      /// VIEW DETAILS
-                      SizedBox(
-                        width: double.infinity,
-                        height: 30,
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(20),
-                            ),
+                /// BUTTONS
+                Row(
+                  children: [
+                    /// VIEW
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
                           ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    CleaningServiceDetailPage(
-                                  product: product,
-                                  serviceName: serviceName,
-                                ),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CleaningServiceDetailPage(
+                                product: product,
+                                serviceName: serviceName,
                               ),
-                            );
-                          },
-                          child: const Text(
-                            "View Details",
-                            style: TextStyle(fontSize: 11),
+                            ),
+                          );
+                        },
+                        child: const Text("View"),
+                      ),
+                    ),
+
+                    const SizedBox(width: 12),
+
+                    /// ADD BUTTON
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: onAdd,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
                           ),
                         ),
+                        child: const Text(
+                          "ADD",
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                    )
+                  ],
+                )
+              ],
             ),
-          ),
+          )
         ],
       ),
     );

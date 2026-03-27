@@ -2,6 +2,7 @@ import 'package:callme/models/civil_services_page.dart';
 import 'package:callme/models/hotel_service_page.dart';
 import 'package:callme/models/service_product.dart';
 import 'package:callme/screens/cleaning_detail_page.dart';
+import 'package:callme/screens/plumbing_detail_page.dart';
 import 'package:callme/screens/resort_page.dart';
 import 'package:callme/screens/water_services_page.dart';
 import 'package:flutter/material.dart';
@@ -99,7 +100,9 @@ class _HomePageState extends State<HomePage> {
   Widget getServicePage(String serviceName) {
     switch (serviceName) {
       case "Cleaning":
-        return const CleaningDetailPage(serviceName: 'Cleaning');
+        return const CleaningDetailPage(
+          serviceName: 'Cleaning',
+        );
 
       case "Salon Service":
         return const SalonPage();
@@ -113,13 +116,22 @@ class _HomePageState extends State<HomePage> {
         return const HotelServicePage();
 
       case "Water Services":
-        return const WaterServicesPage(); // ✅ FIXED
+        return const WaterServicesPage();
 
       case "Civil Services":
         return const CivilServicesPage();
 
+      /// ✅ ADDED PLUMBING
+      case "Plumbing":
+        return const PlumbingDetailPage(
+          serviceName: "Plumbing",
+        );
+
+      /// DEFAULT
       default:
-        return ServiceDetailPage(serviceName: serviceName);
+        return ServiceDetailPage(
+          serviceName: serviceName,
+        );
     }
   }
 
