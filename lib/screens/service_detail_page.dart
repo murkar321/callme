@@ -110,7 +110,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     MaterialPageRoute(
                       builder: (_) => BookingPage(
                         serviceName: widget.serviceName,
-                        products: null,
+                        products: null, cart: [],
                       ),
                     ),
                   );
@@ -328,7 +328,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                   MaterialPageRoute(
                     builder: (_) => BookingPage(
                       serviceName: widget.serviceName,
-                      products: null,
+                      products: null, cart: [],
                     ),
                   ),
                 );

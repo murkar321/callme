@@ -1,3 +1,4 @@
+import 'package:callme/models/cleaning_service.dart';
 import 'package:flutter/foundation.dart';
 
 /// 🌍 UNIVERSAL CART ITEM
@@ -5,7 +6,7 @@ class CartItem {
   final String id;
   final String name;
   final int price;
-  final String service; // Salon / Cleaning / Resort / Water etc
+  final String service;
   final String category;
   final String? image;
 
@@ -31,7 +32,7 @@ class Cart {
   static final List<CartItem> _items = [];
 
   /// =========================
-  /// ➕ ADD ITEM
+  /// ➕ ADD ITEM (OLD LOGIC SAFE)
   /// =========================
   static void add(CartItem item, {required String service}) {
     final index = _items.indexWhere(
@@ -48,7 +49,35 @@ class Cart {
   }
 
   /// =========================
-  /// ➖ REMOVE (DECREASE QTY)
+  /// ➕ ADD DIRECT ITEM
+  /// =========================
+  static void addItem({
+    required String id,
+    required String name,
+    required int price,
+    required String service,
+    required String category,
+    String? image,
+    int adults = 1,
+    int children = 0,
+  }) {
+    add(
+      CartItem(
+        id: id,
+        name: name,
+        price: price,
+        service: service,
+        category: category,
+        image: image,
+        adults: adults,
+        children: children,
+      ),
+      service: service,
+    );
+  }
+
+  /// =========================
+  /// ➖ REMOVE (OLD LOGIC)
   /// =========================
   static void remove(CartItem item) {
     final index = _items.indexWhere(
@@ -65,7 +94,7 @@ class Cart {
   }
 
   /// =========================
-  /// ❌ REMOVE BY ID
+  /// ➖ REMOVE BY ID
   /// =========================
   static void removeById(String id, String service) {
     final index = _items.indexWhere(
@@ -95,16 +124,16 @@ class Cart {
   /// =========================
   static List<CartItem> get allItems => _items;
 
-  static get quantities => null;
-
   /// =========================
   /// 🎯 FILTER BY SERVICE
   /// =========================
   static List<CartItem> getItems(String service) {
-    return _items.where((e) => e.service == service).toList();
+    return _items
+        .where((e) => e.service == service)
+        .toList();
   }
 
-  /// 🔁 Alias
+  /// 🔁 Alias (old support)
   static List<CartItem> getByService(String serviceName) {
     return getItems(serviceName);
   }
@@ -122,7 +151,10 @@ class Cart {
 
     return _items
         .where((e) => e.service == service)
-        .fold(0, (sum, e) => sum + e.quantity);
+        .fold(
+          0,
+          (sum, e) => sum + e.quantity,
+        );
   }
 
   /// 🔁 Alias
@@ -134,7 +166,9 @@ class Cart {
   /// 💰 TOTAL PRICE (SERVICE)
   /// =========================
   static int getTotal(String service) {
-    return _items.where((e) => e.service == service).fold(
+    return _items
+        .where((e) => e.service == service)
+        .fold(
           0,
           (sum, e) =>
               sum +
@@ -183,8 +217,7 @@ class Cart {
   }
 
   /// =========================
-  /// 👨‍👩‍👧 UPDATE GUESTS
-  /// (Used in Resort Popup)
+  /// 👨‍👩‍👧 UPDATE GUESTS (RESORT LOGIC SAFE)
   /// =========================
   static void updateGuests(
     String id,
@@ -206,50 +239,59 @@ class Cart {
   }
 
   /// =========================
-  /// ➕ ADD DIRECT ITEM
-  /// (Shortcut)
-  /// =========================
-  static void addItem({
-    required String id,
-    required String name,
-    required int price,
-    required String service,
-    required String category,
-    String? image,
-    int adults = 1,
-    int children = 0,
-  }) {
-    add(
-      CartItem(
-        id: id,
-        name: name,
-        price: price,
-        service: service,
-        category: category,
-        image: image,
-        adults: adults,
-        children: children,
-      ),
-      service: service,
-    );
-  }
-
-  /// =========================
   /// 🧹 CLEAR CART
   /// =========================
   static void clear([String? service]) {
     if (service == null) {
       _items.clear();
     } else {
-      _items.removeWhere((e) => e.service == service);
+      _items.removeWhere(
+        (e) => e.service == service,
+      );
     }
   }
 
-  static void addResortBooking(
-      {required String id,
-      required String name,
-      required int price,
-      required int adults,
-      required int children,
-      required String image}) {}
+  /// =========================
+  /// 🏝️ RESORT BOOKING SUPPORT
+  /// =========================
+  static void addResortBooking({
+    required String id,
+    required String name,
+    required int price,
+    required int adults,
+    required int children,
+    required String image,
+  }) {
+    addItem(
+      id: id,
+      name: name,
+      price: price,
+      service: "Resorts",
+      category: "Stay",
+      image: image,
+      adults: adults,
+      children: children,
+    );
+  }
+
+  /// =========================
+  /// 🧹 CLEANING SUPPORT (ONLY NEW PART)
+  /// =========================
+  static void addCleaning(CleaningService service) {
+    addItem(
+      id: service.name,
+      name: service.name,
+      price: service.finalPrice,
+      service: "Cleaning",
+      category: "Cleaning",
+      image: service.image,
+    );
+  }
+
+  /// Cleaning items getter
+  static List<CartItem> get cleaningItems {
+    return getItems("Cleaning");
+  }
+
+  static get quantities => null;
 }

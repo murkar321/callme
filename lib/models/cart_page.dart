@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import '../models/cart.dart';
 
 class CartPage extends StatefulWidget {
-  final String? service; // optional filter
+  final String service;
 
   const CartPage({
     super.key,
-    this.service, required String serviceName, required List<dynamic> cart,
+    required this.service, required String serviceName, required List<dynamic> cart,
   });
 
   @override
@@ -16,234 +16,234 @@ class CartPage extends StatefulWidget {
 
 class _CartPageState extends State<CartPage> {
 
-  /// GROUP BY SERVICE
-  Map<String, List<CartItem>> groupByService(List<CartItem> items) {
-    final Map<String, List<CartItem>> data = {};
-
-    for (var item in items) {
-      data.putIfAbsent(item.service, () => []);
-      data[item.service]!.add(item);
-    }
-
-    return data;
-  }
-
   @override
   Widget build(BuildContext context) {
 
-    /// FILTER ITEMS
-    final items = widget.service == null
-        ? Cart.allItems
-        : Cart.getItems(widget.service!);
-
-    final cartData = groupByService(items);
+    List<CartItem> items = Cart.getItems(widget.service);
 
     return Scaffold(
+      backgroundColor: Colors.grey.shade100,
+
+      /// APPBAR
       appBar: AppBar(
-        title: Text(
-          widget.service == null
-              ? "Your Cart"
-              : "${widget.service} Cart",
-        ),
+        title: Text("${widget.service} Cart"),
+        centerTitle: true,
       ),
 
+      /// EMPTY CART
       body: items.isEmpty
           ? const Center(
-              child: Text("Cart is empty"),
+              child: Text(
+                "Cart is empty",
+                style: TextStyle(fontSize: 16),
+              ),
             )
-          : ListView(
+
+          /// CART LIST
+          : ListView.builder(
               padding: const EdgeInsets.all(12),
-              children: cartData.entries.map((entry) {
+              itemCount: items.length,
+              itemBuilder: (context, index) {
 
-                final service = entry.key;
-                final serviceItems = entry.value;
+                CartItem item = items[index];
 
-                return Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 4,
+                      )
+                    ],
+                  ),
+                  child: Row(
+                    children: [
 
-                    /// SERVICE TITLE
-                    Text(
-                      service,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    /// ITEMS
-                    ...serviceItems.map((item) {
-                      return Card(
-                        child: ListTile(
-
-                          /// IMAGE
-                          leading: item.image != null
-                              ? Image.asset(
-                                  item.image!,
-                                  width: 50,
-                                  height: 50,
-                                  fit: BoxFit.cover,
-                                )
-                              : const Icon(Icons.shopping_bag),
-
-                          /// NAME
-                          title: Text(item.name),
-
-                          /// CATEGORY
-                          subtitle: Text(
-                            "Category: ${item.category}",
-                          ),
-
-                          /// PRICE + QTY
-                          trailing: Column(
-                            mainAxisAlignment:
-                                MainAxisAlignment.center,
-                            children: [
-
-                              Text("₹${item.price}"),
-
-                              const SizedBox(height: 4),
-
-                              Row(
-                                mainAxisSize:
-                                    MainAxisSize.min,
-                                children: [
-
-                                  /// REMOVE
-                                  GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        Cart.removeById(
-                                          item.id,
-                                          item.service,
-                                        );
-                                      });
-                                    },
-                                    child: const Icon(
-                                      Icons.remove_circle,
-                                      color: Colors.red,
-                                    ),
-                                  ),
-
-                                  Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(
-                                            horizontal: 6),
-                                    child: Text(
-                                      item.quantity
-                                          .toString(),
-                                    ),
-                                  ),
-
-                                  /// ADD
-                                  GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        Cart.addItem(
-                                          name: item.name,
-                                          price: item.price,
-                                          category:
-                                              item.category,
-                                          service:
-                                              item.service,
-                                          id: item.id,
-                                          image:
-                                              item.image,
-                                        );
-                                      });
-                                    },
-                                    child: const Icon(
-                                      Icons.add_circle,
-                                      color: Colors.green,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                      /// IMAGE
+                      if (item.image != null)
+                        ClipRRect(
+                          borderRadius:
+                              BorderRadius.circular(10),
+                          child: Image.asset(
+                            item.image!,
+                            height: 60,
+                            width: 60,
+                            fit: BoxFit.cover,
                           ),
                         ),
-                      );
-                    }),
 
-                    const SizedBox(height: 10),
+                      const SizedBox(width: 12),
 
-                    /// SUBTOTAL
-                    Align(
-                      alignment:
-                          Alignment.centerRight,
-                      child: Text(
-                        "Subtotal: ₹${Cart.getTotal(service)}",
-                        style: const TextStyle(
-                          fontWeight:
-                              FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                      /// DETAILS
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
 
-                    const SizedBox(height: 10),
-
-                    /// BOOK BUTTON
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  BookingPage(
-                                serviceName:
-                                    service,
-                                products:
-                                    serviceItems,
-                                price: Cart
-                                    .getTotal(
-                                        service),
+                            /// NAME
+                            Text(
+                              item.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
                               ),
                             ),
-                          ).then((_) =>
-                              setState(() {}));
-                        },
-                        child: Text(
-                          "Book $service",
+
+                            const SizedBox(height: 4),
+
+                            /// PRICE
+                            Text(
+                              "₹${item.price}",
+                              style: const TextStyle(
+                                color: Colors.grey,
+                              ),
+                            ),
+
+                            const SizedBox(height: 8),
+
+                            /// COUNTER
+                            Row(
+                              children: [
+
+                                /// REMOVE
+                                IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  onPressed: () {
+                                    setState(() {
+                                      Cart.remove(item);
+                                    });
+                                  },
+                                ),
+
+                                Text(
+                                  item.quantity.toString(),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+
+                                /// ADD
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  onPressed: () {
+                                    setState(() {
+                                      Cart.add(
+                                        CartItem(
+                                          id: item.id,
+                                          name: item.name,
+                                          price: item.price,
+                                          service: item.service,
+                                          category: item.category,
+                                          image: item.image,
+                                        ),
+                                        service: item.service,
+                                      );
+                                    });
+                                  },
+                                ),
+                              ],
+                            )
+                          ],
                         ),
                       ),
-                    ),
 
-                    const SizedBox(height: 15),
-                    const Divider(thickness: 2),
-                  ],
+                      /// DELETE
+                      IconButton(
+                        icon: const Icon(
+                          Icons.delete,
+                          color: Colors.red,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            Cart.delete(
+                              item.id,
+                              widget.service,
+                            );
+                          });
+                        },
+                      )
+                    ],
+                  ),
                 );
-              }).toList(),
+              },
             ),
 
-      /// GRAND TOTAL
+      /// BOTTOM BOOKING
       bottomNavigationBar: items.isEmpty
           ? null
           : Container(
-              padding: const EdgeInsets.all(16),
-              color: Colors.black,
-              child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 6,
+                  )
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
 
-                  Text(
-                    "${Cart.getTotalItems(widget.service)} items",
-                    style: const TextStyle(
-                        color: Colors.white),
+                  /// TOTAL
+                  Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Total",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        "₹${Cart.getTotal(widget.service)}",
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
                   ),
 
-                  Text(
-                    "Total: ₹${widget.service == null ? Cart.getGrandTotal() : Cart.getTotal(widget.service!)}",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight:
-                          FontWeight.bold,
+                  const SizedBox(height: 10),
+
+                  /// BOOKING BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    height: 45,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            const Color(0xFFAE91BA),
+                      ),
+                      onPressed: () {
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BookingPage(
+                              serviceName: widget.service,
+                              cart: Cart.getItems(widget.service), products: null,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        "Proceed to Booking",
+                        style: const TextStyle(
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
                   ),
                 ],

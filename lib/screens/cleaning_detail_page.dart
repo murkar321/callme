@@ -1,8 +1,9 @@
+import 'package:callme/models/cart_page.dart';
 import 'package:flutter/material.dart';
 import '../data/cleaning_data.dart';
 import '../models/cart.dart';
 import '../widgets/cleaning_service_card.dart';
-import 'booking_page.dart';
+
 
 class CleaningDetailPage extends StatefulWidget {
   final String serviceName;
@@ -13,11 +14,14 @@ class CleaningDetailPage extends StatefulWidget {
   });
 
   @override
-  State<CleaningDetailPage> createState() => _CleaningDetailPageState();
+  State<CleaningDetailPage> createState() =>
+      _CleaningDetailPageState();
 }
 
-class _CleaningDetailPageState extends State<CleaningDetailPage> {
+class _CleaningDetailPageState
+    extends State<CleaningDetailPage> {
   final Color primaryColor = const Color(0xFFAE91BA);
+
   late String selectedCategory;
 
   @override
@@ -29,34 +33,38 @@ class _CleaningDetailPageState extends State<CleaningDetailPage> {
   /// TOTAL ITEMS
   int get totalItems {
     int count = 0;
-
-    final items = Cart.getItems(widget.serviceName);
+    final items =
+        Cart.getItems(widget.serviceName);
 
     for (var item in items) {
       count += Cart.getQuantity(
-        item.id,
-        widget.serviceName,
-      );
+          item.id, widget.serviceName);
     }
-
     return count;
   }
 
   /// TOTAL AMOUNT
-  int get totalAmount => Cart.getTotal(widget.serviceName);
+  int get totalAmount =>
+      Cart.getTotal(widget.serviceName);
 
   @override
   Widget build(BuildContext context) {
-    final categories = cleaningServices.keys.toList();
+    final categories =
+        cleaningServices.keys.toList();
 
-    final products = cleaningServices[selectedCategory]!;
+    final products =
+        cleaningServices[selectedCategory]!;
+
+    final screenWidth =
+        MediaQuery.of(context).size.width;
 
     return Scaffold(
-      backgroundColor: const Color(0xffF5F6FA),
+      backgroundColor: const Color(0xffF6F7FB),
 
       /// APPBAR
       appBar: AppBar(
         backgroundColor: primaryColor,
+        centerTitle: true,
         elevation: 0,
         title: Text(
           widget.serviceName,
@@ -64,35 +72,40 @@ class _CleaningDetailPageState extends State<CleaningDetailPage> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        centerTitle: true,
+
+        /// 🛒 CART ICON → CART PAGE
         actions: [
-          /// CART ICON
           Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.shopping_cart),
+                icon:
+                    const Icon(Icons.shopping_cart),
                 onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => BookingPage(
-                        serviceName: widget.serviceName,
-                        products: null,
+                      builder: (_) =>
+                          CartPage(
+                        service:
+                            widget.serviceName, serviceName: '', cart: [],
                       ),
                     ),
                   );
                 },
               ),
+
               if (totalItems > 0)
                 Positioned(
                   right: 6,
                   top: 6,
                   child: CircleAvatar(
                     radius: 8,
-                    backgroundColor: Colors.red,
+                    backgroundColor:
+                        Colors.red,
                     child: Text(
                       totalItems.toString(),
-                      style: const TextStyle(
+                      style:
+                          const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
                       ),
@@ -107,60 +120,94 @@ class _CleaningDetailPageState extends State<CleaningDetailPage> {
       /// BODY
       body: Row(
         children: [
-          /// LEFT CATEGORY PANEL
+
+          /// 🔹 LEFT CATEGORY PANEL
           Container(
-            width: 95,
-            color: Colors.grey.shade100,
+            width: screenWidth * 0.25,
+            color: Colors.white,
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              itemCount: categories.length,
-              itemBuilder: (context, index) {
-                final category = categories[index];
+              padding:
+                  const EdgeInsets.symmetric(
+                      vertical: 10),
+              itemCount:
+                  categories.length,
+              itemBuilder:
+                  (context, index) {
+                final category =
+                    categories[index];
 
-                final isSelected = selectedCategory == category;
+                final isSelected =
+                    selectedCategory ==
+                        category;
 
-                final firstProduct = cleaningServices[category]!.first;
+                final firstProduct =
+                    cleaningServices[
+                            category]!
+                        .first;
 
                 return GestureDetector(
                   onTap: () {
                     setState(() {
-                      selectedCategory = category;
+                      selectedCategory =
+                          category;
                     });
                   },
                   child: Container(
                     margin:
-                        const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: isSelected
-                          ? [
-                              const BoxShadow(
-                                color: Colors.black12,
-                                blurRadius: 4,
-                              )
-                            ]
-                          : [],
+                        const EdgeInsets
+                            .symmetric(
+                      vertical: 10,
+                      horizontal: 6,
                     ),
                     child: Column(
                       children: [
-                        CircleAvatar(
-                          radius: 22,
-                          backgroundImage: AssetImage(firstProduct.image),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          category,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: isSelected ? primaryColor : Colors.grey,
+
+                        Container(
+                          height: 55,
+                          width: 55,
+                          decoration:
+                              BoxDecoration(
+                            shape:
+                                BoxShape.circle,
+                            border:
+                                Border.all(
+                              color: isSelected
+                                  ? primaryColor
+                                  : Colors
+                                      .grey
+                                      .shade300,
+                              width: 2,
+                            ),
+                            image:
+                                DecorationImage(
+                              image: AssetImage(
+                                  firstProduct
+                                      .image),
+                              fit:
+                                  BoxFit.cover,
+                            ),
                           ),
                         ),
+
+                        const SizedBox(
+                            height: 6),
+
+                        Text(
+                          category,
+                          textAlign:
+                              TextAlign.center,
+                          style:
+                              TextStyle(
+                            fontSize: 11,
+                            fontWeight:
+                                FontWeight
+                                    .w600,
+                            color: isSelected
+                                ? primaryColor
+                                : Colors
+                                    .black87,
+                          ),
+                        )
                       ],
                     ),
                   ),
@@ -169,34 +216,63 @@ class _CleaningDetailPageState extends State<CleaningDetailPage> {
             ),
           ),
 
-          /// RIGHT SERVICES LIST
+          /// 🔹 RIGHT SERVICES
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-              itemCount: products.length,
-              itemBuilder: (context, index) {
-                final product = products[index];
+              padding:
+                  const EdgeInsets.fromLTRB(
+                      12, 12, 12, 100),
+              itemCount:
+                  products.length,
+              itemBuilder:
+                  (context, index) {
+                final product =
+                    products[index];
 
-                final id = "${widget.serviceName}_${selectedCategory}_$index";
+                final id =
+                    "${widget.serviceName}_${selectedCategory}_$index";
 
                 return CleaningServiceCard(
-                  product: product,
-                  serviceName: widget.serviceName,
-                  primaryColor: primaryColor,
+                  service: product,
+                  serviceName:
+                      widget.serviceName,
+                  category:
+                      selectedCategory,
+                  index: index,
+
+                  /// ➕ ADD → SHOW POPUP
                   onAdd: () {
                     setState(() {
                       Cart.add(
                         CartItem(
                           id: id,
-                          name: product.name,
-                          price: product.finalPrice,
-                          service: widget.serviceName,
-                          category: selectedCategory,
-                          image: product.image,
+                          name:
+                              product.name,
+                          price: product
+                              .finalPrice,
+                          service: widget
+                              .serviceName,
+                          category:
+                              selectedCategory,
+                          image:
+                              product.image,
                         ),
-                        service: widget.serviceName,
+                        service: widget
+                            .serviceName,
                       );
                     });
+
+                    ScaffoldMessenger.of(
+                            context)
+                        .showSnackBar(
+                      SnackBar(
+                        content: Text(
+                            "${product.name} added to cart"),
+                        duration:
+                            const Duration(
+                                seconds: 1),
+                      ),
+                    );
                   },
                 );
               },
@@ -205,51 +281,85 @@ class _CleaningDetailPageState extends State<CleaningDetailPage> {
         ],
       ),
 
-      /// BOTTOM CART BAR
-      bottomNavigationBar: totalItems == 0
-          ? null
-          : SafeArea(
-              child: InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookingPage(
-                        serviceName: widget.serviceName,
-                        products: null,
+      /// 🔹 VIEW CART BOTTOM
+      bottomNavigationBar:
+          totalItems == 0
+              ? null
+              : SafeArea(
+                  child: InkWell(
+                    onTap: () {
+
+                      /// 👉 OPEN CART PAGE
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              CartPage(
+                            service: widget
+                                .serviceName, serviceName: '', cart: [],
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      margin:
+                          const EdgeInsets
+                              .all(12),
+                      padding:
+                          const EdgeInsets
+                              .symmetric(
+                        horizontal: 18,
+                        vertical: 16,
+                      ),
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            primaryColor,
+                        borderRadius:
+                            BorderRadius
+                                .circular(
+                                    16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: primaryColor
+                                .withOpacity(
+                                    0.3),
+                            blurRadius: 8,
+                          )
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment:
+                            MainAxisAlignment
+                                .spaceBetween,
+                        children: [
+                          Text(
+                            "$totalItems items",
+                            style:
+                                const TextStyle(
+                              color: Colors
+                                  .white,
+                              fontWeight:
+                                  FontWeight
+                                      .w600,
+                            ),
+                          ),
+                          Text(
+                            "₹$totalAmount View Cart →",
+                            style:
+                                const TextStyle(
+                              color: Colors
+                                  .white,
+                              fontWeight:
+                                  FontWeight
+                                      .w600,
+                            ),
+                          )
+                        ],
                       ),
                     ),
-                  );
-                },
-                child: Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: primaryColor,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "$totalItems items",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        "₹$totalAmount View Cart →",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      )
-                    ],
                   ),
                 ),
-              ),
-            ),
     );
   }
 }

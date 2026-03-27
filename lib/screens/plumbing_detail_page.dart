@@ -74,7 +74,7 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
                     MaterialPageRoute(
                       builder: (_) => BookingPage(
                         serviceName: widget.serviceName,
-                        products: null,
+                        products: null, cart: [],
                       ),
                     ),
                   );
@@ -292,7 +292,7 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
                   MaterialPageRoute(
                     builder: (_) => BookingPage(
                       serviceName: widget.serviceName,
-                      products: null,
+                      products: null, cart: [],
                     ),
                   ),
                 );

@@ -1,28 +1,32 @@
+import 'package:callme/models/cart_page.dart';
 import 'package:flutter/material.dart';
-import '../screens/cleaning_service_detail_page.dart';
 import '../models/cleaning_service.dart';
+import '../models/cart.dart';
+import '../screens/cleaning_service_detail_page.dart';
 
 class CleaningServiceCard extends StatelessWidget {
-  final CleaningService product;
+  final CleaningService service;
   final String serviceName;
-  final Color primaryColor;
+  final String category;
+  final int index;
   final VoidCallback onAdd;
 
   const CleaningServiceCard({
     super.key,
-    required this.product,
+    required this.service,
     required this.serviceName,
-    required this.primaryColor,
+    required this.category,
+    required this.index,
     required this.onAdd,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: const [
           BoxShadow(
             color: Colors.black12,
@@ -33,56 +37,58 @@ class CleaningServiceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+
           /// IMAGE
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(18),
-            ),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(16)),
             child: Stack(
               children: [
                 Image.asset(
-                  product.image,
+                  service.image,
                   height: 130,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
 
                 /// DISCOUNT
-                Positioned(
-                  right: 10,
-                  top: 10,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      "${product.discount}% OFF",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
+                if (service.discount > 0)
+                  Positioned(
+                    right: 10,
+                    top: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        "${service.discount}% OFF",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
 
-          /// CONTENT
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                /// NAME
+
+                /// SERVICE NAME
                 Text(
-                  product.name,
+                  service.name,
                   style: const TextStyle(
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
                   ),
                 ),
 
@@ -90,38 +96,29 @@ class CleaningServiceCard extends StatelessWidget {
 
                 /// DESCRIPTION
                 Text(
-                  product.description,
+                  service.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    fontSize: 12,
                     color: Colors.grey,
-                    fontSize: 13,
                   ),
                 ),
 
                 const SizedBox(height: 8),
 
-                /// RATING + TIME
+                /// TIME
                 Row(
                   children: [
                     const Icon(
-                      Icons.star,
-                      color: Colors.orange,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 4),
-                    const Text(
-                      "5.0",
-                      style: TextStyle(fontSize: 13),
-                    ),
-                    const SizedBox(width: 12),
-                    const Icon(
                       Icons.access_time,
+                      size: 14,
                       color: Colors.grey,
-                      size: 18,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      product.time,
-                      style: const TextStyle(fontSize: 13),
+                      service.time,
+                      style: const TextStyle(fontSize: 12),
                     ),
                   ],
                 ),
@@ -132,21 +129,21 @@ class CleaningServiceCard extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      "₹${product.finalPrice}",
+                      "₹${service.finalPrice}",
                       style: const TextStyle(
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        fontSize: 18,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      "₹${product.price}",
-                      style: const TextStyle(
-                        decoration: TextDecoration.lineThrough,
-                        color: Colors.grey,
-                        fontSize: 14,
+                    const SizedBox(width: 8),
+                    if (service.discount > 0)
+                      Text(
+                        "₹${service.price}",
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          decoration: TextDecoration.lineThrough,
+                        ),
                       ),
-                    ),
                   ],
                 ),
 
@@ -155,54 +152,69 @@ class CleaningServiceCard extends StatelessWidget {
                 /// BUTTONS
                 Row(
                   children: [
-                    /// VIEW
+
+                    /// VIEW BUTTON
                     Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CleaningServiceDetailPage(
-                                product: product,
-                                serviceName: serviceName,
+                      child: SizedBox(
+                        height: 36,
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    CleaningServiceDetailPage(
+                                  product: service,
+                                  serviceName: serviceName,
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                        child: const Text("View"),
+                            );
+                          },
+                          child: const Text("View"),
+                        ),
                       ),
                     ),
 
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
 
                     /// ADD BUTTON
                     Expanded(
-                      child: ElevatedButton(
-                        onPressed: onAdd,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
+                      child: SizedBox(
+                        height: 36,
+                        child: ElevatedButton(
+                          onPressed: () {
+
+                            /// add to cart
+                            Cart.addCleaning(service);
+
+                            /// callback
+                            onAdd();
+
+                            /// navigate to cart
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CartPage(
+                                  service: serviceName,
+                                  serviceName: serviceName,
+                                  cart: Cart.cleaningItems,
+                                ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                const Color(0xFFAE91BA),
                           ),
-                        ),
-                        child: const Text(
-                          "ADD",
-                          style: TextStyle(color: Colors.white),
+                          child: const Text("Add"),
                         ),
                       ),
-                    )
+                    ),
                   ],
-                )
+                ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );

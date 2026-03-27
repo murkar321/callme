@@ -103,7 +103,7 @@ class ResortCard extends StatelessWidget {
                             MaterialPageRoute(
                               builder: (_) => BookingPage(
                                 serviceName: resort.name,
-                                products: null,
+                                products: null, cart: [],
                               ),
                             ),
                           );

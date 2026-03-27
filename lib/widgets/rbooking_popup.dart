@@ -198,7 +198,7 @@ class _ResortBookingPopupState
                 builder: (_) =>
                     const CartPage(
                       serviceName: "Resort",
-                      cart: [],
+                      cart: [], service: '',
                     ),
               ),
             );

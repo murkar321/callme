@@ -54,7 +54,7 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
                       builder: (_) => BookingPage(
                         products: Cart.getItems("Water"),
                         serviceName: "Water",
-                        service: null,
+                        service: null, cart: [],
                       ),
                     ),
                   );
@@ -187,7 +187,7 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
                     builder: (_) => BookingPage(
                       products: Cart.getItems("Water"),
                       serviceName: "Water",
-                      service: null,
+                      service: null, cart: [],
                     ),
                   ),
                 );

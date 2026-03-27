@@ -15,12 +15,16 @@ class BookingPage extends StatefulWidget {
   final int? adults;
   final int? children;
 
+  /// CART FLOW
+  final List<CartItem>? cart;
+
   const BookingPage({
     super.key,
     required this.serviceName,
     this.product,
     this.adults,
-    this.children, Object? service, required products, Object? price,
+    this.children,
+    this.cart, Object? products, Object? service, Object? price,
   });
 
   @override
@@ -28,18 +32,21 @@ class BookingPage extends StatefulWidget {
 }
 
 class _BookingPageState extends State<BookingPage> {
+  final TextEditingController nameController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
   final TextEditingController noteController = TextEditingController();
 
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
 
-  /// ✅ NEW CART FLOW
-  List<CartItem> get cartItems => Cart.getByService(widget.serviceName);
+  /// ✅ CART FLOW
+  List<CartItem> get cartItems =>
+      widget.cart ?? Cart.getByService(widget.serviceName);
 
   bool get isCartFlow => cartItems.isNotEmpty;
 
-  bool get isSingleService => widget.product != null && !isCartFlow;
+  bool get isSingleService =>
+      widget.product != null && cartItems.isEmpty;
 
   bool get isResort => widget.adults != null;
 
@@ -58,6 +65,7 @@ class _BookingPageState extends State<BookingPage> {
 
   @override
   void dispose() {
+    nameController.dispose();
     addressController.dispose();
     noteController.dispose();
     super.dispose();
@@ -72,12 +80,23 @@ class _BookingPageState extends State<BookingPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+
+            /// SERVICE SUMMARY
             _serviceSummaryCard(),
+
             const SizedBox(height: 20),
 
             if (isResort) _guestCard(),
 
             const SizedBox(height: 20),
+
+            /// FULL NAME
+            _textField(
+              controller: nameController,
+              hint: "Full Name",
+            ),
+
+            const SizedBox(height: 16),
 
             /// DATE & TIME
             Row(
@@ -106,7 +125,7 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 20),
 
-            /// ADDRESS
+            /// ADDRESS (MAP)
             InkWell(
               onTap: () async {
                 final address = await Navigator.push(
@@ -123,7 +142,7 @@ class _BookingPageState extends State<BookingPage> {
               child: AbsorbPointer(
                 child: _textField(
                   controller: addressController,
-                  hint: 'Select address from map',
+                  hint: "Select address from map",
                 ),
               ),
             ),
@@ -133,18 +152,42 @@ class _BookingPageState extends State<BookingPage> {
             /// NOTES
             _textField(
               controller: noteController,
-              hint: 'Additional Notes',
+              hint: "Additional Notes",
               maxLines: 3,
             ),
 
             const SizedBox(height: 30),
+
+            /// TOTAL
+            _card(
+              child: Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Total Amount",
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  Text(
+                    "₹${totalAmount.toStringAsFixed(0)}",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
 
             /// PAYMENT BUTTON
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _startPaymentFlow,
-                child: const Text('Proceed to Payment'),
+                child: const Text("Proceed to Payment"),
               ),
             ),
           ],
@@ -153,41 +196,49 @@ class _BookingPageState extends State<BookingPage> {
     );
   }
 
-  /// ✅ SUMMARY SWITCH
+  /// ================= SUMMARY =================
+
   Widget _serviceSummaryCard() {
     if (isCartFlow) return _cartSummary();
     if (isSingleService) return _singleSummary();
     return const SizedBox();
   }
 
-  /// 🔹 CART SUMMARY (FIXED)
   Widget _cartSummary() {
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Selected Services'),
-          const SizedBox(height: 8),
-          ...cartItems.map((item) {
-            return ListTile(
+          const Text(
+            "Selected Services",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+
+          ...cartItems.map(
+            (item) => ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text('${item.name} x${item.quantity}'),
+              title: Text("${item.name} x${item.quantity}"),
               trailing: Text(
-                '₹${item.price * item.quantity}',
+                "₹${item.price * item.quantity}",
               ),
-            );
-          }),
+            ),
+          ),
+
           const Divider(),
+
           Text(
-            'Total: ₹${totalAmount.toStringAsFixed(0)}',
-            style: const TextStyle(color: Colors.green),
+            "Total: ₹${totalAmount.toStringAsFixed(0)}",
+            style: const TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// 🔹 SINGLE
   Widget _singleSummary() {
     final p = widget.product!;
 
@@ -197,18 +248,21 @@ class _BookingPageState extends State<BookingPage> {
         children: [
           Text(p.name),
           const SizedBox(height: 6),
-          Text('₹${p.calculatedFinalPrice}'),
+          Text("₹${p.calculatedFinalPrice}"),
         ],
       ),
     );
   }
 
-  /// 🔹 RESORT
   Widget _guestCard() {
     return _card(
-      child: Text("${widget.adults} Adults, ${widget.children} Children"),
+      child: Text(
+        "${widget.adults} Adults, ${widget.children} Children",
+      ),
     );
   }
+
+  /// ================= UI =================
 
   Widget _card({required Widget child}) {
     return Container(
@@ -265,11 +319,14 @@ class _BookingPageState extends State<BookingPage> {
     );
   }
 
+  /// ================= DATE =================
+
   Future<void> _pickDate() async {
     final date = await showDatePicker(
       context: context,
       firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 30)),
+      lastDate:
+          DateTime.now().add(const Duration(days: 30)),
       initialDate: DateTime.now(),
     );
 
@@ -279,21 +336,36 @@ class _BookingPageState extends State<BookingPage> {
   }
 
   Future<void> _pickTime() async {
-    final time =
-        await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
 
     if (time != null) {
       setState(() => selectedTime = time);
     }
   }
 
+  /// ================= PAYMENT =================
+
   void _startPaymentFlow() async {
-    if (selectedDate == null || selectedTime == null) return;
+    if (nameController.text.isEmpty ||
+        addressController.text.isEmpty ||
+        selectedDate == null ||
+        selectedTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please fill all details"),
+        ),
+      );
+      return;
+    }
 
     final success = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => UpiPaymentScreen(amount: totalAmount),
+        builder: (_) =>
+            UpiPaymentScreen(amount: totalAmount),
       ),
     );
 
@@ -306,23 +378,27 @@ class _BookingPageState extends State<BookingPage> {
     final order = OrderModel(
       id: Random().nextInt(999999).toString(),
       services: isCartFlow
-          ? cartItems.map((item) => "${item.name} x${item.quantity}").toList()
+          ? cartItems
+              .map((e) => "${e.name} x${e.quantity}")
+              .toList()
           : [widget.product?.name ?? widget.serviceName],
       date: selectedDate!,
       time: selectedTime!.format(context),
       address: addressController.text,
       note: noteController.text,
-      status: 'Ongoing',
+      status: "Ongoing",
       totalAmount: totalAmount,
     );
 
     OrdersData.orders.add(order);
 
-    /// ✅ CLEAR ONLY CURRENT SERVICE
+    /// CLEAR ONLY CURRENT SERVICE
     Cart.clear(widget.serviceName);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Booking Confirmed')),
+      const SnackBar(
+        content: Text("Booking Confirmed"),
+      ),
     );
 
     Navigator.pop(context);

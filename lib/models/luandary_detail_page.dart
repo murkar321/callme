@@ -262,7 +262,7 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                                     MaterialPageRoute(
                                       builder: (_) => BookingPage(
                                         serviceName: widget.serviceName,
-                                        products: null, price: null,
+                                        products: null, price: null, cart: [],
                                       ),
                                     ),
                                   );
