@@ -30,7 +30,6 @@ class CartItem {
 class Cart {
   static final List<CartItem> _items = [];
 
-
   /// =========================
   /// ➕ ADD ITEM
   /// =========================
@@ -96,22 +95,17 @@ class Cart {
   /// =========================
   static List<CartItem> get allItems => _items;
 
- 
-
-
+  static get quantities => null;
 
   /// =========================
   /// 🎯 FILTER BY SERVICE
   /// =========================
   static List<CartItem> getItems(String service) {
-    return _items
-        .where((e) => e.service == service)
-        .toList();
+    return _items.where((e) => e.service == service).toList();
   }
 
   /// 🔁 Alias
-  static List<CartItem> getByService(
-      String serviceName) {
+  static List<CartItem> getByService(String serviceName) {
     return getItems(serviceName);
   }
 
@@ -128,8 +122,7 @@ class Cart {
 
     return _items
         .where((e) => e.service == service)
-        .fold(0,
-            (sum, e) => sum + e.quantity);
+        .fold(0, (sum, e) => sum + e.quantity);
   }
 
   /// 🔁 Alias
@@ -141,23 +134,17 @@ class Cart {
   /// 💰 TOTAL PRICE (SERVICE)
   /// =========================
   static int getTotal(String service) {
-    return _items
-        .where((e) => e.service == service)
-        .fold(
+    return _items.where((e) => e.service == service).fold(
           0,
           (sum, e) =>
               sum +
-              (e.price *
-                  e.quantity *
-                  e.adults) +
-              ((e.price ~/ 2) *
-                  e.children),
+              (e.price * e.quantity * e.adults) +
+              ((e.price ~/ 2) * e.children),
         );
   }
 
   /// 🔁 Alias
-  static int totalPrice(
-      String serviceName) {
+  static int totalPrice(String serviceName) {
     return getTotal(serviceName);
   }
 
@@ -169,24 +156,18 @@ class Cart {
       0,
       (sum, e) =>
           sum +
-          (e.price *
-              e.quantity *
-              e.adults) +
-          ((e.price ~/ 2) *
-              e.children),
+          (e.price * e.quantity * e.adults) +
+          ((e.price ~/ 2) * e.children),
     );
   }
 
   /// =========================
   /// 🔍 FIND ITEM
   /// =========================
-  static CartItem? find(
-      String id, String service) {
+  static CartItem? find(String id, String service) {
     try {
       return _items.firstWhere(
-        (e) =>
-            e.id == id &&
-            e.service == service,
+        (e) => e.id == id && e.service == service,
       );
     } catch (e) {
       return null;
@@ -196,8 +177,7 @@ class Cart {
   /// =========================
   /// 🔢 GET QUANTITY
   /// =========================
-  static int getQuantity(
-      String id, String service) {
+  static int getQuantity(String id, String service) {
     final item = find(id, service);
     return item?.quantity ?? 0;
   }
@@ -261,10 +241,15 @@ class Cart {
     if (service == null) {
       _items.clear();
     } else {
-      _items.removeWhere(
-          (e) => e.service == service);
+      _items.removeWhere((e) => e.service == service);
     }
   }
 
-  static void addResortBooking({required String id, required String name, required int price, required int adults, required int children, required String image}) {}
+  static void addResortBooking(
+      {required String id,
+      required String name,
+      required int price,
+      required int adults,
+      required int children,
+      required String image}) {}
 }

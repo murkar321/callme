@@ -105,7 +105,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 959,
       warranty: "",
     ),
-     CleaningService(
+    CleaningService(
       name: "Chimney Cleaning",
       image: "assets/chimney.jfif",
       description: "Smoke Free Kitchen Experience",
@@ -147,7 +147,6 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 359,
       warranty: "",
     ),
-
   ],
 
   /// 🚿 BATHROOM CLEANING
@@ -180,7 +179,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 679,
       warranty: "",
     ),
-     CleaningService(
+    CleaningService(
       name: "Toilet Cleaning",
       image: "assets/bc2.jpg",
       description: "Hygienic Toilet Cleaning",
@@ -194,7 +193,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 249,
       warranty: "",
     ),
-     CleaningService(
+    CleaningService(
       name: "Tile and Grout Cleaning",
       image: "assets/cleaning.jpg",
       description: "Shine your bathroom tiles",
@@ -208,7 +207,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 449,
       warranty: "",
     ),
-     CleaningService(
+    CleaningService(
       name: "Hard water stain removal",
       image: "assets/cleaning.jpg",
       description: "Remove tough water stains",
@@ -240,7 +239,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 509,
       warranty: "24 Hours support",
     ),
-     CleaningService(
+    CleaningService(
       name: "Leather Sofa Cleaning",
       image: "assets/sofac.jpg",
       description: "Safe cleaning for leather surfaces.",
@@ -254,7 +253,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 594,
       warranty: "24 Hours support",
     ),
-     CleaningService(
+    CleaningService(
       name: "L Shaped Sofa Cleaning",
       image: "assets/sofac1.jpg",
       description: "Deep clean for large sofas.",
@@ -268,7 +267,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 759,
       warranty: "24 Hours support",
     ),
-     CleaningService(
+    CleaningService(
       name: "Cushion Cleaning",
       image: "assets/cushion.jfif",
       description: "Safe cleaning for leather surfaces.",
@@ -344,7 +343,7 @@ Map<String, List<CleaningService>> cleaningServices = {
     ),
     CleaningService(
       name: "Dust and Allergen Removal",
-      image: "assets/Carpet Cleaning.jpg",
+      image: "assets/cc1.jpg",
       description: "Quick dust removal cleaning.",
       includes: ["Vacuum cleaning"],
       excludes: ["Wet wash"],
@@ -388,7 +387,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 269,
       warranty: "12 Hours support",
     ),
-     CleaningService(
+    CleaningService(
       name: "Frame and Track Cleaning",
       image: "assets/window.jpg",
       description: "Streak-free glass cleaning.",
@@ -402,7 +401,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 269,
       warranty: "12 Hours support",
     ),
-     CleaningService(
+    CleaningService(
       name: "Balcony and Sliding Window Cleaning",
       image: "assets/Window cleaning.jpg",
       description: "Streak-free glass cleaning.",
@@ -416,7 +415,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 269,
       warranty: "12 Hours support",
     ),
-     CleaningService(
+    CleaningService(
       name: "Grill and Exterior Cleaning",
       image: "assets/window.jpg",
       description: "Streak-free glass cleaning.",
@@ -504,7 +503,6 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 2999,
       warranty: "24 Hours support",
     ),
-    
   ],
 
   /// 🏢 CORPORATE CLEANING
@@ -597,7 +595,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 509,
       warranty: "24 Hours support",
     ),
-     CleaningService(
+    CleaningService(
       name: "Fan Cleaning",
       image: "assets/ec1.jpg",
       description: "Improves AC performance.",
@@ -611,7 +609,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 509,
       warranty: "24 Hours support",
     ),
-     CleaningService(
+    CleaningService(
       name: "Refrigerator Cleaning",
       image: "assets/ec1.jpg",
       description: "Improves AC performance.",
@@ -625,7 +623,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 509,
       warranty: "24 Hours support",
     ),
-     CleaningService(
+    CleaningService(
       name: "Washing Machine Cleaning",
       image: "assets/ec1.jpg",
       description: "Improves AC performance.",
@@ -639,7 +637,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 509,
       warranty: "24 Hours support",
     ),
-     CleaningService(
+    CleaningService(
       name: "TV and Laptop Cleaning",
       image: "assets/ec1.jpg",
       description: "Improves AC performance.",
@@ -671,7 +669,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 1199,
       warranty: "1 Month",
     ),
-     CleaningService(
+    CleaningService(
       name: "Standard Plan",
       image: "assets/mc2.jpg",
       description: "Deep + regular cleaning.",
@@ -699,7 +697,7 @@ Map<String, List<CleaningService>> cleaningServices = {
       finalPrice: 3499,
       warranty: "1 Month",
     ),
-     CleaningService(
+    CleaningService(
       name: "Elite Plan",
       image: "assets/mc2.jpg",
       description: "Deep + regular cleaning.",

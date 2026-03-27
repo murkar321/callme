@@ -1,7 +1,7 @@
+import 'package:callme/models/resort_detail_page.dart';
 import 'package:flutter/material.dart';
 import '../data/resorts_data.dart';
-import '../models/resort_detail_page.dart';
-import '../widgets/rbooking_popup.dart';
+import '../screens/booking_page.dart';
 
 class ResortCard extends StatelessWidget {
   final Resort resort;
@@ -13,170 +13,55 @@ class ResortCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Container(
-      margin: const EdgeInsets.symmetric(
-          horizontal: 12, vertical: 8),
-
-      padding: const EdgeInsets.all(12),
-
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            blurRadius: 6,
             color: Colors.grey.shade300,
-            offset: const Offset(0, 3),
+            blurRadius: 4,
           )
         ],
       ),
-
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          /// LEFT PANEL - CIRCULAR IMAGE
-          CircleAvatar(
-            radius: 45,
-            backgroundImage:
-                AssetImage(resort.image),
+          /// IMAGE
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            child: Image.asset(
+              resort.image,
+              height: 150,
+              width: double.infinity,
+              fit: BoxFit.cover,
+            ),
           ),
 
-          const SizedBox(width: 15),
-
-          /// RIGHT PANEL
-          Expanded(
+          Padding(
+            padding: const EdgeInsets.all(10),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 /// NAME
                 Text(
                   resort.name,
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
 
                 const SizedBox(height: 5),
 
-                /// CITY BADGE
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
+                /// PRICE
+                Text(
+                  "₹${resort.price} / night",
+                  style: const TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.w600,
                   ),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius:
-                        BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    resort.city,
-                    style: const TextStyle(
-                      color: Colors.blue,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 5),
-
-                /// FACILITIES
-                Wrap(
-                  spacing: 5,
-                  children: resort.facilities
-                      .take(2)
-                      .map(
-                        (f) => Chip(
-                          label: Text(
-                            f,
-                            style:
-                                const TextStyle(
-                              fontSize: 10,
-                            ),
-                          ),
-                          backgroundColor:
-                              Colors.grey.shade200,
-                        ),
-                      )
-                      .toList(),
-                ),
-
-                const SizedBox(height: 8),
-
-                /// PRICE ROW
-                Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment
-                          .spaceBetween,
-                  children: [
-
-                    /// PRICE
-                    Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment
-                              .start,
-                      children: [
-
-                        Text(
-                          "₹${resort.price}",
-                          style:
-                              const TextStyle(
-                            fontSize: 16,
-                            fontWeight:
-                                FontWeight
-                                    .bold,
-                            color:
-                                Colors.green,
-                          ),
-                        ),
-
-                        Text(
-                          "per person",
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors
-                                .grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    /// DISCOUNT BADGE
-                    if (resort.discount > 0)
-                      Container(
-                        padding:
-                            const EdgeInsets
-                                .symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration:
-                            BoxDecoration(
-                          color: Colors
-                              .red.shade50,
-                          borderRadius:
-                              BorderRadius
-                                  .circular(8),
-                        ),
-                        child: Text(
-                          "${resort.discount}% OFF",
-                          style:
-                              const TextStyle(
-                            color: Colors.red,
-                            fontSize: 12,
-                            fontWeight:
-                                FontWeight
-                                    .bold,
-                          ),
-                        ),
-                      ),
-                  ],
                 ),
 
                 const SizedBox(height: 10),
@@ -184,56 +69,49 @@ class ResortCard extends StatelessWidget {
                 /// BUTTONS
                 Row(
                   children: [
-
-                    /// VIEW DETAILS
+                    /// VIEW
                     Expanded(
-                      child: OutlinedButton(
+                      child: ElevatedButton(
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  ResortDetailPage(
-                                      resort:
-                                          resort),
+                              builder: (_) => ResortDetailPage(
+                                resort: resort,
+                              ),
                             ),
                           );
                         },
-                        child:
-                            const Text(
-                                "View Details"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey.shade300,
+                        ),
+                        child: const Text(
+                          "View",
+                          style: TextStyle(color: Colors.black),
+                        ),
                       ),
                     ),
 
                     const SizedBox(width: 10),
 
-                    /// BOOK NOW
+                    /// BOOK
                     Expanded(
                       child: ElevatedButton(
-                        style:
-                            ElevatedButton
-                                .styleFrom(
-                          backgroundColor:
-                              Colors.green,
-                        ),
                         onPressed: () {
-                          showDialog(
-                            context:
-                                context,
-                            builder: (_) =>
-                                ResortBookingPopup(
-                                    resort:
-                                        resort),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BookingPage(
+                                serviceName: resort.name,
+                                products: null,
+                              ),
+                            ),
                           );
                         },
-                        child:
-                            const Text(
-                          "Book Now",
-                          style: TextStyle(
-                              color:
-                                  Colors
-                                      .white),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
                         ),
+                        child: const Text("Book"),
                       ),
                     ),
                   ],

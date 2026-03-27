@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:callme/widgets/resort_card.dart';
 import '../data/resorts_data.dart';
+import '../widgets/resort_card.dart';
 
 class ResortPage extends StatefulWidget {
   const ResortPage({super.key, required List<dynamic> resorts});
@@ -10,40 +10,39 @@ class ResortPage extends StatefulWidget {
 }
 
 class _ResortPageState extends State<ResortPage> {
-
   String selectedCity = cities.first;
   String searchText = "";
 
   @override
   Widget build(BuildContext context) {
+    List<String> filteredCities = cities
+        .where((city) => city.toLowerCase().contains(searchText.toLowerCase()))
+        .toList();
 
-    List<Resort> filteredResorts =
-        getResortsByCity(selectedCity)
-            .where((resort) =>
-                resort.name
-                    .toLowerCase()
-                    .contains(searchText.toLowerCase()))
-            .toList();
+    List<Resort> filteredResorts = getResortsByCity(selectedCity);
 
     return Scaffold(
+      backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
         title: const Text("Resorts"),
+        centerTitle: true,
         backgroundColor: Colors.blue,
+        elevation: 0,
       ),
-
       body: Column(
         children: [
-
-          /// SEARCH BAR
+          /// 🔍 SEARCH CITY
           Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             child: TextField(
               decoration: InputDecoration(
-                hintText: "Search Resort...",
+                hintText: "Search City...",
                 prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.white,
                 border: OutlineInputBorder(
-                  borderRadius:
-                      BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
               ),
               onChanged: (value) {
@@ -57,17 +56,15 @@ class _ResortPageState extends State<ResortPage> {
           Expanded(
             child: Row(
               children: [
-
-                /// LEFT CITY PANEL
+                /// 🏙️ LEFT CITY PANEL
                 Container(
-                  width: 120,
-                  color: Colors.grey.shade200,
-
+                  width: 110,
+                  color: Colors.white,
                   child: ListView.builder(
-                    itemCount: cities.length,
+                    itemCount: filteredCities.length,
                     itemBuilder: (context, index) {
-
-                      final city = cities[index];
+                      final city = filteredCities[index];
+                      bool isSelected = selectedCity == city;
 
                       return GestureDetector(
                         onTap: () {
@@ -75,49 +72,41 @@ class _ResortPageState extends State<ResortPage> {
                             selectedCity = city;
                           });
                         },
-
                         child: Container(
-                          margin:
-                              const EdgeInsets.all(8),
-
-                          padding:
-                              const EdgeInsets.all(10),
-
-                          decoration: BoxDecoration(
-                            color:
-                                selectedCity == city
-                                    ? Colors.blue
-                                    : Colors.white,
-
-                            borderRadius:
-                                BorderRadius
-                                    .circular(12),
-
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors
-                                    .grey.shade300,
-                                blurRadius: 3,
-                              )
-                            ],
-                          ),
-
-                          child: Center(
-                            child: Text(
-                              city,
-                              textAlign:
-                                  TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight:
-                                    FontWeight.bold,
-                                color:
-                                    selectedCity ==
-                                            city
-                                        ? Colors.white
-                                        : Colors.black,
+                          margin: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 8),
+                          child: Column(
+                            children: [
+                              /// 🔵 CIRCLE CITY
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isSelected
+                                      ? Colors.blue
+                                      : Colors.grey.shade200,
+                                ),
+                                child: Icon(
+                                  Icons.location_on,
+                                  color:
+                                      isSelected ? Colors.white : Colors.black,
+                                ),
                               ),
-                            ),
+
+                              const SizedBox(height: 6),
+
+                              /// CITY NAME
+                              Text(
+                                city,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      isSelected ? Colors.blue : Colors.black,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -125,30 +114,21 @@ class _ResortPageState extends State<ResortPage> {
                   ),
                 ),
 
-                /// RIGHT RESORT LIST
+                /// 🏨 RIGHT RESORT LIST
                 Expanded(
                   child: filteredResorts.isEmpty
                       ? const Center(
                           child: Text(
-                            "No Resorts Found",
-                            style: TextStyle(
-                                fontSize: 16),
+                            "No Resorts Available",
+                            style: TextStyle(fontSize: 16),
                           ),
                         )
                       : ListView.builder(
-                          padding:
-                              const EdgeInsets.all(10),
-
-                          itemCount:
-                              filteredResorts.length,
-
-                          itemBuilder:
-                              (context, index) {
-
+                          padding: const EdgeInsets.all(12),
+                          itemCount: filteredResorts.length,
+                          itemBuilder: (context, index) {
                             return ResortCard(
-                              resort:
-                                  filteredResorts[
-                                      index],
+                              resort: filteredResorts[index],
                             );
                           },
                         ),

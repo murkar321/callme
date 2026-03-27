@@ -30,7 +30,6 @@ List<String> cities = [
 ];
 
 List<Resort> resortList = [
-
   // VIRAR
   Resort(
     name: "Rajhans Water Park",
@@ -90,7 +89,7 @@ List<Resort> resortList = [
   Resort(
     name: "Green Valley Resort",
     city: "Lonavala",
-    image: "assets/greenvalley.jfif",
+    image: "assets/green valley.jfif",
     price: 850,
     originalPrice: 950,
     discount: 10,
@@ -179,8 +178,6 @@ List<Resort> resortList = [
         "Paradise Resort offers comfortable rooms, swimming pool and dining facilities for family outings.",
   ),
 ];
-
-
 
 List<Resort> getResortsByCity(String city) {
   return resortList.where((resort) => resort.city == city).toList();

@@ -1,4 +1,3 @@
-
 import 'package:callme/models/civil_services_page.dart';
 import 'package:callme/models/hotel_service_page.dart';
 import 'package:callme/models/service_product.dart';
@@ -8,7 +7,7 @@ import 'package:callme/screens/water_services_page.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/screens/service_detail_page.dart';
-import 'package:callme/screens/salon_page.dart';// ✅ NEW
+import 'package:callme/screens/salon_page.dart'; // ✅ NEW
 import 'package:callme/widgets/category_card.dart';
 
 class HomePage extends StatefulWidget {
@@ -29,9 +28,9 @@ class _HomePageState extends State<HomePage> {
     ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpg'),
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
     ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
-    ServiceCategory(name: 'Water Services', imagePath: 'assets/water services.png'),
+    ServiceCategory(
+        name: 'Water Services', imagePath: 'assets/water services.png'),
     ServiceCategory(name: 'Civil Services', imagePath: 'assets/civil.png'),
-
   ];
 
   String searchQuery = '';
@@ -106,17 +105,18 @@ class _HomePageState extends State<HomePage> {
         return const SalonPage();
 
       case "Resorts":
-        return const ResortPage(resorts: [],);
+        return const ResortPage(
+          resorts: [],
+        );
 
       case "Hotel":
-        return const HotelServicePage(); 
-        
-       case "Water Services":
-        return const WaterServicesPage();// ✅ FIXED
+        return const HotelServicePage();
+
+      case "Water Services":
+        return const WaterServicesPage(); // ✅ FIXED
 
       case "Civil Services":
-  return const CivilServicesPage();
-   
+        return const CivilServicesPage();
 
       default:
         return ServiceDetailPage(serviceName: serviceName);

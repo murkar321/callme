@@ -12,7 +12,6 @@ class ResortDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
 
@@ -25,7 +24,6 @@ class ResortDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             /// IMAGE
             Stack(
               children: [
@@ -35,13 +33,12 @@ class ResortDetailPage extends StatelessWidget {
                   height: 240,
                   fit: BoxFit.cover,
                 ),
-
                 Positioned(
                   top: 15,
                   right: 15,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.red,
                       borderRadius: BorderRadius.circular(10),
@@ -63,7 +60,6 @@ class ResortDetailPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
                   /// NAME
                   Text(
                     resort.name,
@@ -78,13 +74,10 @@ class ResortDetailPage extends StatelessWidget {
                   /// CITY + RATING
                   Row(
                     children: [
-                      const Icon(Icons.location_on,
-                          color: Colors.red),
+                      const Icon(Icons.location_on, color: Colors.red),
                       const SizedBox(width: 5),
                       Text(resort.city),
-
                       const Spacer(),
-
                       Row(
                         children: List.generate(
                           resort.rating,
@@ -115,8 +108,7 @@ class ResortDetailPage extends StatelessWidget {
                       Text(
                         "₹${resort.originalPrice}",
                         style: const TextStyle(
-                          decoration:
-                              TextDecoration.lineThrough,
+                          decoration: TextDecoration.lineThrough,
                           color: Colors.grey,
                         ),
                       ),
@@ -150,8 +142,7 @@ class ResortDetailPage extends StatelessWidget {
                     children: resort.facilities.map((f) {
                       return Chip(
                         label: Text(f),
-                        backgroundColor:
-                            Colors.blue.shade50,
+                        backgroundColor: Colors.blue.shade50,
                       );
                     }).toList(),
                   ),
@@ -188,17 +179,14 @@ class ResortDetailPage extends StatelessWidget {
         color: Colors.white,
         child: ElevatedButton(
           onPressed: () {
-
             showDialog(
               context: context,
-              builder: (_) =>
-                  ResortBookingPopup(resort: resort),
+              builder: (_) => ResortBookingPopup(resort: resort),
             );
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
-            padding:
-                const EdgeInsets.symmetric(vertical: 15),
+            padding: const EdgeInsets.symmetric(vertical: 15),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
