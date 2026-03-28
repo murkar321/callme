@@ -1,17 +1,13 @@
-import 'package:callme/models/service_product.dart';
-import 'package:flutter/material.dart';
 import 'package:callme/models/service_product_details.dart';
-import 'package:callme/models/cart.dart';
-import 'booking_page.dart';
-import 'package:callme/models/luandary_detail_page.dart';
+import 'package:callme/screens/ServiceViewDetailPage.dart';
+import 'package:flutter/material.dart';
+import '../models/cart.dart';
+
 
 class ServiceDetailPage extends StatefulWidget {
   final String serviceName;
 
-  const ServiceDetailPage({
-    super.key,
-    required this.serviceName,
-  });
+  const ServiceDetailPage({super.key, required this.serviceName});
 
   @override
   State<ServiceDetailPage> createState() => _ServiceDetailPageState();
@@ -19,125 +15,31 @@ class ServiceDetailPage extends StatefulWidget {
 
 class _ServiceDetailPageState extends State<ServiceDetailPage> {
   final Color primaryColor = const Color(0xFFAE91BA);
-
   late String selectedCategory;
 
   @override
   void initState() {
     super.initState();
-
     selectedCategory = serviceProducts[widget.serviceName]!.keys.first;
-  }
-
-  /// CART ITEMS
-  int get totalItems {
-    int count = 0;
-
-    final items = Cart.getItems(widget.serviceName);
-
-    for (var item in items) {
-      count += Cart.getQuantity(
-        item.id,
-        widget.serviceName,
-      );
-    }
-
-    return count;
-  }
-
-  /// TOTAL AMOUNT
-  int get totalAmount => Cart.getTotal(widget.serviceName);
-
-  /// ADD HANDLER
-  void handleAdd(ServiceProduct product) {
-    /// Laundry → Open Laundry Detail
-    if (widget.serviceName.toLowerCase().contains("laundry")) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => LaundryDetailPage(
-            product: product,
-            serviceName: widget.serviceName,
-            category: selectedCategory,
-          ),
-        ),
-      );
-
-      return;
-    }
-
-    /// Normal Add
-    setState(() {
-      Cart.add(
-        CartItem(
-          id: product.id,
-          name: product.name,
-          price: product.calculatedFinalPrice,
-          service: widget.serviceName,
-          category: selectedCategory,
-        ),
-        service: widget.serviceName,
-      );
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     final categories = serviceProducts[widget.serviceName]!.keys.toList();
-
-    final products = serviceProducts[widget.serviceName]![selectedCategory]!;
+    final products =
+        serviceProducts[widget.serviceName]![selectedCategory]!;
 
     final width = MediaQuery.of(context).size.width;
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
 
-      /// APPBAR
       appBar: AppBar(
         backgroundColor: primaryColor,
         title: Text(widget.serviceName),
         centerTitle: true,
-        elevation: 0,
-        actions: [
-          /// CART
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.shopping_cart),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookingPage(
-                        serviceName: widget.serviceName,
-                        products: null, cart: [],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              if (totalItems > 0)
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: CircleAvatar(
-                    radius: 8,
-                    backgroundColor: Colors.red,
-                    child: Text(
-                      totalItems.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                )
-            ],
-          )
-        ],
       ),
 
-      /// BODY
       body: Row(
         children: [
           /// LEFT CATEGORY
@@ -145,11 +47,9 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
             width: width * 0.22,
             color: Colors.grey.shade100,
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 10),
               itemCount: categories.length,
               itemBuilder: (context, index) {
                 final category = categories[index];
-
                 final isSelected = category == selectedCategory;
 
                 final firstProduct =
@@ -157,31 +57,24 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
 
                 return GestureDetector(
                   onTap: () {
-                    setState(() {
-                      selectedCategory = category;
-                    });
+                    setState(() => selectedCategory = category);
                   },
                   child: Container(
-                    margin:
-                        const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                    margin: const EdgeInsets.all(6),
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.white : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: isSelected
-                          ? [
-                              const BoxShadow(
-                                color: Colors.black12,
-                                blurRadius: 4,
-                              )
-                            ]
+                          ? [const BoxShadow(color: Colors.black12)]
                           : [],
                     ),
                     child: Column(
                       children: [
                         CircleAvatar(
                           radius: 20,
-                          backgroundImage: AssetImage(firstProduct.imagePath),
+                          backgroundImage:
+                              AssetImage(firstProduct.imagePath),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -192,7 +85,8 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color: isSelected ? primaryColor : Colors.grey,
+                            color:
+                                isSelected ? primaryColor : Colors.grey,
                           ),
                         ),
                       ],
@@ -206,21 +100,16 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
           /// RIGHT SERVICES
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 100),
+              padding: const EdgeInsets.all(10),
               itemCount: products.length,
               itemBuilder: (context, index) {
                 final product = products[index];
 
-                Cart.getQuantity(
-                  product.id,
-                  widget.serviceName,
-                );
-
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
+                  margin: const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     boxShadow: const [
                       BoxShadow(color: Colors.black12, blurRadius: 6),
                     ],
@@ -228,16 +117,41 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      /// IMAGE
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16)),
-                        child: Image.asset(
-                          product.imagePath,
-                          height: 130,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
+                      /// IMAGE + DISCOUNT
+                      Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(18)),
+                            child: Image.asset(
+                              product.imagePath,
+                              height: 140,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+
+                          /// DISCOUNT BADGE
+                          if (product.discount! > 0)
+                            Positioned(
+                              right: 10,
+                              top: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  "${product.discount}% OFF",
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
 
                       /// CONTENT
@@ -249,18 +163,31 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             Text(
                               product.name,
                               style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16),
                             ),
 
-                            if (product.slogan != null)
-                              Text(
-                                product.slogan!,
-                                style: const TextStyle(
-                                  color: Colors.grey,
-                                ),
-                              ),
+                            Text(
+                              product.slogan ?? "",
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            /// RATING + TIME
+                            Row(
+                              children: [
+                                const Icon(Icons.star,
+                                    color: Colors.orange, size: 16),
+                                const SizedBox(width: 4),
+                                Text("${product.rating}"),
+                                const SizedBox(width: 10),
+                                const Icon(Icons.access_time,
+                                    size: 16, color: Colors.grey),
+                                const SizedBox(width: 4),
+                                Text(product.time ?? ""),
+                              ],
+                            ),
 
                             const SizedBox(height: 8),
 
@@ -270,41 +197,72 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                                 Text(
                                   "₹${product.calculatedFinalPrice}",
                                   style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  "₹${product.price}",
+                                  style: const TextStyle(
+                                    decoration:
+                                        TextDecoration.lineThrough,
+                                    color: Colors.grey,
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                if (product.originalPrice >
-                                    product.calculatedFinalPrice)
-                                  Text(
-                                    "₹${product.originalPrice}",
-                                    style: const TextStyle(
-                                      decoration: TextDecoration.lineThrough,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
                               ],
                             ),
 
                             const SizedBox(height: 12),
 
-                            /// ADD BUTTON
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () => handleAdd(product),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryColor,
+                            /// BUTTONS
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              ServiceViewDetailPage(
+                                            product: product,
+                                            serviceName:
+                                                widget.serviceName,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: const Text("View"),
+                                  ),
                                 ),
-                                child: Text(
-                                  widget.serviceName
-                                          .toLowerCase()
-                                          .contains("laundry")
-                                      ? "View Details"
-                                      : "ADD",
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryColor),
+                                    onPressed: () {
+                                      Cart.add(
+                                        CartItem(
+                                          id: product.id,
+                                          name: product.name,
+                                          price: product
+                                              .calculatedFinalPrice,
+                                          service: widget.serviceName,
+                                          category: selectedCategory,
+                                        ),
+                                        service: widget.serviceName,
+                                      );
+
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content: Text("Added to cart")),
+                                      );
+                                    },
+                                    child: const Text("Add"),
+                                  ),
                                 ),
-                              ),
+                              ],
                             )
                           ],
                         ),
@@ -314,47 +272,9 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                 );
               },
             ),
-          )
+          ),
         ],
       ),
-
-      /// BOTTOM BAR
-      bottomNavigationBar: totalItems == 0
-          ? null
-          : InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => BookingPage(
-                      serviceName: widget.serviceName,
-                      products: null, cart: [],
-                    ),
-                  ),
-                );
-              },
-              child: Container(
-                margin: const EdgeInsets.all(12),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: primaryColor,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "$totalItems items",
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    Text(
-                      "₹$totalAmount View Cart →",
-                      style: const TextStyle(color: Colors.white),
-                    )
-                  ],
-                ),
-              ),
-            ),
     );
   }
 }

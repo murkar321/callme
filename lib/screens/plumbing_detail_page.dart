@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/service_product_details.dart';
 import '../models/cart.dart';
+import '../widgets/plumbing_service_card.dart';
 import 'booking_page.dart';
 
 class PlumbingDetailPage extends StatefulWidget {
@@ -23,23 +24,17 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
   @override
   void initState() {
     super.initState();
-
     selectedCategory = serviceProducts[widget.serviceName]!.keys.first;
   }
 
   /// TOTAL ITEMS
   int get totalItems {
     int count = 0;
-
     final items = Cart.getItems(widget.serviceName);
 
     for (var item in items) {
-      count += Cart.getQuantity(
-        item.id,
-        widget.serviceName,
-      );
+      count += Cart.getQuantity(item.id, widget.serviceName);
     }
-
     return count;
   }
 
@@ -49,8 +44,8 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
   @override
   Widget build(BuildContext context) {
     final categories = serviceProducts[widget.serviceName]!.keys.toList();
-
-    final products = serviceProducts[widget.serviceName]![selectedCategory]!;
+    final products =
+        serviceProducts[widget.serviceName]![selectedCategory]!;
 
     final width = MediaQuery.of(context).size.width;
 
@@ -59,52 +54,16 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
 
       /// APPBAR
       appBar: AppBar(
+        backgroundColor: primaryColor,
         title: Text(widget.serviceName),
         centerTitle: true,
-        backgroundColor: primaryColor,
         elevation: 0,
-        actions: [
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.shopping_cart),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookingPage(
-                        serviceName: widget.serviceName,
-                        products: null, cart: [],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              if (totalItems > 0)
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: CircleAvatar(
-                    radius: 8,
-                    backgroundColor: Colors.red,
-                    child: Text(
-                      totalItems.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                )
-            ],
-          )
-        ],
       ),
 
       /// BODY
       body: Row(
         children: [
-          /// LEFT CATEGORY
+          /// LEFT CATEGORY PANEL
           Container(
             width: width * 0.22,
             color: Colors.grey.shade100,
@@ -113,7 +72,6 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
               itemCount: categories.length,
               itemBuilder: (context, index) {
                 final category = categories[index];
-
                 final isSelected = category == selectedCategory;
 
                 final firstProduct =
@@ -121,13 +79,11 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
 
                 return GestureDetector(
                   onTap: () {
-                    setState(() {
-                      selectedCategory = category;
-                    });
+                    setState(() => selectedCategory = category);
                   },
                   child: Container(
                     margin:
-                        const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.white : Colors.transparent,
@@ -145,9 +101,8 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
                       children: [
                         CircleAvatar(
                           radius: 20,
-                          backgroundImage: AssetImage(
-                            firstProduct.imagePath,
-                          ),
+                          backgroundImage:
+                              AssetImage(firstProduct.imagePath),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -158,7 +113,8 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color: isSelected ? primaryColor : Colors.grey,
+                            color:
+                                isSelected ? primaryColor : Colors.grey,
                           ),
                         ),
                       ],
@@ -172,117 +128,42 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
           /// RIGHT SERVICES
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 100),
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 90),
               itemCount: products.length,
               itemBuilder: (context, index) {
                 final product = products[index];
 
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      /// IMAGE
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16)),
-                        child: Image.asset(
-                          product.imagePath,
-                          height: 130,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
+                return PlumbingServiceCard(
+                  product: product,
+                  serviceName: widget.serviceName,
+                  primaryColor: primaryColor,
+                  onAdd: () {
+                    setState(() {
+                      Cart.add(
+                        CartItem(
+                          id: product.id,
+                          name: product.name,
+                          price: product.calculatedFinalPrice,
+                          service: widget.serviceName,
+                          category: selectedCategory,
+                          image: product.imagePath,
                         ),
-                      ),
+                        service: widget.serviceName,
+                      );
+                    });
 
-                      /// CONTENT
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product.name,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            /// PRICE
-                            Row(
-                              children: [
-                                Text(
-                                  "₹${product.calculatedFinalPrice}",
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                if (product.originalPrice >
-                                    product.calculatedFinalPrice)
-                                  Text(
-                                    "₹${product.originalPrice}",
-                                    style: const TextStyle(
-                                      decoration: TextDecoration.lineThrough,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 12),
-
-                            /// ADD BUTTON
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    Cart.add(
-                                      CartItem(
-                                        id: product.id,
-                                        name: product.name,
-                                        price: product.calculatedFinalPrice,
-                                        service: widget.serviceName,
-                                        category: selectedCategory,
-                                        image: product.imagePath,
-                                      ),
-                                      service: widget.serviceName,
-                                    );
-                                  });
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryColor,
-                                ),
-                                child: const Text("ADD"),
-                              ),
-                            )
-                          ],
-                        ),
-                      )
-                    ],
-                  ),
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Added to cart")),
+                    );
+                  },
                 );
               },
             ),
-          )
+          ),
         ],
       ),
 
-      /// BOTTOM BAR
+      /// BOTTOM VIEW CART BAR
       bottomNavigationBar: totalItems == 0
           ? null
           : InkWell(
@@ -292,7 +173,8 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
                   MaterialPageRoute(
                     builder: (_) => BookingPage(
                       serviceName: widget.serviceName,
-                      products: null, cart: [],
+                      products: null,
+                      cart: [],
                     ),
                   ),
                 );
@@ -305,16 +187,19 @@ class _PlumbingDetailPageState extends State<PlumbingDetailPage> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       "$totalItems items",
-                      style: const TextStyle(color: Colors.white),
+                      style:
+                          const TextStyle(color: Colors.white),
                     ),
                     Text(
                       "₹$totalAmount View Cart →",
-                      style: const TextStyle(color: Colors.white),
-                    )
+                      style:
+                          const TextStyle(color: Colors.white),
+                    ),
                   ],
                 ),
               ),

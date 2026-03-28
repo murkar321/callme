@@ -1,6 +1,7 @@
-import 'package:callme/models/service_product.dart';
+import 'package:callme/screens/ServiceViewDetailPage.dart';
 import 'package:flutter/material.dart';
-import '../screens/service_detail_page.dart';
+import '../models/service_product.dart';
+
 
 class PlumbingServiceCard extends StatelessWidget {
   final ServiceProduct product;
@@ -30,41 +31,43 @@ class PlumbingServiceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// IMAGE
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(18),
-            ),
-            child: Stack(
-              children: [
-                Image.asset(
+          /// IMAGE + DISCOUNT
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
+                child: Image.asset(
                   product.imagePath,
-                  height: 130,
+                  height: 140,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
-                if (product.discount != null && product.discount! > 0)
-                  Positioned(
-                    right: 10,
-                    top: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        "${product.discount}% OFF",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                        ),
+              ),
+
+              if ((product.discount ?? 0) > 0)
+                Positioned(
+                  right: 10,
+                  top: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      "${product.discount}% OFF",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
 
           /// CONTENT
@@ -84,6 +87,7 @@ class PlumbingServiceCard extends StatelessWidget {
 
                 const SizedBox(height: 4),
 
+                /// SLOGAN
                 if (product.slogan != null)
                   Text(
                     product.slogan!,
@@ -95,22 +99,30 @@ class PlumbingServiceCard extends StatelessWidget {
 
                 const SizedBox(height: 8),
 
-                /// RATING
-                if (product.rating != null)
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.star,
-                        color: Colors.orange,
-                        size: 18,
-                      ),
+                /// ⭐ RATING + ⏱ TIME
+                Row(
+                  children: [
+                    if (product.rating != null) ...[
+                      const Icon(Icons.star,
+                          color: Colors.orange, size: 16),
                       const SizedBox(width: 4),
                       Text(
                         product.rating.toString(),
                         style: const TextStyle(fontSize: 13),
                       ),
+                      const SizedBox(width: 10),
                     ],
-                  ),
+                    if (product.time != null) ...[
+                      const Icon(Icons.access_time,
+                          size: 16, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        product.time!,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ],
+                  ],
+                ),
 
                 const SizedBox(height: 10),
 
@@ -124,8 +136,9 @@ class PlumbingServiceCard extends StatelessWidget {
                         fontSize: 18,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    if (product.originalPrice > product.calculatedFinalPrice)
+                    const SizedBox(width: 8),
+                    if (product.originalPrice >
+                        product.calculatedFinalPrice)
                       Text(
                         "₹${product.originalPrice}",
                         style: const TextStyle(
@@ -141,14 +154,22 @@ class PlumbingServiceCard extends StatelessWidget {
                 /// BUTTONS
                 Row(
                   children: [
-                    /// VIEW → ServiceDetailPage
+                    /// VIEW DETAILS
                     Expanded(
                       child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(12),
+                          ),
+                        ),
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ServiceDetailPage(
+                              builder: (_) =>
+                                  ServiceViewDetailPage(
+                                product: product,
                                 serviceName: serviceName,
                               ),
                             ),
@@ -158,16 +179,20 @@ class PlumbingServiceCard extends StatelessWidget {
                       ),
                     ),
 
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
 
-                    /// ADD
+                    /// ADD BUTTON
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: onAdd,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(12),
+                          ),
                         ),
-                        child: const Text("ADD"),
+                        onPressed: onAdd,
+                        child: const Text("Add"),
                       ),
                     ),
                   ],
