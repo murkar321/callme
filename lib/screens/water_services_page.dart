@@ -1,147 +1,131 @@
+import 'package:callme/models/cart_page.dart';
 import 'package:flutter/material.dart';
-import '../screens/booking_page.dart';
+
 import '../screens/water_service_card.dart';
 import '../data/water_data.dart';
-import '../models/service_product.dart';
 import '../models/cart.dart';
 
 class WaterServicesPage extends StatefulWidget {
   const WaterServicesPage({super.key});
 
   @override
-  State<WaterServicesPage> createState() => _WaterServicesPageState();
+  State<WaterServicesPage> createState() =>
+      _WaterServicesPageState();
 }
 
 class _WaterServicesPageState extends State<WaterServicesPage> {
   int selectedIndex = 0;
 
-  List<String> categories = waterServices.keys.toList();
+  late List<String> categories;
 
-  int get totalWaterItems => Cart.getTotalItems("Water");
-  int get totalWaterPrice => Cart.totalPrice("Water");
+  @override
+  void initState() {
+    super.initState();
+    categories = waterServices.keys.toList();
+  }
+
+  int get totalItems => Cart.getTotalItems("Water");
+  int get totalPrice => Cart.totalPrice("Water");
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    /// 🔥 RESPONSIVE
-    final isTablet = screenWidth > 600;
-    final leftWidth = isTablet ? 110.0 : screenWidth * 0.22;
-    final crossAxisCount = isTablet ? 3 : 2;
-
-    List<ServiceProduct> services = waterServices[categories[selectedIndex]]!;
+    final services =
+        waterServices[categories[selectedIndex]]!;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
 
-      /// 🔹 APP BAR
+      /// APP BAR
       appBar: AppBar(
-        backgroundColor: Colors.purple.shade200,
-        title: const Text("Water Services"),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.shopping_cart),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookingPage(
-                        products: Cart.getItems("Water"),
-                        serviceName: "Water",
-                        service: null, cart: [],
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              /// 🔴 CART BADGE
-              if (totalWaterItems > 0)
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: CircleAvatar(
-                    radius: 8,
-                    backgroundColor: Colors.red,
-                    child: Text(
-                      totalWaterItems.toString(),
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                )
-            ],
+        elevation: 0,
+        backgroundColor:
+            const Color.fromARGB(255, 222, 189, 228),
+        title: const Text(
+          "Water Services",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
           ),
-          const SizedBox(width: 10)
-        ],
+        ),
+        centerTitle: true,
       ),
 
-      /// 🔹 BODY
+      /// BODY
       body: Row(
         children: [
-          /// 🔹 LEFT CATEGORY PANEL
+          /// LEFT CATEGORY MENU
           Container(
-            width: leftWidth,
-            color: Colors.grey.shade200,
+            width: 100,
+            color: Colors.white,
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                vertical: 10,
+              ),
               itemCount: categories.length,
               itemBuilder: (context, index) {
-                final isSelected = selectedIndex == index;
+                final selected =
+                    selectedIndex == index;
 
                 return GestureDetector(
                   onTap: () {
-                    setState(() => selectedIndex = index);
+                    setState(() {
+                      selectedIndex = index;
+                    });
                   },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin:
-                        const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: isSelected
+                      color: selected
+                          ? Colors.purple.shade50
+                          : Colors.white,
+                      borderRadius:
+                          BorderRadius.circular(14),
+                      border: Border.all(
+                        color: selected
+                            ? Colors.purple
+                            : Colors.grey.shade300,
+                      ),
+                      boxShadow: selected
                           ? [
-                              const BoxShadow(
-                                color: Colors.black12,
+                              BoxShadow(
+                                color:
+                                    Colors.grey.shade200,
                                 blurRadius: 4,
-                              )
+                              ),
                             ]
                           : [],
                     ),
                     child: Column(
                       children: [
                         const CircleAvatar(
-                          radius: 22,
+                          radius: 24,
                           backgroundImage:
-                              AssetImage("assets/water services.png"),
-                        ),
-                        const SizedBox(height: 6),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            categories[index],
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: isTablet ? 12 : 10,
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isSelected ? Colors.purple : Colors.grey,
-                            ),
+                              AssetImage(
+                            "assets/water services.png",
                           ),
-                        )
+                        ),
+
+                        const SizedBox(height: 6),
+
+                        Text(
+                          categories[index],
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow:
+                              TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: selected
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: selected
+                                ? Colors.purple
+                                : Colors.black,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -150,25 +134,23 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
             ),
           ),
 
-          /// 🔹 RIGHT GRID
+          /// RIGHT SERVICE LIST
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 100),
-
-              /// 🔥 FINAL FIX (NO OVERFLOW)
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
-                mainAxisExtent: isTablet ? 230 : 220,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-              ),
-
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
               itemCount: services.length,
-
               itemBuilder: (context, index) {
-                return WaterServiceCard(
-                  product: services[index],
-                  onUpdate: () => setState(() {}),
+                return Container(
+                  margin: const EdgeInsets.only(
+                    bottom: 14,
+                  ),
+                  height: 340,
+                  child: WaterServiceCard(
+                    product: services[index],
+                    onUpdate: () {
+                      setState(() {});
+                    },
+                  ),
                 );
               },
             ),
@@ -176,36 +158,54 @@ class _WaterServicesPageState extends State<WaterServicesPage> {
         ],
       ),
 
-      /// 🔹 BOTTOM CART BAR
-      bottomNavigationBar: totalWaterItems == 0
+      /// BOTTOM VIEW CART BAR
+      bottomNavigationBar: totalItems == 0
           ? null
-          : GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => BookingPage(
-                      products: Cart.getItems("Water"),
-                      serviceName: "Water",
-                      service: null, cart: [],
-                    ),
+          : Container(
+              margin: const EdgeInsets.all(12),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      const Color.fromARGB(
+                    255,
+                    222,
+                    189,
+                    228,
                   ),
-                );
-              },
-              child: Container(
-                height: 60,
-                margin: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 210, 166, 218),
-                  borderRadius: BorderRadius.circular(30),
+                  padding:
+                      const EdgeInsets.symmetric(
+                    vertical: 16,
+                  ),
+                  shape:
+                      RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(30),
+                  ),
+                  elevation: 4,
                 ),
-                child: Center(
-                  child: Text(
-                    "$totalWaterItems items   ₹$totalWaterPrice   View Cart →",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CartPage(
+                        serviceName: "Water",
+                        service: "Water",
+                        cart: Cart.getItems(
+                          "Water",
+                        ),
+                      ),
                     ),
+                  ).then((_) {
+                    setState(() {});
+                  });
+                },
+                child: Text(
+                  "$totalItems items   |   ₹$totalPrice   |   View Cart →",
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight:
+                        FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
               ),

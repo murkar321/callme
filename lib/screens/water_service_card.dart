@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/service_product.dart';
 import '../models/cart.dart';
+import '../screens/water_detail_page.dart';
 
 class WaterServiceCard extends StatelessWidget {
   final ServiceProduct product;
@@ -12,193 +13,220 @@ class WaterServiceCard extends StatelessWidget {
     required this.onUpdate,
   });
 
-  CartItem get cartItem => CartItem(
-        id: product.id,
-        name: product.name,
-        price: product.calculatedFinalPrice,
-        service: "Water",
-        category: "Water",
-        image: product.imagePath,
-      );
-
   @override
   Widget build(BuildContext context) {
     final quantity = Cart.getQuantity(product.id, "Water");
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 6,
-            color: Colors.grey.shade300,
-          )
-        ],
-      ),
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(20),
+      color: Colors.white,
       child: Column(
-        mainAxisSize: MainAxisSize.min, // 🔥 FIX OVERFLOW
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// 🔹 IMAGE + DISCOUNT
+          /// IMAGE
           Stack(
             children: [
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
+                  top: Radius.circular(20),
                 ),
                 child: Image.asset(
                   product.imagePath,
-                  height: 80,
+                  height: 130,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
               ),
 
-              /// 🔥 DISCOUNT BADGE
-              if (product.discount != null && product.discount! > 0)
+              if ((product.discount ?? 0) > 0)
                 Positioned(
-                  top: 6,
-                  left: 6,
+                  top: 10,
+                  right: 10,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(6),
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       "${product.discount}% OFF",
-                      style: const TextStyle(color: Colors.white, fontSize: 9),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 ),
             ],
           ),
 
-          /// 🔹 CONTENT
-          Flexible(
+          Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(12),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
-                  /// 🔹 TEXT
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        product.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      if (product.description != null)
-                        Text(
-                          product.description!,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
+                  Text(
+                    product.name,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
 
-                  /// 🔹 PRICE + BUTTON
+                  const SizedBox(height: 6),
+
+                  Text(
+                    product.description ??
+                        "Premium service",
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
                   Row(
                     children: [
-                      /// 🔹 PRICE SECTION
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "₹${product.calculatedFinalPrice}",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.purple,
-                                fontSize: 13,
-                              ),
-                            ),
+                      Text(
+                        "₹${product.calculatedFinalPrice}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "₹${product.price}",
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          decoration:
+                              TextDecoration.lineThrough,
+                        ),
+                      ),
+                    ],
+                  ),
 
-                            /// ORIGINAL PRICE
-                            if (product.originalPrice >
-                                product.calculatedFinalPrice)
-                              Text(
-                                "₹${product.originalPrice}",
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  decoration: TextDecoration.lineThrough,
-                                  color: Colors.grey,
+                  const Spacer(),
+
+                  Row(
+                    children: [
+                      /// VIEW BUTTON
+                      Expanded(
+                        child: SizedBox(
+                          height: 45,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      WaterDetailPage(
+                                    product: product,
+                                    serviceName:
+                                        "Water",
+                                  ),
                                 ),
-                              ),
-                          ],
+                              );
+                            },
+                            child:
+                                const Text("View"),
+                          ),
                         ),
                       ),
 
-                      /// 🔹 ADD / QTY
-                      quantity == 0
-                          ? SizedBox(
-                              height: 28,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  Cart.add(cartItem, service: "Water");
-                                  onUpdate();
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.purple,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10),
-                                ),
-                                child: const Text(
-                                  "ADD",
-                                  style: TextStyle(fontSize: 11),
-                                ),
-                              ),
-                            )
-                          : Container(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 6),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.purple),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () {
-                                      Cart.removeById(product.id, "Water");
-                                      onUpdate();
-                                    },
-                                    child: const Icon(Icons.remove, size: 16),
+                      const SizedBox(width: 10),
+
+                      /// ADD / COUNTER
+                      Expanded(
+                        child: SizedBox(
+                          height: 45,
+                          child: quantity == 0
+                              ? ElevatedButton(
+                                  style:
+                                      ElevatedButton
+                                          .styleFrom(
+                                    backgroundColor:
+                                        Colors
+                                            .purple
+                                            .shade200,
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(quantity.toString(),
-                                      style: const TextStyle(fontSize: 12)),
-                                  const SizedBox(width: 6),
-                                  GestureDetector(
-                                    onTap: () {
-                                      Cart.add(cartItem, service: "Water");
-                                      onUpdate();
-                                    },
-                                    child: const Icon(Icons.add, size: 16),
+                                  onPressed: () {
+                                    Cart.addProduct(
+                                        product,
+                                        "Water");
+                                    onUpdate();
+                                  },
+                                  child: const Text(
+                                      "ADD"),
+                                )
+                              : Container(
+                                  decoration:
+                                      BoxDecoration(
+                                    color: Colors
+                                        .purple
+                                        .shade100,
+                                    borderRadius:
+                                        BorderRadius
+                                            .circular(
+                                                30),
                                   ),
-                                ],
-                              ),
-                            ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment
+                                            .spaceEvenly,
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () {
+                                          Cart.removeById(
+                                            product.id,
+                                            "Water",
+                                          );
+                                          onUpdate();
+                                        },
+                                        child: const Icon(
+                                            Icons
+                                                .remove),
+                                      ),
+                                      Text(
+                                        quantity
+                                            .toString(),
+                                        style:
+                                            const TextStyle(
+                                          fontWeight:
+                                              FontWeight
+                                                  .bold,
+                                        ),
+                                      ),
+                                      GestureDetector(
+                                        onTap: () {
+                                          Cart.addProduct(
+                                            product,
+                                            "Water",
+                                          );
+                                          onUpdate();
+                                        },
+                                        child: const Icon(
+                                            Icons.add),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                        ),
+                      ),
                     ],
-                  ),
+                  )
                 ],
               ),
             ),
-          ),
+          )
         ],
       ),
     );

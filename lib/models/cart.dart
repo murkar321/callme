@@ -1,4 +1,5 @@
 import 'package:callme/models/cleaning_service.dart';
+import 'package:callme/models/service_product.dart';
 import 'package:flutter/foundation.dart';
 
 /// 🌍 UNIVERSAL CART ITEM
@@ -294,4 +295,6 @@ class Cart {
   }
 
   static get quantities => null;
+
+  static void addProduct(ServiceProduct product, String s) {}
 }
