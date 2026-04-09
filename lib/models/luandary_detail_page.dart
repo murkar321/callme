@@ -1,284 +1,359 @@
-import 'package:callme/screens/booking_page.dart';
 import 'package:flutter/material.dart';
+import 'package:callme/models/service_product.dart';
 import 'package:callme/models/cart.dart';
+import 'package:callme/screens/booking_page.dart';
 
-class LaundryDetailPage extends StatefulWidget {
-  final dynamic product;
-  final String serviceName;
+class LaundryDetailPage extends StatelessWidget {
+  final ServiceProduct product;
   final String category;
+  final String serviceName;
 
   const LaundryDetailPage({
     super.key,
     required this.product,
-    required this.serviceName,
     required this.category,
+    required this.serviceName,
   });
 
   @override
-  State<LaundryDetailPage> createState() => _LaundryDetailPageState();
-}
-
-class _LaundryDetailPageState extends State<LaundryDetailPage> {
-  int qty = 1;
-  String selectedFabric = "Cotton";
-
-  final Color primaryColor = const Color(0xFFAE91BA);
-
-  late List<Map<String, dynamic>> fabrics;
-
-  @override
-  void initState() {
-    super.initState();
-
-    fabrics = [
-      {
-        "name": "Cotton",
-        "price": widget.product.calculatedFinalPrice,
-        "icon": Icons.checkroom,
-      },
-      {
-        "name": "Silk",
-        "price": widget.product.calculatedFinalPrice + 70,
-        "icon": Icons.auto_awesome,
-      },
-      {
-        "name": "Wool",
-        "price": widget.product.calculatedFinalPrice + 50,
-        "icon": Icons.ac_unit,
-      },
-      {
-        "name": "Denim",
-        "price": widget.product.calculatedFinalPrice + 30,
-        "icon": Icons.work,
-      },
-      {
-        "name": "Delicate",
-        "price": widget.product.calculatedFinalPrice + 100,
-        "icon": Icons.star,
-      },
-    ];
-  }
-
-  int get selectedPrice =>
-      fabrics.firstWhere((f) => f["name"] == selectedFabric)["price"];
-
-  int get total => selectedPrice * qty;
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black54, // overlay effect
+    final screenHeight =
+        MediaQuery.of(context).size.height;
 
-      body: GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: Stack(
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      insetPadding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      child: Container(
+        height: screenHeight * 0.85,
+        padding: const EdgeInsets.all(14),
+        child: Column(
           children: [
-            /// 🔹 BOTTOM POPUP
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: GestureDetector(
-                onTap: () {}, // prevent closing
-                child: Container(
-                  height: MediaQuery.of(context).size.height * 0.7,
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
+
+            /// 🔝 HEADER
+            Row(
+              mainAxisAlignment:
+                  MainAxisAlignment.spaceBetween,
+              children: [
+
+                const Text(
+                  "Service Details",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
                   ),
-                  child: Column(
-                    children: [
-                      /// 🔹 HEADER
-                      Row(
+                ),
+
+                IconButton(
+                  onPressed: () =>
+                      Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                )
+              ],
+            ),
+
+            const SizedBox(height: 5),
+
+            /// 🖼 IMAGE
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.asset(
+                product.imagePath,
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            /// 🧺 NAME
+            Text(
+              product.name,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            /// ⭐ RATING + TIME
+            Row(
+              mainAxisAlignment:
+                  MainAxisAlignment.center,
+              children: [
+
+                const Icon(Icons.star,
+                    color: Colors.orange, size: 16),
+
+                const SizedBox(width: 4),
+
+                Text(product.safeRating.toString()),
+
+                const SizedBox(width: 12),
+
+                const Icon(Icons.access_time,
+                    size: 16, color: Colors.grey),
+
+                const SizedBox(width: 4),
+
+                Text(product.serviceTime),
+              ],
+            ),
+
+            const SizedBox(height: 6),
+
+            /// 💬 SLOGAN
+            if (product.slogan != null)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  product.slogan!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+
+            const Divider(height: 20),
+
+            /// 📄 SCROLL CONTENT
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+
+                    /// DESCRIPTION
+                    if (product.description != null)
+                      Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.local_laundry_service),
-                          const SizedBox(width: 8),
+
                           const Text(
-                            "Laundry Guide",
+                            "Description",
                             style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          const Spacer(),
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => Navigator.pop(context),
-                          )
+
+                          const SizedBox(height: 6),
+
+                          Text(
+                            product.description!,
+                            style: const TextStyle(
+                              fontSize: 13,
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
                         ],
                       ),
 
-                      const SizedBox(height: 10),
+                    /// INCLUDES
+                    if (product.safeIncludes.isNotEmpty)
+                      Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
 
-                      /// 🔹 SCROLL AREA (NO OVERFLOW)
-                      Expanded(
-                        child: ListView(
-                          children: [
-                            /// FABRIC LIST
-                            ...fabrics.map((f) {
-                              final isSelected = selectedFabric == f["name"];
+                          const Text(
+                            "What's Included",
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
 
-                              return GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    selectedFabric = f["name"];
-                                  });
-                                },
-                                child: Container(
-                                  margin:
-                                      const EdgeInsets.symmetric(vertical: 6),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? primaryColor.withOpacity(0.1)
-                                        : Colors.white,
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? primaryColor
-                                          : Colors.grey.shade300,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
+                          const SizedBox(height: 8),
+
+                          ...product.safeIncludes.map(
+                            (item) => Padding(
+                              padding:
+                                  const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                children: [
+
+                                  const Icon(
+                                    Icons.check_circle,
+                                    color: Colors.green,
+                                    size: 16,
                                   ),
-                                  child: Row(
-                                    children: [
-                                      /// ICON
-                                      Icon(
-                                        f["icon"],
-                                        color: isSelected
-                                            ? primaryColor
-                                            : Colors.grey,
-                                      ),
 
-                                      const SizedBox(width: 10),
+                                  const SizedBox(width: 6),
 
-                                      /// NAME
-                                      Expanded(
-                                        child: Text(
-                                          f["name"],
-                                          style: TextStyle(
-                                            fontWeight: isSelected
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
-                                          ),
-                                        ),
-                                      ),
-
-                                      /// PRICE
-                                      Text("₹${f["price"]}"),
-
-                                      const SizedBox(width: 8),
-
-                                      /// RADIO
-                                      Icon(
-                                        isSelected
-                                            ? Icons.radio_button_checked
-                                            : Icons.radio_button_off,
-                                        color: primaryColor,
-                                      ),
-                                    ],
+                                  Expanded(
+                                    child: Text(
+                                      item,
+                                      style: const TextStyle(
+                                          fontSize: 13),
+                                    ),
                                   ),
-                                ),
-                              );
-                            }),
-
-                            const SizedBox(height: 10),
-
-                            /// QTY
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text("Quantity"),
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      onPressed: () {
-                                        if (qty > 1) {
-                                          setState(() => qty--);
-                                        }
-                                      },
-                                      icon: const Icon(Icons.remove),
-                                    ),
-                                    Text(qty.toString()),
-                                    IconButton(
-                                      onPressed: () {
-                                        setState(() => qty++);
-                                      },
-                                      icon: const Icon(Icons.add),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 10),
-
-                            const Text(
-                              "Prices may vary based on fabric condition & service type.",
-                              style:
-                                  TextStyle(fontSize: 11, color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      /// 🔹 BOTTOM ACTION
-                      SafeArea(
-                        child: Column(
-                          children: [
-                            /// TOTAL
-                            Text(
-                              "Total: ₹$total",
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-
-                            const SizedBox(height: 10),
-
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryColor,
-                                  padding: const EdgeInsets.all(14),
-                                ),
-                                onPressed: () {
-                                  /// ADD TO CART
-                                  for (int i = 0; i < qty; i++) {
-                                    Cart.add(
-                                      CartItem(
-                                        id: widget.product.id,
-                                        name:
-                                            "${widget.product.name} ($selectedFabric)",
-                                        price: selectedPrice,
-                                        service: widget.serviceName,
-                                        category: widget.category,
-                                      ),
-                                      service: widget.serviceName,
-                                    );
-                                  }
-
-                                  Navigator.pop(context);
-
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => BookingPage(
-                                        serviceName: widget.serviceName,
-                                        products: null, price: null, cart: [],
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: const Text(
-                                  "Add & Continue",
-                                  style: TextStyle(color: Colors.white),
-                                ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
+
+                          const SizedBox(height: 12),
+                        ],
+                      ),
+
+                    /// TOOLS
+                    if (product.tools != null)
+                      Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+
+                          const Text(
+                            "Tools Used",
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+
+                          const SizedBox(height: 6),
+
+                          Text(
+                            product.tools!,
+                            style: const TextStyle(
+                                fontSize: 13),
+                          ),
+
+                          const SizedBox(height: 12),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            /// 💰 PRICE + BUTTONS
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius:
+                    BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+
+                  /// PRICE
+                  Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
+                    children: [
+
+                      Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+
+                          Text(
+                            "₹${product.calculatedFinalPrice}",
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+
+                          if (product.discount != null)
+                            Text(
+                              "₹${product.price}",
+                              style: const TextStyle(
+                                decoration:
+                                    TextDecoration.lineThrough,
+                                color: Colors.grey,
+                              ),
+                            ),
+                        ],
+                      ),
+
+                      Text(
+                        category,
+                        style: const TextStyle(
+                          color: Colors.grey,
                         ),
                       ),
                     ],
                   ),
-                ),
+
+                  const SizedBox(height: 10),
+
+                  /// 🛒 ADD TO CART
+                  ElevatedButton(
+                    onPressed: () {
+
+                      Cart.addLaundry(
+                        id: product.id,
+                        name: product.name,
+                        price:
+                            product.calculatedFinalPrice,
+                        category: category,
+                        image: product.imagePath,
+                      );
+
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      minimumSize:
+                          const Size(double.infinity, 50),
+                    ),
+                    child: const Text(
+                      "Add to Cart",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  /// ✅ CONFIRM BOOKING
+                  ElevatedButton(
+                    onPressed: () {
+
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BookingPage(
+                            serviceName: serviceName,
+                            product: product,
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          const Color(0xFFAE91BA),
+                      minimumSize:
+                          const Size(double.infinity, 50),
+                    ),
+                    child: const Text(
+                      "Confirm Booking",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

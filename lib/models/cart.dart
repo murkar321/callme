@@ -276,7 +276,7 @@ class Cart {
   }
 
   /// =========================
-  /// 🧹 CLEANING SUPPORT (ONLY NEW PART)
+  /// 🧹 CLEANING SUPPORT
   /// =========================
   static void addCleaning(CleaningService service) {
     addItem(
@@ -289,7 +289,6 @@ class Cart {
     );
   }
 
-  /// Cleaning items getter
   static List<CartItem> get cleaningItems {
     return getItems("Cleaning");
   }
@@ -297,4 +296,33 @@ class Cart {
   static get quantities => null;
 
   static void addProduct(ServiceProduct product, String s) {}
+
+  /// =========================
+  /// 🧺 LAUNDRY SUPPORT (ONLY ADDED)
+  /// =========================
+  static void addLaundry({
+    required String id,
+    required String name,
+    required int price,
+    required String category,
+    String? image,
+  }) {
+    add(
+      CartItem(
+        id: id,
+        name: name,
+        price: price,
+        service: "Laundry",
+        category: category,
+        image: image,
+      ),
+      service: "Laundry",
+    );
+  }
+
+  static List<CartItem> get laundryItems {
+    return getItems("Laundry");
+  }
+
+  static void removeItem(item) {}
 }

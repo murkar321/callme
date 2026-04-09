@@ -7,7 +7,9 @@ class CartPage extends StatefulWidget {
 
   const CartPage({
     super.key,
-    required this.service, required String serviceName, required List<dynamic> cart,
+    required this.service,
+    required String serviceName,
+    required List<dynamic> cart,
   });
 
   @override
@@ -66,12 +68,11 @@ class _CartPageState extends State<CartPage> {
                       /// IMAGE
                       if (item.image != null)
                         ClipRRect(
-                          borderRadius:
-                              BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(10),
                           child: Image.asset(
                             item.image!,
-                            height: 60,
-                            width: 60,
+                            height: 65,
+                            width: 65,
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -90,9 +91,32 @@ class _CartPageState extends State<CartPage> {
                               item.name,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                                fontSize: 15,
                               ),
                             ),
+
+                            const SizedBox(height: 4),
+
+                            /// 🧺 Laundry Category Badge
+                            if (widget.service == "Laundry")
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFAE91BA)
+                                      .withOpacity(0.1),
+                                  borderRadius:
+                                      BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  item.category,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFFAE91BA),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
 
                             const SizedBox(height: 4),
 
@@ -110,9 +134,9 @@ class _CartPageState extends State<CartPage> {
                             Row(
                               children: [
 
-                                /// REMOVE
                                 IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline),
+                                  icon: const Icon(
+                                      Icons.remove_circle_outline),
                                   onPressed: () {
                                     setState(() {
                                       Cart.remove(item);
@@ -128,9 +152,9 @@ class _CartPageState extends State<CartPage> {
                                   ),
                                 ),
 
-                                /// ADD
                                 IconButton(
-                                  icon: const Icon(Icons.add_circle_outline),
+                                  icon: const Icon(
+                                      Icons.add_circle_outline),
                                   onPressed: () {
                                     setState(() {
                                       Cart.add(
@@ -192,7 +216,6 @@ class _CartPageState extends State<CartPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
 
-                  /// TOTAL
                   Row(
                     mainAxisAlignment:
                         MainAxisAlignment.spaceBetween,
@@ -217,7 +240,6 @@ class _CartPageState extends State<CartPage> {
 
                   const SizedBox(height: 10),
 
-                  /// BOOKING BUTTON
                   SizedBox(
                     width: double.infinity,
                     height: 45,
@@ -233,14 +255,15 @@ class _CartPageState extends State<CartPage> {
                           MaterialPageRoute(
                             builder: (_) => BookingPage(
                               serviceName: widget.service,
-                              cart: Cart.getItems(widget.service), products: null,
+                              cart: Cart.getItems(widget.service),
+                              products: null,
                             ),
                           ),
                         );
                       },
-                      child: Text(
+                      child: const Text(
                         "Proceed to Booking",
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                         ),
                       ),

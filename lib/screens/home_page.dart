@@ -2,6 +2,7 @@ import 'package:callme/models/civil_services_page.dart';
 import 'package:callme/models/hotel_service_page.dart';
 import 'package:callme/models/service_product.dart';
 import 'package:callme/screens/cleaning_detail_page.dart';
+import 'package:callme/screens/laundry_service_page.dart';
 import 'package:callme/screens/plumbing_detail_page.dart';
 import 'package:callme/screens/resort_page.dart';
 import 'package:callme/screens/water_services_page.dart';
@@ -27,7 +28,7 @@ class _HomePageState extends State<HomePage> {
     ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jpg'),
     ServiceCategory(name: 'Resorts', imagePath: 'assets/resort.jpg'),
     ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpg'),
-    ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.png'),
+    ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.jpg'),
     ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
     ServiceCategory(
         name: 'Water Services', imagePath: 'assets/water services.png'),
@@ -121,11 +122,16 @@ class _HomePageState extends State<HomePage> {
       case "Civil Services":
         return const CivilServicesPage();
 
+      case "Laundry":
+      return const LaundryServicePage();
+
       /// ✅ ADDED PLUMBING
       case "Plumbing":
         return const PlumbingDetailPage(
           serviceName: "Plumbing",
         );
+
+      
 
       /// DEFAULT
       default:
