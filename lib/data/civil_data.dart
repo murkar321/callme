@@ -43,12 +43,12 @@ List<CivilService> civilServices = [
   CivilService(
     id: "new_build",
     name: "New Build",
-    image: "assets/civil.png",
+    image: "assets/civil.jpeg",
     subServices: [
       SubService(
         id: "residential",
         name: "Residential House Construction",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹1500+/sq.ft",
         rating: 4.5,
         discount: 10,
@@ -56,7 +56,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "commercial",
         name: "Commercial Building Construction",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹1800+/sq.ft",
         rating: 4.6,
         discount: 12,
@@ -64,7 +64,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "villa",
         name: "Bungalow / Villa Construction",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹2500+/sq.ft",
         rating: 4.8,
         discount: 15,
@@ -72,7 +72,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "apartment",
         name: "Apartment / Flat Construction",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹2000+/sq.ft",
         rating: 4.4,
         discount: 8,
@@ -80,7 +80,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "toilet",
         name: "Toilet Construction",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹50,000+",
         rating: 4.3,
         discount: 5,
@@ -92,14 +92,14 @@ List<CivilService> civilServices = [
   CivilService(
     id: "renovation",
     name: "Renovation",
-    image: "assets/civil.png",
+    image: "assets/civil.jpeg",
     subServices: [
 
       /// 💰 BASIC
       SubService(
         id: "basic",
         name: "Basic Package",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹1200 – ₹2800/sq.ft",
         rating: 4.2,
         discount: 10,
@@ -117,7 +117,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "standard",
         name: "Standard Package",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹1200 – ₹1800/sq.ft",
         rating: 4.5,
         discount: 12,
@@ -134,7 +134,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "premium",
         name: "Premium Package",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹1800 – ₹3000+/sq.ft",
         rating: 4.8,
         discount: 18,
@@ -154,12 +154,12 @@ List<CivilService> civilServices = [
   CivilService(
     id: "painting",
     name: "Painting",
-    image: "assets/civil.png",
+    image: "assets/civil.jpeg",
     subServices: [
       SubService(
         id: "interior",
         name: "Interior Painting",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹25/sq.ft",
         rating: 4.6,
         discount: 10,
@@ -177,7 +177,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "exterior",
         name: "Exterior Painting",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹30/sq.ft",
         rating: 4.5,
         discount: 12,
@@ -198,12 +198,12 @@ List<CivilService> civilServices = [
   CivilService(
     id: "carpentry",
     name: "Carpentry & Fabrication",
-    image: "assets/civil.png",
+    image: "assets/civil.jpeg",
     subServices: [
       SubService(
         id: "furniture",
         name: "Furniture Making",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹5000+",
         rating: 4.4,
         discount: 8,
@@ -216,7 +216,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "modular",
         name: "Modular Kitchen Work",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹1,50,000+",
         rating: 4.7,
         discount: 15,
@@ -224,7 +224,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "doors",
         name: "Door & Window Installation",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹8000+",
         rating: 4.3,
         discount: 10,
@@ -232,7 +232,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "repair",
         name: "Wooden Repair Work",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹2000+",
         rating: 4.2,
         discount: 5,
@@ -240,7 +240,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "metal",
         name: "Metal Fabrication",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹7000+",
         rating: 4.5,
         discount: 12,
@@ -257,12 +257,12 @@ List<CivilService> civilServices = [
   CivilService(
     id: "electrical",
     name: "Electrical",
-    image: "assets/civil.png",
+    image: "assets/civil.jpeg",
     subServices: [
       SubService(
         id: "wiring",
         name: "New Wiring Installation",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹3000+",
         rating: 4.5,
         discount: 10,
@@ -270,7 +270,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "replacement",
         name: "Old Wiring Replacement",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹4000+",
         rating: 4.4,
         discount: 10,
@@ -278,7 +278,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "switch",
         name: "Switch Board Installation",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹1500+",
         rating: 4.3,
         discount: 8,
@@ -286,7 +286,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "light",
         name: "Light & Fan Installation",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹800+",
         rating: 4.2,
         discount: 5,
@@ -294,7 +294,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "ups",
         name: "Inverter / UPS Setup",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹5000+",
         rating: 4.6,
         discount: 12,
@@ -302,7 +302,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "fault",
         name: "Fault Repair & Maintenance",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹500+",
         rating: 4.3,
         discount: 5,
@@ -314,12 +314,12 @@ List<CivilService> civilServices = [
   CivilService(
     id: "plumbing",
     name: "Plumbing",
-    image: "assets/civil.png",
+    image: "assets/civil.jpeg",
     subServices: [
       SubService(
         id: "pipe",
         name: "Pipe Installation & Repair",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹2000+",
         rating: 4.4,
         discount: 10,
@@ -327,7 +327,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "leak",
         name: "Water Leakage Fixing",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹800+",
         rating: 4.3,
         discount: 5,
@@ -335,7 +335,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "tank",
         name: "Tank Installation",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹3000+",
         rating: 4.5,
         discount: 10,
@@ -343,7 +343,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "bath",
         name: "Bathroom & Kitchen Plumbing",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹2500+",
         rating: 4.4,
         discount: 10,
@@ -351,7 +351,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "motor",
         name: "Motor Installation",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹4000+",
         rating: 4.5,
         discount: 12,
@@ -359,7 +359,7 @@ List<CivilService> civilServices = [
       SubService(
         id: "drain",
         name: "Drainage Cleaning",
-        image: "assets/civil.png",
+        image: "assets/civil.jpeg",
         price: "₹1000+",
         rating: 4.2,
         discount: 5,
