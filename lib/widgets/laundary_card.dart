@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/service_product.dart';
 
 class LaundryCard extends StatelessWidget {
-
   final ServiceProduct product;
   final String category;
   final VoidCallback onAdd;
@@ -13,12 +12,11 @@ class LaundryCard extends StatelessWidget {
     required this.product,
     required this.category,
     required this.onAdd,
-    required this.onView, required Null Function() onTap,
+    required this.onView,
   });
 
   @override
   Widget build(BuildContext context) {
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -32,109 +30,108 @@ class LaundryCard extends StatelessWidget {
       ),
 
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(
-              top: Radius.circular(14),
-            ),
-            child: Image.asset(
-              product.imagePath,
-              height: 100,
-              width: double.infinity,
-              fit: BoxFit.cover,
+          /// IMAGE
+          AspectRatio(
+            aspectRatio: 4 / 3,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(14),
+              ),
+              child: Image.asset(
+                product.imagePath,
+                fit: BoxFit.cover,
+              ),
             ),
           ),
 
-          Expanded(
-            child: Padding(
-              padding:
-                  const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                children: [
+          /// CONTENT
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
 
-                  Text(
-                    product.name,
-                    maxLines: 2,
-                    overflow:
-                        TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
+                /// NAME
+                Text(
+                  product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
 
-                  Text(
-                    "₹${product.calculatedFinalPrice}",
-                    style: const TextStyle(
-                      fontWeight:
-                          FontWeight.bold,
-                      fontSize: 14,
-                    ),
+                const SizedBox(height: 4),
+
+                /// PRICE
+                Text(
+                  "₹${product.calculatedFinalPrice}",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
+                ),
 
-                  Row(
-                    children: [
+                const SizedBox(height: 8),
 
-                      Expanded(
-                        child:
-                            ElevatedButton(
+                /// BUTTONS
+                Row(
+                  children: [
+
+                    Expanded(
+                      child: SizedBox(
+                        height: 30,
+                        child: ElevatedButton(
                           onPressed: onAdd,
-                          style:
-                              ElevatedButton
-                                  .styleFrom(
-                            padding:
-                                EdgeInsets.zero,
+                          style: ElevatedButton.styleFrom(
                             backgroundColor:
-                                const Color(
-                                    0xFFAE91BA),
+                                const Color(0xFFAE91BA),
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(8),
+                            ),
                           ),
-                          child:
-                              const Text(
+                          child: const Text(
                             "ADD",
                             style: TextStyle(
-                                fontSize:
-                                    12,
-                                color: Colors
-                                    .white),
+                              fontSize: 12,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
+                    ),
 
-                      const SizedBox(
-                          width: 5),
+                    const SizedBox(width: 6),
 
-                      Expanded(
-                        child:
-                            OutlinedButton(
+                    Expanded(
+                      child: SizedBox(
+                        height: 30,
+                        child: OutlinedButton(
                           onPressed: onView,
-                          style:
-                              OutlinedButton
-                                  .styleFrom(
-                            padding:
-                                EdgeInsets.zero,
+                          style: OutlinedButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(8),
+                            ),
                           ),
-                          child:
-                              const Text(
+                          child: const Text(
                             "VIEW",
-                            style: TextStyle(
-                                fontSize:
-                                    12),
+                            style: TextStyle(fontSize: 12),
                           ),
                         ),
                       ),
-                    ],
-                  )
-                ],
-              ),
+                    ),
+                  ],
+                )
+              ],
             ),
           ),
         ],

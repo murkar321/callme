@@ -5,7 +5,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 "Commercial Water Services": [
   ServiceProduct(
     id: "cws1",
-    service: "Water Services",
+    service : "Water",
     name: "Used Water Removal",
     price: 1500,
     imagePath: "assets/Water Removal.jpg",
@@ -17,7 +17,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "cws2",
-    service: "Water Services",
+    service : "Water",
     name: "Industrial Water Disposal",
     price: 3000,
     imagePath: "assets/Water Disposal.jpg",
@@ -29,7 +29,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "cws3",
-    service: "Water Services",
+    service : "Water",
     name: "Construction Site Water Supply",
     price: 2000,
     imagePath: "assets/Site Water.jfif",
@@ -42,7 +42,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "cws4",
-    service: "Water Services",
+    service : "Water",
     name: "Farming / Agriculture Water Supply",
     price: 1800,
     imagePath: "assets/farming.jpg",
@@ -54,7 +54,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "cws5",
-    service: "Water Services",
+    service : "Water",
     name: "Septic Tank Cleaning",
     price: 2500,
     imagePath: "assets/septic tank.jpg",
@@ -66,7 +66,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "cws6",
-    service: "Water Services",
+    service : "Water",
     name: "Drainage Cleaning",
     price: 1000,
     imagePath: "assets/drainwater.jpg",
@@ -81,7 +81,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 "Aqua Installation": [
   ServiceProduct(
     id: "ai1",
-    service: "Water Services",
+    service : "Water",
     name: "RO Installation",
     price: 800,
     imagePath: "assets/ro install.jpg",
@@ -93,7 +93,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "ai2",
-    service: "Water Services",
+    service : "Water",
     name: "RO Service & Repair",
     price: 500,
     imagePath: "assets/RO Service.jpg",
@@ -105,7 +105,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "ai3",
-    service: "Water Services",
+    service : "Water",
     name: "Commercial RO Setup",
     price: 15000,
     imagePath: "assets/ComSetup.jpg",
@@ -117,7 +117,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "ai4",
-    service: "Water Services",
+    service : "Water",
     name: "Filter Replacement",
     price: 300,
     imagePath: "assets/Filter Replace.jpg",
@@ -132,7 +132,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 "Ice Supply": [
   ServiceProduct(
     id: "ice1",
-    service: "Water Services",
+    service : "Water",
     name: "Ice Blocks",
     price: 150,
     imagePath: "assets/ice blocks.jpg",
@@ -144,7 +144,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "ice2",
-    service: "Water Services",
+    service : "Water",
     name: "Ice Cubes (10kg Pack)",
     price: 250,
     imagePath: "assets/10kg ice.jpg",
@@ -156,7 +156,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "ice3",
-    service: "Water Services",
+    service : "Water",
     name: "Crushed Ice (10kg)",
     price: 200,
     imagePath: "assets/crush ice.jpg",
@@ -168,7 +168,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "ice4",
-    service: "Water Services",
+    service : "Water",
     name: "Party Ice Supply",
     price: 1000,
     imagePath: "assets/bulk ice.jpg",
@@ -182,7 +182,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 "Tanker Supply": [
   ServiceProduct(
     id: "tank1",
-    service: "Water Services",
+    service : "Water",
     name: "3000L Mini Tanker",
     price: 800,
     imagePath: "assets/3000L.jpg",
@@ -194,7 +194,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "tank2",
-    service: "Water Services",
+    service : "Water",
     name: "5000L Residential Tanker",
     price: 1200,
     imagePath: "assets/5000L.jpg",
@@ -206,7 +206,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "tank3",
-    service: "Water Services",
+    service : "Water",
     name: "10000L Commercial Tanker",
     price: 2200,
     imagePath: "assets/10KL.jpg",
@@ -218,7 +218,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "tank4",
-    service: "Water Services",
+    service : "Water",
     name: "Emergency Tanker Service",
     price: 1500,
     imagePath: "assets/Emergency Tanker.jpg",
@@ -233,7 +233,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 "Water Bottles": [
   ServiceProduct(
     id: "wb1",
-    service: "Water Services",
+    service : "Water",
     name: "1L Water Bottles (Pack of 12)",
     price: 180,
     imagePath: "assets/12pack.jpg",
@@ -245,7 +245,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "wb2",
-    service: "Water Services",
+    service : "Water",
     name: "500ml Bottles (Pack of 24)",
     price: 200,
     imagePath: "assets/24pack.jpg",
@@ -257,7 +257,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "wb3",
-    service: "Water Services",
+    service : "Water",
     name: "250ml Bottles (Pack of 48)",
     price: 300,
     imagePath: "assets/24pack.jpg",
@@ -269,7 +269,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "wb4",
-    service: "Water Services",
+    service : "Water",
     name: "Customized Label Bottles",
     price: 15,
     imagePath: "assets/cuslabel.jpg",
@@ -284,7 +284,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 "Jar Exchange / Return": [
   ServiceProduct(
     id: "jar1",
-    service: "Water Services",
+    service : "Water",
     name: "20L Water Jar Exchange",
     price: 40,
     imagePath: "assets/20Ljar.jpg",
@@ -296,7 +296,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "jar2",
-    service: "Water Services",
+    service : "Water",
     name: "Empty Jar Return Pickup",
     price: 20,
     imagePath: "assets/empty jar.jpg",
@@ -308,7 +308,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "jar3",
-    service: "Water Services",
+    service : "Water",
     name: "Monthly Jar Subscription",
     price: 1100,
     imagePath: "assets/empty jar.jpg",
@@ -320,7 +320,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "jar4",
-    service: "Water Services",
+    service : "Water",
     name: "Urgent Jar Delivery",
     price: 60,
     imagePath: "assets/Urgent Jar.jpg",
@@ -334,7 +334,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 "Brand Water": [
   ServiceProduct(
     id: "bw1",
-    service: "Water Services",
+    service : "Water",
     name: "Packaged Drinking Water (20L Jar)",
     price: 60,
     imagePath: "assets/Bb8.jpg",
@@ -346,7 +346,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "bw2",
-    service: "Water Services",
+    service : "Water",
     name: "Premium Mineral Water Jar",
     price: 90,
     imagePath: "assets/Bb9.jpg",
@@ -358,7 +358,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "bw3",
-    service: "Water Services",
+    service : "Water",
     name: "Alkaline Water",
     price: 120,
     imagePath: "assets/Bb10.jpg",
@@ -370,7 +370,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "bw4",
-    service: "Water Services",
+    service : "Water",
     name: "Himalayan Natural Water",
     price: 150,
     imagePath: "assets/Bb11.jpg",
@@ -382,7 +382,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "bw5",
-    service: "Water Services",
+    service : "Water",
     name: "Ganga Jal (Holy Water)",
     price: 50,
     imagePath: "assets/Bb12.jpg",
@@ -394,7 +394,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "bw6",
-    service: "Water Services",
+    service : "Water",
     name: "Temple Use Water Pack",
     price: 100,
     imagePath: "assets/temple use.jpg",
@@ -406,7 +406,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
 
   ServiceProduct(
     id: "bw7",
-    service: "Water Services",
+    service : "Water",
     name: "Distilled Water",
     price: 80,
     imagePath: "assets/Bb.jpg",

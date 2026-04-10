@@ -20,9 +20,12 @@ class WaterDetailPage extends StatelessWidget {
         title: Text(product.name),
         backgroundColor: Colors.purple.shade300,
       ),
+
       body: SingleChildScrollView(
         child: Column(
           children: [
+
+            /// IMAGE
             Image.asset(
               product.imagePath,
               height: 240,
@@ -30,46 +33,58 @@ class WaterDetailPage extends StatelessWidget {
               fit: BoxFit.cover,
             ),
 
+            /// DETAILS
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
                 children: [
+
+                  /// NAME
                   Text(
                     product.name,
                     style: const TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                      fontWeight:
+                          FontWeight.bold,
                     ),
                   ),
 
                   const SizedBox(height: 8),
 
+                  /// DESCRIPTION
                   Text(
                     product.description ??
                         "Premium service available",
-                    style: const TextStyle(fontSize: 15),
+                    style: const TextStyle(
+                      fontSize: 15,
+                    ),
                   ),
 
                   const SizedBox(height: 16),
 
+                  /// PRICE
                   Text(
                     "Price: ₹${product.calculatedFinalPrice}",
                     style: const TextStyle(
                       fontSize: 18,
-                      color: Color.fromARGB(255, 196, 153, 204),
-                      fontWeight: FontWeight.bold,
+                      color: Color.fromARGB(
+                          255, 196, 153, 204),
+                      fontWeight:
+                          FontWeight.bold,
                     ),
                   ),
 
                   const SizedBox(height: 20),
 
+                  /// INCLUDES
                   const Text(
                     "Service Includes",
                     style: TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontWeight:
+                          FontWeight.bold,
                     ),
                   ),
 
@@ -82,30 +97,53 @@ class WaterDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 30),
 
+                  /// BOOK BUTTON
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromARGB(255, 223, 170, 233),
-                        padding: const EdgeInsets.all(16),
+                      style:
+                          ElevatedButton.styleFrom(
+                        backgroundColor:
+                            const Color.fromARGB(
+                                255,
+                                223,
+                                170,
+                                233),
+                        padding:
+                            const EdgeInsets.all(
+                                16),
                       ),
-                      onPressed: () {
-                        Cart.addProduct(product, "Water");
 
+                      onPressed: () {
+
+                        /// ADD TO CART
+                        Cart.addProduct(
+                          product,
+                          "Water",
+                        );
+
+                        /// GO TO BOOKING PAGE
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => BookingPage(
-                              products:
-                                  Cart.getItems("Water"),
+                            builder: (_) =>
+                                BookingPage(
+                              products: Cart.getItems(
+                                  "Water"),
                               serviceName: "Water",
-                              service: null,
-                              cart: [],
                             ),
                           ),
                         );
                       },
-                      child: const Text("Book Now"),
+
+                      child: const Text(
+                        "Book Now",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
                     ),
                   )
                 ],

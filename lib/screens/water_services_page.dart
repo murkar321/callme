@@ -1,8 +1,9 @@
 import 'package:callme/models/cart_page.dart';
+import 'package:callme/screens/water_service_card.dart';
 import 'package:flutter/material.dart';
-import '../screens/water_service_card.dart';
 import '../data/water_data.dart';
 import '../models/cart.dart';
+
 
 class WaterServicesPage extends StatefulWidget {
   const WaterServicesPage({super.key});
@@ -14,256 +15,222 @@ class WaterServicesPage extends StatefulWidget {
 
 class _WaterServicesPageState
     extends State<WaterServicesPage> {
-  int selectedIndex = 0;
-  late List<String> categories;
-
-  @override
-  void initState() {
-    super.initState();
-    categories = waterServices.keys.toList();
-  }
 
   void refreshPage() {
     setState(() {});
   }
 
-  int get totalItems =>
-      Cart.getTotalItems("Water");
-
-  int get totalPrice =>
-      Cart.totalPrice("Water");
-
   @override
   Widget build(BuildContext context) {
-    final services =
-        waterServices[categories[selectedIndex]]!;
+
+    final totalItems =
+        Cart.getTotalItems("Water");
+
+    final totalPrice =
+        Cart.totalPrice("Water");
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor:
+          Colors.grey.shade100,
 
-      /// APP BAR
       appBar: AppBar(
-        elevation: 0,
+        title:
+            const Text("Water Services"),
         backgroundColor:
-            const Color.fromARGB(
-          255,
-          222,
-          189,
-          228,
-        ),
-        title: const Text(
-          "Water Services",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+            Colors.blue,
         centerTitle: true,
       ),
 
-      /// BODY
-      body: Row(
+      body: Stack(
         children: [
-          /// LEFT CATEGORY MENU
-          Container(
-            width: 100,
-            color: Colors.white,
-            child: ListView.builder(
-              padding:
-                  const EdgeInsets.symmetric(
-                vertical: 10,
-              ),
-              itemCount:
-                  categories.length,
-              itemBuilder:
-                  (context, index) {
-                final selected =
-                    selectedIndex ==
-                        index;
 
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      selectedIndex =
-                          index;
-                    });
-                  },
-                  child: Container(
-                    margin:
-                        const EdgeInsets
-                            .symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
+          /// SERVICES LIST
+          ListView(
+            padding:
+                const EdgeInsets.only(
+              bottom: 100,
+            ),
+            children:
+                waterServices.entries
+                    .map((entry) {
+
+              final category =
+                  entry.key;
+
+              final services =
+                  entry.value;
+
+              final firstImage =
+                  services
+                      .first
+                      .imagePath;
+
+              return Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment
+                        .start,
+                children: [
+
+                  /// CATEGORY HEADER
+                  Padding(
                     padding:
                         const EdgeInsets
-                            .all(8),
-                    decoration:
-                        BoxDecoration(
-                      color: selected
-                          ? Colors
-                              .purple
-                              .shade50
-                          : Colors
-                              .white,
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                                  14),
-                      border: Border.all(
-                        color: selected
-                            ? Colors
-                                .purple
-                            : Colors
-                                .grey
-                                .shade300,
-                      ),
-                    ),
-                    child: Column(
+                            .all(12),
+                    child: Row(
                       children: [
-                        const CircleAvatar(
-                          radius: 24,
+
+                        /// CIRCLE IMAGE
+                        CircleAvatar(
+                          radius: 28,
                           backgroundImage:
                               AssetImage(
-                            "assets/water services.png",
+                            firstImage,
                           ),
                         ),
+
                         const SizedBox(
-                            height: 6),
+                            width: 10),
+
+                        /// CATEGORY NAME
                         Text(
-                          categories[
-                              index],
-                          textAlign:
-                              TextAlign
-                                  .center,
-                          maxLines: 2,
-                          overflow:
-                              TextOverflow
-                                  .ellipsis,
+                          category,
                           style:
-                              TextStyle(
-                            fontSize:
-                                11,
+                              const TextStyle(
+                            fontSize: 18,
                             fontWeight:
-                                selected
-                                    ? FontWeight
-                                        .bold
-                                    : FontWeight
-                                        .w500,
-                            color: selected
-                                ? Colors
-                                    .purple
-                                : Colors
-                                    .black,
+                                FontWeight
+                                    .bold,
                           ),
                         ),
                       ],
                     ),
                   ),
-                );
-              },
-            ),
+
+                  /// SERVICES
+                  ...services.map(
+                    (service) =>
+                        WaterServiceCard(
+                      product: service,
+                      onUpdate:
+                          refreshPage,
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
           ),
 
-          /// RIGHT SERVICE LIST
-          Expanded(
-            child: ListView.builder(
-              padding:
-                  const EdgeInsets.all(
-                      12),
-              itemCount:
-                  services.length,
-              itemBuilder:
-                  (context, index) {
-                return Container(
-                  margin:
-                      const EdgeInsets
-                          .only(
-                    bottom: 14,
-                  ),
-                  height: 330,
-                  child:
-                      WaterServiceCard(
-                    product:
-                        services[
-                            index],
-                    onUpdate:
-                        refreshPage,
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-
-      /// BOTTOM CART BAR
-      bottomNavigationBar:
-          totalItems == 0
-              ? null
-              : Container(
-                  margin:
-                      const EdgeInsets
-                          .all(12),
-                  child:
-                      ElevatedButton(
-                    style:
-                        ElevatedButton
-                            .styleFrom(
-                      backgroundColor:
-                          const Color
-                              .fromARGB(
-                        255,
-                        222,
-                        189,
-                        228,
-                      ),
-                      padding:
-                          const EdgeInsets
-                              .symmetric(
-                        vertical: 16,
-                      ),
-                      shape:
-                          RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(
-                                30),
-                      ),
-                      elevation: 4,
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              CartPage(
-                            serviceName:
-                                "Water",
-                            service:
-                                "Water",
-                            cart: Cart
-                                .getItems(
-                              "Water",
-                            ),
-                          ),
-                        ),
-                      ).then((_) {
-                        refreshPage();
-                      });
-                    },
-                    child: Text(
-                      "$totalItems items | ₹$totalPrice | View Cart →",
-                      style:
-                          const TextStyle(
-                        fontSize: 15,
-                        fontWeight:
-                            FontWeight
-                                .bold,
-                        color: Colors
-                            .black87,
-                      ),
-                    ),
+          /// VIEW CART BAR
+          if (totalItems > 0)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding:
+                    const EdgeInsets
+                        .all(12),
+                decoration:
+                    const BoxDecoration(
+                  color: Colors.blue,
+                  borderRadius:
+                      BorderRadius.only(
+                    topLeft:
+                        Radius.circular(
+                            20),
+                    topRight:
+                        Radius.circular(
+                            20),
                   ),
                 ),
+
+                child: SafeArea(
+                  child: Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment
+                            .spaceBetween,
+                    children: [
+
+                      /// ITEMS & PRICE
+                      Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment
+                                .start,
+                        children: [
+
+                          Text(
+                            "$totalItems items",
+                            style:
+                                const TextStyle(
+                              color: Colors
+                                  .white,
+                              fontSize:
+                                  16,
+                            ),
+                          ),
+
+                          Text(
+                            "₹$totalPrice",
+                            style:
+                                const TextStyle(
+                              color: Colors
+                                  .white,
+                              fontSize:
+                                  18,
+                              fontWeight:
+                                  FontWeight
+                                      .bold,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      /// VIEW CART BUTTON
+                      ElevatedButton(
+                        onPressed: () {
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  CartPage(
+                                serviceName:
+                                    "Water",
+                                service:
+                                    "Water",
+                                cart: Cart
+                                    .getItems(
+                                        "Water"),
+                              ),
+                            ),
+                          ).then(
+                            (_) =>
+                                refreshPage(),
+                          );
+                        },
+                        style:
+                            ElevatedButton
+                                .styleFrom(
+                          backgroundColor:
+                              Colors.white,
+                        ),
+                        child:
+                            const Text(
+                          "View Cart",
+                          style:
+                              TextStyle(
+                            color: Colors
+                                .blue,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
