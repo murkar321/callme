@@ -18,20 +18,25 @@ class LaundryServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        showDialog(
-          context: context,
-          barrierDismissible: true,
-          builder: (_) => LaundryDetailPage(
-            product: service,
-            serviceName: serviceName,
-            category: category,
+
+        /// 🔁 Redirect to Detail Page (FULL SCREEN)
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LaundryDetailPage(
+              product: service,
+              serviceName: serviceName,
+              category: category,
+            ),
           ),
         );
       },
+
       child: Container(
         margin: const EdgeInsets.symmetric(
             vertical: 8, horizontal: 10),
         padding: const EdgeInsets.all(12),
+
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -42,6 +47,7 @@ class LaundryServiceCard extends StatelessWidget {
             )
           ],
         ),
+
         child: Row(
           children: [
 

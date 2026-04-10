@@ -28,23 +28,185 @@ class _LaundryServicePageState
     selectedCategory = laundryData.keys.first;
   }
 
-  IconData getIcon(String category) {
-    switch (category) {
-      case "Washing":
-        return Icons.local_laundry_service;
-      case "Dry Cleaning":
-        return Icons.dry_cleaning;
-      case "Ironing":
-        return Icons.iron;
-      case "Curtain Cleaning":
-        return Icons.curtains;
-      case "Shoe Cleaning":
-        return Icons.sports_soccer;
-      case "Bedsheet Cleaning":
-        return Icons.bed;
-      default:
-        return Icons.local_laundry_service;
-    }
+  /// 🧺 FABRIC BOTTOM SHEET
+  void showFabricPopup(ServiceProduct product) {
+
+    int selectedPrice = 50;
+    String selectedFabric = "Cotton";
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.55,
+              padding: const EdgeInsets.all(16),
+
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(22),
+                ),
+              ),
+
+              child: Column(
+                children: [
+
+                  /// HANDLE
+                  Container(
+                    width: 50,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  /// HEADER
+                  Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
+                    children: [
+
+                      const Text(
+                        "Laundry Guide",
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      IconButton(
+                        onPressed: () =>
+                            Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                      )
+                    ],
+                  ),
+
+                  const Divider(),
+
+                  /// FABRICS
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        fabricTile("Cotton", 50, selectedFabric, setModalState),
+                        fabricTile("Silk", 70, selectedFabric, setModalState),
+                        fabricTile("Wool", 80, selectedFabric, setModalState),
+                        fabricTile("Denim", 60, selectedFabric, setModalState),
+                        fabricTile("Curtains", 90, selectedFabric, setModalState),
+                        fabricTile("Shoes", 100, selectedFabric, setModalState),
+                      ],
+                    ),
+                  ),
+
+                  /// TOTAL
+                  Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
+                    children: [
+
+                      Text(
+                        "Total ₹${product.calculatedFinalPrice + selectedPrice}",
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  /// ADD TO CART
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () {
+
+                        Cart.addLaundry(
+                          id: product.id,
+                          name: "${product.name} ($selectedFabric)",
+                          price: product.calculatedFinalPrice + selectedPrice,
+                          category: selectedCategory,
+                          image: product.imagePath,
+                        );
+
+                        Navigator.pop(context);
+                        setState(() {});
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            const Color(0xFFAE91BA),
+                      ),
+                      child: const Text(
+                        "ADD TO CART",
+                        style: TextStyle(
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  /// VIEW CART
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton(
+                      onPressed: () {
+
+                        Navigator.pop(context);
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CartPage(
+                              service: "Laundry",
+                              serviceName: "Laundry",
+                              cart: Cart.getItems("Laundry"),
+                            ),
+                          ),
+                        ).then((_) => setState(() {}));
+                      },
+                      child: const Text("VIEW CART"),
+                    ),
+                  )
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget fabricTile(
+    String name,
+    int price,
+    String selected,
+    StateSetter setModalState,
+  ) {
+    return ListTile(
+      title: Text(name),
+      trailing: Text("₹$price"),
+      leading: Radio(
+        value: name,
+        groupValue: selected,
+        onChanged: (val) {
+          setModalState(() {});
+        },
+      ),
+    );
   }
 
   @override
@@ -57,22 +219,26 @@ class _LaundryServicePageState
 
       appBar: AppBar(
         title: const Text("Laundry"),
-        centerTitle: true,
         backgroundColor: const Color(0xFFAE91BA),
+        centerTitle: true,
       ),
 
       body: Row(
         children: [
 
-          /// LEFT MENU
+          /// 🔵 LEFT CIRCLE CATEGORY
           Container(
-            width: MediaQuery.of(context).size.width * 0.28,
+            width: 90,
             color: Colors.white,
             child: ListView(
+              padding: const EdgeInsets.only(top: 10),
               children: laundryData.keys.map((category) {
 
                 bool isSelected =
                     selectedCategory == category;
+
+                String image =
+                    laundryData[category]!.first.imagePath;
 
                 return GestureDetector(
                   onTap: () {
@@ -80,36 +246,26 @@ class _LaundryServicePageState
                       selectedCategory = category;
                     });
                   },
-                  child: Container(
-                    margin: const EdgeInsets.all(6),
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFFAE91BA)
-                              .withOpacity(0.15)
-                          : Colors.transparent,
-                      borderRadius:
-                          BorderRadius.circular(12),
-                    ),
+
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+
                     child: Column(
                       children: [
 
                         CircleAvatar(
-                          radius: 18,
+                          radius: 28,
                           backgroundColor: isSelected
                               ? const Color(0xFFAE91BA)
                               : Colors.grey.shade200,
-                          child: Icon(
-                            getIcon(category),
-                            size: 18,
-                            color: isSelected
-                                ? Colors.white
-                                : Colors.grey,
+
+                          child: CircleAvatar(
+                            radius: 24,
+                            backgroundImage: AssetImage(image),
                           ),
                         ),
 
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 6),
 
                         Text(
                           category,
@@ -121,7 +277,7 @@ class _LaundryServicePageState
                                 ? const Color(0xFFAE91BA)
                                 : Colors.black,
                           ),
-                        ),
+                        )
                       ],
                     ),
                   ),
@@ -130,19 +286,21 @@ class _LaundryServicePageState
             ),
           ),
 
-          /// RIGHT GRID
+          /// 🧾 RIGHT GRID
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(10),
               itemCount:
                   laundryData[selectedCategory]!.length,
+
               gridDelegate:
                   const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
                 childAspectRatio: 0.70,
               ),
+
               itemBuilder: (context, index) {
 
                 final product =
@@ -152,27 +310,20 @@ class _LaundryServicePageState
                   product: product,
                   category: selectedCategory,
 
-                  onAdd: () async {
-
-                    await showDialog(
-                      context: context,
-                      builder: (_) => LaundryDetailPage(
-                        product: product,
-                        category: selectedCategory,
-                        serviceName: "Laundry",
-                      ),
-                    );
-
-                    setState(() {});
+                  onAdd: () {
+                    showFabricPopup(product);
                   },
 
                   onView: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => LaundryDetailPage(
-                        product: product,
-                        category: selectedCategory,
-                        serviceName: "Laundry",
+
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LaundryDetailPage(
+                          product: product,
+                          category: selectedCategory,
+                          serviceName: "Laundry",
+                        ),
                       ),
                     );
                   }, onTap: () {  },
@@ -188,25 +339,28 @@ class _LaundryServicePageState
           ? Container(
               height: 60,
               margin: const EdgeInsets.all(10),
+
               decoration: BoxDecoration(
                 color: const Color(0xFFAE91BA),
                 borderRadius:
                     BorderRadius.circular(12),
               ),
+
               child: InkWell(
                 onTap: () {
+
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => CartPage(
                         service: "Laundry",
                         serviceName: "Laundry",
-                        cart:
-                            Cart.getItems("Laundry"),
+                        cart: Cart.getItems("Laundry"),
                       ),
                     ),
                   ).then((_) => setState(() {}));
                 },
+
                 child: Row(
                   mainAxisAlignment:
                       MainAxisAlignment.spaceBetween,

@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:callme/models/service_product.dart';
 import 'package:callme/models/cart.dart';
@@ -17,343 +18,337 @@ class LaundryDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight =
-        MediaQuery.of(context).size.height;
 
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+    return Scaffold(
+      backgroundColor: Colors.grey.shade100,
+
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFAE91BA),
+        elevation: 0,
+        title: const Text(
+          "Service Details",
+          style: TextStyle(color: Colors.white),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      insetPadding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      child: Container(
-        height: screenHeight * 0.85,
-        padding: const EdgeInsets.all(14),
+
+      body: SingleChildScrollView(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            /// 🔝 HEADER
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-
-                const Text(
-                  "Service Details",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                IconButton(
-                  onPressed: () =>
-                      Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                )
-              ],
-            ),
-
-            const SizedBox(height: 5),
-
             /// 🖼 IMAGE
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Image.asset(
-                product.imagePath,
-                height: 150,
-                width: double.infinity,
-                fit: BoxFit.cover,
+            Container(
+              height: 220,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage(product.imagePath),
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
 
             const SizedBox(height: 10),
 
-            /// 🧺 NAME
-            Text(
-              product.name,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 6),
-
-            /// ⭐ RATING + TIME
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-              children: [
-
-                const Icon(Icons.star,
-                    color: Colors.orange, size: 16),
-
-                const SizedBox(width: 4),
-
-                Text(product.safeRating.toString()),
-
-                const SizedBox(width: 12),
-
-                const Icon(Icons.access_time,
-                    size: 16, color: Colors.grey),
-
-                const SizedBox(width: 4),
-
-                Text(product.serviceTime),
-              ],
-            ),
-
-            const SizedBox(height: 6),
-
-            /// 💬 SLOGAN
-            if (product.slogan != null)
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10),
-                child: Text(
-                  product.slogan!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-
-            const Divider(height: 20),
-
-            /// 📄 SCROLL CONTENT
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-
-                    /// DESCRIPTION
-                    if (product.description != null)
-                      Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-
-                          const Text(
-                            "Description",
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          Text(
-                            product.description!,
-                            style: const TextStyle(
-                              fontSize: 13,
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
-                        ],
-                      ),
-
-                    /// INCLUDES
-                    if (product.safeIncludes.isNotEmpty)
-                      Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-
-                          const Text(
-                            "What's Included",
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          ...product.safeIncludes.map(
-                            (item) => Padding(
-                              padding:
-                                  const EdgeInsets.only(bottom: 6),
-                              child: Row(
-                                children: [
-
-                                  const Icon(
-                                    Icons.check_circle,
-                                    color: Colors.green,
-                                    size: 16,
-                                  ),
-
-                                  const SizedBox(width: 6),
-
-                                  Expanded(
-                                    child: Text(
-                                      item,
-                                      style: const TextStyle(
-                                          fontSize: 13),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
-                        ],
-                      ),
-
-                    /// TOOLS
-                    if (product.tools != null)
-                      Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-
-                          const Text(
-                            "Tools Used",
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          Text(
-                            product.tools!,
-                            style: const TextStyle(
-                                fontSize: 13),
-                          ),
-
-                          const SizedBox(height: 12),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-            /// 💰 PRICE + BUTTONS
+            /// 🧾 DETAILS
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.all(10),
+
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius:
-                    BorderRadius.circular(12),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
               ),
+
               child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
 
-                  /// PRICE
-                  Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
-                    children: [
-
-                      Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-
-                          Text(
-                            "₹${product.calculatedFinalPrice}",
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-
-                          if (product.discount != null)
-                            Text(
-                              "₹${product.price}",
-                              style: const TextStyle(
-                                decoration:
-                                    TextDecoration.lineThrough,
-                                color: Colors.grey,
-                              ),
-                            ),
-                        ],
-                      ),
-
-                      Text(
-                        category,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  /// 🛒 ADD TO CART
-                  ElevatedButton(
-                    onPressed: () {
-
-                      Cart.addLaundry(
-                        id: product.id,
-                        name: product.name,
-                        price:
-                            product.calculatedFinalPrice,
-                        category: category,
-                        image: product.imagePath,
-                      );
-
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      minimumSize:
-                          const Size(double.infinity, 50),
-                    ),
-                    child: const Text(
-                      "Add to Cart",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                      ),
+                  /// NAME
+                  Text(
+                    product.name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
 
                   const SizedBox(height: 8),
 
-                  /// ✅ CONFIRM BOOKING
-                  ElevatedButton(
-                    onPressed: () {
+                  /// RATING + TIME
+                  Row(
+                    children: [
 
-                      Navigator.pop(context);
+                      const Icon(
+                        Icons.star,
+                        color: Colors.orange,
+                        size: 16,
+                      ),
 
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BookingPage(
-                            serviceName: serviceName,
-                            product: product,
+                      const SizedBox(width: 4),
+
+                      Text(product.safeRating.toString()),
+
+                      const SizedBox(width: 15),
+
+                      const Icon(
+                        Icons.access_time,
+                        color: Colors.grey,
+                        size: 16,
+                      ),
+
+                      const SizedBox(width: 4),
+
+                      Text(product.serviceTime),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  /// PRICE
+                  Row(
+                    children: [
+
+                      Text(
+                        "₹${product.calculatedFinalPrice}",
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFAE91BA),
+                        ),
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      if (product.discount != null)
+                        Text(
+                          "₹${product.price}",
+                          style: const TextStyle(
+                            decoration:
+                                TextDecoration.lineThrough,
+                            color: Colors.grey,
                           ),
                         ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          const Color(0xFFAE91BA),
-                      minimumSize:
-                          const Size(double.infinity, 50),
-                    ),
-                    child: const Text(
-                      "Confirm Booking",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  /// CATEGORY
+                  Text(
+                    category,
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 13,
                     ),
                   ),
+
+                  const Divider(height: 25),
+
+                  /// DESCRIPTION
+                  if (product.description != null)
+                    Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+
+                        const Text(
+                          "Description",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Text(
+                          product.description!,
+                          style: const TextStyle(
+                            fontSize: 14,
+                          ),
+                        ),
+
+                        const SizedBox(height: 15),
+                      ],
+                    ),
+
+                  /// INCLUDES
+                  if (product.safeIncludes.isNotEmpty)
+                    Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+
+                        const Text(
+                          "What's Included",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        ...product.safeIncludes.map(
+                          (item) => Padding(
+                            padding:
+                                const EdgeInsets.only(
+                                    bottom: 8),
+                            child: Row(
+                              children: [
+
+                                const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.green,
+                                  size: 18,
+                                ),
+
+                                const SizedBox(width: 8),
+
+                                Expanded(
+                                  child: Text(
+                                    item,
+                                    style:
+                                        const TextStyle(
+                                            fontSize:
+                                                14),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 15),
+                      ],
+                    ),
+
+                  /// TOOLS
+                  if (product.tools != null)
+                    Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+
+                        const Text(
+                          "Tools Used",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Text(
+                          product.tools!,
+                          style: const TextStyle(
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
+              ),
+            ),
+
+            const SizedBox(height: 80),
+          ],
+        ),
+      ),
+
+      /// 🛒 BOTTOM ACTION
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.shade300,
+              blurRadius: 5,
+            )
+          ],
+        ),
+
+        child: Row(
+          children: [
+
+            /// PRICE
+            Expanded(
+              child: Text(
+                "₹${product.calculatedFinalPrice}",
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+
+            /// ADD TO CART
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+
+                  Cart.addLaundry(
+                    id: product.id,
+                    name: product.name,
+                    price: product.calculatedFinalPrice,
+                    category: category,
+                    image: product.imagePath,
+                  );
+
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(
+                    const SnackBar(
+                      content:
+                          Text("Added to cart"),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  minimumSize:
+                      const Size(0, 50),
+                ),
+                child: const Text(
+                  "ADD",
+                  style:
+                      TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 10),
+
+            /// BOOK
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BookingPage(
+                        serviceName: serviceName,
+                        product: product,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      const Color(0xFFAE91BA),
+                  minimumSize:
+                      const Size(0, 50),
+                ),
+                child: const Text(
+                  "BOOK",
+                  style:
+                      TextStyle(color: Colors.white),
+                ),
               ),
             ),
           ],

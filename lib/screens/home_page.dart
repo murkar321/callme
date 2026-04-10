@@ -31,8 +31,8 @@ class _HomePageState extends State<HomePage> {
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.jpg'),
     ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
     ServiceCategory(
-        name: 'Water Services', imagePath: 'assets/water services.png'),
-    ServiceCategory(name: 'Civil Services', imagePath: 'assets/civil.png'),
+        name: 'Water Services', imagePath: 'assets/water services.jpeg'),
+    ServiceCategory(name: 'Civil Services', imagePath: 'assets/civil.jpeg'),
   ];
 
   String searchQuery = '';

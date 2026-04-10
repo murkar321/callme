@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/service_product.dart';
 
 class LaundryCard extends StatelessWidget {
+
   final ServiceProduct product;
   final String category;
   final VoidCallback onAdd;
@@ -17,6 +18,7 @@ class LaundryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -28,15 +30,17 @@ class LaundryCard extends StatelessWidget {
           )
         ],
       ),
+
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
 
-          /// IMAGE
           ClipRRect(
             borderRadius:
                 const BorderRadius.vertical(
-                    top: Radius.circular(14)),
+              top: Radius.circular(14),
+            ),
             child: Image.asset(
               product.imagePath,
               height: 100,
