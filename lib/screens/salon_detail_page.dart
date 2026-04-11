@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/salon_data.dart';
 import '../models/cart.dart';
-import 'salon_booking_page.dart';
+import '../models/cart_page.dart';
 
 class SalonDetailPage extends StatefulWidget {
   final SalonService service;
@@ -16,34 +16,26 @@ class SalonDetailPage extends StatefulWidget {
 }
 
 class _SalonDetailPageState extends State<SalonDetailPage> {
-
   static const String serviceName = "Salon";
 
   @override
   Widget build(BuildContext context) {
-
     final String id = "Salon_${widget.service.name}";
     final int qty = Cart.getQuantity(id, serviceName);
 
     return Scaffold(
-
       appBar: AppBar(
         title: Text(widget.service.name),
         backgroundColor: const Color(0xFFAE91BA),
       ),
 
       body: SingleChildScrollView(
-
         padding: const EdgeInsets.all(16),
-
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            /// =========================
             /// IMAGE
-            /// =========================
-
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Image.asset(
@@ -56,10 +48,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
             const SizedBox(height: 20),
 
-            /// =========================
             /// NAME
-            /// =========================
-
             Text(
               widget.service.name,
               style: const TextStyle(
@@ -72,20 +61,14 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
             Text(
               widget.service.slogan,
-              style: const TextStyle(
-                color: Colors.grey,
-              ),
+              style: const TextStyle(color: Colors.grey),
             ),
 
             const SizedBox(height: 15),
 
-            /// =========================
             /// PRICE
-            /// =========================
-
             Row(
               children: [
-
                 Text(
                   "₹${widget.service.finalPrice}",
                   style: const TextStyle(
@@ -96,22 +79,20 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
                 const SizedBox(width: 10),
 
-                Text(
-                  "₹${widget.service.price}",
-                  style: const TextStyle(
-                    decoration: TextDecoration.lineThrough,
-                    color: Colors.grey,
+                if (widget.service.discount > 0)
+                  Text(
+                    "₹${widget.service.price}",
+                    style: const TextStyle(
+                      decoration: TextDecoration.lineThrough,
+                      color: Colors.grey,
+                    ),
                   ),
-                ),
               ],
             ),
 
             const SizedBox(height: 20),
 
-            /// =========================
             /// DESCRIPTION
-            /// =========================
-
             const Text(
               "Description",
               style: TextStyle(
@@ -126,10 +107,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
             const SizedBox(height: 20),
 
-            /// =========================
             /// INCLUDES
-            /// =========================
-
             const Text(
               "Includes",
               style: TextStyle(
@@ -145,7 +123,8 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(
                   children: [
-                    const Icon(Icons.check, color: Colors.green, size: 18),
+                    const Icon(Icons.check,
+                        color: Colors.green, size: 18),
                     const SizedBox(width: 6),
                     Expanded(child: Text(e)),
                   ],
@@ -153,110 +132,19 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
 
-            /// =========================
             /// BOOK BUTTON
-            /// =========================
-
             SizedBox(
               width: double.infinity,
               height: 50,
-
               child: ElevatedButton(
-
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFAE91BA),
                 ),
-
                 onPressed: () {
-
-                  showDialog(
-                    context: context,
-                    builder: (context) {
-
-                      return AlertDialog(
-
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-
-                        title: const Text("Choose Appointment"),
-
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-
-                            /// HOME
-                            ListTile(
-                              leading: const Icon(
-                                Icons.home,
-                                color: Colors.purple,
-                              ),
-                              title: const Text("Home Appointment"),
-
-                              onTap: () {
-
-                                Navigator.pop(context);
-
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        SalonBookingPage(
-                                      services: [widget.service],
-                                      isHomeVisitDefault: true,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-
-                            const Divider(),
-
-                            /// SALON
-                            ListTile(
-                              leading: const Icon(
-                                Icons.store,
-                                color: Colors.green,
-                              ),
-                              title: const Text("Salon Appointment"),
-
-                              onTap: () {
-
-                                Cart.add(
-                                  CartItem(
-                                    id: id,
-                                    name: widget.service.name,
-                                    price: widget.service.finalPrice,
-                                    service: serviceName,
-                                    category: widget.service.category,
-                                    image: widget.service.image,
-                                  ),
-                                  service: serviceName,
-                                );
-
-                                Navigator.pop(context);
-
-                                setState(() {});
-
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      "${widget.service.name} added to cart",
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
+                  _showBookingPopup(context, id);
                 },
-
                 child: Text(
                   qty == 0
                       ? "Book Service"
@@ -266,9 +154,122 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
               ),
             ),
 
+            const SizedBox(height: 12),
+
+            /// VIEW CART
+            if (qty > 0)
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CartPage(
+                          service: "Salon",
+                          serviceName: "Salon",
+                          cart: [],
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text("View Cart"),
+                ),
+              ),
+
             const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  /// POPUP
+  void _showBookingPopup(BuildContext context, String id) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+
+          title: const Text("Choose Appointment"),
+
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+
+              /// HOME
+              ListTile(
+                leading: const Icon(
+                  Icons.home,
+                  color: Colors.purple,
+                ),
+                title: const Text("Home Appointment"),
+                onTap: () {
+
+                  Cart.addSalon(
+                    id: id,
+                    name: widget.service.name,
+                    price: widget.service.finalPrice,
+                    category: widget.service.category,
+                    visitType: "Home Appointment",
+                    image: widget.service.image,
+                  );
+
+                  Navigator.pop(context);
+
+                  setState(() {});
+
+                  _showSnack(
+                    "Added to Cart (Home Appointment)",
+                  );
+                },
+              ),
+
+              const Divider(),
+
+              /// SALON
+              ListTile(
+                leading: const Icon(
+                  Icons.store,
+                  color: Colors.green,
+                ),
+                title: const Text("Salon Appointment"),
+                onTap: () {
+
+                  Cart.addSalon(
+                    id: id,
+                    name: widget.service.name,
+                    price: widget.service.finalPrice,
+                    category: widget.service.category,
+                    visitType: "Salon Appointment",
+                    image: widget.service.image,
+                  );
+
+                  Navigator.pop(context);
+
+                  setState(() {});
+
+                  _showSnack(
+                    "Added to Cart (Salon Appointment)",
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(seconds: 1),
       ),
     );
   }

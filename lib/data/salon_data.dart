@@ -10,8 +10,11 @@ class SalonService {
   final String category;
   final List<String> includes;
   final List<String> process;
+  
+  var id;
 
   SalonService({
+    required this.id, 
     required this.name,
     required this.image,
     required this.time,
@@ -66,7 +69,7 @@ List<SalonService> salonServices = [
       "Hair preparation",
       "Hair cutting and shaping",
       "Final styling"
-    ],
+    ], id: 1,
   ),
 
   SalonService(
@@ -91,7 +94,7 @@ List<SalonService> salonServices = [
       "Hair wash",
       "Hair cutting",
       "Styling and finishing"
-    ],
+    ], id: 2,
   ),
 
   SalonService(
@@ -115,7 +118,7 @@ List<SalonService> salonServices = [
       "Hair preparation",
       "Hair cutting",
       "Final styling"
-    ],
+    ], id: 3,
   ),
 
   SalonService(
@@ -129,7 +132,7 @@ List<SalonService> salonServices = [
     slogan: "Maintain healthy hair with a quick trim.",
     description: "Quick trim to remove split ends and maintain hair health.",
     includes: ["Hair consultation", "Hair trimming", "Basic styling"],
-    process: ["Hair consultation", "Hair trimming", "Final styling"],
+    process: ["Hair consultation", "Hair trimming", "Final styling"], id: 4,
   ),
 
   /// HAIR STYLING
@@ -145,7 +148,7 @@ List<SalonService> salonServices = [
     slogan: "Smooth and voluminous hair styling.",
     description: "Professional blow dry styling for smooth hair.",
     includes: ["Hair wash", "Blow dry styling"],
-    process: ["Hair wash", "Blow drying", "Final styling"],
+    process: ["Hair wash", "Blow drying", "Final styling"], id: 5,
   ),
 
   SalonService(
@@ -159,7 +162,7 @@ List<SalonService> salonServices = [
     slogan: "Beautiful curls for special occasions.",
     description: "Professional hair curling service.",
     includes: ["Hair preparation", "Curling", "Styling"],
-    process: ["Hair preparation", "Curling", "Final styling"],
+    process: ["Hair preparation", "Curling", "Final styling"], id: 6,
   ),
 
   SalonService(
@@ -173,7 +176,7 @@ List<SalonService> salonServices = [
     slogan: "Sleek and silky straight hair.",
     description: "Temporary hair straightening styling.",
     includes: ["Hair preparation", "Straightening", "Styling"],
-    process: ["Hair preparation", "Hair straightening", "Final styling"],
+    process: ["Hair preparation", "Hair straightening", "Final styling"], id: 7,
   ),
 
   SalonService(
@@ -187,7 +190,7 @@ List<SalonService> salonServices = [
     slogan: "Perfect hairstyle for parties and events.",
     description: "Stylish party hair look created by professionals.",
     includes: ["Hair preparation", "Styling", "Hair finishing"],
-    process: ["Hair preparation", "Hair styling", "Final finishing"],
+    process: ["Hair preparation", "Hair styling", "Final finishing"], id: 8,
   ),
 
 SalonService(
@@ -201,7 +204,7 @@ SalonService(
     slogan: "Perfect hairstyle for parties and events.",
     description: "Stylish party hair look created by professionals.",
     includes: ["Hair preparation", "Styling", "Hair finishing"],
-    process: ["Hair preparation", "Hair styling", "Final finishing"],
+    process: ["Hair preparation", "Hair styling", "Final finishing"], id: 9,
   ),
 
   /// HAIR TREATMENTS
@@ -217,7 +220,7 @@ SalonService(
     slogan: "Frizz free smooth hair for months.",
     description: "Professional smoothening treatment for frizz free hair.",
     includes: ["Hair wash", "Smoothening product", "Heat sealing"],
-    process: ["Hair wash", "Product application", "Heat sealing"],
+    process: ["Hair wash", "Product application", "Heat sealing"], id: 10,
   ),
 
   SalonService(
@@ -231,7 +234,7 @@ SalonService(
     slogan: "Permanent straight hair transformation.",
     description: "Permanent hair straightening rebonding treatment.",
     includes: ["Hair wash", "Chemical treatment", "Heat sealing"],
-    process: ["Hair preparation", "Chemical application", "Heat sealing"],
+    process: ["Hair preparation", "Chemical application", "Heat sealing"], id: 11,
   ),
 
   SalonService(
@@ -245,7 +248,7 @@ SalonService(
     slogan: "Deep repair for damaged hair.",
     description: "Hair botox treatment repairs damaged hair.",
     includes: ["Hair wash", "Botox cream application", "Heat activation"],
-    process: ["Hair wash", "Cream application", "Heat sealing"],
+    process: ["Hair wash", "Cream application", "Heat sealing"], id: 12,
   ),
 
   SalonService(
@@ -264,7 +267,7 @@ SalonService(
       "Keratin application",
       "Heat sealing",
       "Final styling"
-    ],
+    ], id: 13,
   ),
 
   SalonService(
@@ -278,7 +281,7 @@ SalonService(
     slogan: "Nourish and relax your hair.",
     description: "Relaxing spa treatment for healthy hair.",
     includes: ["Hair wash", "Spa massage", "Steam treatment"],
-    process: ["Hair wash", "Spa cream massage", "Steam therapy"],
+    process: ["Hair wash", "Spa cream massage", "Steam therapy"], id: 14,
   ),
 
   SalonService(
@@ -292,7 +295,7 @@ SalonService(
     slogan: "Nourish and relax your hair.",
     description: "Relaxing spa treatment for healthy hair.",
     includes: ["Hair wash", "Spa massage", "Steam treatment"],
-    process: ["Hair wash", "Spa cream massage", "Steam therapy"],
+    process: ["Hair wash", "Spa cream massage", "Steam therapy"],id: 15,
   ),
 
   /// HAIR COLOR
@@ -319,7 +322,7 @@ SalonService(
       "Root color application",
       "Color processing time",
       "Hair wash and styling"
-    ],
+    ],id: 16,
   ),
 
   /// GLOBAL HAIR COLOR
@@ -345,7 +348,7 @@ SalonService(
       "Full hair color application",
       "Color development",
       "Hair wash and styling"
-    ],
+    ], id: 17,
   ),
 
   /// HAIR HIGHLIGHTS
@@ -371,7 +374,7 @@ SalonService(
       "Hair sectioning",
       "Highlight color application",
       "Hair wash and styling"
-    ],
+    ], id: 18,
   ),
 
   /// BALAYAGE
@@ -397,7 +400,7 @@ SalonService(
       "Hand painting color technique",
       "Color development",
       "Hair wash and final styling"
-    ],
+    ], id: 19,
   ),
 
   /// OMBRE HAIR COLOR
@@ -423,7 +426,7 @@ SalonService(
       "Gradient color application",
       "Color development",
       "Hair wash and styling"
-    ],
+    ], id: 20,
   ),
 
   /// FACIAL
@@ -439,7 +442,7 @@ SalonService(
     slogan: "Quick glow facial for everyday beauty.",
     description: "Refreshing facial for glowing skin.",
     includes: ["Face cleansing", "Face scrub", "Face massage", "Face mask"],
-    process: ["Skin cleansing", "Exfoliation", "Massage", "Face pack"],
+    process: ["Skin cleansing", "Exfoliation", "Massage", "Face pack"], id: 21,
   ),
 
   SalonService(
@@ -453,7 +456,7 @@ SalonService(
     slogan: "Natural fruit extracts for glowing skin.",
     description: "Fruit facial improves skin glow.",
     includes: ["Fruit cleanser", "Fruit scrub", "Fruit mask"],
-    process: ["Cleansing", "Scrubbing", "Mask application"],
+    process: ["Cleansing", "Scrubbing", "Mask application"], id: 22,
   ),
 
   /// GOLD FACIAL
@@ -481,7 +484,7 @@ SalonService(
       "Facial massage",
       "Gold mask application",
       "Final moisturizing"
-    ],
+    ], id: 23,
   ),
 
   /// DIAMOND FACIAL
@@ -509,7 +512,7 @@ SalonService(
       "Facial massage",
       "Mask application",
       "Moisturizing"
-    ],
+    ],id: 24,
   ),
 
   /// ANTI AGING FACIAL
@@ -537,7 +540,7 @@ SalonService(
       "Facial massage",
       "Mask application",
       "Final moisturizing"
-    ],
+    ],id: 25,
   ),
 
   /// HYDRATING FACIAL
@@ -565,7 +568,7 @@ SalonService(
       "Facial massage",
       "Hydrating mask",
       "Final moisturizing"
-    ],
+    ], id: 26,
   ),
 
   /// DETAN FACIAL
@@ -593,7 +596,7 @@ SalonService(
       "Massage",
       "Detan pack application",
       "Final moisturizing"
-    ],
+    ], id: 27,
   ),
 
   /// MAKEUP
@@ -614,7 +617,7 @@ SalonService(
       "Base makeup",
       "Eye makeup",
       "Final finishing"
-    ],
+    ], id: 28,
   ),
 
   SalonService(
@@ -633,7 +636,7 @@ SalonService(
       "Base makeup",
       "Eye makeup",
       "Final finishing"
-    ],
+    ], id: 29,
   ),
 
   /// ENGAGEMENT MAKEUP
@@ -660,7 +663,7 @@ SalonService(
       "Base makeup application",
       "Eye makeup styling",
       "Final finishing and setting"
-    ],
+    ], id: 30,
   ),
 
   /// RECEPTION MAKEUP
@@ -687,7 +690,7 @@ SalonService(
       "Base makeup application",
       "Eye makeup styling",
       "Final finishing and setting"
-    ],
+    ], id: 31,
   ),
 
   /// LIGHT MAKEUP
@@ -713,7 +716,7 @@ SalonService(
       "Light base makeup",
       "Eye makeup",
       "Final finishing"
-    ],
+    ], id: 32,
   ),
 
   /// SPA MANICURE
@@ -742,7 +745,7 @@ SalonService(
       "Cuticle care",
       "Hand scrub and massage",
       "Final polish"
-    ],
+    ], id: 33,
   ),
 
   SalonService(
@@ -770,7 +773,7 @@ SalonService(
       "Cuticle care",
       "Hand scrub and massage",
       "Final polish"
-    ],
+    ], id: 34,
   ),
 
   /// GEL MANICURE
@@ -798,7 +801,7 @@ SalonService(
       "Gel polish application",
       "UV curing",
       "Final finishing"
-    ],
+    ], id: 35,
   ),
 
   /// FRENCH MANICURE
@@ -824,7 +827,7 @@ SalonService(
       "Nail shaping",
       "French polish application",
       "Final finishing"
-    ],
+    ], id: 36,
   ),
 
   /// SPA PEDICURE
@@ -852,7 +855,7 @@ SalonService(
       "Nail care",
       "Foot massage",
       "Polish application"
-    ],
+    ], id: 37,
   ),
   
   
@@ -880,7 +883,7 @@ SalonService(
       "Nail care",
       "Foot massage",
       "Polish application"
-    ],
+    ], id: 38,
   ),
 
   /// GEL PEDICURE
@@ -908,7 +911,7 @@ SalonService(
       "Gel polish application",
       "UV curing",
       "Final finishing"
-    ],
+    ], id: 39,
   ),
 
   /// FOOT SPA PEDICURE
@@ -936,7 +939,7 @@ SalonService(
       "Mask application",
       "Foot massage",
       "Final finishing"
-    ],
+    ], id: 40,
   ),
 
 
@@ -962,7 +965,7 @@ SalonService(
       "Wax application",
       "Hair removal",
       "Post wax care"
-    ],
+    ], id: 41,
   ),
 
   /// FULL LEGS WAX
@@ -987,7 +990,7 @@ SalonService(
       "Wax application",
       "Hair removal",
       "Post wax soothing care"
-    ],
+    ], id: 42,
   ),
 
   /// UNDERARMS WAX
@@ -1012,7 +1015,7 @@ SalonService(
       "Wax application",
       "Hair removal",
       "Post wax care"
-    ],
+    ], id: 43,
   ),
 
   /// FACE WAX
@@ -1037,7 +1040,7 @@ SalonService(
       "Wax application",
       "Hair removal",
       "Post wax soothing care"
-    ],
+    ], id: 44,
   ),
 
   /// BIKINI WAX
@@ -1063,6 +1066,6 @@ SalonService(
       "Wax application",
       "Hair removal",
       "Post wax soothing care"
-    ],
+    ], id: 45,
   ),
 ];

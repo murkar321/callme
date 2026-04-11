@@ -18,19 +18,13 @@ class _SalonPageState extends State<SalonPage> {
 
   void refresh() => setState(() {});
 
-  /// TOTAL ITEMS
+  /// TOTAL ITEMS (ONLY SALON)
   int get totalItems {
-    int count = 0;
     final items = Cart.getItems("Salon");
-
-    for (var item in items) {
-      count += item.quantity;
-    }
-
-    return count;
+    return items.fold(0, (sum, item) => sum + item.quantity);
   }
 
-  /// TOTAL PRICE
+  /// TOTAL PRICE (ONLY SALON)
   int get totalAmount => Cart.getTotal("Salon");
 
   @override
@@ -38,8 +32,9 @@ class _SalonPageState extends State<SalonPage> {
     final categories = salonCategories;
     final selectedCategory = categories[selectedIndex];
 
-    final services =
-        salonServices.where((s) => s.category == selectedCategory).toList();
+    final services = salonServices
+        .where((s) => s.category == selectedCategory)
+        .toList();
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
@@ -50,22 +45,22 @@ class _SalonPageState extends State<SalonPage> {
         centerTitle: true,
         backgroundColor: primaryColor,
         actions: [
-          /// CART ICON
           if (totalItems > 0)
             Stack(
               children: [
                 IconButton(
                   icon: const Icon(Icons.shopping_cart),
-                  onPressed: () {
-                    Navigator.push(
+                  onPressed: () async {
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => const CartPage(
-                          serviceName: "Salon",
-                          service: '', cart: [],
+                          service: "Salon",
+                          serviceName: "Salon", cart: [],
                         ),
                       ),
-                    ).then((_) => refresh());
+                    );
+                    refresh();
                   },
                 ),
                 Positioned(
@@ -92,7 +87,8 @@ class _SalonPageState extends State<SalonPage> {
       body: SafeArea(
         child: Row(
           children: [
-            /// ================= LEFT CATEGORY =================
+
+            /// LEFT CATEGORY
             Container(
               width: 95,
               color: Colors.grey.shade100,
@@ -112,9 +108,7 @@ class _SalonPageState extends State<SalonPage> {
 
                   return GestureDetector(
                     onTap: () {
-                      setState(() {
-                        selectedIndex = index;
-                      });
+                      setState(() => selectedIndex = index);
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -122,8 +116,7 @@ class _SalonPageState extends State<SalonPage> {
                         color: isSelected ? Colors.white : Colors.transparent,
                         border: Border(
                           left: BorderSide(
-                            color:
-                                isSelected ? primaryColor : Colors.transparent,
+                            color: isSelected ? primaryColor : Colors.transparent,
                             width: 4,
                           ),
                         ),
@@ -135,21 +128,17 @@ class _SalonPageState extends State<SalonPage> {
                             backgroundImage: AssetImage(image),
                           ),
                           const SizedBox(height: 6),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Text(
-                              category,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                                color:
-                                    isSelected ? primaryColor : Colors.black87,
-                              ),
+                          Text(
+                            category,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight:
+                                  isSelected ? FontWeight.bold : FontWeight.normal,
+                              color:
+                                  isSelected ? primaryColor : Colors.black87,
                             ),
                           ),
                         ],
@@ -160,7 +149,7 @@ class _SalonPageState extends State<SalonPage> {
               ),
             ),
 
-            /// ================= RIGHT SERVICE LIST =================
+            /// RIGHT SERVICES
             Expanded(
               child: ListView.builder(
                 physics: const BouncingScrollPhysics(),
@@ -174,6 +163,7 @@ class _SalonPageState extends State<SalonPage> {
                 itemBuilder: (context, index) {
                   return SalonServiceCard(
                     service: services[index],
+                    onUpdate: refresh,
                   );
                 },
               ),
@@ -187,16 +177,17 @@ class _SalonPageState extends State<SalonPage> {
           ? null
           : SafeArea(
               child: InkWell(
-                onTap: () {
-                  Navigator.push(
+                onTap: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => const CartPage(
-                        serviceName: "Salon",
-                        service: '', cart: [],
+                        service: "Salon",
+                        serviceName: "Salon", cart: [],
                       ),
                     ),
-                  ).then((_) => refresh());
+                  );
+                  refresh();
                 },
                 child: Container(
                   margin: const EdgeInsets.all(12),
@@ -210,9 +201,7 @@ class _SalonPageState extends State<SalonPage> {
                     children: [
                       Text(
                         "$totalItems items",
-                        style: const TextStyle(
-                          color: Colors.white,
-                        ),
+                        style: const TextStyle(color: Colors.white),
                       ),
                       Text(
                         "₹$totalAmount  View Cart →",

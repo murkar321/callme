@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
-import '../data/water_data.dart';
+import '../models/service_product_details.dart';
 import '../models/cart.dart';
 import '../models/cart_page.dart';
-import '../screens/water_service_card.dart';
+import '../widgets/plumbing_service_card.dart';
 
-class WaterServicesPage extends StatefulWidget {
-  const WaterServicesPage({super.key});
+class PlumbingServicesPage extends StatefulWidget {
+  const PlumbingServicesPage({super.key, required String serviceName});
 
   @override
-  State<WaterServicesPage> createState() =>
-      _WaterServicesPageState();
+  State<PlumbingServicesPage> createState() =>
+      _PlumbingServicesPageState();
 }
 
-class _WaterServicesPageState
-    extends State<WaterServicesPage> {
+class _PlumbingServicesPageState
+    extends State<PlumbingServicesPage> {
   int selectedIndex = 0;
 
   List<String> get categories =>
-      waterServices.keys.toList();
+      serviceProducts["Plumbing"]!.keys.toList();
 
   void refreshPage() {
     setState(() {});
@@ -26,23 +26,24 @@ class _WaterServicesPageState
   @override
   Widget build(BuildContext context) {
     final totalItems =
-        Cart.getTotalItems("Water");
+        Cart.getTotalItems("Plumbing");
 
     final totalPrice =
-        Cart.totalPrice("Water");
+        Cart.totalPrice("Plumbing");
 
     final selectedCategory =
         categories[selectedIndex];
 
     final selectedServices =
-        waterServices[selectedCategory]!;
+        serviceProducts["Plumbing"]![
+            selectedCategory]!;
 
     return Scaffold(
       backgroundColor:
           Colors.grey.shade100,
       appBar: AppBar(
         title: const Text(
-          "Water Services",
+          "Plumbing Services",
         ),
         backgroundColor:
             const Color(0xFFD8B8DD),
@@ -65,8 +66,9 @@ class _WaterServicesPageState
                         categories[index];
 
                     final firstImage =
-                        waterServices[
-                                category]!
+                        serviceProducts[
+                                "Plumbing"]![
+                            category]!
                             .first
                             .imagePath;
 
@@ -147,7 +149,7 @@ class _WaterServicesPageState
                 ),
               ),
 
-              /// RIGHT LIST PANEL
+              /// RIGHT LIST
               Expanded(
                 child: ListView.builder(
                   padding:
@@ -163,12 +165,38 @@ class _WaterServicesPageState
                           .length,
                   itemBuilder:
                       (context, index) {
-                    return WaterServiceCard(
-                      product:
-                          selectedServices[
-                              index],
-                      onUpdate:
-                          refreshPage,
+                    final product =
+                        selectedServices[
+                            index];
+
+                    return PlumbingServiceCard(
+                      product: product,
+                      serviceName:
+                          "Plumbing",
+                      primaryColor:
+                          const Color(
+                              0xFFD8B8DD),
+                      onAdd: () {
+                        Cart.add(
+                          CartItem(
+                            id: product.id,
+                            name:
+                                product.name,
+                            price: product
+                                .calculatedFinalPrice,
+                            service:
+                                "Plumbing",
+                            category:
+                                selectedCategory,
+                            image: product
+                                .imagePath,
+                          ),
+                          service:
+                              "Plumbing",
+                        );
+
+                        refreshPage();
+                      },
                     );
                   },
                 ),
@@ -216,8 +244,6 @@ class _WaterServicesPageState
                                 const TextStyle(
                               color: Colors
                                   .white,
-                              fontSize:
-                                  16,
                             ),
                           ),
                           Text(
@@ -226,8 +252,6 @@ class _WaterServicesPageState
                                 const TextStyle(
                               color: Colors
                                   .white,
-                              fontSize:
-                                  18,
                               fontWeight:
                                   FontWeight
                                       .bold,
@@ -235,7 +259,6 @@ class _WaterServicesPageState
                           ),
                         ],
                       ),
-
                       ElevatedButton(
                         onPressed: () {
                           Navigator.push(
@@ -244,12 +267,12 @@ class _WaterServicesPageState
                               builder: (_) =>
                                   CartPage(
                                 serviceName:
-                                    "Water",
+                                    "Plumbing",
                                 service:
-                                    "Water",
+                                    "Plumbing",
                                 cart: Cart
                                     .getItems(
-                                        "Water"),
+                                        "Plumbing"),
                               ),
                             ),
                           ).then(
@@ -257,20 +280,9 @@ class _WaterServicesPageState
                                 refreshPage(),
                           );
                         },
-                        style:
-                            ElevatedButton
-                                .styleFrom(
-                          backgroundColor:
-                              Colors.white,
-                        ),
                         child:
                             const Text(
                           "View Cart",
-                          style:
-                              TextStyle(
-                            color: Colors
-                                .blue,
-                          ),
                         ),
                       ),
                     ],

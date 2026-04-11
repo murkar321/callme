@@ -260,7 +260,7 @@ final Map<String, List<ServiceProduct>> waterServices = {
     service : "Water",
     name: "250ml Bottles (Pack of 48)",
     price: 300,
-    imagePath: "assets/24pack.jpg",
+    imagePath: "assets/48pack.jpg",
     description: "Small bottles ideal for functions and gatherings",
     discount: 8,
     finalPrice: 276,

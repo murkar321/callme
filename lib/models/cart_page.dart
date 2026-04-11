@@ -1,6 +1,8 @@
-import 'package:callme/screens/booking_page.dart';
 import 'package:flutter/material.dart';
+import 'package:callme/screens/booking_page.dart';
 import '../models/cart.dart';
+import '../screens/salon_booking_page.dart';
+import '../data/salon_data.dart';
 
 class CartPage extends StatefulWidget {
   final String service;
@@ -17,36 +19,23 @@ class CartPage extends StatefulWidget {
 }
 
 class _CartPageState extends State<CartPage> {
-
   @override
   Widget build(BuildContext context) {
-
     List<CartItem> items = Cart.getItems(widget.service);
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
-
-      /// APPBAR
       appBar: AppBar(
         title: Text("${widget.service} Cart"),
         centerTitle: true,
       ),
 
-      /// EMPTY CART
       body: items.isEmpty
-          ? const Center(
-              child: Text(
-                "Cart is empty",
-                style: TextStyle(fontSize: 16),
-              ),
-            )
-
-          /// CART LIST
+          ? const Center(child: Text("Cart is empty"))
           : ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: items.length,
               itemBuilder: (context, index) {
-
                 CartItem item = items[index];
 
                 return Container(
@@ -64,11 +53,10 @@ class _CartPageState extends State<CartPage> {
                   ),
                   child: Row(
                     children: [
-
-                      /// IMAGE
                       if (item.image != null)
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius:
+                              BorderRadius.circular(10),
                           child: Image.asset(
                             item.image!,
                             height: 65,
@@ -79,94 +67,85 @@ class _CartPageState extends State<CartPage> {
 
                       const SizedBox(width: 12),
 
-                      /// DETAILS
                       Expanded(
                         child: Column(
                           crossAxisAlignment:
                               CrossAxisAlignment.start,
                           children: [
-
-                            /// NAME
                             Text(
                               item.name,
                               style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
+                                fontWeight:
+                                    FontWeight.bold,
                               ),
                             ),
 
                             const SizedBox(height: 4),
 
-                            /// 🧺 Laundry Category Badge
-                            if (widget.service == "Laundry")
+                            /// KEEP SALON SAME
+                            if (widget.service ==
+                                    "Salon" &&
+                                item.visitType != null)
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFAE91BA)
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration:
+                                    BoxDecoration(
+                                  color: Colors.pink
                                       .withOpacity(0.1),
                                   borderRadius:
-                                      BorderRadius.circular(8),
+                                      BorderRadius
+                                          .circular(8),
                                 ),
                                 child: Text(
-                                  item.category,
-                                  style: const TextStyle(
+                                  item.visitType!,
+                                  style:
+                                      const TextStyle(
+                                    color:
+                                        Colors.pink,
                                     fontSize: 12,
-                                    color: Color(0xFFAE91BA),
-                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),
 
                             const SizedBox(height: 4),
 
-                            /// PRICE
-                            Text(
-                              "₹${item.price}",
-                              style: const TextStyle(
-                                color: Colors.grey,
-                              ),
-                            ),
+                            Text("₹${item.price}"),
 
                             const SizedBox(height: 8),
 
-                            /// COUNTER
                             Row(
                               children: [
-
                                 IconButton(
                                   icon: const Icon(
-                                      Icons.remove_circle_outline),
+                                    Icons
+                                        .remove_circle_outline,
+                                  ),
                                   onPressed: () {
                                     setState(() {
-                                      Cart.remove(item);
+                                      Cart.remove(
+                                          item);
                                     });
                                   },
                                 ),
 
-                                Text(
-                                  item.quantity.toString(),
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                Text(item.quantity
+                                    .toString()),
 
                                 IconButton(
                                   icon: const Icon(
-                                      Icons.add_circle_outline),
+                                    Icons
+                                        .add_circle_outline,
+                                  ),
                                   onPressed: () {
                                     setState(() {
                                       Cart.add(
-                                        CartItem(
-                                          id: item.id,
-                                          name: item.name,
-                                          price: item.price,
-                                          service: item.service,
-                                          category: item.category,
-                                          image: item.image,
-                                        ),
-                                        service: item.service,
+                                        item,
+                                        service: item
+                                            .service,
                                       );
                                     });
                                   },
@@ -177,7 +156,6 @@ class _CartPageState extends State<CartPage> {
                         ),
                       ),
 
-                      /// DELETE
                       IconButton(
                         icon: const Icon(
                           Icons.delete,
@@ -198,78 +176,116 @@ class _CartPageState extends State<CartPage> {
               },
             ),
 
-      /// BOTTOM BOOKING
       bottomNavigationBar: items.isEmpty
           ? null
           : Container(
               padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 6,
-                  )
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+              color: Colors.white,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      const Color(0xFFAE91BA),
+                ),
+                onPressed: () {
+                  /// ================= SALON KEEP SAME =================
+                  if (widget.service == "Salon") {
+                    List<SalonService>
+                        selectedServices = [];
 
-                  Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        "Total",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        "₹${Cart.getTotal(widget.service)}",
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      ),
-                    ],
-                  ),
+                    Map<String, String>
+                        visitTypeMap = {};
 
-                  const SizedBox(height: 10),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 45,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            const Color(0xFFAE91BA),
-                      ),
-                      onPressed: () {
-
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BookingPage(
-                              serviceName: widget.service,
-                              cart: Cart.getItems(widget.service),
-                              products: null,
-                            ),
-                          ),
+                    for (var item in items) {
+                      try {
+                        final service =
+                            salonServices.firstWhere(
+                          (s) =>
+                              s.id
+                                  .toString()
+                                  .trim() ==
+                              item.id
+                                  .toString()
+                                  .trim(),
                         );
-                      },
-                      child: const Text(
-                        "Proceed to Booking",
-                        style: TextStyle(
-                          fontSize: 16,
+
+                        selectedServices
+                            .add(service);
+
+                        visitTypeMap[service.id
+                                .toString()] =
+                            item.visitType ??
+                                "Salon";
+                      } catch (e) {
+                        debugPrint(
+                          "Salon match failed for id: ${item.id}",
+                        );
+                      }
+                    }
+
+                    if (selectedServices
+                        .isEmpty) {
+                      ScaffoldMessenger.of(
+                              context)
+                          .showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            "No valid salon services found",
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            SalonBookingPage(
+                          services:
+                              selectedServices,
+                          visitTypeMap:
+                              visitTypeMap,
                         ),
                       ),
-                    ),
-                  ),
-                ],
+                    );
+                  }
+
+                  /// ================= STRICT PLUMBING FIX =================
+                  else if (widget.service ==
+                      "Plumbing") {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            BookingPage(
+                          serviceName:
+                              "Plumbing",
+                          cart: items,
+                          products: null,
+                        ),
+                      ),
+                    );
+                  }
+
+                  /// ================= OTHER SERVICES SAME =================
+                  else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            BookingPage(
+                          serviceName:
+                              widget.service,
+                          cart: Cart.getItems(
+                              widget.service),
+                          products: null,
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: const Text(
+                    "Proceed to Booking"),
               ),
             ),
     );

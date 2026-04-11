@@ -1,13 +1,17 @@
+import 'package:callme/models/cart_page.dart';
 import 'package:callme/models/service_product_details.dart';
 import 'package:callme/screens/ServiceViewDetailPage.dart';
+
 import 'package:flutter/material.dart';
 import '../models/cart.dart';
-
 
 class ServiceDetailPage extends StatefulWidget {
   final String serviceName;
 
-  const ServiceDetailPage({super.key, required this.serviceName});
+  const ServiceDetailPage({
+    super.key,
+    required this.serviceName,
+  });
 
   @override
   State<ServiceDetailPage> createState() => _ServiceDetailPageState();
@@ -20,12 +24,15 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   @override
   void initState() {
     super.initState();
-    selectedCategory = serviceProducts[widget.serviceName]!.keys.first;
+    selectedCategory =
+        serviceProducts[widget.serviceName]!.keys.first;
   }
 
   @override
   Widget build(BuildContext context) {
-    final categories = serviceProducts[widget.serviceName]!.keys.toList();
+    final categories =
+        serviceProducts[widget.serviceName]!.keys.toList();
+
     final products =
         serviceProducts[widget.serviceName]![selectedCategory]!;
 
@@ -33,16 +40,14 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
-
       appBar: AppBar(
         backgroundColor: primaryColor,
         title: Text(widget.serviceName),
         centerTitle: true,
       ),
-
       body: Row(
         children: [
-          /// LEFT CATEGORY
+          /// LEFT CATEGORY PANEL
           Container(
             width: width * 0.22,
             color: Colors.grey.shade100,
@@ -50,31 +55,44 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
               itemCount: categories.length,
               itemBuilder: (context, index) {
                 final category = categories[index];
-                final isSelected = category == selectedCategory;
+                final isSelected =
+                    category == selectedCategory;
 
                 final firstProduct =
-                    serviceProducts[widget.serviceName]![category]!.first;
+                    serviceProducts[widget.serviceName]![
+                        category]!
+                        .first;
 
                 return GestureDetector(
                   onTap: () {
-                    setState(() => selectedCategory = category);
+                    setState(() {
+                      selectedCategory = category;
+                    });
                   },
                   child: Container(
                     margin: const EdgeInsets.all(6),
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
+                      color: isSelected
+                          ? Colors.white
+                          : Colors.transparent,
+                      borderRadius:
+                          BorderRadius.circular(12),
                       boxShadow: isSelected
-                          ? [const BoxShadow(color: Colors.black12)]
+                          ? const [
+                              BoxShadow(
+                                color: Colors.black12,
+                              )
+                            ]
                           : [],
                     ),
                     child: Column(
                       children: [
                         CircleAvatar(
                           radius: 20,
-                          backgroundImage:
-                              AssetImage(firstProduct.imagePath),
+                          backgroundImage: AssetImage(
+                            firstProduct.imagePath,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -85,8 +103,9 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color:
-                                isSelected ? primaryColor : Colors.grey,
+                            color: isSelected
+                                ? primaryColor
+                                : Colors.grey,
                           ),
                         ),
                       ],
@@ -97,7 +116,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
             ),
           ),
 
-          /// RIGHT SERVICES
+          /// RIGHT SERVICE LIST
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(10),
@@ -106,23 +125,31 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                 final product = products[index];
 
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 14),
+                  margin:
+                      const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius:
+                        BorderRadius.circular(18),
                     boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 6),
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 6,
+                      ),
                     ],
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
                       /// IMAGE + DISCOUNT
                       Stack(
                         children: [
                           ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(18)),
+                            borderRadius:
+                                const BorderRadius.vertical(
+                              top: Radius.circular(18),
+                            ),
                             child: Image.asset(
                               product.imagePath,
                               height: 140,
@@ -131,23 +158,31 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             ),
                           ),
 
-                          /// DISCOUNT BADGE
-                          if (product.discount! > 0)
+                          if ((product.discount ?? 0) > 0)
                             Positioned(
                               right: 10,
                               top: 10,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration:
+                                    BoxDecoration(
                                   color: Colors.green,
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius:
+                                      BorderRadius
+                                          .circular(20),
                                 ),
                                 child: Text(
                                   "${product.discount}% OFF",
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12),
+                                  style:
+                                      const TextStyle(
+                                    color:
+                                        Colors.white,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                             ),
@@ -156,20 +191,28 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
 
                       /// CONTENT
                       Padding(
-                        padding: const EdgeInsets.all(12),
+                        padding:
+                            const EdgeInsets.all(12),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
                           children: [
                             Text(
                               product.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16),
+                              style:
+                                  const TextStyle(
+                                fontWeight:
+                                    FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
 
                             Text(
                               product.slogan ?? "",
-                              style: const TextStyle(color: Colors.grey),
+                              style:
+                                  const TextStyle(
+                                color: Colors.grey,
+                              ),
                             ),
 
                             const SizedBox(height: 6),
@@ -177,15 +220,29 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             /// RATING + TIME
                             Row(
                               children: [
-                                const Icon(Icons.star,
-                                    color: Colors.orange, size: 16),
-                                const SizedBox(width: 4),
-                                Text("${product.rating}"),
-                                const SizedBox(width: 10),
-                                const Icon(Icons.access_time,
-                                    size: 16, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Text(product.time ?? ""),
+                                const Icon(
+                                  Icons.star,
+                                  color:
+                                      Colors.orange,
+                                  size: 16,
+                                ),
+                                const SizedBox(
+                                    width: 4),
+                                Text(
+                                    "${product.rating}"),
+                                const SizedBox(
+                                    width: 10),
+                                const Icon(
+                                  Icons.access_time,
+                                  size: 16,
+                                  color:
+                                      Colors.grey,
+                                ),
+                                const SizedBox(
+                                    width: 4),
+                                Text(
+                                    product.time ??
+                                        ""),
                               ],
                             ),
 
@@ -196,17 +253,25 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                               children: [
                                 Text(
                                   "₹${product.calculatedFinalPrice}",
-                                  style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold),
+                                  style:
+                                      const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight:
+                                        FontWeight
+                                            .bold,
+                                  ),
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(
+                                    width: 8),
                                 Text(
                                   "₹${product.price}",
-                                  style: const TextStyle(
+                                  style:
+                                      const TextStyle(
                                     decoration:
-                                        TextDecoration.lineThrough,
-                                    color: Colors.grey,
+                                        TextDecoration
+                                            .lineThrough,
+                                    color:
+                                        Colors.grey,
                                   ),
                                 ),
                               ],
@@ -218,48 +283,80 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: OutlinedButton(
+                                  child:
+                                      OutlinedButton(
                                     onPressed: () {
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (_) =>
-                                              ServiceViewDetailPage(
-                                            product: product,
+                                          builder:
+                                              (_) =>
+                                                  ServiceViewDetailPage(
+                                            product:
+                                                product,
                                             serviceName:
-                                                widget.serviceName,
+                                                widget
+                                                    .serviceName,
                                           ),
                                         ),
                                       );
                                     },
-                                    child: const Text("View"),
+                                    child: const Text(
+                                        "View"),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+
+                                const SizedBox(
+                                    width: 10),
+
                                 Expanded(
-                                  child: ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                        backgroundColor: primaryColor),
+                                  child:
+                                      ElevatedButton(
+                                    style: ElevatedButton
+                                        .styleFrom(
+                                      backgroundColor:
+                                          primaryColor,
+                                    ),
                                     onPressed: () {
+                                      /// ADD TO CART
                                       Cart.add(
                                         CartItem(
                                           id: product.id,
-                                          name: product.name,
+                                          name: product
+                                              .name,
                                           price: product
                                               .calculatedFinalPrice,
-                                          service: widget.serviceName,
-                                          category: selectedCategory,
+                                          service: widget
+                                              .serviceName,
+                                          category:
+                                              selectedCategory,
                                         ),
-                                        service: widget.serviceName,
+                                        service: widget
+                                            .serviceName,
                                       );
 
-                                      ScaffoldMessenger.of(context)
+                                      /// SNACKBAR
+                                      ScaffoldMessenger.of(
+                                              context)
                                           .showSnackBar(
-                                        const SnackBar(
-                                            content: Text("Added to cart")),
+                                        SnackBar(
+                                          content: Text(
+                                              "${product.name} added to cart"),
+                                        ),
+                                      );
+
+                                      /// OPEN CART PAGE
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder:
+                                              (_) =>
+                                                  const CartPage(service: '', serviceName: '', cart: [],),
+                                        ),
                                       );
                                     },
-                                    child: const Text("Add"),
+                                    child: const Text(
+                                        "Add"),
                                   ),
                                 ),
                               ],
