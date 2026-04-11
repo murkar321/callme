@@ -19,120 +19,136 @@ class CartPage extends StatefulWidget {
 }
 
 class _CartPageState extends State<CartPage> {
-
   void refresh() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
-
-    List<CartItem> items = Cart.getItems(widget.service);
+    List<CartItem> items =
+        Cart.getItems(widget.service);
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor:
+          Colors.grey.shade100,
       appBar: AppBar(
-        title: Text("${widget.service} Cart"),
+        title: Text(
+            "${widget.service} Cart"),
         centerTitle: true,
       ),
-
       body: items.isEmpty
-          ? const Center(child: Text("Cart is empty"))
+          ? const Center(
+              child:
+                  Text("Cart is empty"))
           : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-
-                final item = items[index];
+              padding:
+                  const EdgeInsets.all(
+                      12),
+              itemCount:
+                  items.length,
+              itemBuilder:
+                  (context, index) {
+                final item =
+                    items[index];
 
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
+                  margin:
+                      const EdgeInsets
+                          .only(
+                    bottom: 12,
+                  ),
+                  padding:
+                      const EdgeInsets
+                          .all(12),
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        Colors.white,
+                    borderRadius:
+                        BorderRadius
+                            .circular(
+                                14),
                     boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 4),
+                      BoxShadow(
+                        color: Colors
+                            .black12,
+                        blurRadius: 4,
+                      ),
                     ],
                   ),
                   child: Row(
                     children: [
-
-                      if (item.image != null)
+                      if (item.image !=
+                          null)
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.asset(
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                                      10),
+                          child:
+                              Image.asset(
                             item.image!,
                             height: 65,
                             width: 65,
-                            fit: BoxFit.cover,
+                            fit: BoxFit
+                                .cover,
                           ),
                         ),
-
-                      const SizedBox(width: 12),
-
+                      const SizedBox(
+                          width: 12),
                       Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment:
+                              CrossAxisAlignment
+                                  .start,
                           children: [
-
                             Text(
                               item.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
+                              style:
+                                  const TextStyle(
+                                fontWeight:
+                                    FontWeight
+                                        .bold,
                               ),
                             ),
-
-                            const SizedBox(height: 6),
-
-                            if (widget.service == "Salon" &&
-                                item.visitType != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.pink.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  item.visitType!,
-                                  style: const TextStyle(
-                                    color: Colors.pink,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-
-                            const SizedBox(height: 6),
-
-                            Text("₹${item.price}"),
-
-                            const SizedBox(height: 10),
-
+                            const SizedBox(
+                                height:
+                                    6),
+                            Text(
+                                "₹${item.price}"),
+                            const SizedBox(
+                                height:
+                                    10),
                             Row(
                               children: [
-
                                 IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline),
-                                  onPressed: () {
-                                    setState(() {
+                                  icon: const Icon(
+                                      Icons
+                                          .remove_circle_outline),
+                                  onPressed:
+                                      () {
+                                    setState(
+                                        () {
                                       Cart.removeById(
                                         item.id,
-                                        widget.service,
+                                        widget
+                                            .service,
                                       );
                                     });
                                   },
                                 ),
-
-                                Text("${item.quantity}"),
-
+                                Text(
+                                    "${item.quantity}"),
                                 IconButton(
-                                  icon: const Icon(Icons.add_circle_outline),
-                                  onPressed: () {
-                                    setState(() {
+                                  icon: const Icon(
+                                      Icons
+                                          .add_circle_outline),
+                                  onPressed:
+                                      () {
+                                    setState(
+                                        () {
                                       Cart.add(
                                         item,
-                                        service: widget.service,
+                                        service:
+                                            widget.service,
                                       );
                                     });
                                   },
@@ -142,12 +158,18 @@ class _CartPageState extends State<CartPage> {
                           ],
                         ),
                       ),
-
                       IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
+                        icon: const Icon(
+                          Icons.delete,
+                          color: Colors.red,
+                        ),
                         onPressed: () {
                           setState(() {
-                            Cart.delete(item.id, widget.service);
+                            Cart.delete(
+                              item.id,
+                              widget
+                                  .service,
+                            );
                           });
                         },
                       )
@@ -157,80 +179,130 @@ class _CartPageState extends State<CartPage> {
               },
             ),
 
+      /// ✅ ONLY CLEANING FLOW UPDATED
       bottomNavigationBar: items.isEmpty
           ? null
           : Container(
-              padding: const EdgeInsets.all(12),
+              padding:
+                  const EdgeInsets.all(
+                      12),
               color: Colors.white,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFAE91BA),
+                style: ElevatedButton
+                    .styleFrom(
+                  backgroundColor:
+                      const Color(
+                          0xFFAE91BA),
                 ),
-
                 onPressed: () {
+                  /// ================= SALON UNCHANGED =================
+                  if (widget.service ==
+                      "Salon") {
+                    List<SalonService>
+                        selectedServices =
+                        [];
+                    Map<String, String>
+                        visitTypeMap =
+                        {};
 
-                  /// ================= SALON FIXED FLOW =================
-                 if (widget.service == "Salon") {
+                    for (var item
+                        in items) {
+                      try {
+                        final realId =
+                            item.id
+                                .toString()
+                                .split("_")[0]
+                                .toString();
 
-  List<SalonService> selectedServices = [];
-  Map<String, String> visitTypeMap = {};
+                        final service =
+                            salonServices
+                                .firstWhere(
+                          (s) =>
+                              s.id
+                                  .toString()
+                                  .trim() ==
+                              realId
+                                  .trim(),
+                        );
 
-  for (var item in items) {
+                        selectedServices
+                            .add(service);
 
-    try {
-      /// 🔥 SAFE ID (NO TYPE ERROR EVER)
-      final realId = item.id.toString().split("_")[0].toString();
+                        visitTypeMap[
+                                realId] =
+                            (item.visitType ??
+                                    "Salon")
+                                .toString();
+                      } catch (e) {
+                        debugPrint(
+                            "Salon match failed: ${item.id}");
+                      }
+                    }
 
-      final service = salonServices.firstWhere(
-        (s) => s.id.toString().trim() == realId.trim(),
-      );
+                    if (selectedServices
+                        .isEmpty) {
+                      ScaffoldMessenger
+                              .of(context)
+                          .showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              "No valid salon services found"),
+                        ),
+                      );
+                      return;
+                    }
 
-      selectedServices.add(service);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            SalonBookingPage(
+                          services:
+                              selectedServices,
+                          visitTypeMap:
+                              visitTypeMap,
+                        ),
+                      ),
+                    );
+                  }
 
-      visitTypeMap[realId] =
-          (item.visitType ?? "Salon").toString();
+                  /// ✅ CLEANING FIX ONLY
+                  else if (widget
+                          .service ==
+                      "Cleaning") {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            BookingPage(
+                          serviceName:
+                              widget
+                                  .service,
+                        ),
+                      ),
+                    );
+                  }
 
-    } catch (e) {
-      debugPrint("Salon match failed: ${item.id}");
-    }
-  }
-
-  if (selectedServices.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("No valid salon services found"),
-      ),
-    );
-    return;
-  }
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => SalonBookingPage(
-        services: selectedServices,
-        visitTypeMap: visitTypeMap,
-      ),
-    ),
-  );
-}
-
-                  /// ================= OTHER SERVICES (UNCHANGED) =================
+                  /// ================= REST UNCHANGED =================
                   else {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => BookingPage(
-                          serviceName: widget.service,
-                          cart: Cart.getItems(widget.service),
-                          products: null,
+                        builder: (_) =>
+                            BookingPage(
+                          serviceName:
+                              widget
+                                  .service,
+                          cart: Cart
+                              .getItems(widget
+                                  .service),
                         ),
                       ),
                     );
                   }
                 },
-
-                child: const Text("Proceed to Booking"),
+                child: const Text(
+                    "Proceed to Booking"),
               ),
             ),
     );

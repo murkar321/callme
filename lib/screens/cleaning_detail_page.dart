@@ -4,7 +4,6 @@ import '../data/cleaning_data.dart';
 import '../models/cart.dart';
 import '../widgets/cleaning_service_card.dart';
 
-
 class CleaningDetailPage extends StatefulWidget {
   final String serviceName;
 
@@ -20,32 +19,25 @@ class CleaningDetailPage extends StatefulWidget {
 
 class _CleaningDetailPageState
     extends State<CleaningDetailPage> {
-  final Color primaryColor = const Color(0xFFAE91BA);
+  final Color primaryColor =
+      const Color(0xFFAE91BA);
 
   late String selectedCategory;
 
-  @override 
+  @override
   void initState() {
     super.initState();
-    selectedCategory = cleaningServices.keys.first;
+    selectedCategory =
+        cleaningServices.keys.first;
   }
 
-  /// TOTAL ITEMS
-  int get totalItems {
-    int count = 0;
-    final items =
-        Cart.getItems(widget.serviceName);
+  int get totalItems =>
+      Cart.getTotalItems(
+          widget.serviceName);
 
-    for (var item in items) {
-      count += Cart.getQuantity(
-          item.id, widget.serviceName);
-    }
-    return count;
-  }
-
-  /// TOTAL AMOUNT
   int get totalAmount =>
-      Cart.getTotal(widget.serviceName);
+      Cart.getTotal(
+          widget.serviceName);
 
   @override
   Widget build(BuildContext context) {
@@ -53,47 +45,48 @@ class _CleaningDetailPageState
         cleaningServices.keys.toList();
 
     final products =
-        cleaningServices[selectedCategory]!;
+        cleaningServices[
+            selectedCategory]!;
 
     final screenWidth =
-        MediaQuery.of(context).size.width;
+        MediaQuery.of(context)
+            .size
+            .width;
 
     return Scaffold(
-      backgroundColor: const Color(0xffF6F7FB),
-
-      /// APPBAR
+      backgroundColor:
+          const Color(0xffF6F7FB),
       appBar: AppBar(
-        backgroundColor: primaryColor,
+        backgroundColor:
+            primaryColor,
         centerTitle: true,
         elevation: 0,
         title: Text(
           widget.serviceName,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-          ),
         ),
-
-        /// 🛒 CART ICON → CART PAGE
         actions: [
           Stack(
             children: [
               IconButton(
-                icon:
-                    const Icon(Icons.shopping_cart),
+                icon: const Icon(
+                    Icons.shopping_cart),
                 onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) =>
                           CartPage(
-                        service:
-                            widget.serviceName, serviceName: '', cart: [],
+                        service: widget
+                            .serviceName,
+                        serviceName: '',
+                        cart: [],
                       ),
                     ),
-                  );
+                  ).then((_) {
+                    setState(() {});
+                  });
                 },
               ),
-
               if (totalItems > 0)
                 Positioned(
                   right: 6,
@@ -103,10 +96,12 @@ class _CleaningDetailPageState
                     backgroundColor:
                         Colors.red,
                     child: Text(
-                      totalItems.toString(),
+                      totalItems
+                          .toString(),
                       style:
                           const TextStyle(
-                        color: Colors.white,
+                        color: Colors
+                            .white,
                         fontSize: 10,
                       ),
                     ),
@@ -116,19 +111,13 @@ class _CleaningDetailPageState
           )
         ],
       ),
-
-      /// BODY
       body: Row(
         children: [
-
-          /// 🔹 LEFT CATEGORY PANEL
           Container(
-            width: screenWidth * 0.25,
+            width:
+                screenWidth * 0.25,
             color: Colors.white,
             child: ListView.builder(
-              padding:
-                  const EdgeInsets.symmetric(
-                      vertical: 10),
               itemCount:
                   categories.length,
               itemBuilder:
@@ -161,14 +150,13 @@ class _CleaningDetailPageState
                     ),
                     child: Column(
                       children: [
-
                         Container(
                           height: 55,
                           width: 55,
                           decoration:
                               BoxDecoration(
-                            shape:
-                                BoxShape.circle,
+                            shape: BoxShape
+                                .circle,
                             border:
                                 Border.all(
                               color: isSelected
@@ -180,28 +168,22 @@ class _CleaningDetailPageState
                             ),
                             image:
                                 DecorationImage(
-                              image: AssetImage(
-                                  firstProduct
-                                      .image),
-                              fit:
-                                  BoxFit.cover,
+                              image:
+                                  AssetImage(
+                                firstProduct
+                                    .image,
+                              ),
+                              fit: BoxFit
+                                  .cover,
                             ),
                           ),
                         ),
-
                         const SizedBox(
                             height: 6),
-
                         Text(
                           category,
-                          textAlign:
-                              TextAlign.center,
                           style:
                               TextStyle(
-                            fontSize: 11,
-                            fontWeight:
-                                FontWeight
-                                    .w600,
                             color: isSelected
                                 ? primaryColor
                                 : Colors
@@ -215,13 +197,16 @@ class _CleaningDetailPageState
               },
             ),
           ),
-
-          /// 🔹 RIGHT SERVICES
           Expanded(
             child: ListView.builder(
               padding:
-                  const EdgeInsets.fromLTRB(
-                      12, 12, 12, 100),
+                  const EdgeInsets
+                      .fromLTRB(
+                12,
+                12,
+                12,
+                100,
+              ),
               itemCount:
                   products.length,
               itemBuilder:
@@ -229,33 +214,29 @@ class _CleaningDetailPageState
                 final product =
                     products[index];
 
-                final id =
-                    "${widget.serviceName}_${selectedCategory}_$index";
-
                 return CleaningServiceCard(
                   service: product,
-                  serviceName:
-                      widget.serviceName,
+                  serviceName: widget
+                      .serviceName,
                   category:
                       selectedCategory,
                   index: index,
-
-                  /// ➕ ADD → SHOW POPUP
                   onAdd: () {
                     setState(() {
                       Cart.add(
                         CartItem(
-                          id: id,
-                          name:
-                              product.name,
+                          id:
+                              "${widget.serviceName}_${selectedCategory}_${product.name}",
+                          name: product
+                              .name,
                           price: product
                               .finalPrice,
                           service: widget
                               .serviceName,
                           category:
                               selectedCategory,
-                          image:
-                              product.image,
+                          image: product
+                              .image,
                         ),
                         service: widget
                             .serviceName,
@@ -268,9 +249,6 @@ class _CleaningDetailPageState
                       SnackBar(
                         content: Text(
                             "${product.name} added to cart"),
-                        duration:
-                            const Duration(
-                                seconds: 1),
                       ),
                     );
                   },
@@ -280,86 +258,6 @@ class _CleaningDetailPageState
           ),
         ],
       ),
-
-      /// 🔹 VIEW CART BOTTOM
-      bottomNavigationBar:
-          totalItems == 0
-              ? null
-              : SafeArea(
-                  child: InkWell(
-                    onTap: () {
-
-                      /// 👉 OPEN CART PAGE
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              CartPage(
-                            service: widget
-                                .serviceName, serviceName: '', cart: [],
-                          ),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      margin:
-                          const EdgeInsets
-                              .all(12),
-                      padding:
-                          const EdgeInsets
-                              .symmetric(
-                        horizontal: 18,
-                        vertical: 16,
-                      ),
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            primaryColor,
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                                    16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: primaryColor
-                                .withOpacity(
-                                    0.3),
-                            blurRadius: 8,
-                          )
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment
-                                .spaceBetween,
-                        children: [
-                          Text(
-                            "$totalItems items",
-                            style:
-                                const TextStyle(
-                              color: Colors
-                                  .white,
-                              fontWeight:
-                                  FontWeight
-                                      .w600,
-                            ),
-                          ),
-                          Text(
-                            "₹$totalAmount View Cart →",
-                            style:
-                                const TextStyle(
-                              color: Colors
-                                  .white,
-                              fontWeight:
-                                  FontWeight
-                                      .w600,
-                            ),
-                          )
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
     );
   }
 }
