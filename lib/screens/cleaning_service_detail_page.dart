@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/cleaning_service.dart';
 import 'booking_page.dart';
 
-class CleaningServiceDetailPage extends StatelessWidget {
+class CleaningServiceDetailPage extends StatefulWidget {
   final CleaningService product;
   final String serviceName;
 
@@ -13,8 +13,19 @@ class CleaningServiceDetailPage extends StatelessWidget {
   });
 
   @override
+  State<CleaningServiceDetailPage> createState() =>
+      _CleaningServiceDetailPageState();
+}
+
+class _CleaningServiceDetailPageState
+    extends State<CleaningServiceDetailPage> {
+  bool isNavigating = false;
+
+  @override
   Widget build(BuildContext context) {
     final Color primaryColor = const Color(0xFFAE91BA);
+    final product = widget.product;
+    final serviceName = widget.serviceName;
 
     return Scaffold(
       backgroundColor: const Color(0xffF6F7FB),
@@ -34,7 +45,6 @@ class CleaningServiceDetailPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
                   /// 🔹 IMAGE WITH DISCOUNT
                   Stack(
                     children: [
@@ -44,13 +54,14 @@ class CleaningServiceDetailPage extends StatelessWidget {
                         height: 240,
                         fit: BoxFit.cover,
                       ),
-
                       Positioned(
                         right: 12,
                         top: 12,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.green,
                             borderRadius: BorderRadius.circular(10),
@@ -73,7 +84,6 @@ class CleaningServiceDetailPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-
                         /// NAME
                         Text(
                           product.name,
@@ -88,15 +98,19 @@ class CleaningServiceDetailPage extends StatelessWidget {
                         /// RATING + TIME
                         Row(
                           children: [
-                            const Icon(Icons.star,
-                                color: Colors.orange, size: 18),
+                            const Icon(
+                              Icons.star,
+                              color: Colors.orange,
+                              size: 18,
+                            ),
                             const SizedBox(width: 4),
                             const Text("5.0"),
-
                             const SizedBox(width: 15),
-
-                            const Icon(Icons.access_time,
-                                size: 18, color: Colors.grey),
+                            const Icon(
+                              Icons.access_time,
+                              size: 18,
+                              color: Colors.grey,
+                            ),
                             const SizedBox(width: 4),
                             Text(product.time),
                           ],
@@ -140,7 +154,9 @@ class CleaningServiceDetailPage extends StatelessWidget {
 
                         Text(
                           product.description,
-                          style: const TextStyle(color: Colors.black87),
+                          style: const TextStyle(
+                            color: Colors.black87,
+                          ),
                         ),
 
                         const SizedBox(height: 16),
@@ -212,17 +228,30 @@ class CleaningServiceDetailPage extends StatelessWidget {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => BookingPage(
-                          serviceName: serviceName,
-                          products: product, cart: [],
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: isNavigating
+                      ? null
+                      : () async {
+                          setState(() {
+                            isNavigating = true;
+                          });
+
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BookingPage(
+                                serviceName: serviceName,
+                                products: product,
+                                cart: [],
+                              ),
+                            ),
+                          );
+
+                          if (mounted) {
+                            setState(() {
+                              isNavigating = false;
+                            });
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
                     shape: RoundedRectangleBorder(
@@ -230,7 +259,9 @@ class CleaningServiceDetailPage extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    "Book Now • ₹${product.finalPrice}",
+                    isNavigating
+                        ? "Opening..."
+                        : "Book Now • ₹${product.finalPrice}",
                     style: const TextStyle(
                       fontSize: 16,
                       color: Colors.white,
@@ -248,7 +279,11 @@ class CleaningServiceDetailPage extends StatelessWidget {
 
   /// 🔹 LIST SECTION
   Widget _buildSection(
-      String title, List<String> items, IconData icon, Color color) {
+    String title,
+    List<String> items,
+    IconData icon,
+    Color color,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
