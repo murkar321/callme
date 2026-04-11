@@ -199,7 +199,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                         child: SizedBox(
                           height: 220,
                           child: Image.asset(
-                            'assets/worker.jfif',
+                            'assets/worker.png',
                             fit: BoxFit.contain,
                           ),
                         ),

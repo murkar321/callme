@@ -11,7 +11,7 @@ final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {
   ServiceProduct(
     name: 'Pipe Leakage Repair',
     price: 400,
-    imagePath: 'assets/Plumber fixing leaking pipe .png',
+    imagePath: 'assets/plumber fix.png',
     description: 'This service fixes leaking pipes to prevent water damage and wastage. Our professionals identify the source and repair it efficiently for long lasting results.',
     time: '45 mins',
     discount: 10,
