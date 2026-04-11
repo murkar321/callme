@@ -14,18 +14,20 @@ class SalonServiceCard extends StatelessWidget {
     this.onUpdate,
   });
 
+  String _key(String visitType) {
+    return "${service.id}_$visitType";
+  }
+
+  int _getQty(String visitType) {
+    return Cart.getQuantity(_key(visitType), "Salon");
+  }
+
   @override
   Widget build(BuildContext context) {
 
-    const serviceName = "Salon";
-
-    final homeId = "${service.id}_home";
-    final salonId = "${service.id}_salon";
-
-    final qtyHome = Cart.getQuantity(homeId, serviceName);
-    final qtySalon = Cart.getQuantity(salonId, serviceName);
-
-    final totalQty = qtyHome + qtySalon;
+    final homeQty = _getQty("Home");
+    final salonQty = _getQty("Salon");
+    final totalQty = homeQty + salonQty;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -41,7 +43,9 @@ class SalonServiceCard extends StatelessWidget {
         children: [
 
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(14),
+            ),
             child: Image.asset(
               service.image,
               height: 140,
@@ -107,7 +111,8 @@ class SalonServiceCard extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => SalonDetailPage(service: service),
+                              builder: (_) =>
+                                  SalonDetailPage(service: service),
                             ),
                           );
                         },
@@ -124,7 +129,9 @@ class SalonServiceCard extends StatelessWidget {
                         ),
                         onPressed: () => _showPopup(context),
                         child: Text(
-                          totalQty == 0 ? "Book" : "Added ($totalQty)",
+                          totalQty == 0
+                              ? "Book"
+                              : "Added ($totalQty)",
                         ),
                       ),
                     ),
@@ -139,7 +146,6 @@ class SalonServiceCard extends StatelessWidget {
   }
 
   void _showPopup(BuildContext context) {
-
     showModalBottomSheet(
       context: context,
       builder: (_) {
@@ -157,13 +163,13 @@ class SalonServiceCard extends StatelessWidget {
 
               const SizedBox(height: 20),
 
+              /// 🏠 HOME
               ListTile(
                 leading: const Icon(Icons.home),
                 title: const Text("Home Appointment"),
                 onTap: () {
-
                   Cart.addSalon(
-                    id: "${service.id}_home",
+                    id: _key("Home"), // ✅ FIXED UNIQUE KEY
                     name: service.name,
                     price: service.finalPrice,
                     category: service.category,
@@ -172,17 +178,17 @@ class SalonServiceCard extends StatelessWidget {
                   );
 
                   Navigator.pop(context);
-                  if (onUpdate != null) onUpdate!();
+                  onUpdate?.call();
                 },
               ),
 
+              /// 💇 SALON
               ListTile(
                 leading: const Icon(Icons.store),
                 title: const Text("Salon Appointment"),
                 onTap: () {
-
                   Cart.addSalon(
-                    id: "${service.id}_salon",
+                    id: _key("Salon"), // ✅ FIXED UNIQUE KEY
                     name: service.name,
                     price: service.finalPrice,
                     category: service.category,
@@ -191,7 +197,7 @@ class SalonServiceCard extends StatelessWidget {
                   );
 
                   Navigator.pop(context);
-                  if (onUpdate != null) onUpdate!();
+                  onUpdate?.call();
                 },
               ),
 

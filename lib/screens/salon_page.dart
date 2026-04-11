@@ -18,23 +18,31 @@ class _SalonPageState extends State<SalonPage> {
 
   void refresh() => setState(() {});
 
-  /// TOTAL ITEMS (ONLY SALON)
-  int get totalItems {
-    final items = Cart.getItems("Salon");
-    return items.fold(0, (sum, item) => sum + item.quantity);
-  }
-
-  /// TOTAL PRICE (ONLY SALON)
-  int get totalAmount => Cart.getTotal("Salon");
-
   @override
   Widget build(BuildContext context) {
     final categories = salonCategories;
+
+    /// ✅ SAFETY FIX: prevent index crash / empty render
+    if (categories.isEmpty) {
+      return const Scaffold(
+        body: Center(child: Text("No categories found")),
+      );
+    }
+
+    if (selectedIndex >= categories.length) {
+      selectedIndex = 0;
+    }
+
     final selectedCategory = categories[selectedIndex];
 
     final services = salonServices
         .where((s) => s.category == selectedCategory)
         .toList();
+
+    final totalItems =
+        Cart.getItems("Salon").fold(0, (sum, i) => sum + i.quantity);
+
+    final totalAmount = Cart.getTotal("Salon");
 
     return Scaffold(
       backgroundColor: const Color(0xffF5F6FA),
@@ -56,7 +64,8 @@ class _SalonPageState extends State<SalonPage> {
                       MaterialPageRoute(
                         builder: (_) => const CartPage(
                           service: "Salon",
-                          serviceName: "Salon", cart: [],
+                          serviceName: "Salon",
+                          cart: [],
                         ),
                       ),
                     );
@@ -108,15 +117,21 @@ class _SalonPageState extends State<SalonPage> {
 
                   return GestureDetector(
                     onTap: () {
-                      setState(() => selectedIndex = index);
+                      setState(() {
+                        selectedIndex = index;
+                      });
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: isSelected ? Colors.white : Colors.transparent,
+                        color: isSelected
+                            ? Colors.white
+                            : Colors.transparent,
                         border: Border(
                           left: BorderSide(
-                            color: isSelected ? primaryColor : Colors.transparent,
+                            color: isSelected
+                                ? primaryColor
+                                : Colors.transparent,
                             width: 4,
                           ),
                         ),
@@ -135,10 +150,12 @@ class _SalonPageState extends State<SalonPage> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11,
-                              fontWeight:
-                                  isSelected ? FontWeight.bold : FontWeight.normal,
-                              color:
-                                  isSelected ? primaryColor : Colors.black87,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isSelected
+                                  ? primaryColor
+                                  : Colors.black87,
                             ),
                           ),
                         ],
@@ -151,22 +168,32 @@ class _SalonPageState extends State<SalonPage> {
 
             /// RIGHT SERVICES
             Expanded(
-              child: ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  12,
-                  12,
-                  12,
-                  totalItems > 0 ? 90 : 12,
-                ),
-                itemCount: services.length,
-                itemBuilder: (context, index) {
-                  return SalonServiceCard(
-                    service: services[index],
-                    onUpdate: refresh,
-                  );
-                },
-              ),
+              child: services.isEmpty
+                  ? const Center(
+                      child: Text(
+                        "No services available in this category",
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 14,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        12,
+                        12,
+                        12,
+                        totalItems > 0 ? 90 : 12,
+                      ),
+                      itemCount: services.length,
+                      itemBuilder: (context, index) {
+                        return SalonServiceCard(
+                          service: services[index],
+                          onUpdate: refresh,
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -183,7 +210,8 @@ class _SalonPageState extends State<SalonPage> {
                     MaterialPageRoute(
                       builder: (_) => const CartPage(
                         service: "Salon",
-                        serviceName: "Salon", cart: [],
+                        serviceName: "Salon",
+                        cart: [],
                       ),
                     ),
                   );

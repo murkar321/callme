@@ -19,8 +19,12 @@ class CartPage extends StatefulWidget {
 }
 
 class _CartPageState extends State<CartPage> {
+
+  void refresh() => setState(() {});
+
   @override
   Widget build(BuildContext context) {
+
     List<CartItem> items = Cart.getItems(widget.service);
 
     return Scaffold(
@@ -36,7 +40,8 @@ class _CartPageState extends State<CartPage> {
               padding: const EdgeInsets.all(12),
               itemCount: items.length,
               itemBuilder: (context, index) {
-                CartItem item = items[index];
+
+                final item = items[index];
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -45,18 +50,15 @@ class _CartPageState extends State<CartPage> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 4,
-                      )
+                      BoxShadow(color: Colors.black12, blurRadius: 4),
                     ],
                   ),
                   child: Row(
                     children: [
+
                       if (item.image != null)
                         ClipRRect(
-                          borderRadius:
-                              BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(10),
                           child: Image.asset(
                             item.image!,
                             height: 65,
@@ -69,83 +71,68 @@ class _CartPageState extends State<CartPage> {
 
                       Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+
                             Text(
                               item.name,
                               style: const TextStyle(
-                                fontWeight:
-                                    FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
 
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
 
-                            /// KEEP SALON SAME
-                            if (widget.service ==
-                                    "Salon" &&
+                            if (widget.service == "Salon" &&
                                 item.visitType != null)
                               Container(
-                                padding:
-                                    const EdgeInsets.symmetric(
+                                padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
                                   vertical: 3,
                                 ),
-                                decoration:
-                                    BoxDecoration(
-                                  color: Colors.pink
-                                      .withOpacity(0.1),
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.pink.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
                                   item.visitType!,
-                                  style:
-                                      const TextStyle(
-                                    color:
-                                        Colors.pink,
+                                  style: const TextStyle(
+                                    color: Colors.pink,
                                     fontSize: 12,
                                   ),
                                 ),
                               ),
 
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
 
                             Text("₹${item.price}"),
 
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 10),
 
                             Row(
                               children: [
+
                                 IconButton(
-                                  icon: const Icon(
-                                    Icons
-                                        .remove_circle_outline,
-                                  ),
+                                  icon: const Icon(Icons.remove_circle_outline),
                                   onPressed: () {
                                     setState(() {
-                                      Cart.remove(
-                                          item);
+                                      Cart.removeById(
+                                        item.id,
+                                        widget.service,
+                                      );
                                     });
                                   },
                                 ),
 
-                                Text(item.quantity
-                                    .toString()),
+                                Text("${item.quantity}"),
 
                                 IconButton(
-                                  icon: const Icon(
-                                    Icons
-                                        .add_circle_outline,
-                                  ),
+                                  icon: const Icon(Icons.add_circle_outline),
                                   onPressed: () {
                                     setState(() {
                                       Cart.add(
                                         item,
-                                        service: item
-                                            .service,
+                                        service: widget.service,
                                       );
                                     });
                                   },
@@ -157,16 +144,10 @@ class _CartPageState extends State<CartPage> {
                       ),
 
                       IconButton(
-                        icon: const Icon(
-                          Icons.delete,
-                          color: Colors.red,
-                        ),
+                        icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () {
                           setState(() {
-                            Cart.delete(
-                              item.id,
-                              widget.service,
-                            );
+                            Cart.delete(item.id, widget.service);
                           });
                         },
                       )
@@ -183,109 +164,73 @@ class _CartPageState extends State<CartPage> {
               color: Colors.white,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      const Color(0xFFAE91BA),
+                  backgroundColor: const Color(0xFFAE91BA),
                 ),
+
                 onPressed: () {
-                  /// ================= SALON KEEP SAME =================
-                  if (widget.service == "Salon") {
-                    List<SalonService>
-                        selectedServices = [];
 
-                    Map<String, String>
-                        visitTypeMap = {};
+                  /// ================= SALON FIXED FLOW =================
+                 if (widget.service == "Salon") {
 
-                    for (var item in items) {
-                      try {
-                        final service =
-                            salonServices.firstWhere(
-                          (s) =>
-                              s.id
-                                  .toString()
-                                  .trim() ==
-                              item.id
-                                  .toString()
-                                  .trim(),
-                        );
+  List<SalonService> selectedServices = [];
+  Map<String, String> visitTypeMap = {};
 
-                        selectedServices
-                            .add(service);
+  for (var item in items) {
 
-                        visitTypeMap[service.id
-                                .toString()] =
-                            item.visitType ??
-                                "Salon";
-                      } catch (e) {
-                        debugPrint(
-                          "Salon match failed for id: ${item.id}",
-                        );
-                      }
-                    }
+    try {
+      /// 🔥 SAFE ID (NO TYPE ERROR EVER)
+      final realId = item.id.toString().split("_")[0].toString();
 
-                    if (selectedServices
-                        .isEmpty) {
-                      ScaffoldMessenger.of(
-                              context)
-                          .showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            "No valid salon services found",
-                          ),
-                        ),
-                      );
-                      return;
-                    }
+      final service = salonServices.firstWhere(
+        (s) => s.id.toString().trim() == realId.trim(),
+      );
 
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            SalonBookingPage(
-                          services:
-                              selectedServices,
-                          visitTypeMap:
-                              visitTypeMap,
-                        ),
-                      ),
-                    );
-                  }
+      selectedServices.add(service);
 
-                  /// ================= STRICT PLUMBING FIX =================
-                  else if (widget.service ==
-                      "Plumbing") {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            BookingPage(
-                          serviceName:
-                              "Plumbing",
-                          cart: items,
-                          products: null,
-                        ),
-                      ),
-                    );
-                  }
+      visitTypeMap[realId] =
+          (item.visitType ?? "Salon").toString();
 
-                  /// ================= OTHER SERVICES SAME =================
+    } catch (e) {
+      debugPrint("Salon match failed: ${item.id}");
+    }
+  }
+
+  if (selectedServices.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("No valid salon services found"),
+      ),
+    );
+    return;
+  }
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => SalonBookingPage(
+        services: selectedServices,
+        visitTypeMap: visitTypeMap,
+      ),
+    ),
+  );
+}
+
+                  /// ================= OTHER SERVICES (UNCHANGED) =================
                   else {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            BookingPage(
-                          serviceName:
-                              widget.service,
-                          cart: Cart.getItems(
-                              widget.service),
+                        builder: (_) => BookingPage(
+                          serviceName: widget.service,
+                          cart: Cart.getItems(widget.service),
                           products: null,
                         ),
                       ),
                     );
                   }
                 },
-                child: const Text(
-                    "Proceed to Booking"),
+
+                child: const Text("Proceed to Booking"),
               ),
             ),
     );

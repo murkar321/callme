@@ -21,39 +21,22 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
 
   int get total {
     int sum = 0;
-
     for (var item in selected) {
-      sum += int.parse(
-        item.price.replaceAll(RegExp(r'[^0-9]'), ''),
-      );
+      sum += int.parse(item.price.replaceAll(RegExp(r'[^0-9]'), ''));
     }
-
     return sum;
   }
 
   String getPriceRange() {
     switch (widget.packageId) {
       case "basic":
-        return "₹1200 - ₹2800 sq.ft (approx)";
+        return "₹1200 - ₹2800 / sq.ft (approx)";
       case "standard":
-        return "₹2800 - ₹4500 sq.ft (approx)";
+        return "₹2800 - ₹4500 / sq.ft (approx)";
       case "premium":
-        return "₹4500+ sq.ft (approx)";
+        return "₹4500+ / sq.ft (approx)";
       default:
         return "";
-    }
-  }
-
-  String getWorkerImage() {
-    switch (widget.packageId) {
-      case "basic":
-        return "assets/worker.jfif";
-      case "standard":
-        return "assets/worker.jfif";
-      case "premium":
-        return "assets/worker.jfif";
-      default:
-        return "assets/worker.jfif";
     }
   }
 
@@ -73,9 +56,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final options = renovationOptions[widget.packageId] ?? [];
-
     final width = MediaQuery.of(context).size.width;
-
     final height = MediaQuery.of(context).size.height;
 
     return SafeArea(
@@ -84,193 +65,176 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            /// HEADER
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.packageName,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            /// CARD
             Expanded(
               child: SingleChildScrollView(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.only(right: 50),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.shade300,
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          )
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Text(
-                            widget.packageName,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red,
-                            ),
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          Text(
-                            getPriceRange(),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey[700],
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          /// OPTIONS
-                          Column(
-                            children: options.map((opt) {
-                              final isSelected = selected.contains(opt);
-
-                              return CheckboxListTile(
-                                value: isSelected,
-                                title: Text(opt.name),
-                                subtitle: Text(opt.price),
-                                controlAffinity:
-                                    ListTileControlAffinity.leading,
-                                onChanged: (_) {
-                                  setState(() {
-                                    if (isSelected) {
-                                      selected.remove(opt);
-                                    } else {
-                                      selected.add(opt);
-                                    }
-                                  });
-                                },
-                              );
-                            }).toList(),
-                          ),
-
-                          const SizedBox(height: 10),
-
-                          Text(
-                            getBestFor(),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ),
-
-                    /// WORKER IMAGE
-                    Positioned(
-                      right: 0,
-                      top: 30,
-                      child: Container(
-                        height: width * 0.42,
-                        width: width * 0.26,
+                child: Center(
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: width * 0.9,
+                        margin: const EdgeInsets.only(top: 10),
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
+                          color: const Color(0xfff3f3f3),
+                          borderRadius: BorderRadius.circular(22),
                           boxShadow: const [
                             BoxShadow(
                               color: Colors.black26,
                               blurRadius: 10,
+                              offset: Offset(0, 4),
                             )
                           ],
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.packageName,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xff7b1e1e),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              getPriceRange(),
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            ...options.map((opt) {
+                              final isSelected = selected.contains(opt);
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(
+                                      height: 24,
+                                      width: 24,
+                                      child: Checkbox(
+                                        value: isSelected,
+                                        onChanged: (_) {
+                                          setState(() {
+                                            if (isSelected) {
+                                              selected.remove(opt);
+                                            } else {
+                                              selected.add(opt);
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          opt.name,
+                                          style: const TextStyle(fontSize: 16),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                            const SizedBox(height: 16),
+                            Text(
+                              getBestFor(),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.black54,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Align(
+                              alignment: Alignment.bottomRight,
+                              child: SizedBox(
+                                width: 140,
+                                height: 48,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xff8b1e1e),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  onPressed: selected.isEmpty
+                                      ? null
+                                      : () {
+                                          Navigator.pop(context);
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => CivilBookingPage(
+                                                serviceName: widget.packageName,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                  child: const Text(
+                                    "Appoint me",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      Positioned(
+                        right: 18,
+                        top: 70,
+                        child: SizedBox(
+                          height: 220,
                           child: Image.asset(
-                            getWorkerImage(),
-                            fit: BoxFit.cover,
+                            'assets/worker.jfif',
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
 
-            /// TOTAL
             Container(
-              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     "Total",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   Text(
                     "₹$total",
                     style: const TextStyle(
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
                     ),
-                  )
+                  ),
                 ],
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            /// APPOINT
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                ),
-                onPressed: selected.isEmpty
-                    ? null
-                    : () {
-                        Navigator.pop(context);
-
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CivilBookingPage(
-                              serviceName: widget.packageName,
-                            ),
-                          ),
-                        );
-                      },
-                child: const Text("Appoint me"),
               ),
             ),
           ],

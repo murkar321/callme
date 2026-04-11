@@ -1,4 +1,5 @@
 class SalonService {
+  final int id; // ✅ FIXED (was var)
   final String name;
   final String image;
   final String time;
@@ -10,11 +11,9 @@ class SalonService {
   final String category;
   final List<String> includes;
   final List<String> process;
-  
-  var id;
 
   SalonService({
-    required this.id, 
+    required this.id,
     required this.name,
     required this.image,
     required this.time,
@@ -28,9 +27,7 @@ class SalonService {
     required this.process,
   });
 
-  Null get variants => null;
-
-  double? get rating => 5;
+  double get rating => 5;
 }
 
 List<String> salonCategories = [
