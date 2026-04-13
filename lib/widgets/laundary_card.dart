@@ -17,6 +17,8 @@ class LaundryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -33,26 +35,59 @@ class LaundryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          /// IMAGE
-          AspectRatio(
-            aspectRatio: 4 / 3,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(14),
+          /// =========================
+          /// IMAGE + BADGE
+          /// =========================
+          Stack(
+            children: [
+              AspectRatio(
+                aspectRatio: screenWidth < 400 ? 4 / 3 : 5 / 3,
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(14),
+                  ),
+                  child: Image.asset(
+                    product.imagePath,
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
-              child: Image.asset(
-                product.imagePath,
-                fit: BoxFit.cover,
-              ),
-            ),
+
+              /// BADGE (TOP LEFT)
+              if (product.badge != null &&
+                  product.badge!.isNotEmpty)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      product.badge!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
 
+          /// =========================
           /// CONTENT
+          /// =========================
           Padding(
             padding: const EdgeInsets.all(8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
 
                 /// NAME
@@ -60,32 +95,79 @@ class LaundryCard extends StatelessWidget {
                   product.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
+                  style: TextStyle(
+                    fontSize: screenWidth < 400 ? 12 : 13,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
 
                 const SizedBox(height: 4),
 
-                /// PRICE
-                Text(
-                  "₹${product.calculatedFinalPrice}",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                /// PRICE + DISCOUNT
+                Row(
+                  children: [
+                    Text(
+                      "₹${product.calculatedFinalPrice}",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: screenWidth < 400 ? 13 : 14,
+                      ),
+                    ),
+
+                    const SizedBox(width: 6),
+
+                    if (product.discount != null &&
+                        product.discount! > 0)
+                      Text(
+                        "${product.discount}% OFF",
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: 6),
+
+                /// RATING + TIME
+                Row(
+                  children: [
+                    const Icon(Icons.star,
+                        size: 12, color: Colors.orange),
+                    const SizedBox(width: 2),
+                    Text(
+                      product.safeRating.toString(),
+                      style:
+                          const TextStyle(fontSize: 10),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        product.serviceTime,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 8),
 
-                /// BUTTONS
+                /// =========================
+                /// BUTTONS (NO OVERFLOW FIXED)
+                /// =========================
                 Row(
                   children: [
 
+                    /// ADD BUTTON
                     Expanded(
                       child: SizedBox(
-                        height: 30,
+                        height: 32,
                         child: ElevatedButton(
                           onPressed: onAdd,
                           style: ElevatedButton.styleFrom(
@@ -97,11 +179,13 @@ class LaundryCard extends StatelessWidget {
                                   BorderRadius.circular(8),
                             ),
                           ),
-                          child: const Text(
-                            "ADD",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white,
+                          child: const FittedBox(
+                            child: Text(
+                              "ADD",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -110,9 +194,10 @@ class LaundryCard extends StatelessWidget {
 
                     const SizedBox(width: 6),
 
+                    /// VIEW BUTTON
                     Expanded(
                       child: SizedBox(
-                        height: 30,
+                        height: 32,
                         child: OutlinedButton(
                           onPressed: onView,
                           style: OutlinedButton.styleFrom(
@@ -122,9 +207,11 @@ class LaundryCard extends StatelessWidget {
                                   BorderRadius.circular(8),
                             ),
                           ),
-                          child: const Text(
-                            "VIEW",
-                            style: TextStyle(fontSize: 12),
+                          child: const FittedBox(
+                            child: Text(
+                              "VIEW",
+                              style: TextStyle(fontSize: 12),
+                            ),
                           ),
                         ),
                       ),

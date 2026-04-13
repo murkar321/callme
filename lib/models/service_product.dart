@@ -13,6 +13,9 @@ class ServiceProduct {
   final String? slogan;
   final double? rating;
 
+  /// ✅ ADD THIS (for badge like "Best Seller")
+  final String? badge;
+
   final List<String>? includes;
   final List<String>? excludes;
   final List<String>? process;
@@ -32,6 +35,10 @@ class ServiceProduct {
     this.discount,
     this.finalPrice,
     this.slogan,
+
+    /// ✅ ADD HERE
+    this.badge,
+
     this.includes,
     this.process,
     this.steps,
@@ -58,13 +65,10 @@ class ServiceProduct {
     return price;
   }
 
-  /// ✅ ORIGINAL PRICE (FOR STRIKE UI)
-  int get originalPrice {
-    if (discount != null && discount! > 0) return price;
-    return price;
-  }
+  /// ✅ ORIGINAL PRICE
+  int get originalPrice => price;
 
-  /// ✅ DISCOUNT LABEL
+  /// ✅ DISCOUNT LABEL (SAFE)
   String get discountLabel {
     if (discount == null || discount == 0) return '';
     return '$discount% OFF';
@@ -73,6 +77,9 @@ class ServiceProduct {
   /// ✅ SAFE VALUES (NO CRASH UI)
   String get serviceTime => time ?? 'Standard Time';
   double get safeRating => rating ?? 4.5;
+
+  /// ✅ BADGE SAFE (NEW)
+  String get safeBadge => badge ?? '';
 
   List<String> get safeIncludes => includes ?? [];
   List<String> get safeProcess => process ?? [];

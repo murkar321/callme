@@ -1,7 +1,8 @@
-import 'package:callme/models/cart_page.dart';
 import 'package:flutter/material.dart';
+import 'package:callme/models/cart_page.dart';
 import '../data/cleaning_data.dart';
 import '../models/cart.dart';
+import '../models/cleaning_service.dart';
 import '../widgets/cleaning_service_card.dart';
 
 class CleaningDetailPage extends StatefulWidget {
@@ -32,21 +33,55 @@ class _CleaningDetailPageState
   }
 
   int get totalItems =>
-      Cart.getTotalItems(
-          widget.serviceName);
+      Cart.getTotalItems("Cleaning");
 
   int get totalAmount =>
-      Cart.getTotal(
-          widget.serviceName);
+      Cart.getTotal("Cleaning");
+
+  /// ✅ CLEANING ONLY SAFE ADD
+  void handleAddToCart(
+      CleaningService product) {
+    final alreadyExists =
+        Cart.cleaningItems.any(
+      (item) => item.id == product.name,
+    );
+
+    if (alreadyExists) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            "${product.name} already added",
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      Cart.addCleaning(product);
+    });
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        content: Text(
+          "${product.name} added to cart",
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final categories =
         cleaningServices.keys.toList();
 
-    final products =
+    final List<CleaningService>
+        products =
         cleaningServices[
-            selectedCategory]!;
+                selectedCategory] ??
+            [];
 
     final screenWidth =
         MediaQuery.of(context)
@@ -69,17 +104,21 @@ class _CleaningDetailPageState
             children: [
               IconButton(
                 icon: const Icon(
-                    Icons.shopping_cart),
+                  Icons.shopping_cart,
+                ),
                 onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) =>
                           CartPage(
-                        service: widget
-                            .serviceName,
-                        serviceName: '',
-                        cart: [],
+                        service:
+                            "Cleaning",
+                        serviceName:
+                            widget
+                                .serviceName,
+                        cart: Cart
+                            .cleaningItems,
                       ),
                     ),
                   ).then((_) {
@@ -113,6 +152,7 @@ class _CleaningDetailPageState
       ),
       body: Row(
         children: [
+          /// ✅ LEFT CATEGORY PANEL
           Container(
             width:
                 screenWidth * 0.25,
@@ -179,15 +219,25 @@ class _CleaningDetailPageState
                           ),
                         ),
                         const SizedBox(
-                            height: 6),
+                          height: 6,
+                        ),
                         Text(
                           category,
+                          textAlign:
+                              TextAlign.center,
                           style:
                               TextStyle(
                             color: isSelected
                                 ? primaryColor
                                 : Colors
                                     .black87,
+                            fontSize: 12,
+                            fontWeight:
+                                isSelected
+                                    ? FontWeight
+                                        .bold
+                                    : FontWeight
+                                        .normal,
                           ),
                         )
                       ],
@@ -197,6 +247,8 @@ class _CleaningDetailPageState
               },
             ),
           ),
+
+          /// ✅ RIGHT PRODUCT PANEL
           Expanded(
             child: ListView.builder(
               padding:
@@ -221,37 +273,9 @@ class _CleaningDetailPageState
                   category:
                       selectedCategory,
                   index: index,
-                  onAdd: () {
-                    setState(() {
-                      Cart.add(
-                        CartItem(
-                          id:
-                              "${widget.serviceName}_${selectedCategory}_${product.name}",
-                          name: product
-                              .name,
-                          price: product
-                              .finalPrice,
-                          service: widget
-                              .serviceName,
-                          category:
-                              selectedCategory,
-                          image: product
-                              .image,
-                        ),
-                        service: widget
-                            .serviceName,
-                      );
-                    });
-
-                    ScaffoldMessenger.of(
-                            context)
-                        .showSnackBar(
-                      SnackBar(
-                        content: Text(
-                            "${product.name} added to cart"),
-                      ),
-                    );
-                  },
+                  onAdd: () =>
+                      handleAddToCart(
+                          product),
                 );
               },
             ),

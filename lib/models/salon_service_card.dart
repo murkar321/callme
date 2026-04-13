@@ -14,6 +14,9 @@ class SalonServiceCard extends StatelessWidget {
     this.onUpdate,
   });
 
+  /// =========================
+  /// EXISTING LOGIC (UNCHANGED)
+  /// =========================
   String _key(String visitType) {
     return "${service.id}_$visitType";
   }
@@ -22,15 +25,34 @@ class SalonServiceCard extends StatelessWidget {
     return Cart.getQuantity(_key(visitType), "Salon");
   }
 
+  /// =========================
+  /// AUTO UI HELPERS (NEW)
+  /// =========================
+  String getAutoBadge() {
+    if (service.discount >= 25) return "Best Deal";
+    if (service.price <= 300) return "Budget";
+    return "Popular";
+  }
+
+  double getAutoRating() {
+    return 4.2 + (service.id % 5) * 0.1;
+  }
+
+  String getDiscountLabel() {
+    if (service.discount > 0) {
+      return "${service.discount}% OFF";
+    }
+    return "";
+  }
+
   @override
   Widget build(BuildContext context) {
-
     final homeQty = _getQty("Home");
     final salonQty = _getQty("Salon");
     final totalQty = homeQty + salonQty;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -42,26 +64,60 @@ class SalonServiceCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(14),
-            ),
-            child: Image.asset(
-              service.image,
-              height: 140,
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ),
+          /// =========================
+          /// IMAGE + BADGE
+          /// =========================
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(14),
+                ),
+                child: Image.asset(
+                  service.image,
+                  height: 150,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    getAutoBadge(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
 
+          /// =========================
+          /// CONTENT
+          /// =========================
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
+                /// NAME
                 Text(
                   service.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
@@ -70,16 +126,46 @@ class SalonServiceCard extends StatelessWidget {
 
                 const SizedBox(height: 5),
 
+                /// SLOGAN
                 Text(
                   service.slogan,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.grey,
                     fontSize: 12,
                   ),
                 ),
 
+                const SizedBox(height: 6),
+
+                /// ⭐ RATING + ⏱ TIME
+                Row(
+                  children: [
+                    const Icon(Icons.star,
+                        size: 14, color: Colors.orange),
+                    const SizedBox(width: 4),
+                    Text(
+                      getAutoRating().toStringAsFixed(1),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        service.time,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+
                 const SizedBox(height: 10),
 
+                /// 💸 PRICE + DISCOUNT
                 Row(
                   children: [
                     Text(
@@ -97,41 +183,67 @@ class SalonServiceCard extends StatelessWidget {
                         color: Colors.grey,
                       ),
                     ),
+                    const SizedBox(width: 8),
+
+                    if (service.discount > 0)
+                      Text(
+                        getDiscountLabel(),
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
                   ],
                 ),
 
                 const SizedBox(height: 12),
 
+                /// =========================
+                /// BUTTONS (RESPONSIVE SAFE)
+                /// =========================
                 Row(
                   children: [
 
+                    /// VIEW BUTTON
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  SalonDetailPage(service: service),
-                            ),
-                          );
-                        },
-                        child: const Text("View"),
+                      child: SizedBox(
+                        height: 40,
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    SalonDetailPage(service: service),
+                              ),
+                            );
+                          },
+                          child: const FittedBox(
+                            child: Text("View"),
+                          ),
+                        ),
                       ),
                     ),
 
                     const SizedBox(width: 10),
 
+                    /// BOOK BUTTON
                     Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFAE91BA),
-                        ),
-                        onPressed: () => _showPopup(context),
-                        child: Text(
-                          totalQty == 0
-                              ? "Book"
-                              : "Added ($totalQty)",
+                      child: SizedBox(
+                        height: 40,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFAE91BA),
+                          ),
+                          onPressed: () => _showPopup(context),
+                          child: FittedBox(
+                            child: Text(
+                              totalQty == 0
+                                  ? "Book"
+                                  : "Added ($totalQty)",
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -145,6 +257,9 @@ class SalonServiceCard extends StatelessWidget {
     );
   }
 
+  /// =========================
+  /// POPUP (UNCHANGED)
+  /// =========================
   void _showPopup(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -153,49 +268,43 @@ class SalonServiceCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Wrap(
             children: [
-
               const Center(
                 child: Text(
                   "Choose Appointment Type",
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
-
               const SizedBox(height: 20),
 
-              /// 🏠 HOME
               ListTile(
                 leading: const Icon(Icons.home),
                 title: const Text("Home Appointment"),
                 onTap: () {
                   Cart.addSalon(
-                    id: _key("Home"), // ✅ FIXED UNIQUE KEY
+                    id: _key("Home"),
                     name: service.name,
                     price: service.finalPrice,
                     category: service.category,
                     visitType: "Home",
                     image: service.image,
                   );
-
                   Navigator.pop(context);
                   onUpdate?.call();
                 },
               ),
 
-              /// 💇 SALON
               ListTile(
                 leading: const Icon(Icons.store),
                 title: const Text("Salon Appointment"),
                 onTap: () {
                   Cart.addSalon(
-                    id: _key("Salon"), // ✅ FIXED UNIQUE KEY
+                    id: _key("Salon"),
                     name: service.name,
                     price: service.finalPrice,
                     category: service.category,
                     visitType: "Salon",
                     image: service.image,
                   );
-
                   Navigator.pop(context);
                   onUpdate?.call();
                 },
@@ -208,7 +317,6 @@ class SalonServiceCard extends StatelessWidget {
                 title: const Text("View Cart"),
                 onTap: () {
                   Navigator.pop(context);
-
                   Navigator.push(
                     context,
                     MaterialPageRoute(
