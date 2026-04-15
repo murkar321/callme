@@ -10,7 +10,7 @@ import 'screens/logo_page.dart';
 import 'screens/signup_page.dart';
 import 'screens/home_page.dart';
 import 'screens/bottom_nav_page.dart';
-import 'provider/salon_provider_form.dart';
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,7 +59,7 @@ class CallMeApp extends StatelessWidget {
           '/signup': (context) => const SignupPage(),
           '/bottomnav': (context) => const BottomNavPage(),
           '/home': (context) => const HomePage(),
-          '/salonRegister': (context) => const SalonProviderForm(),
+   
         },
 
         /// 🔹 SAFETY (UNKNOWN ROUTES)
