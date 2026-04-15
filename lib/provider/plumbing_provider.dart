@@ -1,4 +1,4 @@
-import 'package:callme/screens/service_selection.dart';
+import 'package:callme/provider/service_selection.dart';
 import 'package:flutter/material.dart';
 
 class PlumbingProvider extends StatelessWidget {

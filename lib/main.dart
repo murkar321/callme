@@ -4,13 +4,13 @@ import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 
-import 'models/cart_provider.dart'; // ✅ NEW
+import 'provider/cart_provider.dart'; // ✅ NEW
 
 import 'screens/logo_page.dart';
 import 'screens/signup_page.dart';
 import 'screens/home_page.dart';
 import 'screens/bottom_nav_page.dart';
-import 'screens/salon_provider_form.dart';
+import 'provider/salon_provider_form.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

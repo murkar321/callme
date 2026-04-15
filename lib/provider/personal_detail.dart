@@ -1,7 +1,8 @@
 import 'dart:io';
+import 'package:callme/provider/verification_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'verification_screen.dart'; // make sure this file exists
+
 
 class PersonalDetail extends StatefulWidget {
   final List<String> selectedServices;

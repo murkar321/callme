@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/resort_provider.dart';
+import '../provider/resort_provider.dart';
 
 class ResortProviderPage extends StatelessWidget {
   const ResortProviderPage({super.key});

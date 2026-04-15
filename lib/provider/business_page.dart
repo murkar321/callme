@@ -1,13 +1,13 @@
 import 'dart:io';
-import 'package:callme/models/resort_provider.dart';
-import 'package:callme/screens/plumbing_provider.dart';
-import 'package:callme/screens/resort_provider_page.dart';
+import 'package:callme/provider/resort_provider.dart';
+import 'package:callme/provider/plumbing_provider.dart';
+import 'package:callme/provider/resort_provider_page.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:callme/models/cleaning_provider.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/widgets/category_card.dart';
-import 'package:callme/screens/service_provider_form.dart';
+import 'package:callme/provider/service_provider_form.dart';
 import 'package:provider/provider.dart'; // ✅ COMMON FORM
 
 class BusinessPage extends StatefulWidget {

@@ -1,4 +1,4 @@
-import 'package:callme/screens/personal_detail.dart';
+import 'package:callme/provider/personal_detail.dart';
 import 'package:flutter/material.dart';
 
 class ServiceSelection extends StatefulWidget {
