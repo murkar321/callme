@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../provider/service_config.dart';
-import '../screens/success_page.dart';
+import '../provider/succespage.dart';
 
 class ServiceProviderForm extends StatefulWidget {
   final String type;
@@ -65,6 +65,24 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     super.dispose();
   }
 
+  void _goToSuccessPage() {
+    final businessName =
+        businessController.text.trim().isNotEmpty
+            ? businessController.text.trim()
+            : ownerController.text.trim();
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SuccessPage(
+          businessName: businessName,
+          providerType: widget.providerType,
+          serviceType: widget.type,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = serviceConfigs[widget.type]!;
@@ -93,7 +111,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         ),
       ),
 
-      /// STEP 2 → Business + Provider Details
+      /// STEP 2 → Provider Details
       Step(
         title: const Text("Provider Details"),
         isActive: currentStep >= 1,
@@ -148,16 +166,13 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
               "Pincode",
               Icons.pin_drop,
             ),
-
             const SizedBox(height: 10),
-
             Text(
               "Provider Type: ${widget.providerType}",
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             if (widget.providerType != "Individual")
               _buildTextField(
                 staffCountController,
@@ -168,7 +183,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         ),
       ),
 
-      /// STEP 3 → Service Specific Options
+      /// STEP 3 → Service Options
       Step(
         title: const Text("Service Options"),
         isActive: currentStep >= 2,
@@ -304,12 +319,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
           if (currentStep < steps.length - 1) {
             setState(() => currentStep++);
           } else {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const SuccessPage(),
-              ),
-            );
+            _goToSuccessPage();
           }
         },
         onStepCancel: () {

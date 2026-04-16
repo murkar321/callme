@@ -23,11 +23,15 @@ final Map<String, ServiceConfig> serviceConfigs = {
     businessLabel: "Salon Name",
     serviceCategories: [
       "Haircut",
+      "Hair Styling",
+      "Hair Treatments",
+      "Hair Color",
       "Facial",
       "Makeup",
-      "Bridal Makeup",
-      "Hair Spa",
-      "Home Visit",
+      "Manicure",
+      "Pedicure",
+      "Waxing",
+      "Mehandi",
     ],
     requiredDocuments: [
       "Aadhaar Card",
@@ -41,10 +45,15 @@ final Map<String, ServiceConfig> serviceConfigs = {
     businessLabel: "Cleaning Business Name",
     serviceCategories: [
       "Home Cleaning",
-      "Office Cleaning",
+      " Corporate Office Cleaning",
       "Bathroom Cleaning",
       "Kitchen Cleaning",
       "Deep Cleaning",
+      "Sofa Cleaning",
+      "Window Cleaning",
+      "Electronic Cleaning",
+      "Monthly Packages",
+
     ],
     requiredDocuments: [
       "Aadhaar Card",
@@ -58,9 +67,12 @@ final Map<String, ServiceConfig> serviceConfigs = {
     serviceCategories: [
       "Pipe Repair",
       "Leakage Repair",
-      "Tap Fitting",
-      "Bathroom Plumbing",
-      "Water Tank Work",
+      "Tap Installation",
+      "Drain Cleaning",
+      "Toilet Repair",
+      "Sink Installation",
+      "Bathroom Repair",
+      "Water Tank Installation",
     ],
     requiredDocuments: [
       "Aadhaar Card",
@@ -129,13 +141,13 @@ final Map<String, ServiceConfig> serviceConfigs = {
   "water": ServiceConfig(
     businessLabel: "Business Name",
     serviceCategories: [
-      "Jar Exchange",
+      "Jar Exchange/Return",
+      "Aqua Installation",
       "Brand Water",
       "Water Bottles",
       "Tanker Supply",
       "Ice Supply",
-      "RO Installation",
-      "Commercial Water",
+      "Commercial Water Services",
     ],
     requiredDocuments: [
       "Aadhaar Card",
@@ -147,10 +159,12 @@ final Map<String, ServiceConfig> serviceConfigs = {
   "laundry": ServiceConfig(
     businessLabel: "Laundry Name",
     serviceCategories: [
-      "Wash & Fold",
+      "Washing",
       "Dry Cleaning",
       "Ironing",
-      "Home Pickup",
+      "Curtain Cleaning",
+      "Shoe Cleaning",
+      "BedSheet Cleaning",
     ],
     requiredDocuments: [
       "Aadhaar Card",
@@ -165,7 +179,7 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "New Build",
       "Renovation",
       "Painting",
-      "Carpentry",
+      "Carpentry/Fabrication",
       "Electrical",
       "Plumbing",
     ],
