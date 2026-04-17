@@ -149,7 +149,7 @@ class BusinessDashboardPage extends StatelessWidget {
 
             _buildBookingCard(
               customer: "Priya Sharma",
-              service: "Bridal Makeup",
+              service: "Deep Cleaning",
               date: "Today, 4:00 PM",
               status: "Pending",
             ),
