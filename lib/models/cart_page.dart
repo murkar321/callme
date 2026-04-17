@@ -23,132 +23,98 @@ class _CartPageState extends State<CartPage> {
 
   @override
   Widget build(BuildContext context) {
-    List<CartItem> items =
-        Cart.getItems(widget.service);
+    List<CartItem> items = Cart.getItems(widget.service);
 
     return Scaffold(
-      backgroundColor:
-          Colors.grey.shade100,
+      backgroundColor: Colors.grey.shade100,
+
+      /// 🔝 APP BAR
       appBar: AppBar(
-        title: Text(
-            "${widget.service} Cart"),
+        title: Text("${widget.service} Cart"),
         centerTitle: true,
       ),
+
+      /// 📦 BODY
       body: items.isEmpty
-          ? const Center(
-              child:
-                  Text("Cart is empty"))
+          ? const Center(child: Text("Cart is empty"))
           : ListView.builder(
-              padding:
-                  const EdgeInsets.all(
-                      12),
-              itemCount:
-                  items.length,
-              itemBuilder:
-                  (context, index) {
-                final item =
-                    items[index];
+              padding: const EdgeInsets.all(12),
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
 
                 return Container(
-                  margin:
-                      const EdgeInsets
-                          .only(
-                    bottom: 12,
-                  ),
-                  padding:
-                      const EdgeInsets
-                          .all(12),
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        Colors.white,
-                    borderRadius:
-                        BorderRadius
-                            .circular(
-                                14),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
                     boxShadow: const [
                       BoxShadow(
-                        color: Colors
-                            .black12,
+                        color: Colors.black12,
                         blurRadius: 4,
                       ),
                     ],
                   ),
                   child: Row(
                     children: [
-                      if (item.image !=
-                          null)
+                      /// 🖼 IMAGE
+                      if (item.image != null)
                         ClipRRect(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                                      10),
-                          child:
-                              Image.asset(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.asset(
                             item.image!,
                             height: 65,
                             width: 65,
-                            fit: BoxFit
-                                .cover,
+                            fit: BoxFit.cover,
                           ),
                         ),
-                      const SizedBox(
-                          width: 12),
+
+                      const SizedBox(width: 12),
+
+                      /// 📄 DETAILS
                       Expanded(
                         child: Column(
                           crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
+                              CrossAxisAlignment.start,
                           children: [
                             Text(
                               item.name,
-                              style:
-                                  const TextStyle(
-                                fontWeight:
-                                    FontWeight
-                                        .bold,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(
-                                height:
-                                    6),
-                            Text(
-                                "₹${item.price}"),
-                            const SizedBox(
-                                height:
-                                    10),
+
+                            const SizedBox(height: 6),
+
+                            Text("₹${item.price}"),
+
+                            const SizedBox(height: 10),
+
+                            /// ➕➖ QUANTITY
                             Row(
                               children: [
                                 IconButton(
                                   icon: const Icon(
-                                      Icons
-                                          .remove_circle_outline),
-                                  onPressed:
-                                      () {
-                                    setState(
-                                        () {
+                                      Icons.remove_circle_outline),
+                                  onPressed: () {
+                                    setState(() {
                                       Cart.removeById(
                                         item.id,
-                                        widget
-                                            .service,
+                                        widget.service,
                                       );
                                     });
                                   },
                                 ),
-                                Text(
-                                    "${item.quantity}"),
+                                Text("${item.quantity}"),
                                 IconButton(
                                   icon: const Icon(
-                                      Icons
-                                          .add_circle_outline),
-                                  onPressed:
-                                      () {
-                                    setState(
-                                        () {
+                                      Icons.add_circle_outline),
+                                  onPressed: () {
+                                    setState(() {
                                       Cart.add(
                                         item,
-                                        service:
-                                            widget.service,
+                                        service: widget.service,
                                       );
                                     });
                                   },
@@ -158,6 +124,8 @@ class _CartPageState extends State<CartPage> {
                           ],
                         ),
                       ),
+
+                      /// 🗑 DELETE
                       IconButton(
                         icon: const Icon(
                           Icons.delete,
@@ -167,8 +135,7 @@ class _CartPageState extends State<CartPage> {
                           setState(() {
                             Cart.delete(
                               item.id,
-                              widget
-                                  .service,
+                              widget.service,
                             );
                           });
                         },
@@ -179,59 +146,40 @@ class _CartPageState extends State<CartPage> {
               },
             ),
 
-      /// ✅ ONLY CLEANING FLOW UPDATED
+      /// 🔻 BOTTOM BUTTON
       bottomNavigationBar: items.isEmpty
           ? null
           : Container(
-              padding:
-                  const EdgeInsets.all(
-                      12),
+              padding: const EdgeInsets.all(12),
               color: Colors.white,
               child: ElevatedButton(
-                style: ElevatedButton
-                    .styleFrom(
-                  backgroundColor:
-                      const Color(
-                          0xFFAE91BA),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFAE91BA),
                 ),
                 onPressed: () {
-                  /// ================= SALON UNCHANGED =================
-                  if (widget.service ==
-                      "Salon") {
-                    List<SalonService>
-                        selectedServices =
-                        [];
-                    Map<String, String>
-                        visitTypeMap =
-                        {};
+                  /// ================= SALON (UNCHANGED) =================
+                  if (widget.service == "Salon") {
+                    List<SalonService> selectedServices = [];
+                    Map<String, String> visitTypeMap = {};
 
-                    for (var item
-                        in items) {
+                    for (var item in items) {
                       try {
-                        final realId =
-                            item.id
-                                .toString()
-                                .split("_")[0]
-                                .toString();
+                        final realId = item.id
+                            .toString()
+                            .split("_")[0]
+                            .toString();
 
                         final service =
-                            salonServices
-                                .firstWhere(
+                            salonServices.firstWhere(
                           (s) =>
-                              s.id
-                                  .toString()
-                                  .trim() ==
-                              realId
-                                  .trim(),
+                              s.id.toString().trim() ==
+                              realId.trim(),
                         );
 
-                        selectedServices
-                            .add(service);
+                        selectedServices.add(service);
 
-                        visitTypeMap[
-                                realId] =
-                            (item.visitType ??
-                                    "Salon")
+                        visitTypeMap[realId] =
+                            (item.visitType ?? "Salon")
                                 .toString();
                       } catch (e) {
                         debugPrint(
@@ -239,10 +187,8 @@ class _CartPageState extends State<CartPage> {
                       }
                     }
 
-                    if (selectedServices
-                        .isEmpty) {
-                      ScaffoldMessenger
-                              .of(context)
+                    if (selectedServices.isEmpty) {
+                      ScaffoldMessenger.of(context)
                           .showSnackBar(
                         const SnackBar(
                           content: Text(
@@ -255,54 +201,53 @@ class _CartPageState extends State<CartPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            SalonBookingPage(
-                          services:
-                              selectedServices,
-                          visitTypeMap:
-                              visitTypeMap,
+                        builder: (_) => SalonBookingPage(
+                          services: selectedServices,
+                          visitTypeMap: visitTypeMap,
                         ),
                       ),
                     );
                   }
 
-                  /// ✅ CLEANING FIX ONLY
-                  else if (widget
-                          .service ==
-                      "Cleaning") {
+                  /// ================= CLEANING (UNCHANGED) =================
+                  else if (widget.service == "Cleaning") {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            BookingPage(
-                          serviceName:
-                              widget
-                                  .service,
+                        builder: (_) => BookingPage(
+                          serviceName: widget.service,
                         ),
                       ),
                     );
                   }
 
-                  /// ================= REST UNCHANGED =================
+                  /// 🎓 EDUCATION (ADDED ONLY)
+                  else if (widget.service == "Education") {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => BookingPage(
+                          serviceName: "Education",
+                          cart: Cart.getItems("Education"),
+                        ),
+                      ),
+                    );
+                  }
+
+                  /// ================= REST (UNCHANGED) =================
                   else {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            BookingPage(
-                          serviceName:
-                              widget
-                                  .service,
-                          cart: Cart
-                              .getItems(widget
-                                  .service),
+                        builder: (_) => BookingPage(
+                          serviceName: widget.service,
+                          cart: Cart.getItems(widget.service),
                         ),
                       ),
                     );
                   }
                 },
-                child: const Text(
-                    "Proceed to Booking"),
+                child: const Text("Proceed to Booking"),
               ),
             ),
     );

@@ -99,11 +99,9 @@ class Cart {
       CartItem(
         id: product.id,
         name: product.name,
-        price:
-            product.calculatedFinalPrice,
+        price: product.calculatedFinalPrice,
         service: service,
-        category:
-            product.service,
+        category: product.service,
         image: product.imagePath,
       ),
       service: service,
@@ -154,8 +152,7 @@ class Cart {
   /// =========================
   /// ❌ REMOVE ITEM
   /// =========================
-  static void removeItem(
-      CartItem item) {
+  static void removeItem(CartItem item) {
     remove(item);
   }
 
@@ -176,75 +173,52 @@ class Cart {
   /// =========================
   /// 📦 GET ALL ITEMS
   /// =========================
-  static List<CartItem> get allItems =>
-      _items;
+  static List<CartItem> get allItems => _items;
 
   /// =========================
   /// 🎯 FILTER BY SERVICE
   /// =========================
-  static List<CartItem> getItems(
-      String service) {
-    return _items
-        .where(
-            (e) => e.service == service)
-        .toList();
+  static List<CartItem> getItems(String service) {
+    return _items.where((e) => e.service == service).toList();
   }
 
-  static List<CartItem> getByService(
-      String serviceName) {
+  static List<CartItem> getByService(String serviceName) {
     return getItems(serviceName);
   }
 
   /// =========================
   /// 🔢 TOTAL ITEMS
   /// =========================
-  static int getTotalItems(
-      [String? service]) {
+  static int getTotalItems([String? service]) {
     if (service == null) {
-      return _items.fold(
-        0,
-        (sum, e) =>
-            sum + e.quantity,
-      );
+      return _items.fold(0, (sum, e) => sum + e.quantity);
     }
 
     return _items
-        .where(
-            (e) => e.service == service)
-        .fold(
-          0,
-          (sum, e) =>
-              sum + e.quantity,
-        );
+        .where((e) => e.service == service)
+        .fold(0, (sum, e) => sum + e.quantity);
   }
 
-  static int totalItems(
-      String service) {
+  static int totalItems(String service) {
     return getTotalItems(service);
   }
 
   /// =========================
   /// 💰 TOTAL PRICE
   /// =========================
-  static int getTotal(
-      String service) {
+  static int getTotal(String service) {
     return _items
-        .where(
-            (e) => e.service == service)
+        .where((e) => e.service == service)
         .fold(
           0,
           (sum, e) =>
               sum +
-              (e.price *
-                  e.quantity *
-                  e.adults) +
-              ((e.price ~/ 2) *
-                  e.children),
+              (e.price * e.quantity * e.adults) +
+              ((e.price ~/ 2) * e.children),
         );
   }
 
-  static int totalPrice(
-      String serviceName) {
+  static int totalPrice(String serviceName) {
     return getTotal(serviceName);
   }
 
@@ -256,21 +230,15 @@ class Cart {
       0,
       (sum, e) =>
           sum +
-          (e.price *
-              e.quantity *
-              e.adults) +
-          ((e.price ~/ 2) *
-              e.children),
+          (e.price * e.quantity * e.adults) +
+          ((e.price ~/ 2) * e.children),
     );
   }
 
   /// =========================
   /// 🔍 FIND ITEM
   /// =========================
-  static CartItem? find(
-    String id,
-    String service,
-  ) {
+  static CartItem? find(String id, String service) {
     try {
       return _items.firstWhere(
         (e) =>
@@ -285,10 +253,7 @@ class Cart {
   /// =========================
   /// 🔢 GET QUANTITY
   /// =========================
-  static int getQuantity(
-    String id,
-    String service,
-  ) {
+  static int getQuantity(String id, String service) {
     final item = find(id, service);
     return item?.quantity ?? 0;
   }
@@ -306,26 +271,18 @@ class Cart {
 
     if (item == null) return;
 
-    if (adults != null) {
-      item.adults = adults;
-    }
-
-    if (children != null) {
-      item.children = children;
-    }
+    if (adults != null) item.adults = adults;
+    if (children != null) item.children = children;
   }
 
   /// =========================
   /// 🧹 CLEAR CART
   /// =========================
-  static void clear(
-      [String? service]) {
+  static void clear([String? service]) {
     if (service == null) {
       _items.clear();
     } else {
-      _items.removeWhere(
-        (e) => e.service == service,
-      );
+      _items.removeWhere((e) => e.service == service);
     }
   }
 
@@ -355,8 +312,7 @@ class Cart {
   /// =========================
   /// 🧹 CLEANING
   /// =========================
-  static void addCleaning(
-      CleaningService service) {
+  static void addCleaning(CleaningService service) {
     addItem(
       id: service.name,
       name: service.name,
@@ -367,8 +323,7 @@ class Cart {
     );
   }
 
-  static List<CartItem>
-      get cleaningItems {
+  static List<CartItem> get cleaningItems {
     return getItems("Cleaning");
   }
 
@@ -397,8 +352,7 @@ class Cart {
     );
   }
 
-  static List<CartItem>
-      get laundryItems {
+  static List<CartItem> get laundryItems {
     return getItems("Laundry");
   }
 
@@ -427,8 +381,42 @@ class Cart {
     );
   }
 
-  static List<CartItem>
-      get salonItems {
+  static List<CartItem> get salonItems {
     return getItems("Salon");
+  }
+
+  /// =========================
+  /// 🎓 EDUCATION (ONLY ADDED)
+  /// =========================
+  static void addEducation({
+    required String id,
+    required String name,
+    required int price,
+    required String category,
+    String? image,
+  }) {
+    add(
+      CartItem(
+        id: id,
+        name: name,
+        price: price,
+        service: "Education",
+        category: category,
+        image: image,
+      ),
+      service: "Education",
+    );
+  }
+
+  static List<CartItem> get educationItems {
+    return getItems("Education");
+  }
+
+  static int get educationTotalItems {
+    return getTotalItems("Education");
+  }
+
+  static int get educationTotalPrice {
+    return getTotal("Education");
   }
 }

@@ -2,8 +2,10 @@ import 'package:callme/models/civil_services_page.dart';
 import 'package:callme/models/hotel_service_page.dart';
 import 'package:callme/models/service_product.dart';
 import 'package:callme/screens/cleaning_detail_page.dart';
+import 'package:callme/screens/education_services_page.dart';
 import 'package:callme/screens/laundry_service_page.dart';
 import 'package:callme/screens/plumbing_service_page.dart';
+
 import 'package:callme/screens/resort_page.dart';
 import 'package:callme/screens/water_services_page.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +26,7 @@ class _HomePageState extends State<HomePage> {
   double _offset = 0.0;
 
   final List<ServiceCategory> categories = [
+    ServiceCategory(name: 'Education Service', imagePath: 'assets/Education.jpg'),
     ServiceCategory(name: 'Salon Service', imagePath: 'assets/salon.png'),
     ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jpg'),
     ServiceCategory(name: 'Resorts', imagePath: 'assets/resort.jpg'),
@@ -97,49 +100,50 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // 🔹 SERVICE ROUTER (UPDATED)
-  Widget getServicePage(String serviceName) {
-    switch (serviceName) {
-      case "Cleaning":
-        return const CleaningDetailPage(
-          serviceName: 'Cleaning',
-        );
+ Widget getServicePage(String serviceName) {
+  switch (serviceName.trim()) {
 
-      case "Salon Service":
-        return const SalonPage();
+    case "Cleaning":
+      return const CleaningDetailPage(
+        serviceName: 'Cleaning',
+      );
 
-      case "Resorts":
-        return const ResortPage(
-          resorts: [],
-        );
+    case "Salon Service":
+      return const SalonPage();
 
-      case "Hotel":
-        return const HotelServicePage();
+    /// ✅ FIXED (matches properly)
+    case "Education Service":
+      return const EducationServicesPage();
 
-      case "Water Services":
-        return const WaterServicesPage();
+    case "Resorts":
+      return const ResortPage(
+        resorts: [],
+      );
 
-      case "Civil Services":
-        return const CivilServicesPage();
+    case "Hotel":
+      return const HotelServicePage();
 
-      case "Laundry":
+    case "Water Services":
+      return const WaterServicesPage();
+
+    case "Civil Services":
+      return const CivilServicesPage();
+
+    case "Laundry":
       return const LaundryServicePage();
 
-      /// ✅ ADDED PLUMBING
-      case "Plumbing":
-        return const PlumbingServicesPage(
-          serviceName: "Plumbing",
-        );
+    case "Plumbing":
+      return const PlumbingServicesPage(
+        serviceName: "Plumbing",
+      );
 
-      
-
-      /// DEFAULT
-      default:
-        return ServiceDetailPage(
-          serviceName: serviceName,
-        );
-    }
+    /// 🔥 DEFAULT FALLBACK
+    default:
+      return ServiceDetailPage(
+        serviceName: serviceName,
+      );
   }
+}
 
   @override
   Widget build(BuildContext context) {
