@@ -4,7 +4,7 @@ import '../provider/dashboard.dart';
 class SuccessPage extends StatelessWidget {
   final String businessName;
   final String providerType;
-  final String serviceType;
+  final String serviceType; // 🔥 this is your route
 
   const SuccessPage({
     super.key,
@@ -28,6 +28,7 @@ class SuccessPage extends StatelessWidget {
                 color: Colors.green,
                 size: 100,
               ),
+
               const SizedBox(height: 24),
 
               const Text(
@@ -51,6 +52,7 @@ class SuccessPage extends StatelessWidget {
 
               const SizedBox(height: 24),
 
+              /// 🔹 Info Card
               Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -77,6 +79,7 @@ class SuccessPage extends StatelessWidget {
 
               const SizedBox(height: 30),
 
+              /// 🔥 FIXED BUTTON
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -86,6 +89,7 @@ class SuccessPage extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) => BusinessDashboardPage(
                           businessName: businessName,
+                          categoryRoute: serviceType, // ✅ FIXED
                         ),
                       ),
                     );

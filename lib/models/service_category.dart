@@ -10,4 +10,6 @@ class ServiceCategory {
     this.imagePath,
     this.icon,
   });
+
+
 }

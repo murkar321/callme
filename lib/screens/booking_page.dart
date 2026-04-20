@@ -1,17 +1,19 @@
-import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:callme/models/cart.dart';
 import 'package:callme/models/service_product.dart';
 import 'package:callme/screens/map_picker_page.dart';
 import 'package:callme/screens/upi_payment.dart';
-import 'package:callme/data/orders_data.dart';
-import 'package:callme/models/order_model.dart';
 
 class BookingPage extends StatefulWidget {
   final String serviceName;
 
-  /// OPTIONAL (single service)
+  /// SINGLE SERVICE
   final ServiceProduct? product;
+
+  /// RESORT SUPPORT
   final int? adults;
   final int? children;
 
@@ -24,10 +26,7 @@ class BookingPage extends StatefulWidget {
     this.product,
     this.adults,
     this.children,
-    this.cart,
-    Object? products,
-    Object? service,
-    Object? price,
+    this.cart, Object? products,
   });
 
   @override
@@ -35,40 +34,31 @@ class BookingPage extends StatefulWidget {
 }
 
 class _BookingPageState extends State<BookingPage> {
-  final TextEditingController nameController =
-      TextEditingController();
-  final TextEditingController emailController =
-      TextEditingController();
-  final TextEditingController phoneController =
-      TextEditingController();
-  final TextEditingController addressController =
-      TextEditingController();
-  final TextEditingController noteController =
-      TextEditingController();
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController addressController = TextEditingController();
+  final TextEditingController noteController = TextEditingController();
 
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
 
-  /// CART FLOW
+  /// ================= FLOW DETECTION =================
   List<CartItem> get cartItems =>
-      widget.cart ?? Cart.getByService(widget.serviceName);
+      widget.cart ?? Cart.getItems(widget.serviceName);
 
   bool get isCartFlow => cartItems.isNotEmpty;
-
-  bool get isSingleService =>
-      widget.product != null && cartItems.isEmpty;
-
+  bool get isSingleService => widget.product != null && cartItems.isEmpty;
   bool get isResort => widget.adults != null;
 
-  /// TOTAL
+  /// ================= TOTAL =================
   double get totalAmount {
     if (isCartFlow) {
-      return Cart.totalPrice(widget.serviceName).toDouble();
+      return Cart.getTotal(widget.serviceName).toDouble();
     }
 
     if (isSingleService) {
-      return widget.product!.calculatedFinalPrice
-          .toDouble();
+      return widget.product!.calculatedFinalPrice.toDouble();
     }
 
     return 0;
@@ -84,6 +74,7 @@ class _BookingPageState extends State<BookingPage> {
     super.dispose();
   }
 
+  /// ================= UI =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -93,40 +84,27 @@ class _BookingPageState extends State<BookingPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            /// SERVICE SUMMARY
             _serviceSummaryCard(),
-
             const SizedBox(height: 20),
 
             if (isResort) _guestCard(),
-
             const SizedBox(height: 20),
 
-            /// FULL NAME
-            _textField(
-              controller: nameController,
-              hint: "Full Name",
-            ),
-
+            _textField(controller: nameController, hint: "Full Name"),
             const SizedBox(height: 16),
 
-            /// EMAIL
             _textField(
               controller: emailController,
-              hint: "Email Address",
-              keyboardType:
-                  TextInputType.emailAddress,
+              hint: "Email",
+              keyboardType: TextInputType.emailAddress,
             ),
-
             const SizedBox(height: 16),
 
-            /// PHONE
             _textField(
               controller: phoneController,
               hint: "Phone Number",
               keyboardType: TextInputType.phone,
             ),
-
             const SizedBox(height: 16),
 
             /// DATE & TIME
@@ -136,19 +114,18 @@ class _BookingPageState extends State<BookingPage> {
                   child: _selectTile(
                     icon: Icons.calendar_today,
                     title: selectedDate == null
-                        ? 'Select Date'
-                        : '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}',
+                        ? "Select Date"
+                        : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
                     onTap: _pickDate,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _selectTile(
                     icon: Icons.access_time,
                     title: selectedTime == null
-                        ? 'Select Time'
-                        : selectedTime!
-                            .format(context),
+                        ? "Select Time"
+                        : selectedTime!.format(context),
                     onTap: _pickTime,
                   ),
                 ),
@@ -157,64 +134,49 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 20),
 
-            /// ADDRESS FROM MAP
+            /// ADDRESS
             InkWell(
               onTap: () async {
                 final address = await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const MapPickerPage(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const MapPickerPage()),
                 );
 
                 if (address != null) {
                   setState(() {
-                    addressController.text =
-                        address;
+                    addressController.text = address;
                   });
                 }
               },
               child: AbsorbPointer(
                 child: _textField(
                   controller: addressController,
-                  hint:
-                      "Select address from map",
+                  hint: "Select address from map",
                 ),
               ),
             ),
 
             const SizedBox(height: 16),
 
-            /// NOTES
             _textField(
               controller: noteController,
               hint: "Additional Notes",
               maxLines: 3,
             ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
 
             /// TOTAL
             _card(
               child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment
-                        .spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    "Total Amount",
-                    style:
-                        TextStyle(fontSize: 16),
-                  ),
+                  const Text("Total"),
                   Text(
                     "₹${totalAmount.toStringAsFixed(0)}",
                     style: const TextStyle(
-                      fontSize: 18,
-                      color: Colors.green,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green),
                   ),
                 ],
               ),
@@ -222,15 +184,12 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 20),
 
-            /// PAYMENT BUTTON
+            /// PAYMENT
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed:
-                    _startPaymentFlow,
-                child: const Text(
-                  "Proceed to Payment",
-                ),
+                onPressed: _startPaymentFlow,
+                child: const Text("Proceed to Payment"),
               ),
             ),
           ],
@@ -239,47 +198,25 @@ class _BookingPageState extends State<BookingPage> {
     );
   }
 
-  /// SUMMARY
+  /// ================= SUMMARY =================
   Widget _serviceSummaryCard() {
     if (isCartFlow) return _cartSummary();
-    if (isSingleService)
-      return _singleSummary();
+    if (isSingleService) return _singleSummary();
     return const SizedBox();
   }
 
   Widget _cartSummary() {
     return _card(
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Selected Services",
-            style: TextStyle(
-              fontWeight:
-                  FontWeight.bold,
-            ),
-          ),
+          const Text("Selected Services",
+              style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           ...cartItems.map(
             (item) => ListTile(
-              contentPadding:
-                  EdgeInsets.zero,
-              title: Text(
-                "${item.name} x${item.quantity}",
-              ),
-              trailing: Text(
-                "₹${item.price * item.quantity}",
-              ),
-            ),
-          ),
-          const Divider(),
-          Text(
-            "Total: ₹${totalAmount.toStringAsFixed(0)}",
-            style: const TextStyle(
-              color: Colors.green,
-              fontWeight:
-                  FontWeight.bold,
+              title: Text("${item.name} x${item.quantity}"),
+              trailing: Text("₹${item.price * item.quantity}"),
             ),
           ),
         ],
@@ -289,16 +226,12 @@ class _BookingPageState extends State<BookingPage> {
 
   Widget _singleSummary() {
     final p = widget.product!;
-
     return _card(
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(p.name),
-          const SizedBox(height: 6),
-          Text(
-              "₹${p.calculatedFinalPrice}"),
+          Text("₹${p.calculatedFinalPrice}"),
         ],
       ),
     );
@@ -306,22 +239,17 @@ class _BookingPageState extends State<BookingPage> {
 
   Widget _guestCard() {
     return _card(
-      child: Text(
-        "${widget.adults} Adults, ${widget.children} Children",
-      ),
+      child: Text("${widget.adults} Adults, ${widget.children} Children"),
     );
   }
 
-  /// UI
+  /// ================= COMMON UI =================
   Widget _card({required Widget child}) {
     return Container(
-      padding:
-          const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(16),
-      ),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14)),
       child: child,
     );
   }
@@ -334,20 +262,15 @@ class _BookingPageState extends State<BookingPage> {
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius:
-              BorderRadius.circular(
-                  16),
-        ),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14)),
         child: Row(
           children: [
             Icon(icon),
-            const SizedBox(width: 10),
-            Expanded(
-                child: Text(title)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title)),
           ],
         ),
       ),
@@ -355,12 +278,10 @@ class _BookingPageState extends State<BookingPage> {
   }
 
   Widget _textField({
-    required TextEditingController
-        controller,
+    required TextEditingController controller,
     required String hint,
     int maxLines = 1,
-    TextInputType keyboardType =
-        TextInputType.text,
+    TextInputType keyboardType = TextInputType.text,
   }) {
     return TextField(
       controller: controller,
@@ -371,119 +292,100 @@ class _BookingPageState extends State<BookingPage> {
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
-          borderRadius:
-              BorderRadius.circular(14),
-          borderSide:
-              BorderSide.none,
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
         ),
       ),
     );
   }
 
-  /// DATE
+  /// ================= DATE TIME =================
   Future<void> _pickDate() async {
-    final date =
-        await showDatePicker(
+    final date = await showDatePicker(
       context: context,
       firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(
-        const Duration(days: 30),
-      ),
+      lastDate: DateTime.now().add(const Duration(days: 30)),
       initialDate: DateTime.now(),
     );
 
     if (date != null) {
-      setState(() {
-        selectedDate = date;
-      });
+      setState(() => selectedDate = date);
     }
   }
 
   Future<void> _pickTime() async {
     final time =
-        await showTimePicker(
-      context: context,
-      initialTime:
-          TimeOfDay.now(),
-    );
+        await showTimePicker(context: context, initialTime: TimeOfDay.now());
 
     if (time != null) {
-      setState(() {
-        selectedTime = time;
-      });
+      setState(() => selectedTime = time);
     }
   }
 
-  /// PAYMENT
+  /// ================= PAYMENT =================
   void _startPaymentFlow() async {
     if (nameController.text.isEmpty ||
-        emailController.text.isEmpty ||
         phoneController.text.isEmpty ||
         addressController.text.isEmpty ||
         selectedDate == null ||
         selectedTime == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          content: Text(
-              "Please fill all details"),
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Fill all details")),
       );
       return;
     }
 
-    final success =
-        await Navigator.push(
+    final success = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            UpiPaymentScreen(
-          amount: totalAmount,
-        ),
+        builder: (_) => UpiPaymentScreen(amount: totalAmount),
       ),
     );
 
     if (success == true) {
-      _confirmBooking();
+      _saveToFirestore();
     }
   }
 
-  void _confirmBooking() {
-    final order = OrderModel(
-      id: Random()
-          .nextInt(999999)
-          .toString(),
-      services: isCartFlow
-          ? cartItems
-              .map((e) =>
-                  "${e.name} x${e.quantity}")
-              .toList()
-          : [
-              widget.product?.name ??
-                  widget.serviceName
-            ],
-      date: selectedDate!,
-      time:
-          selectedTime!.format(context),
-      address:
-          addressController.text,
-      note: noteController.text,
-      status: "Ongoing",
-      totalAmount: totalAmount,
-    );
+  /// ================= FIRESTORE =================
+  Future<void> _saveToFirestore() async {
+    try {
+      List<String> servicesList;
 
-    OrdersData.orders.add(order);
+      if (isCartFlow) {
+        servicesList =
+            cartItems.map((e) => "${e.name} x${e.quantity}").toList();
+      } else {
+        servicesList = [widget.product?.name ?? widget.serviceName];
+      }
 
-    Cart.clear(widget.serviceName);
+      await FirebaseFirestore.instance.collection("orders").add({
+        "services": servicesList,
+        "date": Timestamp.fromDate(selectedDate!),
+        "time": selectedTime!.format(context),
+        "address": addressController.text,
+        "note": noteController.text,
+        "status": "pending",
+        "totalAmount": totalAmount,
+        "userName": nameController.text,
+        "phone": phoneController.text,
+        "serviceType": widget.serviceName,
+        "createdAt": FieldValue.serverTimestamp(),
+      });
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-      const SnackBar(
-        content:
-            Text("Booking Confirmed"),
-      ),
-    );
+      if (isCartFlow) {
+        Cart.clear(widget.serviceName);
+      }
 
-    Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Booking Confirmed")),
+      );
+
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    }
   }
 }

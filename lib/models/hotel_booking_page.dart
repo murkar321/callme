@@ -1,5 +1,7 @@
 import 'package:callme/data/hotel_data.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../models/cart.dart';
 import '../models/service_product.dart';
 
@@ -8,8 +10,7 @@ class HotelBookingPage extends StatefulWidget {
 
   const HotelBookingPage({
     super.key,
-    required this.products,
-    required HotelRoom hotel,
+    required this.products, required HotelRoom hotel,
   });
 
   @override
@@ -29,14 +30,15 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
 
+  /// 🔥 GET CART ITEMS (HOTEL)
+  List<CartItem> get cartItems => Cart.getItems("Hotel");
+
   /// 🔥 TOTAL PRICE
   int get totalPrice {
-    int total = 0;
-    for (var product in widget.products) {
-      int qty = Cart.quantities[product] ?? 0;
-      total += (product.finalPrice ?? product.price) * qty;
-    }
-    return total;
+    return cartItems.fold(
+      0,
+      (sum, item) => sum + (item.price * item.quantity),
+    );
   }
 
   /// 📅 PICK DATE
@@ -71,6 +73,7 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
     super.dispose();
   }
 
+  /// ================= UI =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -106,7 +109,7 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
 
             const SizedBox(height: 20),
 
-            /// 🔷 SERVICE DETAILS
+            /// 🔷 ROOM DETAILS (FROM CART)
             const Text(
               "Room Details",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -114,22 +117,21 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
 
             const SizedBox(height: 10),
 
-            ...widget.products.map((product) {
-              int qty = Cart.quantities[product] ?? 0;
-              if (qty == 0) return const SizedBox();
-
+            ...cartItems.map((item) {
               return Card(
                 child: ListTile(
-                  leading: Image.asset(product.imagePath, width: 50),
-                  title: Text(product.name),
-                  subtitle: Text("Qty: $qty"),
+                  leading: item.image != null
+                      ? Image.asset(item.image!, width: 50)
+                      : null,
+                  title: Text(item.name),
+                  subtitle: Text("Qty: ${item.quantity}"),
                   trailing: Text(
-                    "₹${(product.finalPrice ?? product.price) * qty}",
+                    "₹${item.price * item.quantity}",
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
               );
-            }).toList(),
+            }),
 
             const SizedBox(height: 20),
 
@@ -222,16 +224,11 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
+
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Booking Confirmed!"),
-                          ),
-                        );
-                      },
+                      onPressed: _confirmBooking,
                       style: ElevatedButton.styleFrom(
                         backgroundColor:
                             const Color.fromARGB(255, 175, 153, 179),
@@ -246,5 +243,52 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
         ),
       ),
     );
+  }
+
+  /// ================= FIRESTORE =================
+  Future<void> _confirmBooking() async {
+    if (nameCtrl.text.isEmpty ||
+        phoneCtrl.text.isEmpty ||
+        addressCtrl.text.isEmpty ||
+        selectedDate == null ||
+        selectedTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Fill all details")),
+      );
+      return;
+    }
+
+    try {
+      final services = cartItems
+          .map((e) => "${e.name} x${e.quantity}")
+          .toList();
+
+      await FirebaseFirestore.instance.collection("orders").add({
+        "services": services,
+        "date": Timestamp.fromDate(selectedDate!),
+        "time": selectedTime!.format(context),
+        "address": "${addressCtrl.text}, ${cityCtrl.text}",
+        "note": messageCtrl.text,
+        "status": "pending",
+        "totalAmount": totalPrice,
+        "userName": nameCtrl.text,
+        "phone": phoneCtrl.text,
+        "email": emailCtrl.text,
+        "serviceType": "Hotel", // 🔥 IMPORTANT
+        "createdAt": FieldValue.serverTimestamp(),
+      });
+
+      Cart.clear("Hotel");
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Booking Confirmed")),
+      );
+
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    }
   }
 }

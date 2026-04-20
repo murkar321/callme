@@ -18,11 +18,14 @@ class SalonDetailPage extends StatefulWidget {
 class _SalonDetailPageState extends State<SalonDetailPage> {
   static const String serviceName = "Salon";
 
+  void refresh() => setState(() {});
+
+  String get id => "Salon_${widget.service.id}";
+
+  int get qty => Cart.getQuantity(id, serviceName);
+
   @override
   Widget build(BuildContext context) {
-    final String id = "Salon_${widget.service.name}";
-    final int qty = Cart.getQuantity(id, serviceName);
-
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.service.name),
@@ -76,9 +79,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(width: 10),
-
                 if (widget.service.discount > 0)
                   Text(
                     "₹${widget.service.price}",
@@ -143,7 +144,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                   backgroundColor: const Color(0xFFAE91BA),
                 ),
                 onPressed: () {
-                  _showBookingPopup(context, id);
+                  _showBookingPopup(context);
                 },
                 child: Text(
                   qty == 0
@@ -166,13 +167,13 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const CartPage(
-                          service: "Salon",
-                          serviceName: "Salon",
-                          cart: [],
+                        builder: (_) => CartPage(
+                          service: serviceName,
+                          serviceName: serviceName,
+                          cart: Cart.getItems(serviceName),
                         ),
                       ),
-                    );
+                    ).then((_) => refresh());
                   },
                   child: const Text("View Cart"),
                 ),
@@ -186,7 +187,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
   }
 
   /// POPUP
-  void _showBookingPopup(BuildContext context, String id) {
+  void _showBookingPopup(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) {
@@ -194,22 +195,16 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-
           title: const Text("Choose Appointment"),
-
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
 
               /// HOME
               ListTile(
-                leading: const Icon(
-                  Icons.home,
-                  color: Colors.purple,
-                ),
+                leading: const Icon(Icons.home, color: Colors.purple),
                 title: const Text("Home Appointment"),
                 onTap: () {
-
                   Cart.addSalon(
                     id: id,
                     name: widget.service.name,
@@ -220,12 +215,9 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                   );
 
                   Navigator.pop(context);
+                  refresh();
 
-                  setState(() {});
-
-                  _showSnack(
-                    "Added to Cart (Home Appointment)",
-                  );
+                  _showSnack("Added to Cart (Home Appointment)");
                 },
               ),
 
@@ -233,13 +225,9 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
               /// SALON
               ListTile(
-                leading: const Icon(
-                  Icons.store,
-                  color: Colors.green,
-                ),
+                leading: const Icon(Icons.store, color: Colors.green),
                 title: const Text("Salon Appointment"),
                 onTap: () {
-
                   Cart.addSalon(
                     id: id,
                     name: widget.service.name,
@@ -250,12 +238,9 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                   );
 
                   Navigator.pop(context);
+                  refresh();
 
-                  setState(() {});
-
-                  _showSnack(
-                    "Added to Cart (Salon Appointment)",
-                  );
+                  _showSnack("Added to Cart (Salon Appointment)");
                 },
               ),
             ],

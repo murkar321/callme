@@ -1,3 +1,4 @@
+import 'package:callme/models/enquiry_page.dart';
 import 'package:flutter/material.dart';
 import 'package:callme/screens/booking_page.dart';
 import '../models/cart.dart';
@@ -221,18 +222,18 @@ class _CartPageState extends State<CartPage> {
                     );
                   }
 
-                  /// 🎓 EDUCATION (ADDED ONLY)
-                  else if (widget.service == "Education") {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => BookingPage(
-                          serviceName: "Education",
-                          cart: Cart.getItems("Education"),
-                        ),
-                      ),
-                    );
-                  }
+                 /// 🎓 EDUCATION (UPDATED → ENQUIRY FLOW)
+else if (widget.service == "Education") {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => EnquiryPage(
+        serviceName: "Education",
+        cart: items,
+      ),
+    ),
+  );
+}
 
                   /// ================= REST (UNCHANGED) =================
                   else {
@@ -247,7 +248,12 @@ class _CartPageState extends State<CartPage> {
                     );
                   }
                 },
-                child: const Text("Proceed to Booking"),
+                child: Text(
+  widget.service == "Education"
+      ? "Proceed to Enquiry"
+      : "Proceed to Booking",
+),
+
               ),
             ),
     );

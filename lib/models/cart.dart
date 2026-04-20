@@ -385,17 +385,24 @@ class Cart {
     return getItems("Salon");
   }
 
-  /// =========================
-  /// 🎓 EDUCATION (ONLY ADDED)
-  /// =========================
-  static void addEducation({
-    required String id,
-    required String name,
-    required int price,
-    required String category,
-    String? image,
-  }) {
-    add(
+ /// =========================
+/// 🎓 EDUCATION (FIXED CLEAN)
+/// =========================
+static void addEducation({
+  required String id,
+  required String name,
+  required int price,
+  required String category,
+  String? image,
+}) {
+  final existingIndex = _items.indexWhere(
+    (e) => e.id == id && e.service == "Education",
+  );
+
+  if (existingIndex != -1) {
+    _items[existingIndex].quantity++;
+  } else {
+    _items.add(
       CartItem(
         id: id,
         name: name,
@@ -404,19 +411,28 @@ class Cart {
         category: category,
         image: image,
       ),
-      service: "Education",
     );
   }
 
-  static List<CartItem> get educationItems {
-    return getItems("Education");
-  }
+  debugPrint("🎓 Added Education Course: $name");
+}
 
-  static int get educationTotalItems {
-    return getTotalItems("Education");
-  }
+/// 🎓 GET ITEMS
+static List<CartItem> get educationItems {
+  return _items.where((e) => e.service == "Education").toList();
+}
 
-  static int get educationTotalPrice {
-    return getTotal("Education");
-  }
+/// 🎓 TOTAL ITEMS
+static int get educationTotalItems {
+  return _items
+      .where((e) => e.service == "Education")
+      .fold(0, (sum, e) => sum + e.quantity);
+}
+
+/// 🎓 TOTAL PRICE
+static int get educationTotalPrice {
+  return _items
+      .where((e) => e.service == "Education")
+      .fold(0, (sum, e) => sum + (e.price * e.quantity));
+}
 }

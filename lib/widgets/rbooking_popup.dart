@@ -1,6 +1,7 @@
+
 import 'package:flutter/material.dart';
 import '../data/resorts_data.dart';
-import '../models/cart.dart';
+
 import '../models/cart_page.dart';
 
 class ResortBookingPopup extends StatefulWidget {
@@ -29,7 +30,6 @@ class _ResortBookingPopupState
 
   @override
   Widget build(BuildContext context) {
-
     return AlertDialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
@@ -48,8 +48,7 @@ class _ResortBookingPopupState
 
           /// ADULT
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
 
               const Text(
@@ -72,8 +71,9 @@ class _ResortBookingPopupState
                   Text(
                     adult.toString(),
                     style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
 
                   IconButton(
@@ -91,8 +91,7 @@ class _ResortBookingPopupState
 
           /// CHILD
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
 
               const Text(
@@ -115,8 +114,9 @@ class _ResortBookingPopupState
                   Text(
                     child.toString(),
                     style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
 
                   IconButton(
@@ -140,8 +140,7 @@ class _ResortBookingPopupState
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
 
                 const Text(
@@ -169,9 +168,7 @@ class _ResortBookingPopupState
 
         /// CANCEL
         TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
           child: const Text("Cancel"),
         ),
 
@@ -179,27 +176,17 @@ class _ResortBookingPopupState
         ElevatedButton(
           onPressed: () {
 
-            /// ADD TO CART
-            Cart.addResortBooking(
-              id: widget.resort.name,
-              name: widget.resort.name,
-              price: widget.resort.price,
-              adults: adult,
-              children: child,
-              image: widget.resort.image,
-            );
+          
 
             Navigator.pop(context);
 
-            /// GO TO CART PAGE
+            /// ✅ GO TO CART (REAL UNIVERSAL WAY)
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    const CartPage(
-                      serviceName: "Resort",
-                      cart: [], service: '',
-                    ),
+                builder: (_) => const CartPage(
+                  service: "Resorts", serviceName: '', cart: [],
+                ),
               ),
             );
           },
@@ -216,4 +203,7 @@ class _ResortBookingPopupState
       ],
     );
   }
+}
+
+class addResortBooking {
 }
