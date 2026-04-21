@@ -616,7 +616,181 @@ EducationService(
   ),
 
 /// Digital Marketing
-/// Graphic Desiging 
+/// 🔹 Basic Digital Marketing
+EducationService(
+  id: "DM_1",
+  name: "Basic Digital Marketing Course",
+  category: "IT & Software Courses",
+  image: "assets/digital1.png",
+
+  description:
+      "Learn the fundamentals of digital marketing including social media, content creation, and basic promotion strategies.",
+
+  includes: [
+    "Digital Marketing Introduction",
+    "Social Media Marketing (Facebook, Instagram)",
+    "Basic Content Creation",
+    "Canva Designing (Basic)",
+    "Email Marketing (Basics)",
+    "WhatsApp Marketing",
+    "Blogging Basics"
+  ],
+
+  excludes: [
+    "Advanced Ads & SEO",
+    "Freelancing Training"
+  ],
+
+  steps: [
+    "Marketing Basics Learning",
+    "Social Media Practice",
+    "Content Creation",
+    "Campaign Setup Practice"
+  ],
+
+  tools: "Canva, Mailchimp",
+  duration: "2 Months",
+
+  price: 12000,
+  discount: 2000,
+  finalPrice: 10000,
+
+  warranty: "Basic Marketing & Promotion Skills",
+),
+
+/// 🔹 Advance Digital Marketing
+EducationService(
+  id: "DM_2",
+  name: "Advance Digital Marketing Course",
+  category: "IT & Software Courses",
+  image: "assets/digital2.png",
+
+  description:
+      "Advanced course covering complete digital marketing strategy, ads, SEO, website creation, and freelancing skills.",
+
+  includes: [
+    "Complete Digital Marketing Strategy",
+    "Social Media Ads (Facebook, Instagram)",
+    "Search Engine Optimization (SEO)",
+    "Search Engine Marketing (Google Ads)",
+    "Website Creation (WordPress)",
+    "Content Marketing Strategy",
+    "Affiliate Marketing",
+    "Freelancing & Client Handling"
+  ],
+
+  excludes: [
+    "Agency-Level Scaling Training"
+  ],
+
+  steps: [
+    "Strategy Learning",
+    "Ads & SEO Training",
+    "Website Development",
+    "Live Project Practice",
+    "Freelancing Setup"
+  ],
+
+  tools: "Google Ads, Google Analytics, WordPress, Canva",
+  duration: "4 Months",
+
+  price: 30000,
+  discount: 5000,
+  finalPrice: 25000,
+
+  warranty: "Job Ready Skills & Freelancing Support",
+),
+
+/// Graphic Desiging
+/// 🔹 Basic Graphic Design (DTP)
+EducationService(
+  id: "DESIGN_1",
+  name: "Basic Graphic Design (DTP)",
+  category: "IT & Software Courses",
+  image: "assets/graphic2.png",
+
+  description:
+      "Learn basic graphic designing and desktop publishing (DTP) tools for printing and small business needs.",
+
+  includes: [
+    "Adobe Photoshop (Basic)",
+    "CorelDRAW",
+    "PageMaker / Canva (Basic)",
+    "Visiting Card Design",
+    "Banner & Poster Design",
+    "Pamphlet / Flyer Design",
+    "Basic Photo Editing",
+    "Printing Setup (DTP Work)"
+  ],
+
+  excludes: [
+    "Advanced Branding & UI Design",
+    "Freelancing Training"
+  ],
+
+  steps: [
+    "Software Basics Training",
+    "Design Practice (Cards, Banners)",
+    "Photo Editing Practice",
+    "Printing Setup Learning"
+  ],
+
+  tools: "Photoshop, CorelDRAW, Canva",
+  duration: "3 Months",
+
+  price: 15000,
+  discount: 3000,
+  finalPrice: 12000,
+
+  warranty: "Basic Graphic & Printing Skills",
+),
+
+/// 🔹 Advance Graphic Design
+EducationService(
+  id: "DESIGN_2",
+  name: "Advance Graphic Design + Job Ready",
+  category: "IT & Software Courses",
+  image: "assets/graphic3.png",
+
+  description:
+      "Professional graphic design course covering branding, social media creatives, UI basics, and freelancing skills.",
+
+  includes: [
+    "Adobe Photoshop (Advance)",
+    "Adobe Illustrator",
+    "CorelDRAW",
+    "Canva (Pro Level)",
+    "Figma (Basic UI Design)",
+    "Logo & Branding Design",
+    "Social Media Creatives",
+    "Ads Design (Instagram / Facebook)",
+    "Photo Manipulation",
+    "Packaging Design",
+    "Basic UI Design",
+    "Live Project Work"
+  ],
+
+  excludes: [
+    "Advanced UI/UX Specialization"
+  ],
+
+  steps: [
+    "Advanced Software Training",
+    "Design Projects",
+    "Portfolio Creation",
+    "Freelancing Guidance",
+    "Interview Preparation"
+  ],
+
+  tools: "Photoshop, Illustrator, Figma, Canva",
+  duration: "6 Months",
+
+  price: 35000,
+  discount: 7000,
+  finalPrice: 28000,
+
+  warranty: "Job Assistance & Freelancing Support",
+), 
 
 /// Government Courses
 /// 🔹 MPSC
@@ -814,181 +988,126 @@ EducationService(
 ),
 
 /// Beautician Courses
+/// 🔹 Basic Beautician Package
 EducationService(
   id: "BEAUTY_1",
-  name: "Basic Beautician Course (Starter Package)",
-  category: "Beautician Courses",
-  image: "assets/basic beauti.png",
-  description: "Beginner level course for starting beauty career",
+  name: "Beautician Course (Basic Package)",
+  category: "Beauty & Makeup Courses",
+  image: "assets/beauti1.png",
+
+  description:
+      "Beginner-level course covering essential parlour skills to start small earning or basic work.",
 
   includes: [
-    "Threading, waxing, cleanup",
-    "Basic facials",
-    "Simple hairstyles",
-    "Basic makeup (day/party look)"
+    "Threading, Waxing, Cleanup",
+    "Basic Facials",
+    "Simple Hairstyles",
+    "Basic Makeup (Day/Party Look)",
+    "Grooming Basics"
   ],
 
   excludes: [
-    "Advanced makeup & skin treatments"
+    "Advanced Skin Treatments",
+    "Bridal Makeup"
   ],
 
   steps: [
-    "Basic training sessions",
-    "Hands-on practice",
-    "Client handling basics",
-    "Final assessment"
+    "Basic Training",
+    "Practice Sessions",
+    "Client Handling Basics"
   ],
 
-  tools: "Basic salon tools & kits",
+  tools: "Basic Parlour Kit, Practice Material",
   duration: "1–2 Months",
 
   price: 30000,
-  discount: 20,
-  finalPrice: 24000,
+  discount: 10000,
+  finalPrice: 20000,
 
-  warranty: "Basic training support",
+  warranty: "Parlour Basics + Small Earning Start",
 ),
 
+/// 🔹 Advanced Beautician Package
 EducationService(
   id: "BEAUTY_2",
-  name: "Certificate Course (Beauty & Makeup)",
-  category: "Beautician Courses",
-  image: "assets/beauti course.jpg",
-  description: "Intermediate beauty and makeup course",
+  name: "Beautician Course (Advanced Package)",
+  category: "Beauty & Makeup Courses",
+  image: "assets/beauti2.png",
+
+  description:
+      "Intermediate to professional course covering makeup, hair styling, and salon-level skills.",
 
   includes: [
-    "Skincare & facials",
-    "Hair cutting & styling basics",
-    "Makeup techniques",
-    "Mehendi & grooming basics"
+    "Skincare + Advanced Facials",
+    "Hair Cutting & Styling",
+    "Makeup Techniques",
+    "Mehendi + Grooming",
+    "Manicure, Pedicure, Nail Art",
+    "Salon Hygiene & Client Handling"
   ],
 
   excludes: [
-    "Bridal & advanced makeup"
+    "Advanced Bridal HD Makeup",
+    "Business Setup Training"
   ],
 
   steps: [
-    "Theory sessions",
-    "Practical training",
-    "Practice on models",
-    "Evaluation"
+    "Skill Training",
+    "Hands-on Practice",
+    "Salon Techniques",
+    "Client Practice"
   ],
 
-  tools: "Makeup kits, Hair tools",
-  duration: "2–4 Months",
-
-  price: 50000,
-  discount: 20,
-  finalPrice: 40000,
-
-  warranty: "Practice support included",
-),
-
-EducationService(
-  id: "BEAUTY_3",
-  name: "Diploma in Beauty Parlour (Professional Package)",
-  category: "Beautician Courses",
-  image: "assets/professional beauti.jfif",
-  description: "Complete professional salon training course",
-
-  includes: [
-    "Advanced facials & skin treatments",
-    "Hair cutting, coloring & styling",
-    "Makeup (bridal + party)",
-    "Manicure, pedicure, nail art",
-    "Salon hygiene & client handling"
-  ],
-
-  excludes: [
-    "Business setup training"
-  ],
-
-  steps: [
-    "Professional training",
-    "Hands-on practice",
-    "Client interaction",
-    "Certification"
-  ],
-
-  tools: "Salon equipment, Professional kits",
-  duration: "4–8 Months",
+  tools: "Professional Kits, Practice Setup",
+  duration: "3–6 Months",
 
   price: 80000,
-  discount: 20,
-  finalPrice: 64000,
+  discount: 20000,
+  finalPrice: 60000,
 
-  warranty: "Job support guidance",
+  warranty: "Job Ready Salon Skills",
 ),
 
+/// 🔹 Premium Beautician Package
 EducationService(
-  id: "BEAUTY_4",
-  name: "Advanced / Bridal Makeup Course",
-  category: "Beautician Courses",
-  image: "assets/bridal makeup.jfif",
-  description: "Specialized course for bridal and fashion makeup",
+  id: "BEAUTY_3",
+  name: "Beautician Course (Premium Package)",
+  category: "Beauty & Makeup Courses",
+  image: "assets/beauti3.png",
+
+  description:
+      "Complete professional course including bridal makeup, advanced treatments, and salon business training.",
 
   includes: [
-    "Bridal makeup (HD, airbrush basics)",
-    "Party & fashion makeup",
-    "Bridal hairstyling",
-    "Portfolio creation"
+    "Bridal Makeup (HD, Airbrush Basics)",
+    "Party & Fashion Makeup",
+    "Advanced Hairstyling",
+    "Advanced Skin Treatments",
+    "Spa & Salon Management",
+    "Live Client Practice",
+    "Portfolio Creation",
+    "Business Setup Training"
   ],
 
   excludes: [
-    "Basic beginner training"
+    "International Certification"
   ],
 
   steps: [
-    "Advanced techniques",
-    "Live model practice",
-    "Portfolio building",
-    "Final certification"
+    "Advanced Training",
+    "Live Practice",
+    "Portfolio Building",
+    "Business Training"
   ],
 
-  tools: "Advanced makeup kits",
-  duration: "2–6 Months",
-
-  price: 100000,
-  discount: 20,
-  finalPrice: 80000,
-
-  warranty: "Career guidance support",
-),
-
-EducationService(
-  id: "BEAUTY_5",
-  name: "Master / Pro Salon Course (Full Package)",
-  category: "Beautician Courses",
-  image: "assets/advaced beauti.jfif",
-  description: "Complete salon career course with business training",
-
-  includes: [
-    "Full beauty + hair + makeup training",
-    "Advanced skin treatments",
-    "Spa & salon management",
-    "Live client practice",
-    "Business setup training"
-  ],
-
-  excludes: [
-    "Short-term crash training"
-  ],
-
-  steps: [
-    "Complete training modules",
-    "Hands-on practice",
-    "Client handling",
-    "Business training"
-  ],
-
-  tools: "Full professional salon setup",
+  tools: "Advanced Makeup Kits, Salon Setup",
   duration: "6–12 Months",
 
   price: 200000,
-  discount: 20,
+  discount: 40000,
   finalPrice: 160000,
 
-  warranty: "Full career support",
+  warranty: "Own Salon + High Income Career Guidance",
 ),
 
 
@@ -1342,9 +1461,378 @@ EducationService(
 
  
 /// Air Hostess
-/// Dance Class
+/// 🔹 Aviation Basic Package
+EducationService(
+  id: "AVIATION_1",
+  name: "Aviation Course (Basic Package)",
+  category: "Aviation Courses",
+  image: "assets/aviation_basic.png",
+
+  description:
+      "Starter course to understand aviation industry basics, grooming, and communication skills.",
+
+  includes: [
+    "Aviation Basics Introduction",
+    "Grooming & Personality Development",
+    "Basic Communication Skills (English)",
+    "Confidence Building Sessions",
+    "Air Hostess Role Understanding"
+  ],
+
+  excludes: [
+    "Advanced Interview Preparation",
+    "Placement Assistance"
+  ],
+
+  steps: [
+    "Basic Training Sessions",
+    "Grooming Practice",
+    "Communication Training",
+    "Confidence Development"
+  ],
+
+  tools: "Training Notes, Grooming Kit Guidance",
+  duration: "3 Months",
+
+  price: 45000,
+  discount: 5000,
+  finalPrice: 40000,
+
+  warranty: "Basic Aviation Knowledge",
+),
+
+/// 🔹 Aviation Standard Package
+EducationService(
+  id: "AVIATION_2",
+  name: "Aviation Course (Standard Package)",
+  category: "Aviation Courses",
+  image: "assets/aviation_standard.png",
+
+  description:
+      "Most popular course designed to make students job-ready for airline interviews.",
+
+  includes: [
+    "Everything in Basic Package",
+    "Advanced English Communication",
+    "Interview Preparation & Mock Interviews",
+    "Cabin Crew Training Modules",
+    "Resume Building + Soft Skills",
+    "Group Discussion Practice"
+  ],
+
+  excludes: [
+    "International Placement Support"
+  ],
+
+  steps: [
+    "Advanced Communication Training",
+    "Interview Practice",
+    "Cabin Crew Modules",
+    "Mock Interviews"
+  ],
+
+  tools: "Mock Interview Setup, Training Material",
+  duration: "6 Months",
+
+  price: 85000,
+  discount: 10000,
+  finalPrice: 75000,
+
+  warranty: "Interview & Job Readiness",
+),
+
+/// 🔹 Aviation Premium Package
+EducationService(
+  id: "AVIATION_3",
+  name: "Aviation Course (Premium Package)",
+  category: "Aviation Courses",
+  image: "assets/aviation_premium.png",
+
+  description:
+      "Professional aviation training with international preparation, simulation, and placement support.",
+
+  includes: [
+    "Everything in Standard Package",
+    "Airline Grooming Masterclass",
+    "International Airline Preparation",
+    "Cabin Crew Simulation Training",
+    "Internship / Placement Assistance",
+    "Personality Transformation Program",
+    "Visa & Overseas Job Guidance"
+  ],
+
+  excludes: [
+    "Guaranteed International Placement"
+  ],
+
+  steps: [
+    "Professional Training",
+    "Simulation Practice",
+    "Internship Training",
+    "Placement Preparation"
+  ],
+
+  tools: "Simulation Lab, Grooming Kit, Training Material",
+  duration: "9–12 Months",
+
+  price: 150000,
+  discount: 20000,
+  finalPrice: 130000,
+
+  warranty: "Placement Assistance & Career Guidance",
+),
+
+/// Dance Class 
+/// 🔹 Basic Dance
+EducationService(
+  id: "DANCE_1",
+  name: "Basic Dance Course (Beginner Level)",
+  category: "Dance & Music Courses",
+  image: "assets/basic dance.png",
+
+  description:
+      "Beginner-friendly dance course covering basic steps, rhythm, and simple choreography for all age groups.",
+
+  includes: [
+    "Dance Basics (Body Movement, Rhythm, Timing)",
+    "Basic Bollywood & Freestyle Steps",
+    "Warm-up & Stretching Techniques",
+    "Simple Choreography",
+    "Facial Expressions & Energy Control",
+    "Basic Fitness & Flexibility Training"
+  ],
+
+  excludes: [
+    "Advanced Choreography",
+    "Stage Performance Training"
+  ],
+
+  steps: [
+    "Warm-up Sessions",
+    "Basic Step Practice",
+    "Routine Practice",
+    "Group Dance Training"
+  ],
+
+  tools: "Music System, Practice Studio",
+  duration: "2–3 Months",
+
+  price: 12000,
+  discount: 4000,
+  finalPrice: 8000,
+
+  warranty: "Basic Dance Skills Development",
+),
+
+/// 🔹 Advance Dance
+EducationService(
+  id: "DANCE_2",
+  name: "Advance Dance Course (Professional Level)",
+  category: "Dance & Music Courses",
+  image: "assets/advance dance.png",
+
+  description:
+      "Professional dance training with multiple styles, stage performance, and choreography skills.",
+
+  includes: [
+    "Advanced Choreography",
+    "Multiple Dance Styles (Bollywood, Hip-Hop, Contemporary)",
+    "Stage Performance Techniques",
+    "Freestyle & Creativity Development",
+    "Partner Dance Basics",
+    "Expression & Storytelling",
+    "Fitness & Stamina Building"
+  ],
+
+  excludes: [
+    "International Certification (optional)"
+  ],
+
+  steps: [
+    "Advanced Training Sessions",
+    "Choreography Practice",
+    "Performance Training",
+    "Competition Preparation"
+  ],
+
+  tools: "Studio, Music System, Performance Setup",
+  duration: "4–6 Months",
+
+  price: 30000,
+  discount: 8000,
+  finalPrice: 22000,
+
+  warranty: "Stage Performance & Career Guidance",
+),
+
 /// Music Class
+/// 🔹 Basic Music
+EducationService(
+  id: "MUSIC_1",
+  name: "Basic Music Course (Beginner Level)",
+  category: "Dance & Music Courses",
+  image: "assets/basic_music.png",
+
+  description:
+      "Learn music fundamentals including vocal training, rhythm, and basic instrumental introduction.",
+
+  includes: [
+    "Music Basics (Swar, Sur, Taal)",
+    "Basic Vocal Training",
+    "Alankar Practice",
+    "Simple Songs (Bollywood / Bhajan)",
+    "Rhythm Understanding",
+    "Instrumental Introduction (Keyboard / Harmonium)"
+  ],
+
+  excludes: [
+    "Advanced Classical Training"
+  ],
+
+  steps: [
+    "Basic Theory Learning",
+    "Voice Practice (Riyaaz)",
+    "Song Practice",
+    "Group Singing Sessions"
+  ],
+
+  tools: "Harmonium, Keyboard, Notes",
+  duration: "3–4 Months",
+
+  price: 15000,
+  discount: 5000,
+  finalPrice: 10000,
+
+  warranty: "Basic Singing & Music Skills",
+),
+
+/// 🔹 Advance Music
+EducationService(
+  id: "MUSIC_2",
+  name: "Advance Music Course (Professional Level)",
+  category: "Dance & Music Courses",
+  image: "assets/advance_music.png",
+
+  description:
+      "Advanced music training including classical techniques, stage performance, and recording skills.",
+
+  includes: [
+    "Advanced Vocal Training",
+    "Classical Music (Raag, Alaap, Taan)",
+    "Voice Control & Modulation",
+    "Stage Performance Skills",
+    "Song Recording Techniques",
+    "Karaoke & Mic Handling",
+    "Instrumental Training (Optional)"
+  ],
+
+  excludes: [
+    "International Certification"
+  ],
+
+  steps: [
+    "Advanced Vocal Practice",
+    "Live Performance Training",
+    "Studio Recording",
+    "Solo Practice Sessions"
+  ],
+
+  tools: "Studio Setup, Instruments, Recording Tools",
+  duration: "6–12 Months",
+
+  price: 40000,
+  discount: 10000,
+  finalPrice: 30000,
+
+  warranty: "Performance Opportunities & Certification",
+),
+
 /// Mobile Repairing
+/// 🔹 Basic Mobile Repairing
+EducationService(
+  id: "MOB_1",
+  name: "Basic Mobile Repairing Course (Beginner Level)",
+  category: "Technical Courses",
+  image: "assets/mobile_basic.png",
+
+  description:
+      "Learn the fundamentals of mobile repairing including hardware basics, common faults, and basic software handling.",
+
+  includes: [
+    "Mobile Repairing Introduction (Android Basics)",
+    "Tools & Equipment Usage",
+    "Mobile Opening & Assembling",
+    "Display (Screen) Replacement",
+    "Battery & Charging Jack Repair",
+    "Speaker, Mic & Camera Issues",
+    "Basic Software (Reset, Flashing)",
+    "Safety & Handling Techniques"
+  ],
+
+  excludes: [
+    "Chip-Level Repairing",
+    "Advanced Software Unlocking"
+  ],
+
+  steps: [
+    "Basic Theory Learning",
+    "Tool Handling Practice",
+    "Mobile Disassembly & Assembly",
+    "Fault Finding Practice"
+  ],
+
+  tools: "Repair Toolkit, Practice Devices",
+  duration: "2–3 Months",
+
+  price: 18000,
+  discount: 6000,
+  finalPrice: 12000,
+
+  warranty: "Basic Mobile Repairing Skills",
+),
+
+/// 🔹 Advance Mobile Repairing
+EducationService(
+  id: "MOB_2",
+  name: "Advance Mobile Repairing Course (Professional Level)",
+  category: "Technical Courses",
+  image: "assets/mobile_advance.png",
+
+  description:
+      "Professional-level mobile repairing course covering chip-level work, advanced troubleshooting, and real-device practice.",
+
+  includes: [
+    "Complete Hardware + Software Repairing",
+    "Chip-Level Repairing (IC Work)",
+    "Soldering & Rework Station Usage",
+    "Motherboard Fault Finding",
+    "Water Damage Repairing",
+    "Advanced Flashing & Unlocking",
+    "Dead Phone Repair",
+    "Network Issue Solving",
+    "iPhone & Android Repair Basics"
+  ],
+
+  excludes: [
+    "Brand-Specific Certification"
+  ],
+
+  steps: [
+    "Advanced Hardware Training",
+    "Chip-Level Practice",
+    "Fault Diagnosis",
+    "Real Device Repairing"
+  ],
+
+  tools: "Soldering Station, Multimeter, Repair Tools",
+  duration: "4–6 Months",
+
+  price: 40000,
+  discount: 10000,
+  finalPrice: 30000,
+
+  warranty: "Job Assistance & Shop Setup Guidance",
+),
 
 
 ];

@@ -22,7 +22,7 @@ class EducationServiceCard extends StatelessWidget {
   Color getButtonColor(String category) {
     final cat = category.toLowerCase();
 
-    if (cat.contains("beautician")) {
+    if (cat.contains("beauty")) {
       return const Color(0xFFE91E63);
     }
 
