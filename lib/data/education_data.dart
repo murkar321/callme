@@ -189,16 +189,12 @@ final List<EducationService> educationServices = [
     warranty: "Full course academic support",
   ),
   
-  /// =========================
-// Computer Courses
-  /// =========================
-  /// 
-  
+/// MSC-IT Courses
   EducationService(
     id: "MSC_1",
     name: "Basic MS-CIT",
-    category: "MS-CIT",
-    image: "assets/Education.jpg",
+    category: "MS-CIT Courses",
+    image: "assets/msc1.jpeg",
     description: "Computer basics & MS Office",
 
     includes: [
@@ -221,8 +217,8 @@ final List<EducationService> educationServices = [
   EducationService(
     id: "MSC_2",
     name: "Standard MS-CIT",
-    category: "MS-CIT",
-    image: "assets/Education.jpg",
+    category: "MS-CIT Courses",
+    image:"assets/msc2.jpeg",
     description: "Full MS-CIT course",
 
     includes: [
@@ -245,8 +241,8 @@ final List<EducationService> educationServices = [
   EducationService(
     id: "MSC_3",
     name: "MS-CIT + Advanced",
-    category: "MS-CIT",
-    image: "assets/Education.jpg",
+    category: "MS-CIT Courses",
+    image: "assets/msc3.jpeg",
     description: "MS-CIT + extra skills",
 
     includes: [
@@ -269,8 +265,8 @@ final List<EducationService> educationServices = [
   EducationService(
     id: "MSC_4",
     name: "Job-Oriented MS-CIT",
-    category: "MS-CIT",
-    image: "assets/Education.jpg",
+    category: "MS-CIT Courses",
+    image: "assets/msc4.jpeg",
     description: "Office job training",
 
     includes: [
@@ -291,145 +287,92 @@ final List<EducationService> educationServices = [
   ),
 
 
-  // 🟢 BASIC
-  EducationService(
-    id: "SE_1",
-    name: "Basic Coding Course",
-    category: "Software Engineering",
-    image: "assets/Education.jpg",
-    description: "Start coding with basic programming & web fundamentals",
+/// Software Enginerring
+EducationService(
+  id: "PROG_1",
+  name: "Programming & Software Course (Basic)",
+  category: "Software & Programming",
+  image: "assets/programming_basic.png",
 
-    includes: [
-      "Python / C / Java basics",
-      "HTML, CSS",
-      "Logic building",
-      "Small projects"
-    ],
-    excludes: ["Advanced frameworks"],
-    steps: ["Basics", "Practice", "Mini projects"],
-    tools: "Python, C, HTML, CSS",
-    duration: "3–6 Months",
+  description:
+      "Learn computer fundamentals, MS Office, internet basics, and introduction to programming for beginners.",
 
-    price: 50000,
-    discount: 40,
-    finalPrice: 30000,
+  includes: [
+    "Computer Fundamentals",
+    "MS Office (Word, Excel, PowerPoint)",
+    "Internet & Email Basics",
+    "Introduction to Programming",
+    "Basic HTML & CSS"
+  ],
 
-    warranty: "Basic coding support",
-  ),
+  excludes: [
+    "Advanced Programming Languages",
+    "Live Project Work"
+  ],
 
-  // 📘 CERTIFICATE / DIPLOMA
-  EducationService(
-    id: "SE_2",
-    name: "Diploma in Software Engineering",
-    category: "Software Engineering",
-    image: "assets/Education.jpg",
-    description: "Core programming + database + development basics",
+  steps: [
+    "Basic Computer Training",
+    "Office Tools Practice",
+    "Internet Usage Training",
+    "Intro to Coding",
+    "Mini Practice Tasks"
+  ],
 
-    includes: [
-      "C, C++, Java",
-      "SQL database",
-      "Software development basics",
-      "Practical projects"
-    ],
-    excludes: [],
-    steps: ["Theory", "Practice", "Projects"],
-    tools: "C++, Java, SQL",
-    duration: "1–2 Years",
+  tools: "Computer Lab, Notes, Practice Files",
+  duration: "3 Months",
 
-    price: 120000,
-    discount: 25,
-    finalPrice: 90000,
+  price: 12000,
+  discount: 2000,
+  finalPrice: 10000,
 
-    warranty: "Project support",
-  ),
+  warranty: "Basic Computer & Software Skills",
+),
+EducationService(
+  id: "PROG_2",
+  name: "Programming & Software Course (Advance)",
+  category: "Software & Programming",
+  image: "assets/programming_advance.png",
 
-  // 🚀 ADVANCED
-  EducationService(
-    id: "SE_3",
-    name: "Full Stack Development Course",
-    category: "Software Engineering",
-    image: "assets/Education.jpg",
-    description: "Frontend + backend + database full training",
+  description:
+      "Advanced programming course covering multiple languages, web development, and real-world project experience.",
 
-    includes: [
-      "HTML, CSS, JavaScript, React",
-      "Node.js / Python backend",
-      "MongoDB / SQL",
-      "Git, APIs",
-      "Live projects"
-    ],
-    excludes: [],
-    steps: ["Frontend", "Backend", "Projects"],
-    tools: "React, Node.js, MongoDB",
-    duration: "6–12 Months",
+  includes: [
+    "C & C++ Programming",
+    "Core Java / Python",
+    "HTML, CSS, JavaScript",
+    "Database (MySQL)",
+    "Basic App / Web Development",
+    "Live Project Work"
+  ],
 
-    price: 150000,
-    discount: 30,
-    finalPrice: 105000,
+  excludes: [
+    "Specialized Frameworks (optional extra)"
+  ],
 
-    warranty: "Portfolio + job prep",
-  ),
+  steps: [
+    "Programming Fundamentals",
+    "Language Training (C/C++/Java/Python)",
+    "Web Development Basics",
+    "Database Integration",
+    "Live Project Development"
+  ],
 
-  // 🔥 JOB ORIENTED
-  EducationService(
-    id: "SE_4",
-    name: "Software Engineering Bootcamp",
-    category: "Software Engineering",
-    image: "assets/Education.jpg",
-    description: "Fast-track job-ready training with interviews",
+  tools: "Code Editor, IDEs, Project Work",
+  duration: "6 Months",
 
-    includes: [
-      "Full stack + DSA",
-      "Mock interviews",
-      "Resume building",
-      "Real-world projects"
-    ],
-    excludes: [],
-    steps: ["Training", "Projects", "Interview prep"],
-    tools: "Full Stack + DSA",
-    duration: "4–9 Months",
+  price: 30000,
+  discount: 5000,
+  finalPrice: 25000,
 
-    price: 200000,
-    discount: 25,
-    finalPrice: 150000,
+  warranty: "Job Assistance & Interview Preparation",
+),
 
-    warranty: "Placement guidance",
-  ),
-
-  // 🎯 SPECIALIZED
-  EducationService(
-    id: "SE_5",
-    name: "Specialized Software Courses",
-    category: "Software Engineering",
-    image: "assets/Education.jpg",
-    description: "Skill-based courses like Web, App, Testing, UI/UX",
-
-    includes: [
-      "Web development",
-      "App development",
-      "Software testing",
-      "UI/UX design basics"
-    ],
-    excludes: [],
-    steps: ["Skill training", "Practice", "Projects"],
-    tools: "Varies by skill",
-    duration: "2–6 Months",
-
-    price: 60000,
-    discount: 30,
-    finalPrice: 42000,
-
-    warranty: "Skill-based support",
-  ),
-
-
-
-  // 🟢 BASIC
+/// Data Science
   EducationService(
     id: "DS_1",
     name: "Basic Data Science Course",
     category: "Data Science",
-    image: "assets/Education.jpg",
+    image: "assets/data1.png",
     description: "Beginner course for data handling and Python basics",
 
     includes: [
@@ -450,12 +393,12 @@ final List<EducationService> educationServices = [
     warranty: "Basic training support",
   ),
 
-  // 📘 CERTIFICATE
+ 
   EducationService(
     id: "DS_2",
     name: "Certificate in Data Science",
     category: "Data Science",
-    image: "assets/Education.jpg",
+    image: "assets/data2.png",
     description: "Foundation course for data analysis",
 
     includes: [
@@ -476,12 +419,12 @@ final List<EducationService> educationServices = [
     warranty: "Course certificate",
   ),
 
-  // 🚀 DIPLOMA
+ 
   EducationService(
     id: "DS_3",
     name: "Diploma in Data Science",
     category: "Data Science",
-    image: "assets/Education.jpg",
+    image: "assets/data3.png",
     description: "Job-ready data analyst training",
 
     includes: [
@@ -502,12 +445,11 @@ final List<EducationService> educationServices = [
     warranty: "Project support",
   ),
 
-  // 🔥 ADVANCED
   EducationService(
     id: "DS_4",
     name: "Advanced Data Science Course",
     category: "Data Science",
-    image: "assets/Education.jpg",
+    image: "assets/data4.png",
     description: "Professional AI & machine learning course",
 
     includes: [
@@ -528,12 +470,12 @@ final List<EducationService> educationServices = [
     warranty: "Career support",
   ),
 
-  // 🎯 SPECIALIZED
+ 
   EducationService(
     id: "DS_5",
     name: "Specialized Data Courses",
     category: "Data Science",
-    image: "assets/Education.jpg",
+    image: "assets/data5.png",
     description: "Skill-based courses like Analytics, ML, AI",
 
     includes: [
@@ -555,36 +497,12 @@ final List<EducationService> educationServices = [
   ),
 
 
-  EducationService(
-    id: "DM_1",
-    name: "Basic Digital Marketing",
-    category: "Digital Marketing",
-    image: "assets/Education.jpg",
-    description: "Introduction to digital marketing",
-
-    includes: [
-      "Social media marketing",
-      "Basic SEO",
-      "Content creation"
-    ],
-    excludes: [],
-    steps: ["Learning", "Practice"],
-    tools: "Social media tools",
-    duration: "2–4 Months",
-
-    price: 40000,
-    discount: 25,
-    finalPrice: 30000,
-
-    warranty: "Basic support",
-  ),
-
-
+/// Networking
   EducationService(
     id: "NW_1",
     name: "Basic Networking",
     category: "Networking",
-    image: "assets/Education.jpg",
+    image: "assets/network1.png",
     description: "Networking fundamentals",
 
     includes: [
@@ -608,7 +526,7 @@ final List<EducationService> educationServices = [
     id: "NW_2",
     name: "Certificate in Networking",
     category: "Networking",
-    image: "assets/Education.jpg",
+    image: "assets/network2.png",
     description: "CCNA basics",
 
     includes: [
@@ -631,7 +549,7 @@ final List<EducationService> educationServices = [
     id: "NW_3",
     name: "Diploma in Networking",
     category: "Networking",
-    image: "assets/Education.jpg",
+    image: "assets/network3.png",
     description: "Hardware + networking",
 
     includes: [
@@ -654,7 +572,7 @@ final List<EducationService> educationServices = [
     id: "NW_4",
     name: "Advanced Networking",
     category: "Networking",
-    image: "assets/Education.jpg",
+    image: "assets/network4.png",
     description: "Professional networking",
 
     includes: [
@@ -678,7 +596,7 @@ final List<EducationService> educationServices = [
     id: "NW_5",
     name: "Specialized Networking",
     category: "Networking",
-    image: "assets/Education.jpg",
+    image: "assets/network5.png",
     description: "Cybersecurity, cloud",
 
     includes: [
@@ -697,710 +615,205 @@ final List<EducationService> educationServices = [
     warranty: "Skill support",
   ),
 
-
-  EducationService(
-    id: "DM_2",
-    name: "Diploma in Digital Marketing",
-    category: "Digital Marketing",
-    image: "assets/Education.jpg",
-    description: "Complete marketing foundation",
-
-    includes: [
-      "SEO, SEM",
-      "Email marketing",
-      "Analytics tools"
-    ],
-    excludes: [],
-    steps: ["Training", "Practice"],
-    tools: "Google tools",
-    duration: "4–8 Months",
-
-    price: 80000,
-    discount: 30,
-    finalPrice: 56000,
-
-    warranty: "Certificate support",
-  ),
-
-  EducationService(
-    id: "DM_3",
-    name: "Advanced Digital Marketing",
-    category: "Digital Marketing",
-    image: "assets/Education.jpg",
-    description: "Professional marketing course",
-
-    includes: [
-      "Advanced SEO",
-      "Google Ads",
-      "Social media ads",
-      "Affiliate marketing"
-    ],
-    excludes: [],
-    steps: ["Training", "Projects"],
-    tools: "Ads tools",
-    duration: "6–12 Months",
-
-    price: 150000,
-    discount: 25,
-    finalPrice: 112500,
-
-    warranty: "Project support",
-  ),
-
-  EducationService(
-    id: "DM_4",
-    name: "Marketing Bootcamp",
-    category: "Digital Marketing",
-    image: "assets/Education.jpg",
-    description: "Fast-track job course",
-
-    includes: [
-      "Live campaigns",
-      "Freelancing training",
-      "Interview prep"
-    ],
-    excludes: [],
-    steps: ["Practice", "Projects"],
-    tools: "Live tools",
-    duration: "3–6 Months",
-
-    price: 200000,
-    discount: 25,
-    finalPrice: 150000,
-
-    warranty: "Placement support",
-  ),
-
-  EducationService(
-    id: "DM_5",
-    name: "Specialized Marketing Skills",
-    category: "Digital Marketing",
-    image: "assets/Education.jpg",
-    description: "SEO, Ads, content writing",
-
-    includes: [
-      "SEO",
-      "Google Ads",
-      "Content writing"
-    ],
-    excludes: [],
-    steps: ["Skill training"],
-    tools: "Marketing tools",
-    duration: "1–3 Months",
-
-    price: 50000,
-    discount: 20,
-    finalPrice: 40000,
-
-    warranty: "Skill support",
-  ),
-
-  
-  /// =========================
-  /// Graphic Design + Video Editing Courses 
-// 🎨 1. Basic Course
-EducationService(
-  id: "GD_1",
-  name: "Basic Graphic Design + Video Editing",
-  category: "Graphic Design & Video Editing",
-  image: "assets/Education.jpg",
-  description: "Starter course for beginners to learn design and basic editing.",
-
-  includes: [
-    "Photoshop basics (poster, banner)",
-    "Canva + social media posts",
-    "Basic video editing (cut, trim, reels)",
-    "Mobile + PC editing tools",
-    "Simple projects (YouTube shorts, posters)"
-  ],
-
-  excludes: [
-    "Advanced motion graphics",
-    "Professional-level editing"
-  ],
-
-  steps: [
-    "Design basics learning",
-    "Practice on simple projects",
-    "Editing practice",
-    "Final mini projects"
-  ],
-
-  tools: "Photoshop, Canva, Mobile Editing Apps",
-  duration: "2–3 Months",
-
-  price: 40000,
-  discount: 50,
-  finalPrice: 20000,
-
-  warranty: "Basic skill training support",
-),
-
-// 📘 2. Certificate Course
-EducationService(
-  id: "GD_2",
-  name: "Certificate in Graphic Design + Video Editing",
-  category: "Graphic Design & Video Editing",
-  image: "assets/Education.jpg",
-  description: "Foundation course covering design tools and video editing.",
-
-  includes: [
-    "Adobe Photoshop & Illustrator",
-    "Premiere Pro basics",
-    "Motion graphics introduction",
-    "Logo design + branding",
-    "YouTube video editing"
-  ],
-
-  excludes: [
-    "Advanced animation",
-    "High-end cinematic editing"
-  ],
-
-  steps: [
-    "Software training",
-    "Design practice",
-    "Video editing projects",
-    "Portfolio basics"
-  ],
-
-  tools: "Photoshop, Illustrator, Premiere Pro",
-  duration: "3–6 Months",
-
-  price: 70000,
-  discount: 40,
-  finalPrice: 42000,
-
-  warranty: "Course completion certificate",
-),
-
-// 🎬 3. Diploma Course
-EducationService(
-  id: "GD_3",
-  name: "Diploma in Graphic Design + Video Editing",
-  category: "Graphic Design & Video Editing",
-  image: "assets/Education.jpg",
-  description: "Professional training with advanced tools and live projects.",
-
-  includes: [
-    "Full Adobe Creative Suite",
-    "Advanced Premiere Pro + After Effects",
-    "Branding + advertising design",
-    "Motion graphics + animation basics",
-    "Portfolio + live projects"
-  ],
-
-  excludes: [
-    "Hollywood-level VFX training"
-  ],
-
-  steps: [
-    "Advanced software training",
-    "Real-world project work",
-    "Portfolio building",
-    "Final assessment"
-  ],
-
-  tools: "Photoshop, Illustrator, Premiere Pro, After Effects",
-  duration: "6–12 Months",
-
-  price: 150000,
-  discount: 30,
-  finalPrice: 105000,
-
-  warranty: "Professional course support",
-),
-
-// 🚀 4. Advanced Course
-EducationService(
-  id: "GD_4",
-  name: "Advanced Creative Media Course",
-  category: "Graphic Design & Video Editing",
-  image: "assets/Education.jpg",
-  description: "High-level career training with client projects and internships.",
-
-  includes: [
-    "Advanced motion graphics",
-    "Cinematic video editing",
-    "UI creatives + campaigns",
-    "Client projects + internships",
-    "Freelancing + placement support"
-  ],
-
-  excludes: [
-    "Film school degree certification"
-  ],
-
-  steps: [
-    "Advanced editing training",
-    "Client-based assignments",
-    "Internship experience",
-    "Placement preparation"
-  ],
-
-  tools: "After Effects, Premiere Pro, Advanced Design Tools",
-  duration: "8–18 Months",
-
-  price: 200000,
-  discount: 25,
-  finalPrice: 150000,
-
-  warranty: "Placement & career support",
-),
-
-// 🔥 5. Short Courses
-EducationService(
-  id: "GD_5",
-  name: "Specialized Short Courses",
-  category: "Graphic Design & Video Editing",
-  image: "assets/Education.jpg",
-  description: "Quick skill-based courses for fast freelancing income.",
-
-  includes: [
-    "Instagram reels editing",
-    "YouTube editing",
-    "Logo design",
-    "Thumbnail design",
-    "Canva + mobile editing mastery"
-  ],
-
-  excludes: [
-    "Full software training",
-    "Long-term projects"
-  ],
-
-  steps: [
-    "Skill-focused training",
-    "Practice tasks",
-    "Quick project execution",
-    "Freelancing guidance"
-  ],
-
-  tools: "Canva, Mobile Apps, Basic Editing Software",
-  duration: "1–3 Months",
-
-  price: 40000,
-  discount: 50,
-  finalPrice: 20000,
-
-  warranty: "Short-term skill support",
-),
-
-
-// Pramedical Courses
-/// 🏥 PARAMEDICAL COURSES
-EducationService(
-  id: "PM_1",
-  name: "Diploma in Medical Lab Technician (DMLT)",
-  category: "Paramedical Courses",
-  image: "assets/dmlt.jpg",
-
-  description:
-      "Learn diagnostic testing, lab procedures, and medical equipment handling.",
-
-  includes: [
-    "Blood & Urine Testing",
-    "Lab Equipment Handling",
-    "Practical Lab Training",
-    "Certification Support",
-    "Job Assistance"
-  ],
-
-  excludes: [
-    "Advanced medical specialization"
-  ],
-
-  steps: [
-    "Theory classes",
-    "Lab practical training",
-    "Assessment tests",
-    "Final certification"
-  ],
-
-  tools: "Lab Kits, Testing Equipment, Study Materials",
-  duration: "12 Months",
-
-  price: 55000,
-  discount: 0,
-  finalPrice: 55000,
-
-  warranty: "Placement assistance provided",
-),
-
-EducationService(
-  id: "PM_2",
-  name: "Diploma in Operation Theatre Technician (OTT)",
-  category: "Paramedical Courses",
-  image: "assets/ott.jpg",
-
-  description:
-      "Train for assisting in surgeries, handling OT equipment, and patient care.",
-
-  includes: [
-    "Surgery Assistance Training",
-    "OT Equipment Handling",
-    "Patient Care Basics",
-    "Hospital Exposure",
-    "Certification"
-  ],
-
-  excludes: [
-    "Doctor-level surgical training"
-  ],
-
-  steps: [
-    "Concept learning",
-    "OT practical training",
-    "Live observation",
-    "Final assessment"
-  ],
-
-  tools: "OT Equipment, Surgical Tools, Study Notes",
-  duration: "12 Months",
-
-  price: 60000,
-  discount: 0,
-  finalPrice: 60000,
-
-  warranty: "Internship support available",
-),
-
-EducationService(
-  id: "PM_3",
-  name: "Diploma in X-Ray Technician",
-  category: "Paramedical Courses",
-  image: "assets/xray.jpg",
-
-  description:
-      "Learn radiology basics and X-ray machine handling for diagnostics.",
-
-  includes: [
-    "Radiology Basics",
-    "X-Ray Machine Handling",
-    "Safety Procedures",
-    "Practical Training",
-    "Certification"
-  ],
-
-  excludes: [
-    "Advanced radiology specialization"
-  ],
-
-  steps: [
-    "Theory sessions",
-    "Machine training",
-    "Practice sessions",
-    "Certification"
-  ],
-
-  tools: "X-Ray Equipment, Lab Access, Notes",
-  duration: "12 Months",
-
-  price: 70000,
-  discount: 0,
-  finalPrice: 70000,
-
-  warranty: "Job guidance support",
-),
-
-EducationService(
-  id: "PM_4",
-  name: "Diploma in Nursing Assistant",
-  category: "Paramedical Courses",
-  image: "assets/nursing.jpg",
-
-  description:
-      "Basic healthcare training including patient care and hospital duties.",
-
-  includes: [
-    "Patient Care Training",
-    "First Aid",
-    "Hospital Duties",
-    "Practical Sessions",
-    "Certification"
-  ],
-
-  excludes: [
-    "Registered nurse qualification"
-  ],
-
-  steps: [
-    "Basic theory",
-    "Practical training",
-    "Hospital exposure",
-    "Final exam"
-  ],
-
-  tools: "Medical Kits, Notes, Practice Sessions",
-  duration: "6–12 Months",
-
-  price: 45000,
-  discount: 0,
-  finalPrice: 45000,
-
-  warranty: "Placement support available",
-),
-
-EducationService(
-  id: "PM_5",
-  name: "Diploma in ECG Technician",
-  category: "Paramedical Courses",
-  image: "assets/ecg.jpg",
-
-  description:
-      "Learn ECG machine usage and heart monitoring techniques.",
-
-  includes: [
-    "ECG Machine Training",
-    "Heart Monitoring",
-    "Practical Sessions",
-    "Certification",
-    "Job Assistance"
-  ],
-
-  excludes: [
-    "Advanced cardiology training"
-  ],
-
-  steps: [
-    "Concept learning",
-    "Machine practice",
-    "Patient monitoring",
-    "Final test"
-  ],
-
-  tools: "ECG Machine, Study Material",
-  duration: "6 Months",
-
-  price: 35000,
-  discount: 0,
-  finalPrice: 35000,
-
-  warranty: "Clinic placement support",
-),
-
-EducationService(
-  id: "PM_6",
-  name: "Diploma in Pharmacy Assistant",
-  category: "Paramedical Courses",
-  image: "assets/pharmacy.jpg",
-
-  description:
-      "Learn medicine handling, billing, and medical store management.",
-
-  includes: [
-    "Medicine Knowledge",
-    "Billing System",
-    "Store Management",
-    "Customer Handling",
-    "Certification"
-  ],
-
-  excludes: [
-    "Pharmacist license (D.Pharm required)"
-  ],
-
-  steps: [
-    "Theory training",
-    "Store handling practice",
-    "Billing training",
-    "Final certification"
-  ],
-
-  tools: "Billing Software, Notes, Practical Training",
-  duration: "6–12 Months",
-
-  price: 50000,
-  discount: 0,
-  finalPrice: 50000,
-
-  warranty: "Medical store job assistance",
-),
-
-  
-  /// =========================
-  /// 🏛️ GOVERNMENT JOB PREPARATION
-
+/// Digital Marketing
+/// Graphic Desiging 
+
+/// Government Courses
+/// 🔹 MPSC
 EducationService(
   id: "GOV_1",
-  name: "Entry Level Package (Railway + Police + Army)",
-  category: "Government Exam Preparation",
-  image: "assets/government.jpg",
-  description: "Fast-track preparation for entry-level government jobs",
+  name: "MPSC Preparation Course",
+  category: "Government Exam Courses",
+  image: "assets/MPSC.png",
+
+  description:
+      "Comprehensive preparation for Maharashtra Public Service Commission exams including Prelims and Mains.",
 
   includes: [
-    "GK + Reasoning + Maths basics",
-    "Physical training guidance",
-    "Mock tests & exam practice",
-    "Previous year questions"
+    "Prelims & Mains Syllabus",
+    "General Studies (History, Polity, Geography)",
+    "Current Affairs",
+    "CSAT Preparation",
+    "Mock Tests & Analysis"
   ],
 
   excludes: [
-    "Advanced officer-level preparation"
+    "Interview Guidance (optional extra)"
   ],
 
   steps: [
-    "Basic concept learning",
-    "Daily practice",
-    "Mock tests",
-    "Final revision"
+    "Concept Learning",
+    "Subject-wise Preparation",
+    "Mock Test Practice",
+    "Performance Analysis"
   ],
 
-  tools: "Study material, Test series",
-  duration: "3–9 Months",
+  tools: "Study Material, Test Series, Notes",
+  duration: "6–12 Months",
 
-  price: 25000,
-  discount: 20,
-  finalPrice: 20000,
+  price: 60000,
+  discount: 20000,
+  finalPrice: 40000,
 
-  warranty: "Exam preparation support",
+  warranty: "Guidance for State Government Exams",
 ),
 
+/// 🔹 UPSC
 EducationService(
   id: "GOV_2",
-  name: "Banking Package (Clerk + PO)",
-  category: "Government Exam Preparation",
-  image: "assets/government.jpg",
-  description: "Preparation for banking sector exams",
+  name: "UPSC Preparation Course",
+  category: "Government Exam Courses",
+  image: "assets/UPSC.png",
+
+  description:
+      "Complete training for UPSC Civil Services including IAS, IPS with Prelims, Mains, and Interview preparation.",
+
+  includes: [
+    "IAS Prelims, Mains & Interview",
+    "NCERT + Advanced Subjects",
+    "Essay Writing Practice",
+    "Current Affairs (In-depth)",
+    "Personality Development"
+  ],
+
+  excludes: [
+    "Optional Subject Coaching (extra cost)"
+  ],
+
+  steps: [
+    "Foundation Course",
+    "Advanced Subject Training",
+    "Answer Writing Practice",
+    "Interview Preparation"
+  ],
+
+  tools: "Books, Notes, Mock Interviews",
+  duration: "1–2 Years",
+
+  price: 150000,
+  discount: 30000,
+  finalPrice: 120000,
+
+  warranty: "Interview & Career Guidance",
+),
+
+/// 🔹 Railway
+EducationService(
+  id: "GOV_3",
+  name: "Railway (RRB) Preparation",
+  category: "Government Exam Courses",
+  image: "assets/RRB.png",
+
+  description:
+      "Preparation course for Railway Recruitment Board exams with focus on aptitude and technical subjects.",
+
+  includes: [
+    "Mathematics & Reasoning",
+    "General Awareness",
+    "Technical Subjects",
+    "Previous Year Papers",
+    "Online Test Series"
+  ],
+
+  excludes: [
+    "Advanced Technical Coaching (optional)"
+  ],
+
+  steps: [
+    "Basic Concept Training",
+    "Practice Sessions",
+    "Previous Papers Solving",
+    "Online Mock Tests"
+  ],
+
+  tools: "Practice Sets, Test Series",
+  duration: "3–6 Months",
+
+  price: 30000,
+  discount: 10000,
+  finalPrice: 20000,
+
+  warranty: "Railway Exam Guidance",
+),
+
+/// 🔹 Banking
+EducationService(
+  id: "GOV_4",
+  name: "Banking (IBPS / SBI) Preparation",
+  category: "Government Exam Courses",
+  image: "assets/SBI.png",
+
+  description:
+      "Complete course for banking exams like IBPS and SBI with aptitude, reasoning, and interview preparation.",
 
   includes: [
     "Quantitative Aptitude",
-    "Reasoning & English",
-    "Computer knowledge",
-    "Mock interviews"
+    "Reasoning Ability",
+    "English Language",
+    "Computer Awareness",
+    "Interview Preparation"
   ],
 
   excludes: [
-    "UPSC/MPSC syllabus"
+    "Advanced Interview Coaching (optional)"
   ],
 
   steps: [
-    "Concept building",
-    "Practice sessions",
-    "Mock tests",
-    "Interview preparation"
+    "Concept Building",
+    "Speed Practice",
+    "Mock Exams",
+    "Interview Preparation"
   ],
 
-  tools: "Books, Online tests",
-  duration: "6–12 Months",
+  tools: "Mock Tests, Study Material",
+  duration: "4–8 Months",
 
-  price: 50000,
-  discount: 20,
-  finalPrice: 40000,
+  price: 40000,
+  discount: 10000,
+  finalPrice: 30000,
 
-  warranty: "Interview guidance support",
+  warranty: "Banking Career Guidance",
 ),
 
+/// 🔹 SSC
 EducationService(
-  id: "GOV_3",
-  name: "State Level Package (MPSC)",
-  category: "Government Exam Preparation",
-  image: "assets/government.jpg",
-  description: "Complete preparation for MPSC exams",
+  id: "GOV_5",
+  name: "SSC & Government Exams Preparation",
+  category: "Government Exam Courses",
+  image: "assets/SSC.png",
+
+  description:
+      "Preparation for SSC exams like CGL, CHSL, GD with focus on core subjects and practice.",
 
   includes: [
-    "Prelims & Mains syllabus",
-    "History, Geography, Polity",
-    "Current Affairs",
-    "Answer writing practice"
+    "SSC CGL, CHSL, GD Syllabus",
+    "Maths, Reasoning & English",
+    "General Knowledge",
+    "Mock Tests & Practice Sets"
   ],
 
   excludes: [
-    "UPSC level preparation"
+    "Department-specific training"
   ],
 
   steps: [
-    "Syllabus coverage",
-    "Answer writing",
-    "Mock tests",
+    "Concept Learning",
+    "Practice Sessions",
+    "Mock Tests",
     "Revision"
   ],
 
-  tools: "Notes, Test series",
-  duration: "12–24 Months",
+  tools: "Notes, Practice Papers",
+  duration: "4–8 Months",
 
-  price: 100000,
-  discount: 20,
-  finalPrice: 80000,
+  price: 35000,
+  discount: 8000,
+  finalPrice: 27000,
 
-  warranty: "Full exam preparation support",
+  warranty: "Central Government Exam Guidance",
 ),
 
-EducationService(
-  id: "GOV_4",
-  name: "National Level Package (UPSC IAS/IPS)",
-  category: "Government Exam Preparation",
-  image: "assets/government.jpg",
-  description: "Advanced preparation for UPSC civil services",
-
-  includes: [
-    "Prelims + Mains + Interview",
-    "Full GS syllabus",
-    "Essay & optional subject",
-    "Mock interviews"
-  ],
-
-  excludes: [
-    "Short-term crash preparation"
-  ],
-
-  steps: [
-    "Concept mastery",
-    "Answer writing",
-    "Test series",
-    "Interview preparation"
-  ],
-
-  tools: "Advanced study material",
-  duration: "1–3 Years",
-
-  price: 250000,
-  discount: 20,
-  finalPrice: 200000,
-
-  warranty: "Complete guidance till interview",
-),
-
-EducationService(
-  id: "GOV_5",
-  name: "Crash Fast Track Package",
-  category: "Government Exam Preparation",
-  image: "assets/government.jpg",
-  description: "Quick preparation for first attempt",
-
-  includes: [
-    "Basic GK & Reasoning",
-    "Daily test practice",
-    "Previous year papers",
-    "Quick revision"
-  ],
-
-  excludes: [
-    "Detailed syllabus coverage"
-  ],
-
-  steps: [
-    "Quick concept revision",
-    "Daily tests",
-    "Practice papers",
-    "Final revision"
-  ],
-
-  tools: "Practice papers, Test series",
-  duration: "3–6 Months",
-
-  price: 15000,
-  discount: 20,
-  finalPrice: 12000,
-
-  warranty: "Short-term support",
-),
-
-  /// =========================
-  /// 💄 SALON & PARLOUR COURSES
-  /// =========================
- /// 💄 BEAUTICIAN / SALON COURSES
-
+/// Beautician Courses
 EducationService(
   id: "BEAUTY_1",
   name: "Basic Beautician Course (Starter Package)",
@@ -1577,471 +990,361 @@ EducationService(
 
   warranty: "Full career support",
 ),
-  /// =========================
-  /// 💃 DANCE CLASSES
-  /// =========================
- /// 💃 DANCE CLASSES
 
+
+/// Paramedical Courses
 EducationService(
-  id: "DANCE_1",
-  name: "Bollywood Dance (Most Popular)",
-  category: "Dance Classes",
-  image: "assets/dance.jpg",
-  description: "Fun Bollywood-style dance for beginners and events",
+  id: "PM_1",
+  name: "Diploma in Medical Lab Technician (DMLT)",
+  category: "Paramedical Courses",
+  image: "assets/dmlt.jpg",
+
+  description:
+      "Learn diagnostic testing, lab procedures, and medical equipment handling.",
 
   includes: [
-    "Basic to advanced Bollywood moves",
-    "Choreography for songs",
-    "Weekly practice sessions",
-    "Performance training"
+    "Blood & Urine Testing",
+    "Lab Equipment Handling",
+    "Practical Lab Training",
+    "Certification Support",
+    "Job Assistance"
   ],
 
   excludes: [
-    "Classical dance training"
+    "Advanced medical specialization"
   ],
 
   steps: [
-    "Basic steps learning",
-    "Routine practice",
-    "Choreography building",
-    "Final performance"
+    "Theory classes",
+    "Lab practical training",
+    "Assessment tests",
+    "Final certification"
   ],
 
-  tools: "Music system, Studio space",
-  duration: "1–6 Months",
+  tools: "Lab Kits, Testing Equipment, Study Materials",
+  duration: "12 Months",
 
-  price: 24000,
-  discount: 20,
-  finalPrice: 19200,
+  price: 55000,
+  discount: 0,
+  finalPrice: 55000,
 
-  warranty: "Practice & performance support",
+  warranty: "Placement assistance provided",
 ),
 
 EducationService(
-  id: "DANCE_2",
-  name: "Hip-Hop Dance",
-  category: "Dance Classes",
-  image: "assets/dance.jpg",
-  description: "Urban freestyle and stage performance dance",
+  id: "PM_2",
+  name: "Diploma in Operation Theatre Technician (OTT)",
+  category: "Paramedical Courses",
+  image: "assets/ott.jpg",
+
+  description:
+      "Train for assisting in surgeries, handling OT equipment, and patient care.",
 
   includes: [
-    "Hip-hop fundamentals",
-    "Freestyle training",
-    "Stage performance skills",
-    "Group choreography"
+    "Surgery Assistance Training",
+    "OT Equipment Handling",
+    "Patient Care Basics",
+    "Hospital Exposure",
+    "Certification"
   ],
 
   excludes: [
-    "Classical techniques"
+    "Doctor-level surgical training"
   ],
 
   steps: [
-    "Basic groove training",
-    "Freestyle practice",
-    "Routine creation",
-    "Performance"
+    "Concept learning",
+    "OT practical training",
+    "Live observation",
+    "Final assessment"
   ],
 
-  tools: "Music system, Practice space",
-  duration: "2–6 Months",
-
-  price: 30000,
-  discount: 20,
-  finalPrice: 24000,
-
-  warranty: "Skill improvement support",
-),
-
-EducationService(
-  id: "DANCE_3",
-  name: "Contemporary Dance",
-  category: "Dance Classes",
-  image: "assets/dance.jpg",
-  description: "Expressive dance with flexibility and storytelling",
-
-  includes: [
-    "Body flexibility training",
-    "Expression techniques",
-    "Stage choreography",
-    "Performance training"
-  ],
-
-  excludes: [
-    "Hip-hop freestyle training"
-  ],
-
-  steps: [
-    "Stretching & basics",
-    "Movement practice",
-    "Routine choreography",
-    "Final showcase"
-  ],
-
-  tools: "Studio, Music setup",
-  duration: "3–6 Months",
-
-  price: 36000,
-  discount: 20,
-  finalPrice: 28800,
-
-  warranty: "Performance guidance",
-),
-
-EducationService(
-  id: "DANCE_4",
-  name: "Classical Dance (Kathak / Bharatanatyam)",
-  category: "Dance Classes",
-  image: "assets/dance.jpg",
-  description: "Traditional Indian dance training with certification",
-
-  includes: [
-    "Classical techniques",
-    "Theory + practical training",
-    "Exam preparation",
-    "Stage performance"
-  ],
-
-  excludes: [
-    "Modern dance styles"
-  ],
-
-  steps: [
-    "Basic steps training",
-    "Theory learning",
-    "Practice routines",
-    "Stage performance"
-  ],
-
-  tools: "Traditional music, Costume guidance",
-  duration: "6–12 Months",
-
-  price: 30000,
-  discount: 20,
-  finalPrice: 24000,
-
-  warranty: "Training + certification support",
-),
-
-EducationService(
-  id: "DANCE_5",
-  name: "Lavani Dance (Maharashtrian Folk)",
-  category: "Dance Classes",
-  image: "assets/dance.jpg",
-  description: "Energetic folk dance for cultural performances",
-
-  includes: [
-    "Lavani steps & expressions",
-    "Stage performance training",
-    "Costume & styling guidance",
-    "Folk choreography"
-  ],
-
-  excludes: [
-    "Classical certification"
-  ],
-
-  steps: [
-    "Basic steps",
-    "Expression practice",
-    "Routine choreography",
-    "Performance"
-  ],
-
-  tools: "Music system, Costume guidance",
-  duration: "2–6 Months",
-
-  price: 25000,
-  discount: 20,
-  finalPrice: 20000,
-
-  warranty: "Performance support",
-),
-
-EducationService(
-  id: "DANCE_6",
-  name: "Zumba / Dance Fitness",
-  category: "Dance Classes",
-  image: "assets/dance.jpg",
-  description: "Fun dance workout for fitness and weight loss",
-
-  includes: [
-    "Daily/weekly sessions",
-    "Cardio dance routines",
-    "Fitness tracking",
-    "Group workouts"
-  ],
-
-  excludes: [
-    "Professional choreography"
-  ],
-
-  steps: [
-    "Warm-up",
-    "Dance workout",
-    "Cool down",
-    "Fitness tracking"
-  ],
-
-  tools: "Music system, Open space",
-  duration: "Monthly Subscription",
-
-  price: 18000,
-  discount: 20,
-  finalPrice: 14400,
-
-  warranty: "Ongoing fitness support",
-),
-
-EducationService(
-  id: "DANCE_7",
-  name: "Wedding / Event Choreography",
-  category: "Dance Classes",
-  image: "assets/dance.jpg",
-  description: "Short-term choreography for weddings and events",
-
-  includes: [
-    "Custom choreography",
-    "Song selection help",
-    "Daily practice sessions",
-    "Final performance prep"
-  ],
-
-  excludes: [
-    "Long-term training"
-  ],
-
-  steps: [
-    "Song selection",
-    "Step creation",
-    "Practice sessions",
-    "Final rehearsal"
-  ],
-
-  tools: "Music system, Studio",
-  duration: "10 Days – 1 Month",
-
-  price: 15000,
-  discount: 20,
-  finalPrice: 12000,
-
-  warranty: "Performance completion support",
-),
-
-
-/// 🎵 MUSIC CLASSES
-
-EducationService(
-  id: "MUSIC_1",
-  name: "Basic Starter Music Package",
-  category: "Music Classes",
-  image: "assets/music.jpg",
-  description: "Beginner level foundation for singing & instruments",
-
-  includes: [
-    "Basic singing (sur, taal, breathing)",
-    "Guitar basics",
-    "Keyboard basics",
-    "Tabla introduction",
-    "Music theory basics"
-  ],
-
-  excludes: [
-    "Advanced performance training"
-  ],
-
-  steps: [
-    "Basics learning",
-    "Practice sessions",
-    "Simple songs",
-    "Assessment"
-  ],
-
-  tools: "Instruments, practice setup",
-  duration: "1–3 Months",
-
-  price: 15000,
-  discount: 20,
-  finalPrice: 12000,
-
-  warranty: "Practice support",
-),
-
-EducationService(
-  id: "MUSIC_2",
-  name: "Regular Music Training Package",
-  category: "Music Classes",
-  image: "assets/music.jpg",
-  description: "Intermediate training across vocals and instruments",
-
-  includes: [
-    "Vocal training (riyaaz)",
-    "Guitar/Keyboard intermediate",
-    "Tabla rhythms",
-    "Drums basics",
-    "Song performance"
-  ],
-
-  excludes: [
-    "Professional stage training"
-  ],
-
-  steps: [
-    "Skill building",
-    "Practice routines",
-    "Song learning",
-    "Performance"
-  ],
-
-  tools: "Instruments, studio setup",
-  duration: "3–6 Months",
-
-  price: 30000,
-  discount: 20,
-  finalPrice: 24000,
-
-  warranty: "Skill improvement support",
-),
-
-EducationService(
-  id: "MUSIC_3",
-  name: "Advanced Performer Package",
-  category: "Music Classes",
-  image: "assets/music.jpg",
-  description: "Professional training for stage and studio performance",
-
-  includes: [
-    "Advanced vocal training",
-    "Guitar solos & fingerstyle",
-    "Keyboard arrangements",
-    "Tabla advanced taals",
-    "Drum kit training",
-    "Live band performance"
-  ],
-
-  excludes: [
-    "Beginner basics"
-  ],
-
-  steps: [
-    "Advanced practice",
-    "Performance training",
-    "Live sessions",
-    "Final showcase"
-  ],
-
-  tools: "Studio instruments",
-  duration: "6–12 Months",
+  tools: "OT Equipment, Surgical Tools, Study Notes",
+  duration: "12 Months",
 
   price: 60000,
-  discount: 20,
-  finalPrice: 48000,
+  discount: 0,
+  finalPrice: 60000,
 
-  warranty: "Performance support",
+  warranty: "Internship support available",
 ),
 
 EducationService(
-  id: "MUSIC_4",
-  name: "Crash Course (Fast Learning)",
-  category: "Music Classes",
-  image: "assets/music.jpg",
-  description: "Quick preparation for performances and events",
+  id: "PM_3",
+  name: "Diploma in X-Ray Technician",
+  category: "Paramedical Courses",
+  image: "assets/xray.jpg",
+
+  description:
+      "Learn radiology basics and X-ray machine handling for diagnostics.",
 
   includes: [
-    "2–3 songs preparation",
-    "Basic instrument playing",
-    "Rhythm basics",
-    "Stage confidence"
+    "Radiology Basics",
+    "X-Ray Machine Handling",
+    "Safety Procedures",
+    "Practical Training",
+    "Certification"
   ],
 
   excludes: [
-    "Long-term training"
+    "Advanced radiology specialization"
   ],
 
   steps: [
-    "Quick learning",
-    "Daily practice",
-    "Song preparation",
-    "Final performance"
+    "Theory sessions",
+    "Machine training",
+    "Practice sessions",
+    "Certification"
   ],
 
-  tools: "Basic instruments",
+  tools: "X-Ray Equipment, Lab Access, Notes",
+  duration: "12 Months",
+
+  price: 70000,
+  discount: 0,
+  finalPrice: 70000,
+
+  warranty: "Job guidance support",
+),
+
+EducationService(
+  id: "PM_4",
+  name: "Diploma in Nursing Assistant",
+  category: "Paramedical Courses",
+  image: "assets/nursing.jpg",
+
+  description:
+      "Basic healthcare training including patient care and hospital duties.",
+
+  includes: [
+    "Patient Care Training",
+    "First Aid",
+    "Hospital Duties",
+    "Practical Sessions",
+    "Certification"
+  ],
+
+  excludes: [
+    "Registered nurse qualification"
+  ],
+
+  steps: [
+    "Basic theory",
+    "Practical training",
+    "Hospital exposure",
+    "Final exam"
+  ],
+
+  tools: "Medical Kits, Notes, Practice Sessions",
+  duration: "6–12 Months",
+
+  price: 45000,
+  discount: 0,
+  finalPrice: 45000,
+
+  warranty: "Placement support available",
+),
+
+EducationService(
+  id: "PM_5",
+  name: "Diploma in ECG Technician",
+  category: "Paramedical Courses",
+  image: "assets/ecg.jpg",
+
+  description:
+      "Learn ECG machine usage and heart monitoring techniques.",
+
+  includes: [
+    "ECG Machine Training",
+    "Heart Monitoring", 
+    "Practical Sessions",
+    "Certification",
+    "Job Assistance"
+  ],
+
+  excludes: [
+    "Advanced cardiology training"
+  ],
+
+  steps: [
+    "Concept learning",
+    "Machine practice",
+    "Patient monitoring",
+    "Final test"
+  ],
+
+  tools: "ECG Machine, Study Material",
+  duration: "6 Months",
+
+  price: 35000,
+  discount: 0,
+  finalPrice: 35000,
+
+  warranty: "Clinic placement support",
+),
+
+EducationService(
+  id: "PM_6",
+  name: "Diploma in Pharmacy Assistant",
+  category: "Paramedical Courses",
+  image: "assets/pharmacy.jpg",
+
+  description:
+      "Learn medicine handling, billing, and medical store management.",
+
+  includes: [
+    "Medicine Knowledge",
+    "Billing System",
+    "Store Management",
+    "Customer Handling",
+    "Certification"
+  ],
+
+  excludes: [
+    "Pharmacist license (D.Pharm required)"
+  ],
+
+  steps: [
+    "Theory training",
+    "Store handling practice",
+    "Billing training",
+    "Final certification"
+  ],
+
+  tools: "Billing Software, Notes, Practical Training",
+  duration: "6–12 Months",
+
+  price: 50000,
+  discount: 0,
+  finalPrice: 50000,
+
+  warranty: "Medical store job assistance",
+),
+
+
+
+/// English Speaking Courses
+EducationService(
+  id: "ENG_1",
+  name: "Basic English Speaking Course",
+  category: "English Speaking Courses",
+  image: "assets/basic_english.png",
+
+  description:
+      "Beginner-friendly course to build basic English speaking, grammar, and daily communication skills.",
+
+  includes: [
+    "Basic Grammar (Tenses, Sentence Formation)",
+    "Daily Use Sentences",
+    "Vocabulary Building",
+    "Basic Conversation Practice",
+    "Introduction Speaking"
+  ],
+
+  excludes: [
+    "Advanced Communication Training"
+  ],
+
+  steps: [
+    "Grammar Basics",
+    "Sentence Practice",
+    "Vocabulary Sessions",
+    "Speaking Practice"
+  ],
+
+  tools: "Notes, Practice Sheets, Speaking Sessions",
   duration: "1–2 Months",
 
-  price: 12000,
-  discount: 20,
-  finalPrice: 9600,
+  price: 8000,
+  discount: 3000,
+  finalPrice: 5000,
 
-  warranty: "Short-term support",
+  warranty: "Basic Communication Improvement",
 ),
 
+/// 🔹 Intermediate English
 EducationService(
-  id: "MUSIC_5",
-  name: "Instrument Combo (Guitar + Keyboard / Tabla + Drums)",
-  category: "Music Classes",
-  image: "assets/music.jpg",
-  description: "Focused training on selected instruments",
+  id: "ENG_2",
+  name: "Intermediate English Speaking Course",
+  category: "English Speaking Courses",
+  image: "assets/inter_english.png",
+
+  description:
+      "Improve fluency, confidence, and real-life communication through interactive sessions.",
 
   includes: [
-    "Dual instrument training",
-    "Practice routines",
-    "Performance basics",
-    "Skill improvement"
+    "Spoken Fluency Improvement",
+    "Group Discussion Practice",
+    "Confidence Building",
+    "Pronunciation Training",
+    "Situational Conversations"
   ],
 
   excludes: [
-    "Full vocal training"
+    "Advanced Corporate Training"
   ],
 
   steps: [
-    "Instrument basics",
-    "Practice",
-    "Song playing",
-    "Evaluation"
+    "Fluency Practice",
+    "Group Discussions",
+    "Pronunciation Training",
+    "Confidence Sessions"
   ],
 
-  tools: "Selected instruments",
+  tools: "Audio Practice, Group Activities",
+  duration: "2–3 Months",
+
+  price: 15000,
+  discount: 4000,
+  finalPrice: 11000,
+
+  warranty: "Fluency & Confidence Development",
+),
+
+/// 🔹 Advanced English
+EducationService(
+  id: "ENG_3",
+  name: "Advanced / Professional English Course",
+  category: "English Speaking Courses",
+  image: "assets/advanced_english.png",
+
+  description:
+      "Professional-level English training for interviews, public speaking, and corporate communication.",
+
+  includes: [
+    "Public Speaking Skills",
+    "Interview Preparation",
+    "Presentation Skills",
+    "Accent Training",
+    "Business Communication"
+  ],
+
+  excludes: [
+    "Foreign Language Training"
+  ],
+
+  steps: [
+    "Advanced Communication Training",
+    "Public Speaking Practice",
+    "Interview Preparation",
+    "Corporate Communication"
+  ],
+
+  tools: "Mock Interviews, Presentation Practice",
   duration: "3–6 Months",
 
-  price: 20000,
-  discount: 20,
-  finalPrice: 16000,
+  price: 30000,
+  discount: 8000,
+  finalPrice: 22000,
 
-  warranty: "Practice support",
+  warranty: "Professional Communication Skills",
 ),
 
-EducationService(
-  id: "MUSIC_6",
-  name: "Private 1-to-1 Music Coaching",
-  category: "Music Classes",
-  image: "assets/music.jpg",
-  description: "Personalized music training with fast improvement",
+ 
+/// Air Hostess
+/// Dance Class
+/// Music Class
+/// Mobile Repairing
 
-  includes: [
-    "Customized training",
-    "Vocal + instruments",
-    "Recording practice",
-    "Audition preparation"
-  ],
-
-  excludes: [
-    "Group classes"
-  ],
-
-  steps: [
-    "Skill assessment",
-    "Personal plan",
-    "Practice sessions",
-    "Progress tracking"
-  ],
-
-  tools: "Studio + instruments",
-  duration: "Flexible",
-
-  price: 25000,
-  discount: 20,
-  finalPrice: 20000,
-
-  warranty: "Personal mentorship support",
-),
 
 ];
