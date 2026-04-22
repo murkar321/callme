@@ -88,7 +88,7 @@ class _ProfilePageState extends State<ProfilePage> {
         const SnackBar(content: Text("Profile Updated")),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(       
         const SnackBar(content: Text("Failed to save profile")),
       );
     } finally {
