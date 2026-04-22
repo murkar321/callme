@@ -12,15 +12,33 @@
           "package_name": "com.example.callme"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "240198181802-mda6g64rdb59ug6hlkvn4uahcc6auv95.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.callme",
+            "certificate_hash": "a04c9351576cf620053d7e9c2baba5183e17fb1c"
+          }
+        },
+        {
+          "client_id": "240198181802-nj610u1pv5e5gp0lec2bk7pno88dnb8u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyDNefwlJDDHTr3MIV4SmBiPuYaoGAaYdTQ"
+          "current_key": "AIzaSyCFZgkNCOXpLHk7Xbc42eoxX4UCdpD7BVE"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "240198181802-nj610u1pv5e5gp0lec2bk7pno88dnb8u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

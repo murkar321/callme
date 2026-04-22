@@ -4,7 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
 import 'screens/logo_page.dart';
-import 'screens/signup_page.dart';
+import 'login/signup_page.dart';
 import 'screens/home_page.dart';
 import 'screens/bottom_nav_page.dart';
 

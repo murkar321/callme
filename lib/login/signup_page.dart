@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'otp_page.dart';
+import 'role_selection_page.dart'; // ✅ ADD THIS
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -14,56 +15,86 @@ class SignupPage extends StatefulWidget {
 
 class _SignupPageState extends State<SignupPage> {
   final TextEditingController phoneController = TextEditingController();
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   bool loading = false;
 
-  // ✅ Google Sign-In (Android + Web)
+  /// 🔥 HANDLE USER DATA + NAVIGATION
+  Future<void> handleUserAfterLogin(User user) async {
+    final userRef = _firestore.collection('users').doc(user.uid);
+
+    final doc = await userRef.get();
+
+    bool isProvider = false;
+    bool isAdmin = false;
+
+    if (!doc.exists) {
+      /// ✅ NEW USER → CREATE DATA
+      await userRef.set({
+        'uid': user.uid,
+        'email': user.email,
+        'name': user.displayName,
+        'photo': user.photoURL,
+        'isProvider': false,
+        'isAdmin': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+    } else {
+      /// ✅ EXISTING USER → FETCH ROLES
+      final data = doc.data()!;
+      isProvider = data['isProvider'] ?? false;
+      isAdmin = data['isAdmin'] ?? false;
+    }
+
+    if (!mounted) return;
+
+    /// 🚀 NAVIGATE TO ROLE SELECTION
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RoleSelectionPage(
+          isProvider: isProvider,
+          isAdmin: isAdmin,
+        ),
+      ),
+    );
+  }
+
+  // ✅ GOOGLE SIGN-IN
   Future<void> signInWithGoogle() async {
     try {
       setState(() => loading = true);
 
-      // 🔹 Start Google Sign-In
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      final GoogleSignInAccount? googleUser =
+          await _googleSignIn.signIn();
 
-      // If user cancels
       if (googleUser == null) {
         setState(() => loading = false);
         return;
       }
 
-      // 🔹 Get authentication details
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      // 🔹 Create Firebase credential
-      final AuthCredential credential = GoogleAuthProvider.credential(
+      final AuthCredential credential =
+          GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // 🔹 Sign in to Firebase
       final UserCredential userCredential =
           await _auth.signInWithCredential(credential);
 
       final User? user = userCredential.user;
 
       if (user != null) {
-        // 🔹 Save user data in Firestore
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'uid': user.uid,
-          'email': user.email,
-          'name': user.displayName,
-          'photo': user.photoURL,
-          'provider': 'google',
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        await handleUserAfterLogin(user); // ✅ NEW FLOW
       }
 
-      if (!mounted) return;
-
-      Navigator.pushReplacementNamed(context, '/bottomnav');
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Login Failed: $e")),
@@ -85,29 +116,33 @@ class _SignupPageState extends State<SignupPage> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 "Welcome to CallMe",
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                style:
+                    TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text(
                 "Sign up or log in securely",
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+                style:
+                    TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const SizedBox(height: 40),
 
-              // 📞 Phone Input
+              /// 📞 PHONE INPUT
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
                   labelText: "Mobile Number",
                   prefixText: "+91 ",
-                  prefixIcon: const Icon(Icons.phone, color: Colors.indigo),
+                  prefixIcon:
+                      const Icon(Icons.phone, color: Colors.indigo),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -116,7 +151,7 @@ class _SignupPageState extends State<SignupPage> {
 
               const SizedBox(height: 24),
 
-              // 📲 Send OTP Button
+              /// 📲 OTP BUTTON
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -127,7 +162,8 @@ class _SignupPageState extends State<SignupPage> {
                     if (phone.length != 10) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                            content: Text("Enter valid phone number")),
+                            content:
+                                Text("Enter valid phone number")),
                       );
                       return;
                     }
@@ -135,31 +171,36 @@ class _SignupPageState extends State<SignupPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => OtpPage(phone: "+91$phone"),
+                        builder: (_) =>
+                            OtpPage(phone: "+91$phone"),
                       ),
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3F51B5),
+                    backgroundColor:
+                        const Color(0xFF3F51B5),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius:
+                          BorderRadius.circular(12),
                     ),
                   ),
                   child: const Text(
                     "Send OTP",
-                    style: TextStyle(fontSize: 18, color: Colors.white),
+                    style: TextStyle(
+                        fontSize: 18, color: Colors.white),
                   ),
                 ),
               ),
 
               const SizedBox(height: 20),
 
-              // Divider
+              /// DIVIDER
               Row(
                 children: const [
                   Expanded(child: Divider()),
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 10),
                     child: Text("OR"),
                   ),
                   Expanded(child: Divider()),
@@ -168,7 +209,7 @@ class _SignupPageState extends State<SignupPage> {
 
               const SizedBox(height: 20),
 
-              // 🔐 Google Login Button
+              /// 🔐 GOOGLE LOGIN
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -181,25 +222,31 @@ class _SignupPageState extends State<SignupPage> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(
+                          child:
+                              CircularProgressIndicator(
                             strokeWidth: 2,
                           ),
                         )
-                      : const Text("Continue with Google"),
-                  onPressed: loading ? null : signInWithGoogle,
+                      : const Text(
+                          "Continue with Google"),
+                  onPressed:
+                      loading ? null : signInWithGoogle,
                 ),
               ),
 
               const Spacer(),
 
+              /// ⚠️ GUEST LOGIN (NO ROLE)
               Center(
                 child: TextButton(
                   onPressed: () {
-                    Navigator.pushReplacementNamed(context, '/bottomnav');
+                    Navigator.pushReplacementNamed(
+                        context, '/bottomnav');
                   },
                   child: const Text(
                     "Continue without login",
-                    style: TextStyle(color: Colors.indigo),
+                    style:
+                        TextStyle(color: Colors.indigo),
                   ),
                 ),
               ),

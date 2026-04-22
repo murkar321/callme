@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../provider/dashboard.dart';
+import 'provider_dashboard.dart';
 
 class SuccessPage extends StatelessWidget {
   final String businessName;
