@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'role_selection_page.dart';
-
 class OtpPage extends StatefulWidget {
-  final String phone; // +91XXXXXXXXXX
+  final String phone;
+
   const OtpPage({super.key, required this.phone});
 
   @override
@@ -32,47 +31,40 @@ class _OtpPageState extends State<OtpPage> {
     startTimer();
   }
 
-  /// 🔥 COMMON FUNCTION (Same as Signup Page)
-  Future<void> handleUserAfterLogin(User user) async {
+  // ================= SAVE USER =================
+
+  Future<void> saveUser(User user) async {
     final userRef = _firestore.collection('users').doc(user.uid);
 
     final doc = await userRef.get();
 
-    bool isProvider = false;
-    bool isAdmin = false;
-
     if (!doc.exists) {
-      /// ✅ NEW USER
       await userRef.set({
         'uid': user.uid,
         'phone': widget.phone,
-        'isProvider': false,
-        'isAdmin': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      print("🆕 User created");
     } else {
-      /// ✅ EXISTING USER
-      final data = doc.data()!;
-      isProvider = data['isProvider'] ?? false;
-      isAdmin = data['isAdmin'] ?? false;
+      print("👤 User exists");
     }
+  }
 
-    if (!mounted) return;
+  // ================= NAVIGATION =================
 
-    /// 🚀 GO TO ROLE SELECTION
-    Navigator.pushReplacement(
+  void goToHome() {
+    Navigator.pushNamedAndRemoveUntil(
       context,
-      MaterialPageRoute(
-        builder: (_) => RoleSelectionPage(
-          isProvider: isProvider,
-          isAdmin: isAdmin,
-        ),
-      ),
+      '/bottomnav',
+      (route) => false,
     );
   }
 
-  /// 🔹 SEND OTP
+  // ================= SEND OTP =================
+
   Future<void> sendOtp() async {
+    print("📲 Sending OTP to ${widget.phone}");
+
     await _auth.verifyPhoneNumber(
       phoneNumber: widget.phone,
       timeout: const Duration(seconds: 60),
@@ -83,12 +75,14 @@ class _OtpPageState extends State<OtpPage> {
 
         final user = userCredential.user;
         if (user != null) {
-          await handleUserAfterLogin(user); // ✅ FIXED
+          await saveUser(user);
+          goToHome(); // ✅ DIRECT NAVIGATION
         }
       },
 
       verificationFailed: (FirebaseAuthException e) {
-        showMessage(e.message ?? "OTP verification failed");
+        print("❌ OTP Failed: ${e.code} - ${e.message}");
+        showMessage(e.message ?? "OTP failed");
       },
 
       codeSent: (String vid, int? resendToken) {
@@ -101,12 +95,18 @@ class _OtpPageState extends State<OtpPage> {
     );
   }
 
-  /// 🔹 VERIFY OTP
+  // ================= VERIFY OTP =================
+
   Future<void> verifyOtp() async {
     final otp = otpController.text.trim();
 
     if (otp.length != 6) {
       showMessage("Enter valid 6-digit OTP");
+      return;
+    }
+
+    if (verificationId.isEmpty) {
+      showMessage("Request OTP again");
       return;
     }
 
@@ -124,7 +124,8 @@ class _OtpPageState extends State<OtpPage> {
       final user = userCredential.user;
 
       if (user != null) {
-        await handleUserAfterLogin(user); // ✅ FIXED
+        await saveUser(user);
+        goToHome(); // ✅ DIRECT NAVIGATION
       }
 
     } catch (e) {
@@ -134,7 +135,8 @@ class _OtpPageState extends State<OtpPage> {
     }
   }
 
-  /// 🔹 TIMER
+  // ================= TIMER =================
+
   void startTimer() {
     resendTimer = 30;
     timer?.cancel();
@@ -148,7 +150,8 @@ class _OtpPageState extends State<OtpPage> {
     });
   }
 
-  /// 🔹 SNACKBAR
+  // ================= UI =================
+
   void showMessage(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
@@ -174,21 +177,21 @@ class _OtpPageState extends State<OtpPage> {
             children: [
               const Text(
                 "Verify Phone",
-                style:
-                    TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    fontSize: 26, fontWeight: FontWeight.bold),
               ),
 
               const SizedBox(height: 8),
 
               Text(
                 "OTP sent to ${widget.phone}",
-                style:
-                    const TextStyle(fontSize: 16, color: Colors.grey),
+                style: const TextStyle(
+                    fontSize: 16, color: Colors.grey),
               ),
 
               const SizedBox(height: 40),
 
-              /// OTP INPUT
+              // OTP FIELD
               TextField(
                 controller: otpController,
                 keyboardType: TextInputType.number,
@@ -205,7 +208,7 @@ class _OtpPageState extends State<OtpPage> {
 
               const SizedBox(height: 30),
 
-              /// VERIFY BUTTON
+              // VERIFY BUTTON
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -231,7 +234,7 @@ class _OtpPageState extends State<OtpPage> {
 
               const SizedBox(height: 20),
 
-              /// RESEND OTP
+              // RESEND
               Center(
                 child: TextButton(
                   onPressed: resendTimer == 0
