@@ -1,4 +1,6 @@
+import 'package:callme/provider/order_service.dart';
 import 'package:flutter/material.dart';
+
 
 class CivilBookingPage extends StatefulWidget {
   final String serviceName;
@@ -10,158 +12,85 @@ class CivilBookingPage extends StatefulWidget {
 }
 
 class _CivilBookingPageState extends State<CivilBookingPage> {
-  final _formKey = GlobalKey<FormState>();
 
-  final nameController = TextEditingController();
-  final phoneController = TextEditingController();
-  final emailController = TextEditingController();
+  final name = TextEditingController();
+  final phone = TextEditingController();
+  final email = TextEditingController();
+  final address = TextEditingController();
+  final note = TextEditingController();
 
-  final addressController = TextEditingController();
-  final cityController = TextEditingController();
-  final pincodeController = TextEditingController();
-
-  final requestController = TextEditingController();
-
-  DateTime? selectedDate;
-  TimeOfDay? selectedTime;
+  DateTime? date;
+  TimeOfDay? time;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Book ${widget.serviceName}"),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
+      appBar: AppBar(title: Text(widget.serviceName)),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: ListView(
+          children: [
 
-              /// 👤 CUSTOMER DETAILS
-              _sectionTitle("Customer Details"),
-              _input(nameController, "Full Name"),
-              _input(phoneController, "Mobile Number"),
-              _input(emailController, "Email ID"),
+            _f(name, "Name"),
+            _f(phone, "Phone"),
+            _f(email, "Email"),
+            _f(address, "Address"),
+            _f(note, "Request"),
 
-              /// 📍 ADDRESS
-              _sectionTitle("Site Address"),
-              _input(addressController, "Full Address"),
-              _input(cityController, "City"),
-              _input(pincodeController, "Pincode"),
+            ListTile(
+              title: Text(date == null ? "Date" : date.toString()),
+              onTap: _pickDate,
+            ),
+            ListTile(
+              title: Text(time == null ? "Time" : time!.format(context)),
+              onTap: _pickTime,
+            ),
 
-              /// 📅 DATE & TIME
-              _sectionTitle("Preferred Site Visit"),
-              ListTile(
-                title: Text(selectedDate == null
-                    ? "Select Date"
-                    : selectedDate.toString().split(" ")[0]),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: _pickDate,
-              ),
-              ListTile(
-                title: Text(selectedTime == null
-                    ? "Select Time"
-                    : selectedTime!.format(context)),
-                trailing: const Icon(Icons.access_time),
-                onTap: _pickTime,
-              ),
-
-              /// ⭐ REQUEST
-              _sectionTitle("Special Request"),
-              _input(requestController, "Optional Message", maxLines: 3),
-
-              const SizedBox(height: 10),
-
-              /// 📌 NOTE
-              Container(
-                padding: const EdgeInsets.all(10),
-                color: Colors.yellow.shade100,
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("📌 Note",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text("• Site inspection before quotation"),
-                    Text("• 3–5 budget options provided"),
-                    Text("• Work starts after confirmation"),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              /// SUBMIT
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _submit,
-                  child: const Text("Submit Booking"),
-                ),
-              )
-            ],
-          ),
+            ElevatedButton(
+              onPressed: _submit,
+              child: const Text("Submit"),
+            )
+          ],
         ),
       ),
     );
   }
 
-  /// 🔹 UI HELPERS
-  Widget _sectionTitle(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(text,
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 16)),
-      ),
-    );
-  }
+  Widget _f(TextEditingController c, String h) =>
+      TextField(controller: c, decoration: InputDecoration(labelText: h));
 
-  Widget _input(TextEditingController controller, String hint,
-      {int maxLines = 1}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: TextFormField(
-        controller: controller,
-        maxLines: maxLines,
-        validator: (val) =>
-            val == null || val.isEmpty ? "Required" : null,
-        decoration: InputDecoration(
-          hintText: hint,
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8)),
-        ),
-      ),
-    );
-  }
-
-  /// 📅 PICKERS
   void _pickDate() async {
-    final date = await showDatePicker(
+    final d = await showDatePicker(
       context: context,
       firstDate: DateTime.now(),
-      lastDate: DateTime(2030),
+      lastDate: DateTime(2100),
       initialDate: DateTime.now(),
     );
-    if (date != null) setState(() => selectedDate = date);
+    if (d != null) setState(() => date = d);
   }
 
   void _pickTime() async {
-    final time = await showTimePicker(
+    final t = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
     );
-    if (time != null) setState(() => selectedTime = time);
+    if (t != null) setState(() => time = t);
   }
 
-  /// 🚀 SUBMIT
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Booking Submitted")),
-      );
-    }
+  void _submit() async {
+    await OrderService.placeOrder(
+      serviceType: widget.serviceName,
+      services: [widget.serviceName],
+      userName: name.text,
+      phone: phone.text,
+      email: email.text,
+      address: address.text,
+      note: note.text,
+      date: date!,
+      time: time!.format(context),
+      totalAmount: 0,
+    );
+
+    Navigator.pop(context);
   }
 }

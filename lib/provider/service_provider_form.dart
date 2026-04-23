@@ -1,4 +1,11 @@
+import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+
 import '../provider/service_config.dart';
 import '../provider/succespage.dart';
 
@@ -18,344 +25,341 @@ class ServiceProviderForm extends StatefulWidget {
 
 class _ServiceProviderFormState extends State<ServiceProviderForm> {
   int currentStep = 0;
+  bool isLoading = false;
 
   final List<String> selectedCategories = [];
-  final List<String> selectedAmenities = [];
+  Map<String, String> uploadedDocs = {};
 
   bool ownTools = false;
-  bool homeVisit = false;
-  bool pickupDrop = false;
 
-  // Controllers
-  final ownerController = TextEditingController();
+  /// 🔹 CONTROLLERS
   final businessController = TextEditingController();
+  final ownerController = TextEditingController();
   final phoneController = TextEditingController();
   final emailController = TextEditingController();
   final addressController = TextEditingController();
   final cityController = TextEditingController();
   final stateController = TextEditingController();
   final pincodeController = TextEditingController();
-
-  final staffCountController = TextEditingController();
-  final roomCountController = TextEditingController();
   final priceController = TextEditingController();
-
   final bankHolderController = TextEditingController();
   final accountController = TextEditingController();
   final ifscController = TextEditingController();
   final upiController = TextEditingController();
 
-  @override
-  void dispose() {
-    ownerController.dispose();
-    businessController.dispose();
-    phoneController.dispose();
-    emailController.dispose();
-    addressController.dispose();
-    cityController.dispose();
-    stateController.dispose();
-    pincodeController.dispose();
-    staffCountController.dispose();
-    roomCountController.dispose();
-    priceController.dispose();
-    bankHolderController.dispose();
-    accountController.dispose();
-    ifscController.dispose();
-    upiController.dispose();
-    super.dispose();
+  /// ================= FILE UPLOAD =================
+  Future<void> _uploadDocument(String docName) async {
+    final result = await FilePicker.platform.pickFiles();
+    if (result == null) return;
+
+    final file = File(result.files.single.path!);
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child("provider_docs/$userId/$docName");
+
+    await ref.putFile(file);
+    final url = await ref.getDownloadURL();
+
+    setState(() {
+      uploadedDocs[docName] = url;
+    });
   }
 
-  void _goToSuccessPage() {
-    final businessName =
-        businessController.text.trim().isNotEmpty
-            ? businessController.text.trim()
-            : ownerController.text.trim();
+  /// ================= SUBMIT =================
+  Future<void> _submitForm() async {
+    try {
+      setState(() => isLoading = true);
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SuccessPage(
-          businessName: businessName,
-          providerType: widget.providerType,
-          serviceType: widget.type,
+      final user = FirebaseAuth.instance.currentUser;
+
+      /// 🔥 CREATE UNIQUE PROVIDER ID
+      final providerRef =
+          FirebaseFirestore.instance.collection("providers").doc();
+
+      final data = {
+        /// 🔑 IDS
+        "providerId": providerRef.id,
+        "userId": user!.uid,
+
+        /// 🔥 BASIC INFO
+        "serviceType": widget.type,
+        "providerType": widget.providerType,
+        "categories": selectedCategories,
+
+        /// 🏢 BUSINESS DETAILS
+        "business": {
+          "businessName": businessController.text.trim(),
+          "ownerName": ownerController.text.trim(),
+          "phone": phoneController.text.trim(),
+          "email": emailController.text.trim(),
+          "address": addressController.text.trim(),
+          "city": cityController.text.trim(),
+          "state": stateController.text.trim(),
+          "pincode": pincodeController.text.trim(),
+        },
+
+        /// 🔧 SERVICE SETTINGS
+        "service": {
+          "price": priceController.text.trim(),
+          "ownTools": ownTools,
+        },
+
+        /// 💳 BANK DETAILS
+        "bank": {
+          "accountHolder": bankHolderController.text.trim(),
+          "accountNumber": accountController.text.trim(),
+          "ifsc": ifscController.text.trim(),
+          "upi": upiController.text.trim(),
+        },
+
+        /// 📂 DOCUMENTS
+        "documents": uploadedDocs,
+
+        /// 🔥 ADMIN CONTROL
+        "status": "pending", // pending / approved / rejected
+        "isActive": false,
+
+        /// ⏱ TIMESTAMP
+        "createdAt": FieldValue.serverTimestamp(),
+      };
+
+      await providerRef.set(data);
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SuccessPage(
+            businessName: businessController.text,
+            providerType: widget.providerType,
+            serviceType: widget.type,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      setState(() => isLoading = false);
+    }
   }
 
+  void nextStep() {
+    if (currentStep < 4) {
+      setState(() => currentStep++);
+    } else {
+      _submitForm();
+    }
+  }
+
+  /// ================= UI =================
   @override
   Widget build(BuildContext context) {
     final config = serviceConfigs[widget.type]!;
 
-    final steps = <Step>[
-      /// STEP 1 → Categories
-      Step(
-        title: const Text("Service Categories"),
-        isActive: currentStep >= 0,
-        content: Column(
-          children: config.serviceCategories.map((category) {
-            return CheckboxListTile(
-              title: Text(category),
-              value: selectedCategories.contains(category),
-              onChanged: (val) {
-                setState(() {
-                  if (val == true) {
-                    selectedCategories.add(category);
-                  } else {
-                    selectedCategories.remove(category);
-                  }
-                });
-              },
-            );
-          }).toList(),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6FA),
+
+      /// 🔥 APPBAR
+      appBar: AppBar(
+        title: Text("${widget.type} Registration"),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.blue, Colors.purple],
+            ),
+          ),
         ),
       ),
 
-      /// STEP 2 → Provider Details
-      Step(
-        title: const Text("Provider Details"),
-        isActive: currentStep >= 1,
-        content: _buildCard(
-          children: [
-            _buildTextField(
-              businessController,
-              config.businessLabel,
-              Icons.business,
-            ),
-            _buildTextField(
-              ownerController,
-              "Owner Name",
-              Icons.person,
-            ),
-            _buildTextField(
-              phoneController,
-              "Phone Number",
-              Icons.phone,
-            ),
-            _buildTextField(
-              emailController,
-              "Email",
-              Icons.email,
-            ),
-            _buildTextField(
-              addressController,
-              "Address",
-              Icons.location_on,
-            ),
-            Row(
+      body: Stack(
+        children: [
+          /// CONTENT
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            child: Column(
               children: [
-                Expanded(
-                  child: _buildTextField(
-                    cityController,
-                    "City",
-                    Icons.location_city,
-                  ),
+                /// STEP INDICATOR
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: List.generate(5, (i) {
+                    return CircleAvatar(
+                      radius: 14,
+                      backgroundColor:
+                          i <= currentStep ? Colors.blue : Colors.grey.shade300,
+                      child: Text(
+                        "${i + 1}",
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    );
+                  }),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildTextField(
-                    stateController,
-                    "State",
-                    Icons.map,
-                  ),
+
+                const SizedBox(height: 20),
+
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 400),
+                  child: _buildStep(config),
                 ),
               ],
             ),
-            _buildTextField(
-              pincodeController,
-              "Pincode",
-              Icons.pin_drop,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              "Provider Type: ${widget.providerType}",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
+          ),
+
+          /// BUTTON
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.white,
+              child: ElevatedButton(
+                onPressed: nextStep,
+                child: Text(currentStep == 4 ? "Submit" : "Continue"),
               ),
             ),
-            if (widget.providerType != "Individual")
-              _buildTextField(
-                staffCountController,
-                "Staff Count",
-                Icons.groups,
-              ),
-          ],
-        ),
+          ),
+
+          if (isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+        ],
       ),
+    );
+  }
 
-      /// STEP 3 → Service Options
-      Step(
-        title: const Text("Service Options"),
-        isActive: currentStep >= 2,
-        content: _buildCard(
-          children: [
-            if (config.showRoomCount)
-              _buildTextField(
-                roomCountController,
-                "Total Rooms",
-                Icons.hotel,
-              ),
-
-            _buildTextField(
-              priceController,
-              "Base Price / Starting Price",
-              Icons.currency_rupee,
-            ),
-
-            if (widget.type == "salon" ||
-                widget.type == "cleaning" ||
-                widget.type == "plumbing")
-              SwitchListTile(
-                title: const Text("Own Tools Available"),
-                value: ownTools,
+  /// ================= STEP BUILDER =================
+  Widget _buildStep(config) {
+    switch (currentStep) {
+      case 0:
+        return _card(
+          "Select Categories",
+          Icons.category,
+          Column(
+            children: config.serviceCategories.map<Widget>((cat) {
+              return CheckboxListTile(
+                title: Text(cat),
+                value: selectedCategories.contains(cat),
                 onChanged: (val) {
-                  setState(() => ownTools = val);
+                  setState(() {
+                    val!
+                        ? selectedCategories.add(cat)
+                        : selectedCategories.remove(cat);
+                  });
                 },
-              ),
+              );
+            }).toList(),
+          ),
+        );
 
-            if (widget.type == "salon")
-              SwitchListTile(
-                title: const Text("Home Visit Available"),
-                value: homeVisit,
-                onChanged: (val) {
-                  setState(() => homeVisit = val);
-                },
-              ),
-
-            if (widget.type == "laundry")
-              SwitchListTile(
-                title: const Text("Pickup & Drop Available"),
-                value: pickupDrop,
-                onChanged: (val) {
-                  setState(() => pickupDrop = val);
-                },
-              ),
-
-            if (config.amenities.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              const Text(
-                "Amenities",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              ...config.amenities.map((amenity) {
-                return CheckboxListTile(
-                  title: Text(amenity),
-                  value: selectedAmenities.contains(amenity),
-                  onChanged: (val) {
-                    setState(() {
-                      if (val == true) {
-                        selectedAmenities.add(amenity);
-                      } else {
-                        selectedAmenities.remove(amenity);
-                      }
-                    });
-                  },
-                );
-              }),
+      case 1:
+        return _card(
+          "Business Details",
+          Icons.business,
+          Column(
+            children: [
+              _field(businessController, "Business Name"),
+              _field(ownerController, "Owner Name"),
+              _field(phoneController, "Phone"),
+              _field(emailController, "Email"),
+              _field(addressController, "Address"),
             ],
-          ],
-        ),
-      ),
+          ),
+        );
 
-      /// STEP 4 → Bank Details
-      Step(
-        title: const Text("Bank Details"),
-        isActive: currentStep >= 3,
-        content: _buildCard(
-          children: [
-            _buildTextField(
-              bankHolderController,
-              "Account Holder Name",
-              Icons.person,
-            ),
-            _buildTextField(
-              accountController,
-              "Account Number",
-              Icons.account_balance,
-            ),
-            _buildTextField(
-              ifscController,
-              "IFSC Code",
-              Icons.code,
-            ),
-            _buildTextField(
-              upiController,
-              "UPI ID",
-              Icons.payment,
-            ),
-          ],
-        ),
-      ),
-
-      /// STEP 5 → Documents
-      Step(
-        title: const Text("Documents"),
-        isActive: currentStep >= 4,
-        content: _buildCard(
-          children: config.requiredDocuments.map((doc) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.upload_file),
-                label: Text("Upload $doc"),
+      case 2:
+        return _card(
+          "Service",
+          Icons.build,
+          Column(
+            children: [
+              _field(priceController, "Price"),
+              SwitchListTile(
+                title: const Text("Own Tools"),
+                value: ownTools,
+                onChanged: (v) => setState(() => ownTools = v),
               ),
-            );
-          }).toList(),
-        ),
-      ),
-    ];
+            ],
+          ),
+        );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("${widget.type.toUpperCase()} Registration"),
+      case 3:
+        return _card(
+          "Bank",
+          Icons.account_balance,
+          Column(
+            children: [
+              _field(bankHolderController, "Holder Name"),
+              _field(accountController, "Account Number"),
+              _field(ifscController, "IFSC"),
+              _field(upiController, "UPI ID"),
+            ],
+          ),
+        );
+
+      case 4:
+        return _card(
+          "Documents",
+          Icons.upload_file,
+          Column(
+            children: config.requiredDocuments.map<Widget>((doc) {
+              final uploaded = uploadedDocs.containsKey(doc);
+
+              return ListTile(
+                title: Text(doc),
+                trailing: ElevatedButton(
+                  onPressed: () => _uploadDocument(doc),
+                  child: Text(uploaded ? "Update" : "Upload"),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+
+      default:
+        return const SizedBox();
+    }
+  }
+
+  /// ================= UI HELPERS =================
+  Widget _card(String title, IconData icon, Widget child) {
+    return Container(
+      key: ValueKey(title),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
       ),
-      body: Stepper(
-        currentStep: currentStep,
-        steps: steps,
-        onStepContinue: () {
-          if (currentStep < steps.length - 1) {
-            setState(() => currentStep++);
-          } else {
-            _goToSuccessPage();
-          }
-        },
-        onStepCancel: () {
-          if (currentStep > 0) {
-            setState(() => currentStep--);
-          }
-        },
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(icon),
+              const SizedBox(width: 10),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 15),
+          child,
+        ],
       ),
     );
   }
 
-  Widget _buildCard({required List<Widget> children}) {
-    return Card(
-      elevation: 4,
-      margin: const EdgeInsets.only(top: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(children: children),
-      ),
-    );
-  }
-
-  Widget _buildTextField(
-    TextEditingController controller,
-    String label,
-    IconData icon,
-  ) {
+  Widget _field(TextEditingController c, String hint) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
-        controller: controller,
+        controller: c,
         decoration: InputDecoration(
-          prefixIcon: Icon(icon),
-          labelText: label,
+          hintText: hint,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),

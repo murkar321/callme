@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/resorts_data.dart';
 import '../widgets/rbooking_popup.dart';
+import '../screens/booking_page.dart';
 
 class ResortDetailPage extends StatelessWidget {
   final Resort resort;
@@ -24,6 +25,7 @@ class ResortDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+
             /// IMAGE
             Stack(
               children: [
@@ -33,12 +35,13 @@ class ResortDetailPage extends StatelessWidget {
                   height: 240,
                   fit: BoxFit.cover,
                 ),
+
                 Positioned(
                   top: 15,
                   right: 15,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.red,
                       borderRadius: BorderRadius.circular(10),
@@ -60,6 +63,7 @@ class ResortDetailPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+
                   /// NAME
                   Text(
                     resort.name,
@@ -173,16 +177,35 @@ class ResortDetailPage extends StatelessWidget {
         ),
       ),
 
-      /// BOOK BUTTON
+      /// ✅ FIXED BOOK BUTTON
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(12),
         color: Colors.white,
         child: ElevatedButton(
-          onPressed: () {
-            showDialog(
+          onPressed: () async {
+
+            /// 👉 OPEN POPUP
+            final result = await showDialog(
               context: context,
-              builder: (_) => ResortBookingPopup(resort: resort),
+              builder: (_) => ResortBookingPopup(
+                resort: resort,
+              ),
             );
+
+            /// 👉 HANDLE RESULT
+            if (result != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BookingPage(
+                    serviceName: "Resorts",
+                    adults: result['adults'],
+                     products: [],
+                    children: result['children'],
+                  ),
+                ),
+              );
+            }
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,

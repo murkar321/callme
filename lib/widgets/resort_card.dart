@@ -1,6 +1,7 @@
-import 'package:callme/models/resort_detail_page.dart';
 import 'package:flutter/material.dart';
 import '../data/resorts_data.dart';
+import '../models/resort_detail_page.dart';
+import '../widgets/rbooking_popup.dart';
 import '../screens/booking_page.dart';
 
 class ResortCard extends StatelessWidget {
@@ -19,18 +20,17 @@ class ResortCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade300,
-            blurRadius: 4,
-          )
+          BoxShadow(color: Colors.grey.shade300, blurRadius: 4)
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+
           /// IMAGE
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(12)),
             child: Image.asset(
               resort.image,
               height: 150,
@@ -44,6 +44,7 @@ class ResortCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+
                 /// NAME
                 Text(
                   resort.name,
@@ -69,6 +70,7 @@ class ResortCard extends StatelessWidget {
                 /// BUTTONS
                 Row(
                   children: [
+
                     /// VIEW
                     Expanded(
                       child: ElevatedButton(
@@ -76,9 +78,8 @@ class ResortCard extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ResortDetailPage(
-                                resort: resort,
-                              ),
+                              builder: (_) =>
+                                  ResortDetailPage(resort: resort),
                             ),
                           );
                         },
@@ -97,16 +98,32 @@ class ResortCard extends StatelessWidget {
                     /// BOOK
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => BookingPage(
-                                serviceName: resort.name,
-                                products: null, cart: [],
-                              ),
+                        onPressed: () async {
+
+                          /// 👉 OPEN POPUP
+                          final result = await showDialog(
+                            context: context,
+                            builder: (_) => ResortBookingPopup(
+                              resort: resort,
                             ),
                           );
+
+                          /// 👉 GO TO BOOKING PAGE
+                          if (result != null) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BookingPage(
+                                  serviceName: "Resorts",
+                                  adults: result['adults'],
+                                   
+                                
+                                   products: [],
+                                  children: result['children'],
+                                ),
+                              ),
+                            );
+                          }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue,

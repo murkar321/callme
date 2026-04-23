@@ -103,7 +103,7 @@ class ServiceViewDetailPage extends StatelessWidget {
               MaterialPageRoute(
                 builder: (_) => BookingPage(
                   serviceName: serviceName,
-                  products: [product],
+                  products: [],
                   cart: [],
                 ),
               ),

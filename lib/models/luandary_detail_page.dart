@@ -333,7 +333,7 @@ class LaundryDetailPage extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (_) => BookingPage(
                         serviceName: serviceName,
-                        product: product,
+                        product: product, products: [],
                       ),
                     ),
                   );

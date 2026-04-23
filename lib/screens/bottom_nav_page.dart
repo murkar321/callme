@@ -1,11 +1,16 @@
-import 'package:callme/provider/business_page.dart';
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'myorders_page.dart';
 import 'profile_page.dart';
+import 'package:callme/provider/business_page.dart';
 
 class BottomNavPage extends StatefulWidget {
-  const BottomNavPage({super.key});
+  final String userPhone; // 🔥 IMPORTANT
+
+  const BottomNavPage({
+    super.key,
+    required this.userPhone,
+  });
 
   @override
   State<BottomNavPage> createState() => _BottomNavPageState();
@@ -14,12 +19,25 @@ class BottomNavPage extends StatefulWidget {
 class _BottomNavPageState extends State<BottomNavPage> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
-    HomePage(),
-    const BusinessPage(),
-    const MyOrdersPage(),
-    const ProfilePage(),
-  ];
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _screens = [
+      const HomePage(),
+
+      /// 🏢 BUSINESS
+      const BusinessPage(),
+
+      /// 📦 MY ORDERS (DYNAMIC)
+      MyOrdersPage(phone: widget.userPhone),
+
+      /// 👤 PROFILE
+      ProfilePage(phone: widget.userPhone), // optional if you want dynamic profile
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +46,7 @@ class _BottomNavPageState extends State<BottomNavPage> {
         index: _currentIndex,
         children: _screens,
       ),
+
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
@@ -35,12 +54,22 @@ class _BottomNavPageState extends State<BottomNavPage> {
         selectedItemColor: Colors.deepPurple,
         unselectedItemColor: Colors.grey,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: "Home"),
           BottomNavigationBarItem(
-              icon: Icon(Icons.add_box), label: "My Business"),
+            icon: Icon(Icons.home_filled),
+            label: "Home",
+          ),
           BottomNavigationBarItem(
-              icon: Icon(Icons.collections_bookmark), label: "My Orders"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+            icon: Icon(Icons.business_center),
+            label: "My Business",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.shopping_bag),
+            label: "My Orders",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: "Profile",
+          ),
         ],
       ),
     );

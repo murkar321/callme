@@ -4,206 +4,231 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class BusinessDashboardPage extends StatelessWidget {
   final String businessName;
   final String categoryRoute;
+  final String providerId; // 🔥 NEW
 
   const BusinessDashboardPage({
     super.key,
     required this.businessName,
     required this.categoryRoute,
+    required this.providerId,
   });
 
-  /// 🔥 Firestore refs
-  CollectionReference get requestRef =>
-      FirebaseFirestore.instance.collection('requests');
+  /// 🔥 COLLECTION
+  CollectionReference get ordersRef =>
+      FirebaseFirestore.instance.collection('orders');
 
-  CollectionReference get notificationRef =>
-      FirebaseFirestore.instance.collection('notifications');
-
-  CollectionReference get categoryRef =>
-      FirebaseFirestore.instance.collection('categories');
-
-  /// 🔹 Requests for this provider category
-  Stream<QuerySnapshot> getRequests() {
-    return requestRef
-        .where('service', isEqualTo: categoryRoute)
+  /// ✅ ONLY PROVIDER ORDERS
+  Stream<QuerySnapshot> getOrders() {
+    return ordersRef
+        .where('serviceType', isEqualTo: categoryRoute)
+        .where('providerId', isEqualTo: providerId) // 🔥 FIX
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
-  /// 🔹 Services
-  Stream<QuerySnapshot> getServices() {
-    return categoryRef
-        .doc(categoryRoute)
-        .collection('services')
-        .snapshots();
-  }
-
-  /// 🔹 Accept Request
-  Future<void> acceptRequest(String id, String userName) async {
-    await requestRef.doc(id).update({"status": "accepted"});
-
-    await notificationRef.add({
-      "message": "Your booking has been ACCEPTED ✅",
-      "userName": userName,
-      "service": categoryRoute,
-      "createdAt": FieldValue.serverTimestamp(),
+  /// ✅ UPDATE STATUS
+  Future<void> updateStatus(String id, String status) async {
+    await ordersRef.doc(id).update({
+      "status": status,
+      "updatedAt": FieldValue.serverTimestamp(),
     });
   }
 
-  /// 🔹 Reject Request
-  Future<void> rejectRequest(String id, String userName) async {
-    await requestRef.doc(id).update({"status": "rejected"});
-
-    await notificationRef.add({
-      "message": "Your booking was REJECTED ❌",
-      "userName": userName,
-      "service": categoryRoute,
-      "createdAt": FieldValue.serverTimestamp(),
-    });
+  /// 🎨 STATUS COLOR
+  Color getStatusColor(String status) {
+    switch (status) {
+      case "accepted":
+        return Colors.green;
+      case "rejected":
+        return Colors.red;
+      case "completed":
+        return Colors.blue;
+      default:
+        return Colors.orange;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
+
       appBar: AppBar(
         title: Text("$categoryRoute Dashboard"),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
+
+      body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            /// 🔹 Welcome
-            _welcomeCard(),
+            /// 🔹 HEADER
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blue.shade400, Colors.purple.shade300],
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                "Welcome, $businessName 👋",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                ),
+              ),
+            ),
 
             const SizedBox(height: 20),
 
-            /// 🔥 INCOMING REQUESTS (MAIN FEATURE)
-            const Text(
-              "Incoming Requests",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            /// 🔥 ORDERS
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: getOrders(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-            const SizedBox(height: 10),
+                  final docs = snapshot.data!.docs;
 
-            StreamBuilder<QuerySnapshot>(
-              stream: getRequests(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const CircularProgressIndicator();
-                }
+                  if (docs.isEmpty) {
+                    return const Center(
+                      child: Text("No assigned orders yet"),
+                    );
+                  }
 
-                final docs = snapshot.data!.docs;
+                  return ListView.builder(
+                    itemCount: docs.length,
+                    itemBuilder: (context, i) {
+                      final doc = docs[i];
+                      final data = doc.data() as Map<String, dynamic>;
 
-                if (docs.isEmpty) {
-                  return const Text("No requests yet");
-                }
+                      final status = data['status'] ?? "pending";
 
-                return Column(
-                  children: docs.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      child: ListTile(
-                        leading: const Icon(Icons.person),
-                        title: Text(data['userName'] ?? 'User'),
-                        subtitle: Text(
-                          "Service: ${data['service']}\nStatus: ${data['status']}",
-                        ),
-
-                        /// 🔥 ACTION BUTTONS
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-
-                            /// ACCEPT
-                            IconButton(
-                              icon: const Icon(Icons.check, color: Colors.green),
-                              onPressed: data['status'] == 'pending'
-                                  ? () => acceptRequest(
-                                        doc.id,
-                                        data['userName'],
-                                      )
-                                  : null,
-                            ),
-
-                            /// REJECT
-                            IconButton(
-                              icon: const Icon(Icons.close, color: Colors.red),
-                              onPressed: data['status'] == 'pending'
-                                  ? () => rejectRequest(
-                                        doc.id,
-                                        data['userName'],
-                                      )
-                                  : null,
-                            ),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.shade300,
+                              blurRadius: 6,
+                              offset: const Offset(0, 4),
+                            )
                           ],
                         ),
-                      ),
-                    );
-                  }).toList(),
-                );
-              },
-            ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
 
-            const SizedBox(height: 24),
+                            /// 👤 USER
+                            Text(
+                              data['userName'] ?? "User",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
 
-            /// 🔹 SERVICES LIST
-            const Text(
-              "Your Services",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+                            const SizedBox(height: 6),
 
-            const SizedBox(height: 10),
+                            Text("📞 ${data['phone'] ?? ""}"),
+                            Text("📍 ${data['address'] ?? ""}"),
 
-            StreamBuilder<QuerySnapshot>(
-              stream: getServices(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const CircularProgressIndicator();
-                }
+                            const SizedBox(height: 8),
 
-                final services = snapshot.data!.docs;
+                            /// 🛠 SERVICES
+                            Text(
+                              "Services: ${(data['services'] as List?)?.join(", ") ?? ""}",
+                            ),
 
-                if (services.isEmpty) {
-                  return const Text("No services added");
-                }
+                            const SizedBox(height: 6),
 
-                return Column(
-                  children: services.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
+                            /// 📅 DATE
+                            Text(
+                              "Date: ${data['date'] != null ? (data['date'] as Timestamp).toDate().toString().split(" ")[0] : ""}",
+                            ),
 
-                    return Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.design_services),
-                        title: Text(data['name'] ?? ''),
-                        subtitle: Text("₹${data['price'] ?? 0}"),
-                      ),
-                    );
-                  }).toList(),
-                );
-              },
-            ),
+                            Text("Time: ${data['time'] ?? ""}"),
+
+                            const SizedBox(height: 6),
+
+                            /// 💰
+                            Text(
+                              "₹${data['totalAmount'] ?? 0}",
+                              style: const TextStyle(
+                                color: Colors.green,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+
+                            const SizedBox(height: 10),
+
+                            /// 🔥 STATUS + ACTIONS
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+
+                                /// STATUS BADGE
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: getStatusColor(status)
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    status.toUpperCase(),
+                                    style: TextStyle(
+                                      color: getStatusColor(status),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+
+                                /// ACTIONS
+                                if (status == "pending")
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.check,
+                                            color: Colors.green),
+                                        onPressed: () =>
+                                            updateStatus(doc.id, "accepted"),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.close,
+                                            color: Colors.red),
+                                        onPressed: () =>
+                                            updateStatus(doc.id, "rejected"),
+                                      ),
+                                    ],
+                                  ),
+
+                                if (status == "accepted")
+                                  TextButton(
+                                    onPressed: () =>
+                                        updateStatus(doc.id, "completed"),
+                                    child: const Text("Mark Completed"),
+                                  ),
+                              ],
+                            )
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            )
           ],
         ),
-      ),
-    );
-  }
-
-  /// 🔹 UI widgets
-  Widget _welcomeCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Colors.blue.shade50,
-      ),
-      child: Text(
-        "Welcome, $businessName 👋\nManage your bookings here.",
-        style: const TextStyle(fontSize: 16),
       ),
     );
   }

@@ -1,7 +1,5 @@
-
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
+import 'package:callme/provider/order_service.dart';
 import 'package:callme/models/cart.dart';
 import 'package:callme/models/service_product.dart';
 import 'package:callme/screens/map_picker_page.dart';
@@ -10,14 +8,9 @@ import 'package:callme/screens/upi_payment.dart';
 class BookingPage extends StatefulWidget {
   final String serviceName;
 
-  /// SINGLE SERVICE
   final ServiceProduct? product;
-
-  /// RESORT SUPPORT
   final int? adults;
   final int? children;
-
-  /// CART FLOW
   final List<CartItem>? cart;
 
   const BookingPage({
@@ -26,7 +19,7 @@ class BookingPage extends StatefulWidget {
     this.product,
     this.adults,
     this.children,
-    this.cart, Object? products,
+    this.cart, required List<CartItem> products,
   });
 
   @override
@@ -34,30 +27,28 @@ class BookingPage extends StatefulWidget {
 }
 
 class _BookingPageState extends State<BookingPage> {
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
-  final TextEditingController addressController = TextEditingController();
-  final TextEditingController noteController = TextEditingController();
+  final name = TextEditingController();
+  final email = TextEditingController();
+  final phone = TextEditingController();
+  final address = TextEditingController();
+  final note = TextEditingController();
 
-  DateTime? selectedDate;
-  TimeOfDay? selectedTime;
+  DateTime? date;
+  TimeOfDay? time;
 
-  /// ================= FLOW DETECTION =================
+  /// ================= CART LOGIC (UNCHANGED) =================
   List<CartItem> get cartItems =>
       widget.cart ?? Cart.getItems(widget.serviceName);
 
-  bool get isCartFlow => cartItems.isNotEmpty;
-  bool get isSingleService => widget.product != null && cartItems.isEmpty;
-  bool get isResort => widget.adults != null;
+  bool get isCart => cartItems.isNotEmpty;
+  bool get isSingle => widget.product != null && cartItems.isEmpty;
 
-  /// ================= TOTAL =================
-  double get totalAmount {
-    if (isCartFlow) {
+  double get total {
+    if (isCart) {
       return Cart.getTotal(widget.serviceName).toDouble();
     }
 
-    if (isSingleService) {
+    if (isSingle) {
       return widget.product!.calculatedFinalPrice.toDouble();
     }
 
@@ -66,326 +57,204 @@ class _BookingPageState extends State<BookingPage> {
 
   @override
   void dispose() {
-    nameController.dispose();
-    emailController.dispose();
-    phoneController.dispose();
-    addressController.dispose();
-    noteController.dispose();
+    name.dispose();
+    email.dispose();
+    phone.dispose();
+    address.dispose();
+    note.dispose();
     super.dispose();
   }
 
-  /// ================= UI =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.serviceName)),
-      backgroundColor: const Color(0xFFF5F7FB),
-      body: SingleChildScrollView(
+      body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
+        child: ListView(
           children: [
-            _serviceSummaryCard(),
-            const SizedBox(height: 20),
 
-            if (isResort) _guestCard(),
-            const SizedBox(height: 20),
+            _field(name, "Full Name"),
+            _field(email, "Email"),
+            _field(phone, "Phone"),
 
-            _textField(controller: nameController, hint: "Full Name"),
-            const SizedBox(height: 16),
-
-            _textField(
-              controller: emailController,
-              hint: "Email",
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 16),
-
-            _textField(
-              controller: phoneController,
-              hint: "Phone Number",
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 16),
-
-            /// DATE & TIME
-            Row(
-              children: [
-                Expanded(
-                  child: _selectTile(
-                    icon: Icons.calendar_today,
-                    title: selectedDate == null
-                        ? "Select Date"
-                        : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-                    onTap: _pickDate,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _selectTile(
-                    icon: Icons.access_time,
-                    title: selectedTime == null
-                        ? "Select Time"
-                        : selectedTime!.format(context),
-                    onTap: _pickTime,
-                  ),
-                ),
-              ],
+            /// DATE
+            ListTile(
+              title: Text(
+                date == null
+                    ? "Select Date"
+                    : "${date!.day}/${date!.month}/${date!.year}",
+              ),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: _pickDate,
             ),
 
-            const SizedBox(height: 20),
+            /// TIME
+            ListTile(
+              title: Text(
+                time == null ? "Select Time" : time!.format(context),
+              ),
+              trailing: const Icon(Icons.access_time),
+              onTap: _pickTime,
+            ),
 
-            /// ADDRESS
+            /// ADDRESS (SAFE MAP HANDLING)
             InkWell(
               onTap: () async {
-                final address = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MapPickerPage()),
-                );
+                try {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MapPickerPage(),
+                    ),
+                  );
 
-                if (address != null) {
-                  setState(() {
-                    addressController.text = address;
-                  });
+                  if (result != null && result.toString().isNotEmpty) {
+                    setState(() {
+                      address.text = result;
+                    });
+                  }
+                } catch (_) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Map not available. Enter address manually.",
+                      ),
+                    ),
+                  );
                 }
               },
-              child: AbsorbPointer(
-                child: _textField(
-                  controller: addressController,
-                  hint: "Select address from map",
-                ),
-              ),
+              child: _field(address, "Enter Address (Optional)"),
             ),
 
-            const SizedBox(height: 16),
-
-            _textField(
-              controller: noteController,
-              hint: "Additional Notes",
-              maxLines: 3,
-            ),
+            _field(note, "Note"),
 
             const SizedBox(height: 20),
 
-            /// TOTAL
-            _card(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Total"),
-                  Text(
-                    "₹${totalAmount.toStringAsFixed(0)}",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green),
-                  ),
-                ],
+            Text(
+              "Total: ₹$total",
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
             ),
 
             const SizedBox(height: 20),
 
-            /// PAYMENT
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _startPaymentFlow,
-                child: const Text("Proceed to Payment"),
-              ),
-            ),
+            ElevatedButton(
+              onPressed: _validateAndPay,
+              child: const Text("Proceed to Payment"),
+            )
           ],
         ),
       ),
     );
   }
 
-  /// ================= SUMMARY =================
-  Widget _serviceSummaryCard() {
-    if (isCartFlow) return _cartSummary();
-    if (isSingleService) return _singleSummary();
-    return const SizedBox();
-  }
-
-  Widget _cartSummary() {
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Selected Services",
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          ...cartItems.map(
-            (item) => ListTile(
-              title: Text("${item.name} x${item.quantity}"),
-              trailing: Text("₹${item.price * item.quantity}"),
-            ),
+  Widget _field(TextEditingController c, String hint) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: c,
+        decoration: InputDecoration(
+          hintText: hint,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _singleSummary() {
-    final p = widget.product!;
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(p.name),
-          Text("₹${p.calculatedFinalPrice}"),
-        ],
-      ),
-    );
-  }
-
-  Widget _guestCard() {
-    return _card(
-      child: Text("${widget.adults} Adults, ${widget.children} Children"),
-    );
-  }
-
-  /// ================= COMMON UI =================
-  Widget _card({required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14)),
-      child: child,
-    );
-  }
-
-  Widget _selectTile({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14)),
-        child: Row(
-          children: [
-            Icon(icon),
-            const SizedBox(width: 8),
-            Expanded(child: Text(title)),
-          ],
         ),
       ),
     );
   }
 
-  Widget _textField({
-    required TextEditingController controller,
-    required String hint,
-    int maxLines = 1,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-      ),
-    );
-  }
-
-  /// ================= DATE TIME =================
-  Future<void> _pickDate() async {
-    final date = await showDatePicker(
+  void _pickDate() async {
+    final d = await showDatePicker(
       context: context,
       firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 30)),
+      lastDate: DateTime(2100),
       initialDate: DateTime.now(),
     );
 
-    if (date != null) {
-      setState(() => selectedDate = date);
-    }
+    if (d != null) setState(() => date = d);
   }
 
-  Future<void> _pickTime() async {
-    final time =
-        await showTimePicker(context: context, initialTime: TimeOfDay.now());
+  void _pickTime() async {
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
 
-    if (time != null) {
-      setState(() => selectedTime = time);
-    }
+    if (t != null) setState(() => time = t);
   }
 
-  /// ================= PAYMENT =================
-  void _startPaymentFlow() async {
-    if (nameController.text.isEmpty ||
-        phoneController.text.isEmpty ||
-        addressController.text.isEmpty ||
-        selectedDate == null ||
-        selectedTime == null) {
+  /// ================= VALIDATION =================
+  void _validateAndPay() {
+    if (name.text.isEmpty ||
+        phone.text.isEmpty ||
+        date == null ||
+        time == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Fill all details")),
+        const SnackBar(content: Text("Fill all required details")),
       );
       return;
     }
 
+    _pay();
+  }
+
+  /// ================= PAYMENT =================
+  void _pay() async {
     final success = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => UpiPaymentScreen(amount: totalAmount),
+        builder: (_) => UpiPaymentScreen(amount: total),
       ),
     );
 
     if (success == true) {
-      _saveToFirestore();
+      _save();
     }
   }
 
-  /// ================= FIRESTORE =================
-  Future<void> _saveToFirestore() async {
-    try {
-      List<String> servicesList;
+  /// ================= SAVE ORDER =================
+  void _save() async {
+    List<String> services = isCart
+        ? cartItems.map((e) => "${e.name} x${e.quantity}").toList()
+        : [widget.product?.name ?? widget.serviceName];
 
-      if (isCartFlow) {
-        servicesList =
-            cartItems.map((e) => "${e.name} x${e.quantity}").toList();
-      } else {
-        servicesList = [widget.product?.name ?? widget.serviceName];
-      }
+    /// 🔥 ONLY FOR RESORT
+    int? adults = widget.serviceName.toLowerCase() == "resort"
+        ? widget.adults
+        : null;
 
-      await FirebaseFirestore.instance.collection("orders").add({
-        "services": servicesList,
-        "date": Timestamp.fromDate(selectedDate!),
-        "time": selectedTime!.format(context),
-        "address": addressController.text,
-        "note": noteController.text,
-        "status": "pending",
-        "totalAmount": totalAmount,
-        "userName": nameController.text,
-        "phone": phoneController.text,
-        "serviceType": widget.serviceName,
-        "createdAt": FieldValue.serverTimestamp(),
-      });
+    int? children = widget.serviceName.toLowerCase() == "resort"
+        ? widget.children
+        : null;
 
-      if (isCartFlow) {
-        Cart.clear(widget.serviceName);
-      }
+    await OrderService.placeOrder(
+      serviceType: widget.serviceName,
+      services: services,
+      userName: name.text,
+      phone: phone.text,
+      email: email.text,
+      address: address.text.isEmpty ? "Not Provided" : address.text,
+      note: note.text,
+      date: date!,
+      time: time!.format(context),
+      totalAmount: total,
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Booking Confirmed")),
-      );
+      /// 🔥 ONLY RESORT DATA SAVED
+      adults: adults,
+      children: children,
+    );
 
-      Navigator.pop(context);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+    if (isCart) {
+      Cart.clear(widget.serviceName);
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Booking Confirmed")),
+    );
+
+    Navigator.pop(context);
   }
 }

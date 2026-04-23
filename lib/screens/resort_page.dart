@@ -15,11 +15,14 @@ class _ResortPageState extends State<ResortPage> {
 
   @override
   Widget build(BuildContext context) {
+
     List<String> filteredCities = cities
-        .where((city) => city.toLowerCase().contains(searchText.toLowerCase()))
+        .where((city) =>
+            city.toLowerCase().contains(searchText.toLowerCase()))
         .toList();
 
-    List<Resort> filteredResorts = getResortsByCity(selectedCity);
+    List<Resort> filteredResorts =
+        getResortsByCity(selectedCity);
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
@@ -27,11 +30,12 @@ class _ResortPageState extends State<ResortPage> {
         title: const Text("Resorts"),
         centerTitle: true,
         backgroundColor: Colors.blue,
-        elevation: 0,
       ),
+
       body: Column(
         children: [
-          /// 🔍 SEARCH CITY
+
+          /// SEARCH
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
@@ -56,7 +60,8 @@ class _ResortPageState extends State<ResortPage> {
           Expanded(
             child: Row(
               children: [
-                /// 🏙️ LEFT CITY PANEL
+
+                /// LEFT PANEL
                 Container(
                   width: 110,
                   color: Colors.white,
@@ -77,7 +82,7 @@ class _ResortPageState extends State<ResortPage> {
                               vertical: 10, horizontal: 8),
                           child: Column(
                             children: [
-                              /// 🔵 CIRCLE CITY
+
                               Container(
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
@@ -88,22 +93,23 @@ class _ResortPageState extends State<ResortPage> {
                                 ),
                                 child: Icon(
                                   Icons.location_on,
-                                  color:
-                                      isSelected ? Colors.white : Colors.black,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.black,
                                 ),
                               ),
 
                               const SizedBox(height: 6),
 
-                              /// CITY NAME
                               Text(
                                 city,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color:
-                                      isSelected ? Colors.blue : Colors.black,
+                                  color: isSelected
+                                      ? Colors.blue
+                                      : Colors.black,
                                 ),
                               ),
                             ],
@@ -114,14 +120,11 @@ class _ResortPageState extends State<ResortPage> {
                   ),
                 ),
 
-                /// 🏨 RIGHT RESORT LIST
+                /// RIGHT PANEL
                 Expanded(
                   child: filteredResorts.isEmpty
                       ? const Center(
-                          child: Text(
-                            "No Resorts Available",
-                            style: TextStyle(fontSize: 16),
-                          ),
+                          child: Text("No Resorts Available"),
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.all(12),

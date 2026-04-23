@@ -45,7 +45,7 @@ final Map<String, ServiceConfig> serviceConfigs = {
     businessLabel: "Cleaning Business Name",
     serviceCategories: [
       "Home Cleaning",
-      " Corporate Office Cleaning",
+      "Corporate Office Cleaning",
       "Bathroom Cleaning",
       "Kitchen Cleaning",
       "Deep Cleaning",
@@ -61,6 +61,36 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "Business Proof",
     ],
   ),
+
+  "education": ServiceConfig(
+    businessLabel: "Educational Institution Name",
+    serviceCategories: [
+      "Academic Coaching",
+      "Aviation Training",
+      "Beautician Courses",
+      "Dance Classes",
+      "Music Lessons",
+      "English Speaking Classes",
+      "Data Science Courses",
+      "Software And Programming",
+      "Government Exam Coaching",
+      "Networking Courses",
+      "Paramedical courses",
+      "Technical Training",
+      "Digital Marketing Courses",
+      "Graphic and video Editing Courses",
+      "MSC-IT Courses",
+
+    ],
+    requiredDocuments: [
+      "Aadhaar Card",
+      "PAN Card",
+      "Institution License",
+      "Educator Certificates",
+    ],
+  ),
+      
+
 
   "plumbing": ServiceConfig(
     businessLabel: "Plumbing Business Name",

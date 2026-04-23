@@ -6,7 +6,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  final String phone; // ✅ FIXED
+
+  const ProfilePage({
+    super.key,
+    required this.phone,
+  });
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -35,24 +40,32 @@ class _ProfilePageState extends State<ProfilePage> {
 
   /// ================= LOAD USER =================
   Future<void> loadUserData() async {
-    if (user == null) return;
+    try {
+      if (user != null) {
+        final doc =
+            await firestore.collection('users').doc(user!.uid).get();
 
-    final doc =
-        await firestore.collection('users').doc(user!.uid).get();
+        if (doc.exists) {
+          final data = doc.data()!;
 
-    if (doc.exists) {
-      final data = doc.data()!;
-
-      firstNameController.text = data['firstName'] ?? "";
-      lastNameController.text = data['lastName'] ?? "";
-      emailController.text =
-          data['email'] ?? user!.email ?? "";
-      phoneController.text =
-          data['phone'] ?? user!.phoneNumber ?? "";
-      addressController.text = data['address'] ?? "";
-    } else {
-      emailController.text = user!.email ?? "";
-      phoneController.text = user!.phoneNumber ?? "";
+          firstNameController.text = data['firstName'] ?? "";
+          lastNameController.text = data['lastName'] ?? "";
+          emailController.text =
+              data['email'] ?? user!.email ?? "";
+          phoneController.text =
+              data['phone'] ?? widget.phone;
+          addressController.text = data['address'] ?? "";
+        } else {
+          /// fallback
+          emailController.text = user!.email ?? "";
+          phoneController.text = widget.phone;
+        }
+      } else {
+        /// if no firebase auth (phone login/manual)
+        phoneController.text = widget.phone;
+      }
+    } catch (e) {
+      debugPrint("Load user error: $e");
     }
   }
 
@@ -75,12 +88,17 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       setState(() => isLoading = true);
 
-      await firestore.collection('users').doc(user!.uid).set({
+      /// 🔥 use uid if available else phone
+      final docId = user?.uid ?? widget.phone;
+
+      await firestore.collection('users').doc(docId).set({
         'firstName': firstNameController.text.trim(),
         'lastName': lastNameController.text.trim(),
         'email': emailController.text.trim(),
         'phone': phoneController.text.trim(),
         'address': addressController.text.trim(),
+
+        /// (future ready)
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -88,8 +106,8 @@ class _ProfilePageState extends State<ProfilePage> {
         const SnackBar(content: Text("Profile Updated")),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(       
-        const SnackBar(content: Text("Failed to save profile")),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
       );
     } finally {
       setState(() => isLoading = false);
@@ -135,7 +153,6 @@ class _ProfilePageState extends State<ProfilePage> {
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        elevation: 1,
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -145,7 +162,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 key: _formKey,
                 child: Column(
                   children: [
-                    /// PROFILE IMAGE
+
+                    /// 👤 PROFILE IMAGE
                     Stack(
                       children: [
                         CircleAvatar(
@@ -181,17 +199,11 @@ class _ProfilePageState extends State<ProfilePage> {
                     Row(
                       children: [
                         Expanded(
-                          child: _field(
-                            controller: firstNameController,
-                            label: "First Name",
-                          ),
+                          child: _field(firstNameController, "First Name"),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _field(
-                            controller: lastNameController,
-                            label: "Last Name",
-                          ),
+                          child: _field(lastNameController, "Last Name"),
                         ),
                       ],
                     ),
@@ -199,33 +211,23 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 15),
 
                     /// EMAIL
-                    _field(
-                      controller: emailController,
-                      label: "Email",
-                      keyboard: TextInputType.emailAddress,
-                    ),
+                    _field(emailController, "Email",
+                        keyboard: TextInputType.emailAddress),
 
                     const SizedBox(height: 15),
 
                     /// PHONE
-                    _field(
-                      controller: phoneController,
-                      label: "Mobile Number",
-                      keyboard: TextInputType.phone,
-                    ),
+                    _field(phoneController, "Mobile Number",
+                        keyboard: TextInputType.phone),
 
                     const SizedBox(height: 15),
 
                     /// ADDRESS
-                    _field(
-                      controller: addressController,
-                      label: "Address",
-                      maxLines: 3,
-                    ),
+                    _field(addressController, "Address", maxLines: 3),
 
                     const SizedBox(height: 25),
 
-                    /// SAVE BUTTON
+                    /// SAVE
                     SizedBox(
                       width: double.infinity,
                       height: 50,
@@ -233,39 +235,22 @@ class _ProfilePageState extends State<ProfilePage> {
                         onPressed: saveProfile,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.indigo,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
                         ),
-                        child: const Text(
-                          "Save Profile",
-                          style: TextStyle(fontSize: 16),
-                        ),
+                        child: const Text("Save Profile"),
                       ),
                     ),
 
                     const SizedBox(height: 20),
 
-                    /// LOGOUT BUTTON
+                    /// LOGOUT
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: OutlinedButton.icon(
                         onPressed: logout,
-                        icon: const Icon(Icons.logout,
-                            color: Colors.red),
-                        label: const Text(
-                          "Logout",
-                          style: TextStyle(
-                              color: Colors.red, fontSize: 16),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.red),
-                          shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(12),
-                          ),
-                        ),
+                        icon: const Icon(Icons.logout, color: Colors.red),
+                        label: const Text("Logout",
+                            style: TextStyle(color: Colors.red)),
                       ),
                     ),
                   ],
@@ -275,30 +260,18 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  /// ================= INPUT FIELD =================
-
-  Widget _field({
-    required TextEditingController controller,
-    required String label,
-    TextInputType keyboard = TextInputType.text,
-    int maxLines = 1,
-  }) {
+  /// 🔹 FIELD
+  Widget _field(TextEditingController c, String label,
+      {TextInputType keyboard = TextInputType.text, int maxLines = 1}) {
     return TextFormField(
-      controller: controller,
+      controller: c,
       keyboardType: keyboard,
       maxLines: maxLines,
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return "Required";
-        }
-        return null;
-      },
+      validator: (v) => v == null || v.isEmpty ? "Required" : null,
       decoration: InputDecoration(
         labelText: label,
         filled: true,
         fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),

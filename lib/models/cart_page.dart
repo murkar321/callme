@@ -1,8 +1,8 @@
-import 'package:callme/models/enquiry_page.dart';
 import 'package:flutter/material.dart';
-import 'package:callme/screens/booking_page.dart';
 import '../models/cart.dart';
+import '../screens/booking_page.dart';
 import '../screens/salon_booking_page.dart';
+import '../models/enquiry_page.dart';
 import '../data/salon_data.dart';
 
 class CartPage extends StatefulWidget {
@@ -10,9 +10,7 @@ class CartPage extends StatefulWidget {
 
   const CartPage({
     super.key,
-    required this.service,
-    required String serviceName,
-    required List<dynamic> cart,
+    required this.service, required String serviceName, required List<dynamic> cart,
   });
 
   @override
@@ -51,10 +49,7 @@ class _CartPageState extends State<CartPage> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 4,
-                      ),
+                      BoxShadow(color: Colors.black12, blurRadius: 4),
                     ],
                   ),
                   child: Row(
@@ -82,14 +77,10 @@ class _CartPageState extends State<CartPage> {
                             Text(
                               item.name,
                               style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
+                                  fontWeight: FontWeight.bold),
                             ),
-
                             const SizedBox(height: 6),
-
                             Text("₹${item.price}"),
-
                             const SizedBox(height: 10),
 
                             /// ➕➖ QUANTITY
@@ -128,16 +119,10 @@ class _CartPageState extends State<CartPage> {
 
                       /// 🗑 DELETE
                       IconButton(
-                        icon: const Icon(
-                          Icons.delete,
-                          color: Colors.red,
-                        ),
+                        icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () {
                           setState(() {
-                            Cart.delete(
-                              item.id,
-                              widget.service,
-                            );
+                            Cart.delete(item.id, widget.service);
                           });
                         },
                       )
@@ -156,19 +141,19 @@ class _CartPageState extends State<CartPage> {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFAE91BA),
+                  padding: const EdgeInsets.all(14),
                 ),
                 onPressed: () {
-                  /// ================= SALON (UNCHANGED) =================
+
+                  /// ================= SALON =================
                   if (widget.service == "Salon") {
                     List<SalonService> selectedServices = [];
                     Map<String, String> visitTypeMap = {};
 
                     for (var item in items) {
                       try {
-                        final realId = item.id
-                            .toString()
-                            .split("_")[0]
-                            .toString();
+                        final realId =
+                            item.id.toString().split("_")[0];
 
                         final service =
                             salonServices.firstWhere(
@@ -180,8 +165,7 @@ class _CartPageState extends State<CartPage> {
                         selectedServices.add(service);
 
                         visitTypeMap[realId] =
-                            (item.visitType ?? "Salon")
-                                .toString();
+                            (item.visitType ?? "Salon");
                       } catch (e) {
                         debugPrint(
                             "Salon match failed: ${item.id}");
@@ -210,50 +194,37 @@ class _CartPageState extends State<CartPage> {
                     );
                   }
 
-                  /// ================= CLEANING (UNCHANGED) =================
-                  else if (widget.service == "Cleaning") {
+                  /// ================= EDUCATION (ENQUIRY) =================
+                  else if (widget.service == "Education") {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => BookingPage(
-                          serviceName: widget.service,
+                        builder: (_) => EnquiryPage(
+                          serviceName: "Education",
+                          cart: items,
                         ),
                       ),
                     );
                   }
 
-                 /// 🎓 EDUCATION (UPDATED → ENQUIRY FLOW)
-else if (widget.service == "Education") {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => EnquiryPage(
-        serviceName: "Education",
-        cart: items,
-      ),
-    ),
-  );
-}
-
-                  /// ================= REST (UNCHANGED) =================
+                  /// ================= DEFAULT FLOW =================
                   else {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => BookingPage(
                           serviceName: widget.service,
-                          cart: Cart.getItems(widget.service),
+                          cart: items, products: [], // ✅ FIXED
                         ),
                       ),
                     );
                   }
                 },
                 child: Text(
-  widget.service == "Education"
-      ? "Proceed to Enquiry"
-      : "Proceed to Booking",
-),
-
+                  widget.service == "Education"
+                      ? "Proceed to Enquiry"
+                      : "Proceed to Booking",
+                ),
               ),
             ),
     );

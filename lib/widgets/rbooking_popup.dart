@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import '../data/resorts_data.dart';
 
-import '../models/cart_page.dart';
 
 class ResortBookingPopup extends StatefulWidget {
   final Resort resort;
@@ -17,8 +16,7 @@ class ResortBookingPopup extends StatefulWidget {
       _ResortBookingPopupState();
 }
 
-class _ResortBookingPopupState
-    extends State<ResortBookingPopup> {
+class _ResortBookingPopupState extends State<ResortBookingPopup> {
 
   int adult = 1;
   int child = 0;
@@ -35,12 +33,7 @@ class _ResortBookingPopupState
         borderRadius: BorderRadius.circular(15),
       ),
 
-      title: Text(
-        widget.resort.name,
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+      title: Text(widget.resort.name),
 
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -50,15 +43,10 @@ class _ResortBookingPopupState
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-
-              const Text(
-                "Adults",
-                style: TextStyle(fontSize: 16),
-              ),
+              const Text("Adults"),
 
               Row(
                 children: [
-
                   IconButton(
                     icon: const Icon(Icons.remove),
                     onPressed: () {
@@ -67,15 +55,7 @@ class _ResortBookingPopupState
                       }
                     },
                   ),
-
-                  Text(
-                    adult.toString(),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
+                  Text(adult.toString()),
                   IconButton(
                     icon: const Icon(Icons.add),
                     onPressed: () {
@@ -87,21 +67,14 @@ class _ResortBookingPopupState
             ],
           ),
 
-          const SizedBox(height: 10),
-
           /// CHILD
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-
-              const Text(
-                "Children",
-                style: TextStyle(fontSize: 16),
-              ),
+              const Text("Children"),
 
               Row(
                 children: [
-
                   IconButton(
                     icon: const Icon(Icons.remove),
                     onPressed: () {
@@ -110,15 +83,7 @@ class _ResortBookingPopupState
                       }
                     },
                   ),
-
-                  Text(
-                    child.toString(),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
+                  Text(child.toString()),
                   IconButton(
                     icon: const Icon(Icons.add),
                     onPressed: () {
@@ -132,78 +97,33 @@ class _ResortBookingPopupState
 
           const SizedBox(height: 20),
 
-          /// TOTAL PRICE
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-
-                const Text(
-                  "Total Price",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                Text(
-                  "₹$totalPrice",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          /// TOTAL
+          Text("Total: ₹$totalPrice"),
         ],
       ),
 
       actions: [
 
-        /// CANCEL
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text("Cancel"),
         ),
 
-        /// PROCEED
         ElevatedButton(
           onPressed: () {
 
-          
-
-            Navigator.pop(context);
-
-            /// ✅ GO TO CART (REAL UNIVERSAL WAY)
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const CartPage(
-                  service: "Resorts", serviceName: '', cart: [],
-                ),
-              ),
-            );
+            /// ✅ RETURN DATA TO CARD
+            Navigator.pop(context, {
+              Navigator.pop(context, {
+  "adults": adult,
+  "children": child,
+  "price": widget.resort.price, // ✅ ADD THIS
+})
+            });
           },
-
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-          ),
-
-          child: const Text(
-            "Proceed to Cart",
-            style: TextStyle(color: Colors.white),
-          ),
+          child: const Text("Continue"),
         ),
       ],
     );
   }
-}
-
-class addResortBooking {
 }

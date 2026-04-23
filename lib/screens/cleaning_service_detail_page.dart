@@ -240,7 +240,7 @@ class _CleaningServiceDetailPageState
                             MaterialPageRoute(
                               builder: (_) => BookingPage(
                                 serviceName: serviceName,
-                                products: product,
+                                products: [],
                                 cart: [],
                               ),
                             ),
