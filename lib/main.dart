@@ -49,7 +49,7 @@ class CallMeApp extends StatelessWidget {
       routes: {
         '/logo': (context) => const LogoPage(),
         '/signup': (context) => const SignupPage(),
-        '/bottomnav': (context) => const BottomNavPage(userPhone: '',),
+        '/bottomnav': (context) => const BottomNavPage(userPhone: '', userEmail: '',),
         '/home': (context) => const HomePage(),
       },
 

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -74,25 +73,47 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
       final user = FirebaseAuth.instance.currentUser;
 
-      /// 🔥 CREATE UNIQUE PROVIDER ID
+      if (user == null) {
+        throw "User not logged in";
+      }
+
+      /// 🔥 VALIDATIONS
+      if (businessController.text.trim().isEmpty) {
+        throw "Enter business name";
+      }
+
+      if (selectedCategories.isEmpty) {
+        throw "Select at least one category";
+      }
+
+      /// 🔥 CREATE DOC
       final providerRef =
           FirebaseFirestore.instance.collection("providers").doc();
+
+      final businessName = businessController.text.trim();
+      final ownerName = ownerController.text.trim();
+      final phone = phoneController.text.trim();
 
       final data = {
         /// 🔑 IDS
         "providerId": providerRef.id,
-        "userId": user!.uid,
+        "userId": user.uid,
 
-        /// 🔥 BASIC INFO
+        /// 🔥 IMPORTANT (USED IN DASHBOARD)
+        "providerName": businessName,
+        "ownerName": ownerName,
+        "phone": phone,
+
+        /// 🔥 TYPE
         "serviceType": widget.type,
         "providerType": widget.providerType,
         "categories": selectedCategories,
 
-        /// 🏢 BUSINESS DETAILS
+        /// 🏢 BUSINESS
         "business": {
-          "businessName": businessController.text.trim(),
-          "ownerName": ownerController.text.trim(),
-          "phone": phoneController.text.trim(),
+          "businessName": businessName,
+          "ownerName": ownerName,
+          "phone": phone,
           "email": emailController.text.trim(),
           "address": addressController.text.trim(),
           "city": cityController.text.trim(),
@@ -100,13 +121,13 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
           "pincode": pincodeController.text.trim(),
         },
 
-        /// 🔧 SERVICE SETTINGS
+        /// 🔧 SERVICE
         "service": {
           "price": priceController.text.trim(),
           "ownTools": ownTools,
         },
 
-        /// 💳 BANK DETAILS
+        /// 💳 BANK
         "bank": {
           "accountHolder": bankHolderController.text.trim(),
           "accountNumber": accountController.text.trim(),
@@ -114,14 +135,14 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
           "upi": upiController.text.trim(),
         },
 
-        /// 📂 DOCUMENTS
+        /// 📂 DOCS
         "documents": uploadedDocs,
 
         /// 🔥 ADMIN CONTROL
         "status": "pending", // pending / approved / rejected
         "isActive": false,
 
-        /// ⏱ TIMESTAMP
+        /// ⏱ META
         "createdAt": FieldValue.serverTimestamp(),
       };
 
@@ -131,7 +152,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         context,
         MaterialPageRoute(
           builder: (_) => SuccessPage(
-            businessName: businessController.text,
+            businessName: businessName,
             providerType: widget.providerType,
             serviceType: widget.type,
           ),
@@ -161,7 +182,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
 
-      /// 🔥 APPBAR
       appBar: AppBar(
         title: Text("${widget.type} Registration"),
         flexibleSpace: Container(
@@ -180,6 +200,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
             child: Column(
               children: [
+
                 /// STEP INDICATOR
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -215,7 +236,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
               padding: const EdgeInsets.all(16),
               color: Colors.white,
               child: ElevatedButton(
-                onPressed: nextStep,
+                onPressed: isLoading ? null : nextStep,
                 child: Text(currentStep == 4 ? "Submit" : "Continue"),
               ),
             ),
@@ -234,6 +255,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
   /// ================= STEP BUILDER =================
   Widget _buildStep(config) {
     switch (currentStep) {
+
       case 0:
         return _card(
           "Select Categories",
@@ -288,7 +310,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
       case 3:
         return _card(
-          "Bank",
+          "Bank Details",
           Icons.account_balance,
           Column(
             children: [
@@ -302,7 +324,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
       case 4:
         return _card(
-          "Documents",
+          "Upload Documents",
           Icons.upload_file,
           Column(
             children: config.requiredDocuments.map<Widget>((doc) {
@@ -325,6 +347,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
   }
 
   /// ================= UI HELPERS =================
+
   Widget _card(String title, IconData icon, Widget child) {
     return Container(
       key: ValueKey(title),
@@ -339,9 +362,11 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
             children: [
               Icon(icon),
               const SizedBox(width: 10),
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(
+                title,
+                style: const TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           const SizedBox(height: 15),

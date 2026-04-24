@@ -25,21 +25,64 @@ class _EnquiryPageState extends State<EnquiryPage> {
 
   bool isLoading = false;
 
-  /// 🔹 SUBMIT
+  /// 🔹 CONVERT DATE (dd/MM/yyyy → yyyy-MM-dd)
+  String _convertToIso(String input) {
+    final parts = input.split('/');
+    return "${parts[2]}-${parts[1]}-${parts[0]}";
+  }
+
+  /// 🔹 SUBMIT → NOW STORES IN ORDERS COLLECTION
   Future<void> submitEnquiry() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => isLoading = true);
 
     try {
-      await FirebaseFirestore.instance.collection("enquiries").add({
-        "serviceName": widget.serviceName,
-        "courses": widget.cart?.map((e) => e.name).toList() ?? [],
-        "userName": nameController.text.trim(),
-        "phone": phoneController.text.trim(),
-        "email": emailController.text.trim(),
-        "preferredDate": dateController.text,
-        "createdAt": Timestamp.now(),
+      final phone = phoneController.text.trim();
+
+      await FirebaseFirestore.instance.collection("orders").add({
+        /// 🔹 SERVICE INFO
+        "serviceType": widget.serviceName,
+        "services": widget.cart?.map((e) => e.name).toList() ?? [],
+
+        /// 🔹 USER (IMPORTANT FOR MY ORDERS + RULES)
+        "user": {
+          "name": nameController.text.trim(),
+          "phone": phone,
+          "email": emailController.text.trim(),
+        },
+
+        /// 🔹 SCHEDULE
+        "schedule": {
+          "date": dateController.text.isNotEmpty
+              ? Timestamp.fromDate(
+                  DateTime.parse(_convertToIso(dateController.text)),
+                )
+              : null,
+          "time": "",
+        },
+
+        /// 🔹 LOCATION (EMPTY FOR NOW)
+        "location": {
+          "address": "",
+          "lat": null,
+          "lng": null,
+        },
+
+        /// 🔹 PAYMENT (ENQUIRY → ₹0)
+        "payment": {
+          "totalAmount": 0,
+          "method": "enquiry",
+        },
+
+        /// 🔹 ORDER STATUS
+        "status": "pending",
+
+        /// 🔹 PROVIDER (NOT ASSIGNED YET)
+        "providerId": null,
+
+        /// 🔹 TIMESTAMP
+        "createdAt": FieldValue.serverTimestamp(),
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -48,12 +91,22 @@ class _EnquiryPageState extends State<EnquiryPage> {
 
       Navigator.pop(context);
     } catch (e) {
+      print("🔥 Error submitting enquiry: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e")),
       );
     }
 
     setState(() => isLoading = false);
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+    dateController.dispose();
+    super.dispose();
   }
 
   @override
@@ -147,7 +200,7 @@ class _EnquiryPageState extends State<EnquiryPage> {
 
                   const SizedBox(height: 15),
 
-                  /// DATE
+                  /// DATE PICKER
                   GestureDetector(
                     onTap: () async {
                       DateTime? picked = await showDatePicker(
@@ -173,7 +226,7 @@ class _EnquiryPageState extends State<EnquiryPage> {
 
                   const SizedBox(height: 30),
 
-                  /// BUTTON
+                  /// SUBMIT BUTTON
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -184,7 +237,6 @@ class _EnquiryPageState extends State<EnquiryPage> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        elevation: 4,
                       ),
                       child: isLoading
                           ? const SizedBox(

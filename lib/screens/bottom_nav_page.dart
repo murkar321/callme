@@ -1,15 +1,19 @@
+import 'package:callme/Admin/admin_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'myorders_page.dart';
 import 'profile_page.dart';
 import 'package:callme/provider/business_page.dart';
 
+
 class BottomNavPage extends StatefulWidget {
-  final String userPhone; // 🔥 IMPORTANT
+  final String userPhone;
+  final String userEmail;
 
   const BottomNavPage({
     super.key,
     required this.userPhone,
+    required this.userEmail,
   });
 
   @override
@@ -19,23 +23,53 @@ class BottomNavPage extends StatefulWidget {
 class _BottomNavPageState extends State<BottomNavPage> {
   int _currentIndex = 0;
 
+  late final bool isAdmin;
   late final List<Widget> _screens;
+  late final List<BottomNavigationBarItem> _items;
 
   @override
   void initState() {
     super.initState();
 
+    /// 🔥 ADMIN CHECK
+    isAdmin = widget.userEmail == "allinonecallme@gmail.com";
+
+    /// ✅ SCREENS
     _screens = [
       const HomePage(),
-
-      /// 🏢 BUSINESS
-      const BusinessPage(),
-
-      /// 📦 MY ORDERS (DYNAMIC)
+      BusinessPage(),
       MyOrdersPage(phone: widget.userPhone),
+      ProfilePage(phone: widget.userPhone),
 
-      /// 👤 PROFILE
-      ProfilePage(phone: widget.userPhone), // optional if you want dynamic profile
+      /// 👑 ADMIN EXTRA SCREEN
+      if (isAdmin) AdminDashboard(),
+    ];
+
+    /// ✅ NAV ITEMS
+    _items = [
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.home),
+        label: "Home",
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.business),
+        label: "Business",
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.shopping_bag),
+        label: "Orders",
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.person),
+        label: "Profile",
+      ),
+
+      /// 👑 ADMIN TAB
+      if (isAdmin)
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.admin_panel_settings),
+          label: "Admin",
+        ),
     ];
   }
 
@@ -53,24 +87,7 @@ class _BottomNavPageState extends State<BottomNavPage> {
         onTap: (index) => setState(() => _currentIndex = index),
         selectedItemColor: Colors.deepPurple,
         unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_filled),
-            label: "Home",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.business_center),
-            label: "My Business",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_bag),
-            label: "My Orders",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: "Profile",
-          ),
-        ],
+        items: _items,
       ),
     );
   }

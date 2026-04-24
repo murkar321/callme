@@ -1,17 +1,18 @@
+import 'package:callme/provider/provider_dashboard.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:callme/models/service_category.dart';
 import 'package:callme/widgets/category_card.dart';
 import 'package:callme/provider/service_provider_form.dart';
 
-class BusinessPage extends StatefulWidget {
-  const BusinessPage({super.key});
+class BusinessPage extends StatelessWidget {
+  BusinessPage({super.key});
 
-  @override
-  State<BusinessPage> createState() => _BusinessPageState();
-}
+  final user = FirebaseAuth.instance.currentUser;
 
-class _BusinessPageState extends State<BusinessPage> {
-
+  /// 🔹 SERVICE LIST
   final List<ServiceCategory> businessCategories = [
     ServiceCategory(name: 'Salon', icon: Icons.content_cut),
     ServiceCategory(name: 'Educational Services', icon: Icons.school),
@@ -24,11 +25,11 @@ class _BusinessPageState extends State<BusinessPage> {
     ServiceCategory(name: 'Civil', icon: Icons.construction),
   ];
 
-  /// ✅ FIX: Proper type mapping
+  /// 🔹 SERVICE TYPE MAP
   String _getServiceType(String name) {
     switch (name) {
       case "Educational Services":
-        return "education"; // 🔥 FIXED
+        return "education";
       case "Salon":
         return "salon";
       case "Cleaning":
@@ -50,18 +51,91 @@ class _BusinessPageState extends State<BusinessPage> {
     }
   }
 
-  /// 🔹 Show Provider Type Selector
-  void _showProviderTypeSelector(ServiceCategory service) {
+  /// ================= MAIN LOGIC =================
+  void _handleTap(
+      BuildContext context,
+      ServiceCategory service,
+      Map<String, dynamic>? provider,
+      ) {
+
+    final serviceType = _getServiceType(service.name);
+
+    /// ❌ NOT REGISTERED
+    if (provider == null) {
+      _showProviderTypeSelector(context, service);
+      return;
+    }
+
+    final status = provider['status'] ?? "pending";
+
+    /// ⏳ PENDING
+    if (status == "pending") {
+      _showMessage(context, "⏳ Your application is under review");
+      return;
+    }
+
+    /// ❌ REJECTED
+    if (status == "rejected") {
+      _showRejectedDialog(context, service);
+      return;
+    }
+
+    /// ✅ APPROVED → NAVIGATE
+    if (status == "approved") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BusinessDashboardPage(
+            businessName:
+            provider['business']?['businessName'] ?? "My Business",
+            categoryRoute: serviceType,
+            providerId: provider['providerId'],
+          ),
+        ),
+      );
+    }
+  }
+
+  /// ================= HELPERS =================
+
+  void _showMessage(BuildContext context, String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _showRejectedDialog(BuildContext context, ServiceCategory service) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Application Rejected"),
+        content: const Text("You can apply again."),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _showProviderTypeSelector(context, service);
+            },
+            child: const Text("Reapply"),
+          )
+        ],
+      ),
+    );
+  }
+
+  /// 🔹 PROVIDER TYPE SELECTOR
+  void _showProviderTypeSelector(
+      BuildContext context,
+      ServiceCategory service,
+      ) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (context) {
+      builder: (_) {
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          padding: const EdgeInsets.all(18),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -77,25 +151,18 @@ class _BusinessPageState extends State<BusinessPage> {
               ),
 
               Text(
-                "Register as ${service.name} Provider",
+                "Register as ${service.name}",
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
 
-              const SizedBox(height: 8),
-
-              Text(
-                "Choose how you want to provide services",
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-
               const SizedBox(height: 20),
 
-              _buildTypeTile(service, "Individual", Icons.person),
-              _buildTypeTile(service, "Agency", Icons.groups),
-              _buildTypeTile(service, "Business", Icons.business),
+              _typeTile(context, service, "Individual", Icons.person),
+              _typeTile(context, service, "Agency", Icons.groups),
+              _typeTile(context, service, "Business", Icons.business),
 
               const SizedBox(height: 10),
             ],
@@ -105,57 +172,40 @@ class _BusinessPageState extends State<BusinessPage> {
     );
   }
 
-  /// 🔹 Provider Type Tile
-  Widget _buildTypeTile(
-    ServiceCategory service,
-    String providerType,
-    IconData icon,
-  ) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: Colors.grey.shade200),
+  Widget _typeTile(
+      BuildContext context,
+      ServiceCategory service,
+      String type,
+      IconData icon,
+      ) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: Colors.blue.withOpacity(0.1),
+        child: Icon(icon, color: Colors.blue),
       ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.blue.withOpacity(0.1),
-          child: Icon(icon, color: Colors.blue),
-        ),
-        title: Text(providerType),
-        subtitle: Text(
-          providerType == "Individual"
-              ? "Single person providing service"
-              : providerType == "Agency"
-                  ? "Multiple workers under you"
-                  : "Registered company/business",
-        ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {
-          Navigator.pop(context);
+      title: Text(type),
+      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+      onTap: () {
+        Navigator.pop(context);
 
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ServiceProviderForm(
-                type: _getServiceType(service.name), // ✅ FIX USED HERE
-                providerType: providerType,
-              ),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ServiceProviderForm(
+              type: _getServiceType(service.name),
+              providerType: type,
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
-  /// 🔹 Handle Category Tap
-  void _handleCategoryTap(ServiceCategory service) {
-    _showProviderTypeSelector(service);
-  }
-
+  /// ================= UI =================
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
 
@@ -163,23 +213,24 @@ class _BusinessPageState extends State<BusinessPage> {
         elevation: 0,
         backgroundColor: Colors.white,
         title: const Text(
-          'Become a Service Provider',
+          "Become a Provider",
           style: TextStyle(color: Colors.black),
         ),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
       ),
 
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
+          /// 🔥 HEADER (REALISTIC)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
             margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.blue,
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade500, Colors.purple.shade400],
+              ),
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Column(
@@ -195,47 +246,73 @@ class _BusinessPageState extends State<BusinessPage> {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  "Join our platform, get customers, and grow your income.",
+                  "Register your service, get customers & grow your income.",
                   style: TextStyle(color: Colors.white70),
                 ),
               ],
             ),
           ),
 
+          /// 🔹 TITLE
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              "Select Service Category",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Select Service Category",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
 
           const SizedBox(height: 10),
 
+          /// 🔥 GRID
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.all(12),
               itemCount: businessCategories.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: size.width < 600 ? 2 : 3, // adaptive
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
                 childAspectRatio: 1,
               ),
-              itemBuilder: (context, index) {
-                final category = businessCategories[index];
+              itemBuilder: (_, i) {
+                final category = businessCategories[i];
+                final serviceType = _getServiceType(category.name);
 
-                return GestureDetector(
-                  onTap: () => _handleCategoryTap(category),
-                  child: CategoryCard(
-                    name: category.name,
-                    icon: category.icon,
-                    showName: true,
-                    imagePath: '',
-                  ),
+                return StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection("providers")
+                      .where("userId", isEqualTo: user!.uid)
+                      .where("serviceType", isEqualTo: serviceType)
+                      .limit(1)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+
+                    Map<String, dynamic>? provider;
+
+                    if (snapshot.hasData &&
+                        snapshot.data!.docs.isNotEmpty) {
+                      provider = snapshot.data!.docs.first.data()
+                      as Map<String, dynamic>;
+                    }
+
+                    return GestureDetector(
+                      onTap: () =>
+                          _handleTap(context, category, provider),
+                      child: CategoryCard(
+                        name: category.name,
+                        icon: category.icon,
+                        showName: true,
+                        imagePath: '',
+                      ),
+                    );
+                  },
                 );
               },
             ),

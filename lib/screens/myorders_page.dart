@@ -1,25 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class MyOrdersPage extends StatelessWidget {
-  final String phone;
+  const MyOrdersPage({super.key, required String phone});
 
-  const MyOrdersPage({
-    super.key,
-    required this.phone,
-  });
-
-  /// 🔥 FIXED QUERY (USES FLAT FIELD)
+  /// 🔥 BEST PRACTICE QUERY (FAST + RELIABLE)
   Stream<QuerySnapshot> getMyOrders() {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
     return FirebaseFirestore.instance
         .collection('orders')
-        .where('userPhone', isEqualTo: phone)
+        .where('userId', isEqualTo: uid) // ✅ FIXED
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
+  /// 🎨 STATUS COLOR
   Color getStatusColor(String status) {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "accepted":
         return Colors.green;
       case "rejected":
@@ -34,115 +33,150 @@ class MyOrdersPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
+
       appBar: AppBar(
         title: const Text("My Orders"),
         centerTitle: true,
       ),
+
       body: StreamBuilder<QuerySnapshot>(
         stream: getMyOrders(),
         builder: (context, snapshot) {
 
+          /// ❌ ERROR
           if (snapshot.hasError) {
+            print("🔥 Firestore Error: ${snapshot.error}");
             return const Center(
-              child: Text("Query Error - check Firestore index"),
+              child: Text("Something went wrong"),
             );
           }
 
+          /// ⏳ LOADING
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
           }
 
-          final docs = snapshot.data!.docs;
+          final orders = snapshot.data!.docs;
 
-          if (docs.isEmpty) {
-            return const Center(child: Text("No orders found"));
+          /// 📭 EMPTY STATE
+          if (orders.isEmpty) {
+            return const Center(
+              child: Text(
+                "No orders yet",
+                style: TextStyle(fontSize: 16),
+              ),
+            );
           }
 
           return ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: docs.length,
-            itemBuilder: (context, i) {
-              final data = docs[i].data() as Map<String, dynamic>;
+            itemCount: orders.length,
+            itemBuilder: (context, index) {
 
-              final user = data['user'] ?? {};
-              final schedule = data['schedule'] ?? {};
-              final payment = data['payment'] ?? {};
-              final location = data['location'] ?? {};
+              final data =
+                  orders[index].data() as Map<String, dynamic>;
 
-              final status = data['status'] ?? "pending";
+              /// 🔐 SAFE MAPS
+              final schedule =
+                  (data['schedule'] ?? {}) as Map<String, dynamic>;
+              final payment =
+                  (data['payment'] ?? {}) as Map<String, dynamic>;
+              final location =
+                  (data['location'] ?? {}) as Map<String, dynamic>;
 
-              return Card(
+              final status =
+                  (data['status'] ?? "pending").toString();
+
+              /// 📅 FORMAT DATE
+              String date = "";
+              if (schedule['date'] is Timestamp) {
+                date = (schedule['date'] as Timestamp)
+                    .toDate()
+                    .toString()
+                    .split(" ")[0];
+              }
+
+              return Container(
                 margin: const EdgeInsets.only(bottom: 12),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.shade200,
+                      blurRadius: 6,
+                    )
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
 
-                      Text(
-                        data['serviceType'] ?? "",
+                    /// 🛠 SERVICE TYPE
+                    Text(
+                      data['serviceType'] ?? "",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    /// 📋 SERVICES
+                    Text(
+                      (data['services'] as List?)
+                              ?.join(", ") ??
+                          "",
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    /// 📍 ADDRESS
+                    Text("📍 ${location['address'] ?? ""}"),
+
+                    const SizedBox(height: 6),
+
+                    /// 📅 DATE & TIME
+                    Text("📅 $date"),
+                    Text("⏰ ${schedule['time'] ?? ""}"),
+
+                    const SizedBox(height: 6),
+
+                    /// 💰 PRICE
+                    Text(
+                      "₹${payment['totalAmount'] ?? 0}",
+                      style: const TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    /// 📌 STATUS CHIP
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: getStatusColor(status),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        status.toUpperCase(),
                         style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-
-                      const SizedBox(height: 6),
-
-                      Text(
-                        (data['services'] as List?)?.join(", ") ?? "",
-                      ),
-
-                      const SizedBox(height: 6),
-
-                      Text("👤 ${user['name'] ?? ''}"),
-                      Text("📞 ${user['phone'] ?? ''}"),
-
-                      const SizedBox(height: 6),
-
-                      Text("📍 ${location['address'] ?? ''}"),
-
-                      const SizedBox(height: 6),
-
-                      Text(
-                        "Date: ${schedule['date'] != null
-                            ? (schedule['date'] as Timestamp)
-                                .toDate()
-                                .toString()
-                                .split(" ")[0]
-                            : ''}",
-                      ),
-
-                      Text("Time: ${schedule['time'] ?? ''}"),
-
-                      const SizedBox(height: 6),
-
-                      Text(
-                        "₹${payment['totalAmount'] ?? 0}",
-                        style: const TextStyle(
-                          color: Colors.green,
+                          color: Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
-                      const SizedBox(height: 10),
-
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: getStatusColor(status),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          status.toUpperCase(),
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               );
             },
