@@ -19,7 +19,8 @@ class ServiceProviderForm extends StatefulWidget {
   });
 
   @override
-  State<ServiceProviderForm> createState() => _ServiceProviderFormState();
+  State<ServiceProviderForm> createState() =>
+      _ServiceProviderFormState();
 }
 
 class _ServiceProviderFormState extends State<ServiceProviderForm> {
@@ -48,22 +49,32 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
   /// ================= FILE UPLOAD =================
   Future<void> _uploadDocument(String docName) async {
-    final result = await FilePicker.platform.pickFiles();
-    if (result == null) return;
+    try {
+      final result = await FilePicker.platform.pickFiles();
+      if (result == null) return;
 
-    final file = File(result.files.single.path!);
-    final userId = FirebaseAuth.instance.currentUser!.uid;
+      final file = File(result.files.single.path!);
+      final userId = FirebaseAuth.instance.currentUser!.uid;
 
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child("provider_docs/$userId/$docName");
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child("provider_docs/$userId/$docName");
 
-    await ref.putFile(file);
-    final url = await ref.getDownloadURL();
+      await ref.putFile(file);
+      final url = await ref.getDownloadURL();
 
-    setState(() {
-      uploadedDocs[docName] = url;
-    });
+      setState(() {
+        uploadedDocs[docName] = url;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("$docName uploaded")),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Upload failed")),
+      );
+    }
   }
 
   /// ================= SUBMIT =================
@@ -77,16 +88,14 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         throw "User not logged in";
       }
 
-      /// 🔥 VALIDATIONS
       if (businessController.text.trim().isEmpty) {
-        throw "Enter business name";
+        throw "Business name required";
       }
 
       if (selectedCategories.isEmpty) {
         throw "Select at least one category";
       }
 
-      /// 🔥 CREATE DOC
       final providerRef =
           FirebaseFirestore.instance.collection("providers").doc();
 
@@ -94,12 +103,12 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
       final ownerName = ownerController.text.trim();
       final phone = phoneController.text.trim();
 
-      final data = {
+      await providerRef.set({
         /// 🔑 IDS
         "providerId": providerRef.id,
         "userId": user.uid,
 
-        /// 🔥 IMPORTANT (USED IN DASHBOARD)
+        /// 🔥 BASIC INFO
         "providerName": businessName,
         "ownerName": ownerName,
         "phone": phone,
@@ -109,7 +118,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         "providerType": widget.providerType,
         "categories": selectedCategories,
 
-        /// 🏢 BUSINESS
+        /// 🏢 BUSINESS INFO
         "business": {
           "businessName": businessName,
           "ownerName": ownerName,
@@ -135,18 +144,18 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
           "upi": upiController.text.trim(),
         },
 
-        /// 📂 DOCS
+        /// 📂 DOCUMENTS
         "documents": uploadedDocs,
 
-        /// 🔥 ADMIN CONTROL
-        "status": "pending", // pending / approved / rejected
+        /// 🔥 STATUS
+        "status": "pending",
         "isActive": false,
 
         /// ⏱ META
         "createdAt": FieldValue.serverTimestamp(),
-      };
+      });
 
-      await providerRef.set(data);
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
@@ -159,8 +168,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
     } finally {
       setState(() => isLoading = false);
     }
@@ -184,23 +194,14 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
       appBar: AppBar(
         title: Text("${widget.type} Registration"),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.blue, Colors.purple],
-            ),
-          ),
-        ),
       ),
 
       body: Stack(
         children: [
-          /// CONTENT
           SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
             child: Column(
               children: [
-
                 /// STEP INDICATOR
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -208,11 +209,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
                     return CircleAvatar(
                       radius: 14,
                       backgroundColor:
-                          i <= currentStep ? Colors.blue : Colors.grey.shade300,
-                      child: Text(
-                        "${i + 1}",
-                        style: const TextStyle(color: Colors.white),
-                      ),
+                          i <= currentStep ? Colors.blue : Colors.grey,
+                      child: Text("${i + 1}",
+                          style: const TextStyle(color: Colors.white)),
                     );
                   }),
                 ),
@@ -220,7 +219,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
                 const SizedBox(height: 20),
 
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 400),
+                  duration: const Duration(milliseconds: 300),
                   child: _buildStep(config),
                 ),
               ],
@@ -244,7 +243,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
           if (isLoading)
             Container(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black54,
               child: const Center(child: CircularProgressIndicator()),
             ),
         ],
@@ -252,13 +251,13 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     );
   }
 
-  /// ================= STEP BUILDER =================
+  /// ================= STEPS =================
   Widget _buildStep(config) {
     switch (currentStep) {
 
       case 0:
         return _card(
-          "Select Categories",
+          "Categories",
           Icons.category,
           Column(
             children: config.serviceCategories.map<Widget>((cat) {
@@ -279,7 +278,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
       case 1:
         return _card(
-          "Business Details",
+          "Business Info",
           Icons.business,
           Column(
             children: [
@@ -317,14 +316,14 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
               _field(bankHolderController, "Holder Name"),
               _field(accountController, "Account Number"),
               _field(ifscController, "IFSC"),
-              _field(upiController, "UPI ID"),
+              _field(upiController, "UPI"),
             ],
           ),
         );
 
       case 4:
         return _card(
-          "Upload Documents",
+          "Documents",
           Icons.upload_file,
           Column(
             children: config.requiredDocuments.map<Widget>((doc) {
@@ -346,8 +345,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     }
   }
 
-  /// ================= UI HELPERS =================
-
+  /// ================= HELPERS =================
   Widget _card(String title, IconData icon, Widget child) {
     return Container(
       key: ValueKey(title),
@@ -362,11 +360,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
             children: [
               Icon(icon),
               const SizedBox(width: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 15),

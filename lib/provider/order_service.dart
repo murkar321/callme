@@ -3,96 +3,106 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class OrderService {
   static final _db = FirebaseFirestore.instance;
 
-  /// 🔥 COMMON ORDER SAVE (USED BY ALL BOOKING PAGES)
-  static Future<void> placeOrder({
+  static Future<DocumentReference> placeOrder({
     required String serviceType,
     required List<String> services,
 
+    /// 👤 CUSTOMER
+    required String userId,
     required String userName,
     required String phone,
     String? email,
 
+    /// 🔥 WHO CREATED
+    required String createdBy,
+    required String createdByRole,
+
+    /// 📍 LOCATION
     required String address,
     String? note,
 
+    /// 📅 SCHEDULE
     required DateTime date,
     required String time,
 
+    /// 💰 PAYMENT
     required double totalAmount,
 
     /// OPTIONAL
     int? adults,
     int? children,
     String? visitType,
-    String? providerId,
 
+    /// 🔧 PROVIDER (OPTIONAL)
+    String? providerId,
+    String? providerName,
+
+    /// ENQUIRY
+    bool isEnquiry = false,
   }) async {
+
     final docRef = _db.collection("orders").doc();
 
     await docRef.set({
-      "orderId": docRef.id, // 🔥 IMPORTANT FOR TRACKING
 
-      /// ================= CORE INFO =================
+      /// 🔑 IDS
+      "orderId": docRef.id,
+      "userId": userId,
+
+      /// 🔥 FIXED PROVIDER LOGIC (NO NULL EVER)
+      "providerId": providerId ?? "",
+      "providerName": providerName ?? "",
+
+      /// 🔥 CREATOR INFO
+      "createdBy": createdBy,
+      "createdByRole": createdByRole,
+
+      /// 🧾 SERVICE
       "serviceType": serviceType,
       "services": services,
 
-      /// ================= USER INFO =================
+      /// 👤 USER SNAPSHOT
       "user": {
         "name": userName,
         "phone": phone,
         "email": email ?? "",
       },
 
-      /// ================= BOOKING INFO =================
+      /// 📅 SCHEDULE
       "schedule": {
         "date": Timestamp.fromDate(date),
         "time": time,
       },
 
+      /// 📍 LOCATION
       "location": {
         "address": address.isEmpty ? "Not Provided" : address,
+        "note": note ?? "",
       },
 
-      /// ================= SERVICE SPECIFIC =================
+      /// 🧠 META
       "meta": {
         "adults": adults ?? 0,
         "children": children ?? 0,
-        "visitType": visitType ?? "standard",
-        "providerId": providerId ?? "",
+        "visitType": visitType ?? "",
+        "isEnquiry": isEnquiry,
       },
 
-      /// ================= PAYMENT =================
+      /// 💳 PAYMENT
       "payment": {
         "totalAmount": totalAmount,
-        "currency": "INR",
-        "paid": false,
+        "paid": isEnquiry ? false : true,
+        "method": isEnquiry ? "enquiry" : "upi",
       },
 
-      /// ================= STATUS =================
-      "status": "pending", // pending → accepted → completed → rejected
+      /// 📦 STATUS
+      "status": isEnquiry ? "enquiry" : "pending",
 
-      /// ================= TIMESTAMP =================
+      /// ⏱ TIME
       "createdAt": FieldValue.serverTimestamp(),
       "updatedAt": FieldValue.serverTimestamp(),
     });
-  }
 
-  /// 🔥 UPDATE STATUS (FOR PROVIDER / ADMIN LATER)
-  static Future<void> updateStatus(
-      String orderId,
-      String status,
-      ) async {
-    await _db.collection("orders").doc(orderId).update({
-      "status": status,
-      "updatedAt": FieldValue.serverTimestamp(),
-    });
-  }
-
-  /// 🔥 MARK PAYMENT (FUTURE)
-  static Future<void> markPaid(String orderId) async {
-    await _db.collection("orders").doc(orderId).update({
-      "payment.paid": true,
-      "updatedAt": FieldValue.serverTimestamp(),
-    });
+    return docRef;
   }
 }

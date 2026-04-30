@@ -1,8 +1,8 @@
 
 import 'package:flutter/material.dart';
-import 'package:callme/models/service_product.dart';
+import 'package:callme/data/service_product.dart';
 import 'package:callme/models/cart.dart';
-import 'package:callme/screens/booking_page.dart';
+import 'package:callme/bookings/booking_page.dart';
 
 class LaundryDetailPage extends StatelessWidget {
   final ServiceProduct product;

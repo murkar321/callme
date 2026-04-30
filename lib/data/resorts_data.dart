@@ -20,6 +20,10 @@ class Resort {
     required this.facilities,
     required this.description,
   });
+
+  String? get location => null;
+
+  String? get providerId => null;
 }
 
 List<String> cities = [

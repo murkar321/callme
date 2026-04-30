@@ -1,10 +1,11 @@
-import 'package:callme/Admin/admin_dashboard.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'home_page.dart';
 import 'myorders_page.dart';
 import 'profile_page.dart';
 import 'package:callme/provider/business_page.dart';
-
+import 'package:callme/Admin/admin_dashboard.dart';
 
 class BottomNavPage extends StatefulWidget {
   final String userPhone;
@@ -23,29 +24,46 @@ class BottomNavPage extends StatefulWidget {
 class _BottomNavPageState extends State<BottomNavPage> {
   int _currentIndex = 0;
 
-  late final bool isAdmin;
-  late final List<Widget> _screens;
-  late final List<BottomNavigationBarItem> _items;
+  bool isAdmin = false;
+  bool isGuest = false;
+
+  late List<Widget> _screens;
+  late List<BottomNavigationBarItem> _items;
 
   @override
   void initState() {
     super.initState();
+    _initUserRole();
+  }
 
-    /// 🔥 ADMIN CHECK
-    isAdmin = widget.userEmail == "allinonecallme@gmail.com";
+  /// 🔥 INIT ROLE (REALTIME SAFE)
+  void _initUserRole() {
+    final user = FirebaseAuth.instance.currentUser;
 
-    /// ✅ SCREENS
+    isGuest = user == null;
+
+    /// ✅ ADMIN CHECK (SAFE)
+    isAdmin = (user?.email ?? "")
+            .toLowerCase()
+            .trim() ==
+        "allinonecallme@gmail.com";
+
+    debugPrint("User Email: ${user?.email}");
+    debugPrint("Is Admin: $isAdmin");
+
+    _buildNav();
+  }
+
+  /// 🔥 BUILD NAV (NO CONST LIST)
+  void _buildNav() {
+
     _screens = [
       const HomePage(),
       BusinessPage(),
       MyOrdersPage(phone: widget.userPhone),
       ProfilePage(phone: widget.userPhone),
-
-      /// 👑 ADMIN EXTRA SCREEN
-      if (isAdmin) AdminDashboard(),
     ];
 
-    /// ✅ NAV ITEMS
     _items = [
       const BottomNavigationBarItem(
         icon: Icon(Icons.home),
@@ -63,18 +81,32 @@ class _BottomNavPageState extends State<BottomNavPage> {
         icon: Icon(Icons.person),
         label: "Profile",
       ),
+    ];
 
-      /// 👑 ADMIN TAB
-      if (isAdmin)
+    /// 👑 ADMIN ACCESS
+    if (isAdmin) {
+      _screens.add(AdminDashboard());
+      _items.add(
         const BottomNavigationBarItem(
           icon: Icon(Icons.admin_panel_settings),
           label: "Admin",
         ),
-    ];
+      );
+    }
+
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
+
+    /// ⏳ LOADING SAFE
+    if (_screens.isEmpty) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -84,9 +116,14 @@ class _BottomNavPageState extends State<BottomNavPage> {
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+
+        onTap: (index) {
+          setState(() => _currentIndex = index);
+        },
+
         selectedItemColor: Colors.deepPurple,
         unselectedItemColor: Colors.grey,
+
         items: _items,
       ),
     );

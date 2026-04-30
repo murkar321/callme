@@ -4,18 +4,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class ApproveProvidersPage extends StatelessWidget {
   ApproveProvidersPage({super.key});
 
-  final providersRef =
+  final CollectionReference providersRef =
       FirebaseFirestore.instance.collection("providers");
 
-  /// 🔥 SAFE QUERY (avoid index error)
-  Stream<QuerySnapshot> getPendingProviders() {
+  /// ================= STREAM =================
+
+  Stream<QuerySnapshot> pendingProvidersStream() {
     return providersRef
         .where("status", isEqualTo: "pending")
-        .snapshots(); // ❗ removed orderBy (can break if index missing)
+        .snapshots();
   }
 
-  /// ✅ APPROVE PROVIDER
-  Future<void> approve(String id, BuildContext context) async {
+  /// ================= ACTIONS =================
+
+  Future<void> approveProvider(String id, BuildContext context) async {
     try {
       await providersRef.doc(id).update({
         "status": "approved",
@@ -24,7 +26,7 @@ class ApproveProvidersPage extends StatelessWidget {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Provider Approved")),
+        const SnackBar(content: Text("Provider approved")),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -33,8 +35,7 @@ class ApproveProvidersPage extends StatelessWidget {
     }
   }
 
-  /// ❌ REJECT PROVIDER
-  Future<void> reject(String id, BuildContext context) async {
+  Future<void> rejectProvider(String id, BuildContext context) async {
     String reason = "";
 
     await showDialog(
@@ -54,18 +55,25 @@ class ApproveProvidersPage extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              await providersRef.doc(id).update({
-                "status": "rejected",
-                "isActive": false,
-                "rejectReason": reason,
-                "updatedAt": FieldValue.serverTimestamp(),
-              });
+              try {
+                await providersRef.doc(id).update({
+                  "status": "rejected",
+                  "isActive": false,
+                  "rejectReason": reason,
+                  "updatedAt": FieldValue.serverTimestamp(),
+                });
 
-              Navigator.pop(ctx);
+                Navigator.pop(ctx);
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("❌ Provider Rejected")),
-              );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Provider rejected")),
+                );
+              } catch (e) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Error: $e")),
+                );
+              }
             },
             child: const Text("Reject"),
           ),
@@ -82,19 +90,25 @@ class ApproveProvidersPage extends StatelessWidget {
       backgroundColor: const Color(0xFFF5F7FB),
 
       appBar: AppBar(
-        title: const Text("Approve Providers"),
+        title: const Text("Provider Approvals"),
         centerTitle: true,
       ),
 
       body: StreamBuilder<QuerySnapshot>(
-        stream: getPendingProviders(),
-        builder: (context, snapshot) {
+        stream: pendingProvidersStream(),
 
-          if (!snapshot.hasData) {
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text("Error: ${snapshot.error}"),
+            );
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final docs = snapshot.data!.docs;
+          final docs = snapshot.data?.docs ?? [];
 
           if (docs.isEmpty) {
             return const Center(
@@ -105,63 +119,67 @@ class ApproveProvidersPage extends StatelessWidget {
           return ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: docs.length,
-            itemBuilder: (context, i) {
 
-              final doc = docs[i];
+            itemBuilder: (context, index) {
+              final doc = docs[index];
               final data = doc.data() as Map<String, dynamic>;
 
               final business =
-                  (data['business'] ?? {}) as Map<String, dynamic>;
+                  (data['business'] as Map<String, dynamic>?) ?? {};
 
-              final serviceType = data['serviceType'] ?? "";
-              final providerType = data['providerType'] ?? "";
-              final createdAt = data['createdAt'];
+              final serviceType = data['serviceType'] ?? "Not specified";
+              final providerType = data['providerType'] ?? "Not specified";
+
+              final createdAt = data['createdAt'] as Timestamp?;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(14),
+
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.shade300,
+                      color: Colors.grey.shade200,
                       blurRadius: 6,
-                      offset: const Offset(0, 4),
+                      offset: const Offset(0, 3),
                     )
                   ],
                 ),
+
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
 
-                    /// 🏢 BUSINESS NAME + DATE
+                    /// ================= HEADER =================
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+
                         Expanded(
                           child: Row(
                             children: [
                               const Icon(Icons.business, color: Colors.blue),
+
                               const SizedBox(width: 8),
+
                               Expanded(
                                 child: Text(
                                   business['businessName'] ?? "No Name",
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
                                     fontSize: 16,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
                             ],
                           ),
                         ),
+
                         if (createdAt != null)
                           Text(
-                            (createdAt as Timestamp)
-                                .toDate()
-                                .toString()
-                                .split(" ")[0],
+                            createdAt.toDate().toString().split(" ")[0],
                             style: TextStyle(
                               color: Colors.grey.shade600,
                               fontSize: 12,
@@ -170,50 +188,43 @@ class ApproveProvidersPage extends StatelessWidget {
                       ],
                     ),
 
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
 
-                    /// 👤 OWNER
+                    /// ================= DETAILS =================
                     Text("👤 Owner: ${business['ownerName'] ?? ""}"),
-
-                    /// 📞 PHONE
                     Text("📞 ${business['phone'] ?? ""}"),
 
-                    /// 📧 EMAIL
                     if (business['email'] != null)
                       Text("📧 ${business['email']}"),
 
-                    /// 📍 ADDRESS
                     if (business['address'] != null)
                       Text("📍 ${business['address']}"),
 
                     const SizedBox(height: 6),
 
-                    /// 🛠 SERVICE
                     Text("🛠 Service: $serviceType"),
-
-                    /// 🏷 TYPE
                     Text("🏷 Type: $providerType"),
 
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
 
-                    /// 🔥 ACTIONS
+                    /// ================= ACTIONS =================
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
 
-                        /// ❌ REJECT
                         IconButton(
                           icon: const Icon(Icons.close, color: Colors.red),
-                          onPressed: () => reject(doc.id, context),
+                          onPressed: () =>
+                              rejectProvider(doc.id, context),
                         ),
 
-                        /// ✅ APPROVE
                         IconButton(
                           icon: const Icon(Icons.check, color: Colors.green),
-                          onPressed: () => approve(doc.id, context),
+                          onPressed: () =>
+                              approveProvider(doc.id, context),
                         ),
                       ],
-                    )
+                    ),
                   ],
                 ),
               );

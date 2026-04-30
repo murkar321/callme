@@ -1,4 +1,4 @@
-import '../models/service_product.dart';
+import '../data/service_product.dart';
 
 final Map<String, List<ServiceProduct>> waterServices = {
   /// 🔷 COMMERCIAL WATER SERVICES

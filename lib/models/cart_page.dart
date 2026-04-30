@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import '../models/cart.dart';
-import '../screens/booking_page.dart';
-import '../screens/salon_booking_page.dart';
-import '../models/enquiry_page.dart';
-import '../data/salon_data.dart';
+import '../bookings/booking_page.dart';
+import '../bookings/salon_booking_page.dart';
+import '../bookings/enquiry_page.dart';
 
 class CartPage extends StatefulWidget {
   final String service;
 
   const CartPage({
     super.key,
-    required this.service, required String serviceName, required List<dynamic> cart,
+    required this.service,
+    required String serviceName,
+    required List<dynamic> cart,
   });
 
   @override
@@ -22,24 +23,22 @@ class _CartPageState extends State<CartPage> {
 
   @override
   Widget build(BuildContext context) {
-    List<CartItem> items = Cart.getItems(widget.service);
+    final items = Cart.getItems(widget.service);
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
 
-      /// 🔝 APP BAR
       appBar: AppBar(
         title: Text("${widget.service} Cart"),
         centerTitle: true,
       ),
 
-      /// 📦 BODY
       body: items.isEmpty
           ? const Center(child: Text("Cart is empty"))
           : ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: items.length,
-              itemBuilder: (context, index) {
+              itemBuilder: (_, index) {
                 final item = items[index];
 
                 return Container(
@@ -54,7 +53,6 @@ class _CartPageState extends State<CartPage> {
                   ),
                   child: Row(
                     children: [
-                      /// 🖼 IMAGE
                       if (item.image != null)
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
@@ -68,47 +66,33 @@ class _CartPageState extends State<CartPage> {
 
                       const SizedBox(width: 12),
 
-                      /// 📄 DETAILS
                       Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              item.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold),
-                            ),
+                            Text(item.name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)),
                             const SizedBox(height: 6),
                             Text("₹${item.price}"),
-                            const SizedBox(height: 10),
 
-                            /// ➕➖ QUANTITY
                             Row(
                               children: [
                                 IconButton(
-                                  icon: const Icon(
-                                      Icons.remove_circle_outline),
+                                  icon: const Icon(Icons.remove_circle_outline),
                                   onPressed: () {
-                                    setState(() {
-                                      Cart.removeById(
-                                        item.id,
-                                        widget.service,
-                                      );
-                                    });
+                                    Cart.removeById(
+                                        item.id, widget.service);
+                                    refresh();
                                   },
                                 ),
                                 Text("${item.quantity}"),
                                 IconButton(
-                                  icon: const Icon(
-                                      Icons.add_circle_outline),
+                                  icon: const Icon(Icons.add_circle_outline),
                                   onPressed: () {
-                                    setState(() {
-                                      Cart.add(
-                                        item,
-                                        service: widget.service,
-                                      );
-                                    });
+                                    Cart.add(item,
+                                        service: widget.service);
+                                    refresh();
                                   },
                                 ),
                               ],
@@ -117,13 +101,11 @@ class _CartPageState extends State<CartPage> {
                         ),
                       ),
 
-                      /// 🗑 DELETE
                       IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () {
-                          setState(() {
-                            Cart.delete(item.id, widget.service);
-                          });
+                          Cart.delete(item.id, widget.service);
+                          refresh();
                         },
                       )
                     ],
@@ -132,70 +114,17 @@ class _CartPageState extends State<CartPage> {
               },
             ),
 
-      /// 🔻 BOTTOM BUTTON
+      /// 🔻 BUTTON
       bottomNavigationBar: items.isEmpty
           ? null
           : Container(
               padding: const EdgeInsets.all(12),
               color: Colors.white,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFAE91BA),
-                  padding: const EdgeInsets.all(14),
-                ),
                 onPressed: () {
 
-                  /// ================= SALON =================
-                  if (widget.service == "Salon") {
-                    List<SalonService> selectedServices = [];
-                    Map<String, String> visitTypeMap = {};
-
-                    for (var item in items) {
-                      try {
-                        final realId =
-                            item.id.toString().split("_")[0];
-
-                        final service =
-                            salonServices.firstWhere(
-                          (s) =>
-                              s.id.toString().trim() ==
-                              realId.trim(),
-                        );
-
-                        selectedServices.add(service);
-
-                        visitTypeMap[realId] =
-                            (item.visitType ?? "Salon");
-                      } catch (e) {
-                        debugPrint(
-                            "Salon match failed: ${item.id}");
-                      }
-                    }
-
-                    if (selectedServices.isEmpty) {
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              "No valid salon services found"),
-                        ),
-                      );
-                      return;
-                    }
-
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SalonBookingPage(
-                          services: selectedServices,
-                          visitTypeMap: visitTypeMap,
-                        ),
-                      ),
-                    );
-                  }
-
-                  /// ================= EDUCATION (ENQUIRY) =================
-                  else if (widget.service == "Education") {
+                  /// 🎓 EDUCATION
+                  if (widget.service == "Education") {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -207,14 +136,26 @@ class _CartPageState extends State<CartPage> {
                     );
                   }
 
-                  /// ================= DEFAULT FLOW =================
+                  /// 💇 SALON
+                  else if (widget.service == "Salon") {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const SalonBookingPage(services: [], visitTypeMap: {}),
+                      ),
+                    );
+                  }
+
+                  /// 🌍 DEFAULT (Cleaning, Water, Plumbing etc.)
                   else {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => BookingPage(
                           serviceName: widget.service,
-                          cart: items, products: [], // ✅ FIXED
+                          cart: items,
+                          products: [],
                         ),
                       ),
                     );

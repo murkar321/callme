@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:callme/models/luandary_detail_page.dart';
-import 'package:callme/models/service_product.dart';
+import 'package:callme/data/service_product.dart';
 
 class LaundryServiceCard extends StatelessWidget {
   final ServiceProduct service;

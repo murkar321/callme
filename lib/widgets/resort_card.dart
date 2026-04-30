@@ -1,8 +1,8 @@
+import 'package:callme/bookings/resort_booking.dart';
 import 'package:flutter/material.dart';
 import '../data/resorts_data.dart';
 import '../models/resort_detail_page.dart';
-import '../widgets/rbooking_popup.dart';
-import '../screens/booking_page.dart';
+ // ✅ NEW PAGE
 
 class ResortCard extends StatelessWidget {
   final Resort resort;
@@ -27,7 +27,7 @@ class ResortCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          /// IMAGE
+          /// 🖼 IMAGE
           ClipRRect(
             borderRadius:
                 const BorderRadius.vertical(top: Radius.circular(12)),
@@ -45,7 +45,7 @@ class ResortCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
-                /// NAME
+                /// 🏷 NAME
                 Text(
                   resort.name,
                   style: const TextStyle(
@@ -56,7 +56,7 @@ class ResortCard extends StatelessWidget {
 
                 const SizedBox(height: 5),
 
-                /// PRICE
+                /// 💰 PRICE
                 Text(
                   "₹${resort.price} / night",
                   style: const TextStyle(
@@ -67,11 +67,11 @@ class ResortCard extends StatelessWidget {
 
                 const SizedBox(height: 10),
 
-                /// BUTTONS
+                /// 🔘 BUTTONS
                 Row(
                   children: [
 
-                    /// VIEW
+                    /// 👁 VIEW DETAILS
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
@@ -95,35 +95,17 @@ class ResortCard extends StatelessWidget {
 
                     const SizedBox(width: 10),
 
-                    /// BOOK
+                    /// 🚀 BOOK NOW (FIXED FLOW)
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () async {
-
-                          /// 👉 OPEN POPUP
-                          final result = await showDialog(
-                            context: context,
-                            builder: (_) => ResortBookingPopup(
-                              resort: resort,
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ResortBookingPage(resort: resort),
                             ),
                           );
-
-                          /// 👉 GO TO BOOKING PAGE
-                          if (result != null) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => BookingPage(
-                                  serviceName: "Resorts",
-                                  adults: result['adults'],
-                                   
-                                
-                                   products: [],
-                                  children: result['children'],
-                                ),
-                              ),
-                            );
-                          }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue,

@@ -1,4 +1,6 @@
-import '../models/service_product.dart';
+import 'package:callme/data/service_product.dart';
+
+
 
 // Master data for all services and their subcategories
 final Map<String, Map<String, List<ServiceProduct>>> serviceProducts = {

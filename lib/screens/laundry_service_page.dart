@@ -3,7 +3,7 @@ import 'package:callme/models/cart.dart';
 import 'package:callme/models/cart_page.dart';
 import 'package:callme/models/luandary_detail_page.dart';
 import '../data/laundary_data.dart';
-import '../models/service_product.dart';
+import '../data/service_product.dart';
 import '../widgets/laundary_card.dart';
 
 class LaundryServicePage extends StatefulWidget {

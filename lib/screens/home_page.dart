@@ -1,18 +1,18 @@
-import 'package:callme/models/civil_services_page.dart';
-import 'package:callme/models/hotel_service_page.dart';
-import 'package:callme/models/service_product.dart';
-import 'package:callme/screens/cleaning_detail_page.dart';
-import 'package:callme/screens/education_services_page.dart';
-import 'package:callme/screens/laundry_service_page.dart';
-import 'package:callme/screens/plumbing_service_page.dart';
-
-import 'package:callme/screens/resort_page.dart';
-import 'package:callme/screens/water_services_page.dart';
 import 'package:flutter/material.dart';
+
 import 'package:callme/models/service_category.dart';
-import 'package:callme/screens/service_detail_page.dart';
-import 'package:callme/screens/salon_page.dart'; // ✅ NEW
 import 'package:callme/widgets/category_card.dart';
+
+// ✅ UNIVERSAL PAGE
+import 'package:callme/screens/universal_services_page.dart';
+
+// ✅ OTHER PAGES
+import 'package:callme/screens/salon_page.dart';
+import 'package:callme/models/hotel_service_page.dart';
+import 'package:callme/models/civil_services_page.dart';
+import 'package:callme/screens/resort_page.dart';
+import 'package:callme/screens/laundry_service_page.dart';
+import 'package:callme/screens/education_services_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -25,22 +25,23 @@ class _HomePageState extends State<HomePage> {
   final ScrollController _scrollController = ScrollController();
   double _offset = 0.0;
 
+  /// 🔥 UPDATED CATEGORY NAMES (IMPORTANT)
   final List<ServiceCategory> categories = [
-    ServiceCategory(name: 'Education Service', imagePath: 'assets/Education.jpg'),
-    ServiceCategory(name: 'Salon Service', imagePath: 'assets/salon.png'),
+    ServiceCategory(name: 'Education', imagePath: 'assets/Education.jpg'),
+    ServiceCategory(name: 'Salon', imagePath: 'assets/salon.png'),
     ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jpg'),
     ServiceCategory(name: 'Resorts', imagePath: 'assets/resort.jpg'),
     ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpg'),
     ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.jpg'),
     ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
-    ServiceCategory(
-        name: 'Water Services', imagePath: 'assets/water services.jpeg'),
+    ServiceCategory(name: 'Water', imagePath: 'assets/water services.jpeg'),
     ServiceCategory(name: 'Civil Services', imagePath: 'assets/civil.jpeg'),
   ];
 
   String searchQuery = '';
   String selectedCategory = '';
 
+  /// 🔍 FILTER VERTICAL
   List<ServiceCategory> get filteredCategories {
     return categories.where((category) {
       final matchesSearch = category.name
@@ -54,6 +55,7 @@ class _HomePageState extends State<HomePage> {
     }).toList();
   }
 
+  /// 🔍 FILTER HORIZONTAL
   List<ServiceCategory> get filteredHorizontal {
     return categories.where((category) {
       return category.name
@@ -61,8 +63,6 @@ class _HomePageState extends State<HomePage> {
           .contains(searchQuery.toLowerCase().trim());
     }).toList();
   }
-
-  List<ServiceProduct>? get civilServicesList => null;
 
   @override
   void initState() {
@@ -100,55 +100,52 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
- Widget getServicePage(String serviceName) {
-  switch (serviceName.trim()) {
+  /// 🚀 FINAL ROUTER (CLEAN)
+  Widget getServicePage(String serviceName) {
+    switch (serviceName.trim()) {
 
-    case "Cleaning":
-      return const CleaningDetailPage(
-        serviceName: 'Cleaning',
-      );
+      /// 🔥 UNIVERSAL SERVICES (MERGED)
+      case "Cleaning":
+      case "Plumbing":
+      case "Water":
+        return UniversalServicesPage(serviceName: serviceName);
 
-    case "Salon Service":
-      return const SalonPage();
+      /// 🧺 SEPARATE FLOW (SPECIAL UI)
+      case "Laundry":
+        return const LaundryServicePage();
 
-    /// ✅ FIXED (matches properly)
-    case "Education Service":
-      return const EducationServicesPage();
+      /// 💇 SALON
+      case "Salon":
+        return const SalonPage();
 
-    case "Resorts":
-      return const ResortPage(
-        resorts: [],
-      );
+      /// 🏝 RESORT
+      case "Resorts":
+        return const ResortPage(resorts: []);
 
-    case "Hotel":
-      return const HotelServicePage();
+      /// 🏨 HOTEL
+      case "Hotel":
+        return const HotelServicePage();
 
-    case "Water Services":
-      return const WaterServicesPage();
+      /// 🏗 CIVIL
+      case "Civil Services":
+        return const CivilServicesPage();
 
-    case "Civil Services":
-      return const CivilServicesPage();
+        /// Education
+   case "Education":
+  return const EducationServicesPage();
 
-    case "Laundry":
-      return const LaundryServicePage();
-
-    case "Plumbing":
-      return const PlumbingServicesPage(
-        serviceName: "Plumbing",
-      );
-
-    /// 🔥 DEFAULT FALLBACK
-    default:
-      return ServiceDetailPage(
-        serviceName: serviceName,
-      );
+      /// DEFAULT FALLBACK
+      default:
+        return UniversalServicesPage(serviceName: serviceName);
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
+
+      /// 🔝 APPBAR
       appBar: AppBar(
         title: const Text(
           'CallMe Services',
@@ -159,11 +156,13 @@ class _HomePageState extends State<HomePage> {
         foregroundColor: Colors.black,
         elevation: 1,
       ),
+
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            // 🔍 SEARCH BAR
+
+            /// 🔍 SEARCH
             TextField(
               decoration: InputDecoration(
                 hintText: 'Search for a service...',
@@ -185,7 +184,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 HORIZONTAL LIST
+            /// 🔹 HORIZONTAL SCROLL
             SizedBox(
               height: 110,
               child: NotificationListener<ScrollNotification>(
@@ -213,11 +212,13 @@ class _HomePageState extends State<HomePage> {
                       child: GestureDetector(
                         onTap: () {
                           setState(() {
-                            selectedCategory = isSelected ? '' : category.name;
+                            selectedCategory =
+                                isSelected ? '' : category.name;
                           });
                         },
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 6),
                           child: CategoryCard(
                             name: category.name,
                             imagePath: category.imagePath,
@@ -233,11 +234,10 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 VERTICAL LIST
+            /// 🔹 VERTICAL LIST
             Expanded(
               child: ListView.builder(
                 itemCount: filteredCategories.length,
-                cacheExtent: 700,
                 padding: const EdgeInsets.only(bottom: 12),
                 itemBuilder: (context, index) {
                   final category = filteredCategories[index];
@@ -249,7 +249,8 @@ class _HomePageState extends State<HomePage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => getServicePage(category.name),
+                            builder: (_) =>
+                                getServicePage(category.name),
                           ),
                         );
                       },

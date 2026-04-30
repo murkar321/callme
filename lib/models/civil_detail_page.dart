@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/civil_data.dart';
-import 'package:callme/screens/civil_book_page.dart';
+import 'package:callme/bookings/civil_book_page.dart';
 
 class CivilServiceDetailPage extends StatelessWidget {
   final SubService service;

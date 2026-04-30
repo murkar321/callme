@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'provider_dashboard.dart';
 
-class SuccessPage extends StatefulWidget {
+class SuccessPage extends StatelessWidget {
   final String businessName;
   final String providerType;
   final String serviceType;
@@ -16,47 +16,22 @@ class SuccessPage extends StatefulWidget {
     required this.serviceType,
   });
 
-  @override
-  State<SuccessPage> createState() => _SuccessPageState();
-}
+  /// 🔥 STREAM PROVIDER (REALTIME)
+  Stream<QuerySnapshot> providerStream() {
+    final user = FirebaseAuth.instance.currentUser;
 
-class _SuccessPageState extends State<SuccessPage> {
-
-  String approvalStatus = "Loading...";
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchStatus();
-  }
-
-  /// 🔥 Fetch provider approval status
-  Future<void> _fetchStatus() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection("providers")
-          .where("userId", isEqualTo: user!.uid)
-          .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        setState(() {
-          approvalStatus = snapshot.docs.first['approvalStatus'] ?? "Pending";
-        });
-      } else {
-        setState(() => approvalStatus = "Pending");
-      }
-    } catch (e) {
-      setState(() => approvalStatus = "Error");
-    }
+    return FirebaseFirestore.instance
+        .collection("providers")
+        .where("userId", isEqualTo: user!.uid)
+        .limit(1)
+        .snapshots();
   }
 
   Color _statusColor(String status) {
     switch (status) {
-      case "Approved":
+      case "approved":
         return Colors.green;
-      case "Rejected":
+      case "rejected":
         return Colors.red;
       default:
         return Colors.orange;
@@ -65,154 +40,163 @@ class _SuccessPageState extends State<SuccessPage> {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _statusColor(approvalStatus);
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
 
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: providerStream(),
+        builder: (context, snap) {
 
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-              /// ✅ Success Icon
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_circle,
-                  color: Colors.green,
-                  size: 80,
-                ),
-              ),
+          if (snap.data!.docs.isEmpty) {
+            return const Center(child: Text("Provider not found"));
+          }
 
-              const SizedBox(height: 24),
+          final doc = snap.data!.docs.first;
+          final data = doc.data() as Map<String, dynamic>;
 
-              /// ✅ Title
-              const Text(
-                "Registration Submitted",
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+          final status = data['status'] ?? "pending";
+          final providerId = doc.id;
 
-              const SizedBox(height: 10),
+          final statusColor = _statusColor(status);
 
-              /// ✅ Subtitle
-              Text(
-                "Your business has been successfully registered.\nOur team will review your profile.",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[600]),
-              ),
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
 
-              const SizedBox(height: 28),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
 
-              /// 🔹 Business Info Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 10,
-                      offset: Offset(0, 5),
+                  /// ✅ ICON
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      shape: BoxShape.circle,
                     ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      widget.businessName,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 80,
                     ),
-
-                    const SizedBox(height: 8),
-
-                    Text("Provider Type: ${widget.providerType}"),
-                    Text("Service: ${widget.serviceType.toUpperCase()}"),
-
-                    const SizedBox(height: 12),
-
-                    /// 🔥 STATUS CHIP
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        approvalStatus,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 30),
-
-              /// 🔥 ACTION BUTTON
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  onPressed: () {
 
-                    /// 🔥 Optional logic (recommended)
-                    if (approvalStatus != "Approved") {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            "Your account is under review. Dashboard access will be enabled once approved.",
+                  const SizedBox(height: 24),
+
+                  const Text(
+                    "Registration Submitted",
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Text(
+                    "Your business is under review.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  /// 🔹 CARD
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          data['providerName'] ?? businessName,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      );
-                      return;
-                    }
 
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => BusinessDashboardPage(
-                          businessName: widget.businessName,
-                          categoryRoute: widget.serviceType, providerId: '',
+                        const SizedBox(height: 8),
+
+                        Text("Type: ${data['providerType'] ?? providerType}"),
+                        Text("Service: ${data['serviceType'] ?? serviceType}"),
+
+                        const SizedBox(height: 12),
+
+                        /// 🔥 STATUS CHIP
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            status.toUpperCase(),
+                            style: TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                  child: const Text("Go to Dashboard"),
-                ),
-              ),
+                      ],
+                    ),
+                  ),
 
-              const SizedBox(height: 12),
+                  const SizedBox(height: 30),
 
-              /// 🔹 Refresh Status
-              TextButton(
-                onPressed: _fetchStatus,
-                child: const Text("Refresh Status"),
+                  /// 🔥 DASHBOARD BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+
+                        /// ❌ BLOCK IF NOT APPROVED
+                        if (status != "approved") {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  "Waiting for admin approval"),
+                            ),
+                          );
+                          return;
+                        }
+
+                        /// ✅ PASS CORRECT providerId
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BusinessDashboardPage(
+                              providerId: providerId, // 🔥 FIX
+                              businessName:
+                                  data['providerName'] ?? businessName,
+                              serviceType:
+                                  data['serviceType'] ?? serviceType,
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text("Go to Dashboard"),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }

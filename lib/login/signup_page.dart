@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'otp_page.dart';
 
+import 'otp_page.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -22,19 +22,21 @@ class _SignupPageState extends State<SignupPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   bool loading = false;
+  bool obscurePassword = true;
 
-  /// 🔥 SAVE USER
+  /// ================= SAVE USER =================
   Future<void> saveUser(User user) async {
     await _firestore.collection('users').doc(user.uid).set({
       'uid': user.uid,
       'email': user.email ?? "",
       'name': user.displayName ?? "",
       'phone': user.phoneNumber ?? "",
+      'photo': user.photoURL ?? "",
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
-  /// 🔥 NAVIGATE TO HOME (PASS DATA)
+  /// ================= HOME =================
   void goToHome(User user) {
     Navigator.pushReplacement(
       context,
@@ -47,15 +49,25 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  /// 🔹 GOOGLE LOGIN
+  /// ================= GOOGLE SIGN-IN (FIXED PROPERLY) =================
   Future<void> signInWithGoogle() async {
     try {
       setState(() => loading = true);
 
-      final googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return;
+      final GoogleSignIn googleSignIn = GoogleSignIn();
 
-      final googleAuth = await googleUser.authentication;
+      await googleSignIn.signOut(); // reset previous session
+
+      final GoogleSignInAccount? googleUser =
+          await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        setState(() => loading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
@@ -66,46 +78,43 @@ class _SignupPageState extends State<SignupPage> {
           await _auth.signInWithCredential(credential);
 
       final user = userCredential.user!;
+
       await saveUser(user);
       goToHome(user);
+
     } catch (e) {
+      debugPrint("Google Sign-In Error: $e");
       showError("Google Sign-In failed");
     } finally {
       setState(() => loading = false);
     }
   }
 
-  /// 🔹 EMAIL SIGNUP
-  Future<void> signUpWithEmail() async {
-    final email = emailController.text.trim();
-    final password = passwordController.text.trim();
-
-    if (email.isEmpty || password.length < 6) {
-      showError("Enter valid email & password");
-      return;
-    }
-
+  /// ================= EMAIL SIGNUP =================
+  Future<void> signUpEmail() async {
     try {
       setState(() => loading = true);
 
       final userCredential =
           await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
       );
 
       final user = userCredential.user!;
       await saveUser(user);
+
       goToHome(user);
     } catch (e) {
+      debugPrint(e.toString());
       showError("Signup failed");
     } finally {
       setState(() => loading = false);
     }
   }
 
-  /// 🔹 EMAIL LOGIN
-  Future<void> loginWithEmail() async {
+  /// ================= EMAIL LOGIN =================
+  Future<void> loginEmail() async {
     try {
       setState(() => loading = true);
 
@@ -117,8 +126,10 @@ class _SignupPageState extends State<SignupPage> {
 
       final user = userCredential.user!;
       await saveUser(user);
+
       goToHome(user);
     } catch (e) {
+      debugPrint(e.toString());
       showError("Login failed");
     } finally {
       setState(() => loading = false);
@@ -131,218 +142,165 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   @override
-  void dispose() {
-    phoneController.dispose();
-    emailController.dispose();
-    passwordController.dispose();
-    super.dispose();
-  }
-
-  /// ================= UI =================
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF3F51B5), Color(0xFF5C6BC0)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 30),
-
-              const Text(
-                "CallMe",
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Container(
+            height: MediaQuery.of(context).size.height,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF3F51B5), Color(0xFF5C6BC0)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 30),
+                const Text(
+                  "CallMe",
+                  style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
                 ),
-              ),
+                const SizedBox(height: 8),
+                const Text("Login or Signup",
+                    style: TextStyle(color: Colors.white70)),
+                const SizedBox(height: 30),
 
-              const SizedBox(height: 8),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(30)),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
 
-              const Text(
-                "Login or Signup",
-                style: TextStyle(color: Colors.white70),
-              ),
-
-              const SizedBox(height: 30),
-
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(30)),
-                  ),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-
-                        /// 📱 PHONE FIRST
-                        _inputField(
-                          controller: phoneController,
-                          label: "Mobile Number",
-                          icon: Icons.phone,
-                          prefix: "+91 ",
-                        ),
-
-                        const SizedBox(height: 15),
-
-                        _primaryButton(
-                          text: "Send OTP",
-                          onTap: () {
-                            final phone = phoneController.text.trim();
-
-                            if (phone.length != 10) {
-                              showError("Enter valid phone");
-                              return;
-                            }
-
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    OtpPage(phone: "+91$phone"),
-                              ),
-                            );
-                          },
-                        ),
-
-                        const SizedBox(height: 25),
-
-                        /// OR
-                        const Row(
-                          children: [
-                            Expanded(child: Divider()),
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 10),
-                              child: Text("OR"),
+                          /// PHONE
+                          TextField(
+                            controller: phoneController,
+                            keyboardType: TextInputType.phone,
+                            decoration: const InputDecoration(
+                              labelText: "Mobile Number",
+                              prefixText: "+91 ",
+                              border: OutlineInputBorder(),
                             ),
-                            Expanded(child: Divider()),
-                          ],
-                        ),
+                          ),
 
-                        const SizedBox(height: 25),
+                          const SizedBox(height: 15),
 
-                        /// EMAIL
-                        _inputField(
-                          controller: emailController,
-                          label: "Email",
-                          icon: Icons.email,
-                        ),
+                          ElevatedButton(
+                            onPressed: () {
+                              if (phoneController.text.length != 10) {
+                                showError("Enter valid phone");
+                                return;
+                              }
 
-                        const SizedBox(height: 15),
-
-                        /// PASSWORD
-                        _inputField(
-                          controller: passwordController,
-                          label: "Password",
-                          icon: Icons.lock,
-                          obscure: true,
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        _primaryButton(
-                          text: "Sign Up",
-                          onTap: signUpWithEmail,
-                        ),
-
-                        TextButton(
-                          onPressed: loginWithEmail,
-                          child: const Text("Already have account? Login"),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        /// GOOGLE
-                        OutlinedButton.icon(
-                          icon: Image.asset("assets/google.png", height: 22),
-                          label: loading
-                              ? const CircularProgressIndicator()
-                              : const Text("Continue with Google"),
-                          onPressed:
-                              loading ? null : signInWithGoogle,
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        /// GUEST
-                        TextButton(
-                          onPressed: () {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const BottomNavPage(
-                                  userPhone: "",
-                                  userEmail: "",
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => OtpPage(
+                                    phone: "+91${phoneController.text}",
+                                  ),
                                 ),
+                              );
+                            },
+                            child: const Text("Send OTP"),
+                          ),
+
+                          const SizedBox(height: 25),
+                          const Divider(),
+                          const SizedBox(height: 25),
+
+                          /// EMAIL
+                          TextField(
+                            controller: emailController,
+                            decoration: const InputDecoration(
+                              labelText: "Email",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+
+                          const SizedBox(height: 15),
+
+                          /// PASSWORD
+                          TextField(
+                            controller: passwordController,
+                            obscureText: obscurePassword,
+                            decoration: InputDecoration(
+                              labelText: "Password",
+                              border: const OutlineInputBorder(),
+                              suffixIcon: IconButton(
+                                icon: Icon(obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility),
+                                onPressed: () {
+                                  setState(() {
+                                    obscurePassword = !obscurePassword;
+                                  });
+                                },
                               ),
-                            );
-                          },
-                          child: const Text("Continue as Guest"),
-                        ),
-                      ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          ElevatedButton(
+                            onPressed: signUpEmail,
+                            child: const Text("Sign Up"),
+                          ),
+
+                          TextButton(
+                            onPressed: loginEmail,
+                            child:
+                                const Text("Already have account? Login"),
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          /// GOOGLE
+                          OutlinedButton.icon(
+                            icon: Image.asset(
+                              "assets/google.png",
+                              height: 22,
+                            ),
+                            label: loading
+                                ? const CircularProgressIndicator()
+                                : const Text("Continue with Google"),
+                            onPressed:
+                                loading ? null : signInWithGoogle,
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => BottomNavPage(
+                                    userPhone: "",
+                                    userEmail: "",
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text("Continue as Guest"),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  /// 🔹 INPUT FIELD
-  Widget _inputField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool obscure = false,
-    String? prefix,
-  }) {
-    return TextField(
-      controller: controller,
-      obscureText: obscure,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixText: prefix,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
-  }
-
-  /// 🔹 BUTTON
-  Widget _primaryButton({
-    required String text,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton(
-        onPressed: loading ? null : onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF3F51B5),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(fontSize: 16, color: Colors.white),
         ),
       ),
     );

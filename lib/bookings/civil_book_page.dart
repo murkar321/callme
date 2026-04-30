@@ -1,60 +1,54 @@
-import 'package:callme/data/hotel_data.dart';
 import 'package:callme/provider/order_service.dart';
 import 'package:flutter/material.dart';
-import '../models/cart.dart';
 
-class HotelBookingPage extends StatefulWidget {
-  const HotelBookingPage({super.key, required HotelRoom hotel, required List<dynamic> products});
+
+class CivilBookingPage extends StatefulWidget {
+  final String serviceName;
+
+  const CivilBookingPage({super.key, required this.serviceName});
 
   @override
-  State<HotelBookingPage> createState() => _HotelBookingPageState();
+  State<CivilBookingPage> createState() => _CivilBookingPageState();
 }
 
-class _HotelBookingPageState extends State<HotelBookingPage> {
+class _CivilBookingPageState extends State<CivilBookingPage> {
 
   final name = TextEditingController();
   final phone = TextEditingController();
   final email = TextEditingController();
   final address = TextEditingController();
+  final note = TextEditingController();
 
   DateTime? date;
   TimeOfDay? time;
 
-  List<CartItem> get cart => Cart.getItems("Hotel");
-
-  int get total =>
-      cart.fold(0, (sum, e) => sum + e.price * e.quantity);
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Hotel Booking")),
+      appBar: AppBar(title: Text(widget.serviceName)),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
 
-            _field(name, "Name"),
-            _field(phone, "Phone"),
-            _field(email, "Email"),
-            _field(address, "Address"),
+            _f(name, "Name"),
+            _f(phone, "Phone"),
+            _f(email, "Email"),
+            _f(address, "Address"),
+            _f(note, "Request"),
 
             ListTile(
-              title: Text(date == null ? "Select Date" : date.toString()),
+              title: Text(date == null ? "Date" : date.toString()),
               onTap: _pickDate,
             ),
             ListTile(
-              title: Text(time == null ? "Select Time" : time!.format(context)),
+              title: Text(time == null ? "Time" : time!.format(context)),
               onTap: _pickTime,
             ),
 
-            const SizedBox(height: 20),
-
-            Text("Total ₹$total"),
-
             ElevatedButton(
               onPressed: _submit,
-              child: const Text("Confirm"),
+              child: const Text("Submit"),
             )
           ],
         ),
@@ -62,8 +56,8 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
     );
   }
 
-  Widget _field(TextEditingController c, String t) =>
-      TextField(controller: c, decoration: InputDecoration(labelText: t));
+  Widget _f(TextEditingController c, String h) =>
+      TextField(controller: c, decoration: InputDecoration(labelText: h));
 
   void _pickDate() async {
     final d = await showDatePicker(
@@ -85,19 +79,17 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
 
   void _submit() async {
     await OrderService.placeOrder(
-      serviceType: "Hotel",
-      services: cart.map((e) => "${e.name} x${e.quantity}").toList(),
+      serviceType: widget.serviceName,
+      services: [widget.serviceName],
       userName: name.text,
       phone: phone.text,
       email: email.text,
       address: address.text,
-      note: "",
+      note: note.text,
       date: date!,
       time: time!.format(context),
-      totalAmount: total.toDouble(),
+      totalAmount: 0, userId: '', createdBy: '', createdByRole: '', isEnquiry:true,
     );
-
-    Cart.clear("Hotel");
 
     Navigator.pop(context);
   }

@@ -1,5 +1,6 @@
+import 'package:callme/provider/order_service.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class EnquiryPage extends StatefulWidget {
   final String serviceName;
@@ -21,77 +22,84 @@ class _EnquiryPageState extends State<EnquiryPage> {
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
   final emailController = TextEditingController();
-  final dateController = TextEditingController();
+
+  DateTime? selectedDate;
+  TimeOfDay? selectedTime;
 
   bool isLoading = false;
 
-  /// 🔹 CONVERT DATE (dd/MM/yyyy → yyyy-MM-dd)
-  String _convertToIso(String input) {
-    final parts = input.split('/');
-    return "${parts[2]}-${parts[1]}-${parts[0]}";
-  }
-
-  /// 🔹 SUBMIT → NOW STORES IN ORDERS COLLECTION
+  /// =========================
+  /// 🚀 SUBMIT ENQUIRY
+  /// =========================
   Future<void> submitEnquiry() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (selectedTime == null || selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Select date & time")),
+      );
+      return;
+    }
+
+    if (isLoading) return;
 
     setState(() => isLoading = true);
 
     try {
-      final phone = phoneController.text.trim();
+      final user = FirebaseAuth.instance.currentUser;
 
-      await FirebaseFirestore.instance.collection("orders").add({
-        /// 🔹 SERVICE INFO
-        "serviceType": widget.serviceName,
-        "services": widget.cart?.map((e) => e.name).toList() ?? [],
+      if (user == null) {
+        throw Exception("User not logged in");
+      }
 
-        /// 🔹 USER (IMPORTANT FOR MY ORDERS + RULES)
-        "user": {
-          "name": nameController.text.trim(),
-          "phone": phone,
-          "email": emailController.text.trim(),
-        },
+      final servicesList = widget.cart != null && widget.cart!.isNotEmpty
+          ? widget.cart!
+              .map((e) => "${e.name} x${e.quantity}")
+              .toList()
+          : [widget.serviceName];
 
-        /// 🔹 SCHEDULE
-        "schedule": {
-          "date": dateController.text.isNotEmpty
-              ? Timestamp.fromDate(
-                  DateTime.parse(_convertToIso(dateController.text)),
-                )
-              : null,
-          "time": "",
-        },
+      /// ✅ CALL COMMON ORDER SERVICE
+      await OrderService.placeOrder(
+        serviceType: widget.serviceName,
+        services: servicesList,
 
-        /// 🔹 LOCATION (EMPTY FOR NOW)
-        "location": {
-          "address": "",
-          "lat": null,
-          "lng": null,
-        },
+        /// USER
+        userId: user.uid,
+        userName: nameController.text.trim(),
+        phone: phoneController.text.trim(),
+        email: emailController.text.trim(),
 
-        /// 🔹 PAYMENT (ENQUIRY → ₹0)
-        "payment": {
-          "totalAmount": 0,
-          "method": "enquiry",
-        },
+        /// CREATED BY
+        createdBy: user.uid,
+        createdByRole: "user",
 
-        /// 🔹 ORDER STATUS
-        "status": "pending",
+        /// LOCATION
+        address: "Not Provided",
 
-        /// 🔹 PROVIDER (NOT ASSIGNED YET)
-        "providerId": null,
+        /// SCHEDULE
+        date: selectedDate!,
+        time: selectedTime!.format(context),
 
-        /// 🔹 TIMESTAMP
-        "createdAt": FieldValue.serverTimestamp(),
-      });
+        /// PAYMENT
+        totalAmount: 0,
+
+        /// ENQUIRY FLAG
+        isEnquiry: true,
+      );
+
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Enquiry Submitted Successfully")),
       );
 
       Navigator.pop(context);
+
     } catch (e) {
-      print("🔥 Error submitting enquiry: $e");
+      debugPrint("🔥 Enquiry Error: $e");
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e")),
       );
@@ -105,10 +113,12 @@ class _EnquiryPageState extends State<EnquiryPage> {
     nameController.dispose();
     phoneController.dispose();
     emailController.dispose();
-    dateController.dispose();
     super.dispose();
   }
 
+  /// =========================
+  /// 🎨 UI
+  /// =========================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -116,9 +126,9 @@ class _EnquiryPageState extends State<EnquiryPage> {
 
       appBar: AppBar(
         title: const Text("Enquiry"),
-        elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
+        elevation: 0,
       ),
 
       body: Center(
@@ -144,7 +154,7 @@ class _EnquiryPageState extends State<EnquiryPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
-                  /// 🔹 HEADER
+                  /// HEADER
                   Text(
                     widget.serviceName,
                     style: const TextStyle(
@@ -156,7 +166,7 @@ class _EnquiryPageState extends State<EnquiryPage> {
                   const SizedBox(height: 5),
 
                   const Text(
-                    "Fill details to get a callback",
+                    "Request callback / visit",
                     style: TextStyle(color: Colors.grey),
                   ),
 
@@ -191,62 +201,50 @@ class _EnquiryPageState extends State<EnquiryPage> {
                     label: "Email",
                     icon: Icons.email,
                     keyboard: TextInputType.emailAddress,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return "Enter email";
-                      if (!v.contains("@")) return "Enter valid email";
-                      return null;
-                    },
                   ),
 
                   const SizedBox(height: 15),
 
-                  /// DATE PICKER
-                  GestureDetector(
-                    onTap: () async {
-                      DateTime? picked = await showDatePicker(
-                        context: context,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime(2030),
-                        initialDate: DateTime.now(),
-                      );
-
-                      if (picked != null) {
-                        dateController.text =
-                            "${picked.day}/${picked.month}/${picked.year}";
-                      }
-                    },
-                    child: AbsorbPointer(
-                      child: _inputField(
-                        controller: dateController,
-                        label: "Preferred Date",
-                        icon: Icons.calendar_today,
-                      ),
+                  /// DATE
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.calendar_today),
+                    title: Text(
+                      selectedDate == null
+                          ? "Select Date"
+                          : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
                     ),
+                    onTap: _pickDate,
+                  ),
+
+                  /// TIME
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.access_time),
+                    title: Text(
+                      selectedTime == null
+                          ? "Select Time"
+                          : selectedTime!.format(context),
+                    ),
+                    onTap: _pickTime,
                   ),
 
                   const SizedBox(height: 30),
 
-                  /// SUBMIT BUTTON
+                  /// SUBMIT
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
                       onPressed: isLoading ? null : submitEnquiry,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: const Color(0xFFAE91BA),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: isLoading
-                          ? const SizedBox(
-                              height: 22,
-                              width: 22,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
+                          ? const CircularProgressIndicator(color: Colors.white)
                           : const Text(
                               "Submit Enquiry",
                               style: TextStyle(fontSize: 16),
@@ -262,7 +260,34 @@ class _EnquiryPageState extends State<EnquiryPage> {
     );
   }
 
-  /// 🔹 COMMON INPUT FIELD
+  /// =========================
+  /// HELPERS
+  /// =========================
+
+  void _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2030),
+      initialDate: DateTime.now(),
+    );
+
+    if (picked != null) {
+      setState(() => selectedDate = picked);
+    }
+  }
+
+  void _pickTime() async {
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+
+    if (t != null) {
+      setState(() => selectedTime = t);
+    }
+  }
+
   Widget _inputField({
     required TextEditingController controller,
     required String label,

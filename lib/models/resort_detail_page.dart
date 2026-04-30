@@ -1,7 +1,7 @@
+import 'package:callme/bookings/resort_booking.dart';
 import 'package:flutter/material.dart';
 import '../data/resorts_data.dart';
-import '../widgets/rbooking_popup.dart';
-import '../screens/booking_page.dart';
+// ✅ USE NEW PAGE
 
 class ResortDetailPage extends StatelessWidget {
   final Resort resort;
@@ -26,7 +26,7 @@ class ResortDetailPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            /// IMAGE
+            /// 🖼 IMAGE + DISCOUNT
             Stack(
               children: [
                 Image.asset(
@@ -64,7 +64,7 @@ class ResortDetailPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
-                  /// NAME
+                  /// 🏷 NAME
                   Text(
                     resort.name,
                     style: const TextStyle(
@@ -75,7 +75,7 @@ class ResortDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 8),
 
-                  /// CITY + RATING
+                  /// 📍 CITY + ⭐ RATING
                   Row(
                     children: [
                       const Icon(Icons.location_on, color: Colors.red),
@@ -97,7 +97,7 @@ class ResortDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 15),
 
-                  /// PRICE
+                  /// 💰 PRICE
                   Row(
                     children: [
                       Text(
@@ -129,7 +129,7 @@ class ResortDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 20),
 
-                  /// FACILITIES
+                  /// 🏨 FACILITIES
                   const Text(
                     "Facilities",
                     style: TextStyle(
@@ -153,7 +153,7 @@ class ResortDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 20),
 
-                  /// DESCRIPTION
+                  /// 📖 DESCRIPTION
                   const Text(
                     "Description",
                     style: TextStyle(
@@ -177,35 +177,20 @@ class ResortDetailPage extends StatelessWidget {
         ),
       ),
 
-      /// ✅ FIXED BOOK BUTTON
+      /// ✅ FIXED BOOK BUTTON (DIRECT FLOW)
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(12),
         color: Colors.white,
         child: ElevatedButton(
-          onPressed: () async {
-
-            /// 👉 OPEN POPUP
-            final result = await showDialog(
-              context: context,
-              builder: (_) => ResortBookingPopup(
-                resort: resort,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ResortBookingPage(
+                  resort: resort,
+                ),
               ),
             );
-
-            /// 👉 HANDLE RESULT
-            if (result != null) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BookingPage(
-                    serviceName: "Resorts",
-                    adults: result['adults'],
-                     products: [],
-                    children: result['children'],
-                  ),
-                ),
-              );
-            }
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,

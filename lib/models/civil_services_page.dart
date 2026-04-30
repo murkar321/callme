@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import '../data/civil_data.dart';
-import '../models/service_product.dart';
+import '../data/service_product.dart';
 import '../models/cart.dart';
 import '../widgets/civil_card.dart';
 import '../widgets/renovation_bottom_sheet.dart';
 import '../models/civil_detail_page.dart';
-import '../screens/civil_book_page.dart';
+import '../bookings/civil_book_page.dart';
 
 class CivilServicesPage extends StatefulWidget {
   const CivilServicesPage({super.key});

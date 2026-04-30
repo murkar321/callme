@@ -29,6 +29,10 @@ class HotelRoom {
     required this.suitableFor,
     required this.description,
   });
+
+  String get name => hotelName;
+
+  String get location => "${city}, ${address}";
 }
 
 /// MAIN HOTEL DATA

@@ -1,4 +1,3 @@
-import 'package:callme/provider/provider_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,13 +5,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:callme/models/service_category.dart';
 import 'package:callme/widgets/category_card.dart';
 import 'package:callme/provider/service_provider_form.dart';
+import 'package:callme/provider/provider_dashboard.dart';
 
 class BusinessPage extends StatelessWidget {
   BusinessPage({super.key});
 
   final user = FirebaseAuth.instance.currentUser;
 
-  /// 🔹 SERVICE LIST
   final List<ServiceCategory> businessCategories = [
     ServiceCategory(name: 'Salon', icon: Icons.content_cut),
     ServiceCategory(name: 'Educational Services', icon: Icons.school),
@@ -25,7 +24,8 @@ class BusinessPage extends StatelessWidget {
     ServiceCategory(name: 'Civil', icon: Icons.construction),
   ];
 
-  /// 🔹 SERVICE TYPE MAP
+  /// ================= SERVICE TYPE MAP =================
+
   String _getServiceType(String name) {
     switch (name) {
       case "Educational Services":
@@ -51,13 +51,21 @@ class BusinessPage extends StatelessWidget {
     }
   }
 
-  /// ================= MAIN LOGIC =================
-  void _handleTap(
-      BuildContext context,
-      ServiceCategory service,
-      Map<String, dynamic>? provider,
-      ) {
+  /// ================= MESSAGE =================
 
+  void _showMessage(BuildContext context, String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
+  /// ================= MAIN TAP LOGIC =================
+
+  void _handleTap(
+    BuildContext context,
+    ServiceCategory service,
+    Map<String, dynamic>? provider,
+  ) {
     final serviceType = _getServiceType(service.name);
 
     /// ❌ NOT REGISTERED
@@ -67,6 +75,7 @@ class BusinessPage extends StatelessWidget {
     }
 
     final status = provider['status'] ?? "pending";
+    final rejectReason = provider['rejectReason'] ?? "No reason provided";
 
     /// ⏳ PENDING
     if (status == "pending") {
@@ -76,39 +85,54 @@ class BusinessPage extends StatelessWidget {
 
     /// ❌ REJECTED
     if (status == "rejected") {
-      _showRejectedDialog(context, service);
+      _showRejectedDialog(context, service, rejectReason);
       return;
     }
 
-    /// ✅ APPROVED → NAVIGATE
+    /// ✅ APPROVED → PROVIDER DASHBOARD
     if (status == "approved") {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => BusinessDashboardPage(
+            providerId: provider['providerId'] ?? "",
             businessName:
-            provider['business']?['businessName'] ?? "My Business",
-            categoryRoute: serviceType,
-            providerId: provider['providerId'],
+                provider['business']?['businessName'] ?? "My Business",
+            serviceType: serviceType,
           ),
         ),
       );
     }
   }
 
-  /// ================= HELPERS =================
+  /// ================= REJECTED DIALOG =================
 
-  void _showMessage(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  void _showRejectedDialog(BuildContext context, ServiceCategory service) {
+  void _showRejectedDialog(
+    BuildContext context,
+    ServiceCategory service,
+    String reason,
+  ) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Application Rejected"),
-        content: const Text("You can apply again."),
+        title: const Text("Application Rejected ❌"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Your application was rejected."),
+
+            const SizedBox(height: 10),
+
+            Text(
+              "Reason: $reason",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -116,20 +140,20 @@ class BusinessPage extends StatelessWidget {
               _showProviderTypeSelector(context, service);
             },
             child: const Text("Reapply"),
-          )
+          ),
         ],
       ),
     );
   }
 
-  /// 🔹 PROVIDER TYPE SELECTOR
+  /// ================= PROVIDER TYPE SELECTOR =================
+
   void _showProviderTypeSelector(
-      BuildContext context,
-      ServiceCategory service,
-      ) {
+    BuildContext context,
+    ServiceCategory service,
+  ) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -139,16 +163,7 @@ class BusinessPage extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-
-              Container(
-                height: 4,
-                width: 40,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
+              const SizedBox(height: 10),
 
               Text(
                 "Register as ${service.name}",
@@ -163,8 +178,6 @@ class BusinessPage extends StatelessWidget {
               _typeTile(context, service, "Individual", Icons.person),
               _typeTile(context, service, "Agency", Icons.groups),
               _typeTile(context, service, "Business", Icons.business),
-
-              const SizedBox(height: 10),
             ],
           ),
         );
@@ -173,11 +186,11 @@ class BusinessPage extends StatelessWidget {
   }
 
   Widget _typeTile(
-      BuildContext context,
-      ServiceCategory service,
-      String type,
-      IconData icon,
-      ) {
+    BuildContext context,
+    ServiceCategory service,
+    String type,
+    IconData icon,
+  ) {
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: Colors.blue.withOpacity(0.1),
@@ -202,6 +215,7 @@ class BusinessPage extends StatelessWidget {
   }
 
   /// ================= UI =================
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -210,7 +224,6 @@ class BusinessPage extends StatelessWidget {
       backgroundColor: const Color(0xFFF4F6FA),
 
       appBar: AppBar(
-        elevation: 0,
         backgroundColor: Colors.white,
         title: const Text(
           "Become a Provider",
@@ -222,7 +235,7 @@ class BusinessPage extends StatelessWidget {
       body: Column(
         children: [
 
-          /// 🔥 HEADER (REALISTIC)
+          /// HEADER
           Container(
             width: double.infinity,
             margin: const EdgeInsets.all(12),
@@ -246,14 +259,13 @@ class BusinessPage extends StatelessWidget {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  "Register your service, get customers & grow your income.",
+                  "Register your service and start earning.",
                   style: TextStyle(color: Colors.white70),
                 ),
               ],
             ),
           ),
 
-          /// 🔹 TITLE
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Align(
@@ -270,17 +282,18 @@ class BusinessPage extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          /// 🔥 GRID
+          /// GRID
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: businessCategories.length,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: size.width < 600 ? 2 : 3, // adaptive
+                crossAxisCount: size.width < 600 ? 2 : 3,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
                 childAspectRatio: 1,
               ),
+
               itemBuilder: (_, i) {
                 final category = businessCategories[i];
                 final serviceType = _getServiceType(category.name);
@@ -292,19 +305,21 @@ class BusinessPage extends StatelessWidget {
                       .where("serviceType", isEqualTo: serviceType)
                       .limit(1)
                       .snapshots(),
-                  builder: (context, snapshot) {
 
+                  builder: (context, snapshot) {
                     Map<String, dynamic>? provider;
 
                     if (snapshot.hasData &&
                         snapshot.data!.docs.isNotEmpty) {
-                      provider = snapshot.data!.docs.first.data()
-                      as Map<String, dynamic>;
+                      provider =
+                          snapshot.data!.docs.first.data()
+                              as Map<String, dynamic>;
                     }
 
                     return GestureDetector(
                       onTap: () =>
                           _handleTap(context, category, provider),
+
                       child: CategoryCard(
                         name: category.name,
                         icon: category.icon,

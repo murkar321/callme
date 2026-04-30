@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BusinessDashboardPage extends StatefulWidget {
-  final String businessName;
-  final String categoryRoute;
   final String providerId;
+  final String businessName;
+  final String serviceType;
 
   const BusinessDashboardPage({
     super.key,
-    required this.businessName,
-    required this.categoryRoute,
     required this.providerId,
+    required this.businessName,
+    required this.serviceType,
   });
 
   @override
@@ -18,340 +18,244 @@ class BusinessDashboardPage extends StatefulWidget {
       _BusinessDashboardPageState();
 }
 
-class _BusinessDashboardPageState
-    extends State<BusinessDashboardPage> {
+class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
+  final ordersRef = FirebaseFirestore.instance.collection('orders');
+  final providersRef = FirebaseFirestore.instance.collection('providers');
 
-  final CollectionReference ordersRef =
-      FirebaseFirestore.instance.collection('orders');
-
-  bool isApproved = false;
-  bool loading = true;
-
-  /// ================= CHECK APPROVAL =================
-  Future<void> checkApproval() async {
-    final doc = await FirebaseFirestore.instance
-        .collection("providers")
-        .doc(widget.providerId)
-        .get();
-
-    if (doc.exists) {
-      final data = doc.data() as Map<String, dynamic>;
-
-      setState(() {
-        isApproved = data['isActive'] == true;
-        loading = false;
-      });
-    } else {
-      setState(() => loading = false);
-    }
+  /// ================= PROVIDER STREAM =================
+  Stream<DocumentSnapshot> providerStream() {
+    return providersRef.doc(widget.providerId).snapshots();
   }
 
-  @override
-  void initState() {
-    super.initState();
-    checkApproval();
-  }
-
-  /// ================= ORDERS STREAM =================
-  Stream<QuerySnapshot> getOrders() {
+  /// ================= AVAILABLE JOBS =================
+  Stream<QuerySnapshot> availableJobs() {
     return ordersRef
-        .where('serviceType', isEqualTo: widget.categoryRoute)
+        .where('serviceType', isEqualTo: widget.serviceType)
+        .where('status', isEqualTo: "pending")
+        .where('providerId', isNull: true) // only unassigned jobs
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  /// ================= MY JOBS =================
+  Stream<QuerySnapshot> myJobs() {
+    return ordersRef
+        .where('providerId', isEqualTo: widget.providerId)
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
   /// ================= ACCEPT ORDER =================
   Future<void> acceptOrder(String id) async {
-    final docSnap = await ordersRef.doc(id).get();
-    final data = docSnap.data() as Map<String, dynamic>;
+    final ref = ordersRef.doc(id);
 
-    if (data['providerId'] != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Already accepted")),
-      );
-      return;
+    try {
+      await FirebaseFirestore.instance.runTransaction((tx) async {
+        final snap = await tx.get(ref);
+        final data = snap.data() as Map<String, dynamic>;
+
+        final existingProvider = data['providerId'];
+
+        if (existingProvider != null && existingProvider != "") {
+          throw Exception("Already taken");
+        }
+
+        tx.update(ref, {
+          "providerId": widget.providerId,
+          "providerName": widget.businessName,
+          "status": "accepted",
+          "updatedAt": FieldValue.serverTimestamp(),
+        });
+      });
+
+      _msg("✅ Order Accepted");
+    } catch (e) {
+      _msg("❌ Already taken");
     }
-
-    await ordersRef.doc(id).update({
-      "providerId": widget.providerId,
-      "providerName": widget.businessName,
-      "status": "accepted",
-      "updatedAt": FieldValue.serverTimestamp(),
-    });
   }
 
-  /// ================= UPDATE STATUS =================
-  Future<void> updateStatus(String id, String status) async {
+  /// ================= COMPLETE =================
+  Future<void> completeOrder(String id) async {
     await ordersRef.doc(id).update({
-      "status": status,
+      "status": "completed",
       "updatedAt": FieldValue.serverTimestamp(),
     });
+
+    _msg("✅ Job Completed");
   }
 
-  /// ================= STATUS COLOR =================
-  Color getStatusColor(String status) {
+  /// ================= CANCEL =================
+  Future<void> cancelOrder(String id) async {
+    await ordersRef.doc(id).update({
+      "status": "cancelled",
+      "updatedAt": FieldValue.serverTimestamp(),
+    });
+
+    _msg("❌ Job Cancelled");
+  }
+
+  void _msg(String m) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(m)));
+  }
+
+  Color getColor(String status) {
     switch (status) {
       case "accepted":
         return Colors.green;
-      case "rejected":
-        return Colors.red;
       case "completed":
         return Colors.blue;
+      case "cancelled":
+        return Colors.red;
       default:
         return Colors.orange;
     }
   }
 
   /// ================= UI =================
-
   @override
   Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: providerStream(),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-    /// 🔄 LOADING
-    if (loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+        final provider =
+            snap.data!.data() as Map<String, dynamic>?;
 
-    /// ❌ NOT APPROVED
-    if (!isApproved) {
-      return Scaffold(
-        appBar: AppBar(title: const Text("Dashboard")),
-        body: const Center(
-          child: Text("⏳ Waiting for Admin Approval"),
-        ),
-      );
-    }
-
-    /// ✅ APPROVED DASHBOARD
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-
-      appBar: AppBar(
-        title: Text("${widget.categoryRoute.toUpperCase()} Dashboard"),
-        centerTitle: true,
-      ),
-
-      body: Column(
-        children: [
-
-          /// 🔹 HEADER
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Colors.blue, Colors.purple],
-              ),
-              borderRadius: BorderRadius.circular(16),
+        if (provider?['status'] != "approved") {
+          return Scaffold(
+            appBar: AppBar(title: const Text("Dashboard")),
+            body: const Center(
+              child: Text("⏳ Waiting for Admin Approval"),
             ),
-            child: Row(
+          );
+        }
+
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            backgroundColor: const Color(0xFFF5F7FB),
+            appBar: AppBar(
+              title: Text(widget.businessName),
+              bottom: const TabBar(
+                tabs: [
+                  Tab(text: "Available Jobs"),
+                  Tab(text: "My Jobs"),
+                ],
+              ),
+            ),
+            body: TabBarView(
               children: [
-                const CircleAvatar(
-                  radius: 25,
-                  backgroundColor: Colors.white,
-                  child: Icon(Icons.store, color: Colors.blue),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    "Welcome, ${widget.businessName}",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+                _jobsList(availableJobs(), true),
+                _jobsList(myJobs(), false),
               ],
             ),
           ),
+        );
+      },
+    );
+  }
 
-          /// 🔥 ORDERS
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: getOrders(),
-              builder: (context, snapshot) {
+  /// ================= JOB LIST =================
+  Widget _jobsList(Stream<QuerySnapshot> stream, bool isAvailable) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: stream,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+        if (snap.hasError) {
+          return Center(child: Text("Error: ${snap.error}"));
+        }
 
-                /// 🔥 FILTER LOGIC (IMPORTANT)
-                final allDocs = snapshot.data!.docs;
+        final docs = snap.data?.docs ?? [];
 
-                final docs = allDocs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final providerId = data['providerId'];
+        if (docs.isEmpty) {
+          return const Center(child: Text("No jobs found"));
+        }
 
-                  return providerId == null ||
-                      providerId == widget.providerId;
-                }).toList();
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: docs.length,
+          itemBuilder: (_, i) {
+            final doc = docs[i];
+            final data = doc.data() as Map<String, dynamic>;
 
-                if (docs.isEmpty) {
-                  return const Center(child: Text("No orders available"));
-                }
+            final user = data['user'] ?? {};
+            final payment = data['payment'] ?? {};
+            final status = data['status'] ?? "pending";
 
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: docs.length,
-                  itemBuilder: (context, i) {
+            return Card(
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user['name'] ?? "No Name",
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    Text("📞 ${user['phone'] ?? ""}"),
+                    Text("📍 ${data['location']?['address'] ?? ""}"),
+                    Text("💰 ₹${payment['totalAmount'] ?? 0}"),
+                    const SizedBox(height: 10),
 
-                    final doc = docs[i];
-                    final data = doc.data() as Map<String, dynamic>;
-
-                    final status =
-                        (data['status'] ?? "pending").toString();
-
-                    final user =
-                        (data['user'] ?? {}) as Map<String, dynamic>;
-
-                    final location =
-                        (data['location'] ?? {}) as Map<String, dynamic>;
-
-                    final schedule =
-                        (data['schedule'] ?? {}) as Map<String, dynamic>;
-
-                    final payment =
-                        (data['payment'] ?? {}) as Map<String, dynamic>;
-
-                    final isMine =
-                        data['providerId'] == widget.providerId;
-
-                    final isUnassigned =
-                        data['providerId'] == null;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(14),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.shade200,
-                            blurRadius: 6,
-                          )
-                        ],
+                        color: getColor(status),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-
-                          /// TOP
-                          Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                user['name'] ?? "User",
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              _statusChip(status),
-                            ],
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          Text("📞 ${user['phone'] ?? ""}"),
-                          Text("📍 ${location['address'] ?? ""}"),
-
-                          const SizedBox(height: 6),
-
-                          Text(
-                            "🛠 ${(data['services'] as List?)?.join(", ") ?? ""}",
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          Text(
-                            "📅 ${schedule['date'] is Timestamp
-                                ? (schedule['date'] as Timestamp)
-                                    .toDate()
-                                    .toString()
-                                    .split(" ")[0]
-                                : ""}",
-                          ),
-
-                          Text("⏰ ${schedule['time'] ?? ""}"),
-
-                          const SizedBox(height: 6),
-
-                          Text(
-                            "₹${payment['totalAmount'] ?? 0}",
-                            style: const TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-
-                          const SizedBox(height: 10),
-
-                          /// ACTIONS
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-
-                              if (isUnassigned) ...[
-                                _actionBtn("Accept", Colors.green,
-                                    () => acceptOrder(doc.id)),
-                                const SizedBox(width: 8),
-                                _actionBtn("Reject", Colors.red,
-                                    () => updateStatus(doc.id, "rejected")),
-                              ],
-
-                              if (isMine && status == "accepted")
-                                _actionBtn("Complete", Colors.blue,
-                                    () => updateStatus(doc.id, "completed")),
-                            ],
-                          )
-                        ],
+                      child: Text(
+                        status.toUpperCase(),
+                        style: const TextStyle(color: Colors.white),
                       ),
-                    );
-                  },
-                );
-              },
-            ),
-          )
-        ],
-      ),
-    );
-  }
+                    ),
 
-  /// ================= STATUS CHIP =================
-  Widget _statusChip(String status) {
-    return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: getStatusColor(status).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(
-          color: getStatusColor(status),
-          fontWeight: FontWeight.bold,
-          fontSize: 12,
-        ),
-      ),
-    );
-  }
+                    const SizedBox(height: 10),
 
-  /// ================= BUTTON =================
-  Widget _actionBtn(
-      String text, Color color, VoidCallback onTap) {
-    return ElevatedButton(
-      onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        minimumSize: const Size(70, 36),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-      child: Text(text),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (isAvailable)
+                          ElevatedButton(
+                            onPressed: () => acceptOrder(doc.id),
+                            child: const Text("Accept"),
+                          ),
+                        if (!isAvailable && status == "accepted")
+                          ElevatedButton(
+                            onPressed: () => completeOrder(doc.id),
+                            child: const Text("Complete"),
+                          ),
+                        const SizedBox(width: 8),
+                        if (!isAvailable && status == "accepted")
+                          OutlinedButton(
+                            onPressed: () => cancelOrder(doc.id),
+                            child: const Text("Cancel"),
+                          ),
+                      ],
+                    )
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

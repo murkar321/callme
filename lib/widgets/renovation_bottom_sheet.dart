@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:callme/screens/civil_book_page.dart';
+import 'package:callme/bookings/civil_book_page.dart';
 import '../data/renovation_options.dart';
 
 class RenovationBottomSheet extends StatefulWidget {
