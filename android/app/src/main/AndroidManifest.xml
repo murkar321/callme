@@ -1,21 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.callme">
 
-    <!-- 🔐 Location permissions -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 🔐 Permissions -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.CAMERA"/>
-
-
-    <!-- Optional for Internet-based Firebase services -->
-    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:label="callme"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <!-- 🔥 Google Maps API Key -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyCFZgkNCOXpLHk7Xbc42eoxX4UCdpD7BVE"/>
 
         <activity
             android:name=".MainActivity"
@@ -27,47 +29,41 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
-            <!-- Flutter splash screen theme -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
+                android:resource="@style/NormalTheme"/>
 
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
 
-        <!-- Firebase messaging channel (optional but useful for notifications) -->
+        <!-- Firebase -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="default_channel" />
+            android:value="default_channel"/>
 
-        <!-- Flutter plugin registration -->
         <meta-data
             android:name="flutterEmbedding"
-            android:value="2" />
+            android:value="2"/>
 
-        <!-- Firebase auto init -->
         <meta-data
             android:name="firebase_analytics_collection_enabled"
-            android:value="true" />
+            android:value="true"/>
+
         <meta-data
             android:name="google_analytics_automatic_screen_reporting_enabled"
-            android:value="true" />
+            android:value="true"/>
 
     </application>
 
-    <!-- Required for PROCESS_TEXT intent visibility -->
+    <!-- Text processing -->
     <queries>
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT" />
-            <data android:mimeType="text/plain" />
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
         </intent>
     </queries>
-
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-
 
 </manifest>

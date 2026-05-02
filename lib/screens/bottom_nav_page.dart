@@ -27,8 +27,8 @@ class _BottomNavPageState extends State<BottomNavPage> {
   bool isAdmin = false;
   bool isGuest = false;
 
-  late List<Widget> _screens;
-  late List<BottomNavigationBarItem> _items;
+  List<Widget> _screens = [];
+  List<BottomNavigationBarItem> _items = [];
 
   @override
   void initState() {
@@ -36,54 +36,53 @@ class _BottomNavPageState extends State<BottomNavPage> {
     _initUserRole();
   }
 
-  /// 🔥 INIT ROLE (REALTIME SAFE)
+  /// 🔥 INIT ROLE
   void _initUserRole() {
     final user = FirebaseAuth.instance.currentUser;
 
     isGuest = user == null;
 
-    /// ✅ ADMIN CHECK (SAFE)
-    isAdmin = (user?.email ?? "")
-            .toLowerCase()
-            .trim() ==
+    isAdmin = (user?.email ?? "").toLowerCase().trim() ==
         "allinonecallme@gmail.com";
 
     debugPrint("User Email: ${user?.email}");
+    debugPrint("Is Guest: $isGuest");
     debugPrint("Is Admin: $isAdmin");
 
     _buildNav();
   }
 
-  /// 🔥 BUILD NAV (NO CONST LIST)
+  /// 🔥 BUILD NAV
   void _buildNav() {
 
+    /// ✅ COMMON SCREENS (ALL USERS INCLUDING GUEST)
     _screens = [
       const HomePage(),
-      BusinessPage(),
+      BusinessPage(), // 👈 ALWAYS visible
       MyOrdersPage(phone: widget.userPhone),
       ProfilePage(phone: widget.userPhone),
     ];
 
-    _items = [
-      const BottomNavigationBarItem(
+    _items = const [
+      BottomNavigationBarItem(
         icon: Icon(Icons.home),
         label: "Home",
       ),
-      const BottomNavigationBarItem(
+      BottomNavigationBarItem(
         icon: Icon(Icons.business),
         label: "Business",
       ),
-      const BottomNavigationBarItem(
+      BottomNavigationBarItem(
         icon: Icon(Icons.shopping_bag),
         label: "Orders",
       ),
-      const BottomNavigationBarItem(
+      BottomNavigationBarItem(
         icon: Icon(Icons.person),
         label: "Profile",
       ),
     ];
 
-    /// 👑 ADMIN ACCESS
+    /// 👑 ADMIN EXTRA TAB
     if (isAdmin) {
       _screens.add(AdminDashboard());
       _items.add(
@@ -100,7 +99,7 @@ class _BottomNavPageState extends State<BottomNavPage> {
   @override
   Widget build(BuildContext context) {
 
-    /// ⏳ LOADING SAFE
+    /// ⏳ SAFE LOADING
     if (_screens.isEmpty) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),

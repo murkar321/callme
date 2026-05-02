@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class BusinessDashboardPage extends StatefulWidget {
   final String providerId;
@@ -22,30 +23,35 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   final ordersRef = FirebaseFirestore.instance.collection('orders');
   final providersRef = FirebaseFirestore.instance.collection('providers');
 
-  /// ================= PROVIDER STREAM =================
+  final user = FirebaseAuth.instance.currentUser;
+
+  /// ================= STREAMS =================
+
   Stream<DocumentSnapshot> providerStream() {
     return providersRef.doc(widget.providerId).snapshots();
   }
 
-  /// ================= AVAILABLE JOBS =================
+  /// 🔥 AVAILABLE JOBS (FIXED NULL ISSUE)
   Stream<QuerySnapshot> availableJobs() {
     return ordersRef
         .where('serviceType', isEqualTo: widget.serviceType)
         .where('status', isEqualTo: "pending")
-        .where('providerId', isNull: true) // only unassigned jobs
+        .where('providerId', isNull: true) // ✅ IMPORTANT FIX
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
-  /// ================= MY JOBS =================
+  /// 🔥 MY JOBS (USE AUTH UID)
   Stream<QuerySnapshot> myJobs() {
     return ordersRef
-        .where('providerId', isEqualTo: widget.providerId)
+        .where('providerUserId', isEqualTo: user!.uid)
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
-  /// ================= ACCEPT ORDER =================
+  /// ================= ACTIONS =================
+
+  /// ✅ ACCEPT
   Future<void> acceptOrder(String id) async {
     final ref = ordersRef.doc(id);
 
@@ -54,14 +60,13 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         final snap = await tx.get(ref);
         final data = snap.data() as Map<String, dynamic>;
 
-        final existingProvider = data['providerId'];
-
-        if (existingProvider != null && existingProvider != "") {
-          throw Exception("Already taken");
+        if (data['providerId'] != null) {
+          throw Exception("Taken");
         }
 
         tx.update(ref, {
-          "providerId": widget.providerId,
+          "providerId": widget.providerId,        // old logic kept
+          "providerUserId": user!.uid,            // 🔥 NEW (for rules)
           "providerName": widget.businessName,
           "status": "accepted",
           "updatedAt": FieldValue.serverTimestamp(),
@@ -74,7 +79,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
     }
   }
 
-  /// ================= COMPLETE =================
+  /// ✅ COMPLETE
   Future<void> completeOrder(String id) async {
     await ordersRef.doc(id).update({
       "status": "completed",
@@ -84,10 +89,12 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
     _msg("✅ Job Completed");
   }
 
-  /// ================= CANCEL =================
+  /// ❌ CANCEL
   Future<void> cancelOrder(String id) async {
     await ordersRef.doc(id).update({
-      "status": "cancelled",
+      "status": "pending",
+      "providerId": null,
+      "providerUserId": null,
       "updatedAt": FieldValue.serverTimestamp(),
     });
 
@@ -113,6 +120,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   }
 
   /// ================= UI =================
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
@@ -120,8 +128,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
       builder: (context, snap) {
         if (!snap.hasData) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+              body: Center(child: CircularProgressIndicator()));
         }
 
         final provider =
@@ -139,8 +146,9 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         return DefaultTabController(
           length: 2,
           child: Scaffold(
-            backgroundColor: const Color(0xFFF5F7FB),
+            backgroundColor: const Color(0xFFF4F6FA),
             appBar: AppBar(
+              elevation: 0,
               title: Text(widget.businessName),
               bottom: const TabBar(
                 tabs: [
@@ -151,8 +159,8 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             ),
             body: TabBarView(
               children: [
-                _jobsList(availableJobs(), true),
-                _jobsList(myJobs(), false),
+                _jobList(availableJobs(), true),
+                _jobList(myJobs(), false),
               ],
             ),
           ),
@@ -162,7 +170,8 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   }
 
   /// ================= JOB LIST =================
-  Widget _jobsList(Stream<QuerySnapshot> stream, bool isAvailable) {
+
+  Widget _jobList(Stream<QuerySnapshot> stream, bool isAvailable) {
     return StreamBuilder<QuerySnapshot>(
       stream: stream,
       builder: (context, snap) {
@@ -187,70 +196,118 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             final doc = docs[i];
             final data = doc.data() as Map<String, dynamic>;
 
-            final user = data['user'] ?? {};
+            final userData = data['user'] ?? {};
             final payment = data['payment'] ?? {};
             final status = data['status'] ?? "pending";
 
-            return Card(
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+            return Container(
               margin: const EdgeInsets.only(bottom: 12),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user['name'] ?? "No Name",
-                      style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 6),
-                    Text("📞 ${user['phone'] ?? ""}"),
-                    Text("📍 ${data['location']?['address'] ?? ""}"),
-                    Text("💰 ₹${payment['totalAmount'] ?? 0}"),
-                    const SizedBox(height: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 10,
+                    color: Colors.black.withOpacity(0.06),
+                  )
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
 
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: getColor(status),
-                        borderRadius: BorderRadius.circular(20),
+                  /// NAME
+                  Text(
+                    userData['name'] ?? "No Name",
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  /// PHONE
+                  Row(
+                    children: [
+                      const Icon(Icons.phone, size: 14),
+                      const SizedBox(width: 6),
+                      Text(userData['phone'] ?? ""),
+                    ],
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  /// LOCATION
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on, size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          data['location']?['address'] ?? "",
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      child: Text(
-                        status.toUpperCase(),
-                        style: const TextStyle(color: Colors.white),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  /// PRICE + STATUS
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "₹${payment['totalAmount'] ?? 0}",
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold),
                       ),
-                    ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: getColor(status),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          status.toUpperCase(),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12),
+                        ),
+                      )
+                    ],
+                  ),
 
-                    const SizedBox(height: 10),
+                  const SizedBox(height: 10),
 
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        if (isAvailable)
-                          ElevatedButton(
-                            onPressed: () => acceptOrder(doc.id),
-                            child: const Text("Accept"),
-                          ),
-                        if (!isAvailable && status == "accepted")
-                          ElevatedButton(
-                            onPressed: () => completeOrder(doc.id),
-                            child: const Text("Complete"),
-                          ),
-                        const SizedBox(width: 8),
-                        if (!isAvailable && status == "accepted")
-                          OutlinedButton(
-                            onPressed: () => cancelOrder(doc.id),
-                            child: const Text("Cancel"),
-                          ),
-                      ],
-                    )
-                  ],
-                ),
+                  /// ACTIONS
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (isAvailable)
+                        ElevatedButton(
+                          onPressed: () => acceptOrder(doc.id),
+                          child: const Text("Accept"),
+                        ),
+
+                      if (!isAvailable && status == "accepted")
+                        ElevatedButton(
+                          onPressed: () => completeOrder(doc.id),
+                          child: const Text("Complete"),
+                        ),
+
+                      const SizedBox(width: 8),
+
+                      if (!isAvailable && status == "accepted")
+                        OutlinedButton(
+                          onPressed: () => cancelOrder(doc.id),
+                          child: const Text("Cancel"),
+                        ),
+                    ],
+                  )
+                ],
               ),
             );
           },

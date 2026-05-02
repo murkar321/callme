@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 import '../provider/service_config.dart';
 import '../provider/succespage.dart';
@@ -32,7 +35,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
   bool ownTools = false;
 
-  /// 🔹 CONTROLLERS
+  File? businessImage;
+
+  /// CONTROLLERS
   final businessController = TextEditingController();
   final ownerController = TextEditingController();
   final phoneController = TextEditingController();
@@ -46,6 +51,45 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
   final accountController = TextEditingController();
   final ifscController = TextEditingController();
   final upiController = TextEditingController();
+
+  /// ================= IMAGE PICK =================
+  Future<void> pickBusinessImage() async {
+    final picked =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
+
+    if (picked != null) {
+      setState(() {
+        businessImage = File(picked.path);
+      });
+    }
+  }
+
+  /// ================= LOCATION =================
+  Future<void> fillLocation() async {
+    try {
+      await Geolocator.requestPermission();
+
+      Position pos = await Geolocator.getCurrentPosition();
+
+      List<Placemark> placemarks =
+          await placemarkFromCoordinates(
+              pos.latitude, pos.longitude);
+
+      final place = placemarks.first;
+
+      setState(() {
+        addressController.text =
+            "${place.street}, ${place.locality}";
+        cityController.text = place.locality ?? "";
+        stateController.text = place.administrativeArea ?? "";
+        pincodeController.text = place.postalCode ?? "";
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Location failed")),
+      );
+    }
+  }
 
   /// ================= FILE UPLOAD =================
   Future<void> _uploadDocument(String docName) async {
@@ -72,7 +116,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Upload failed")),
+        const SnackBar(content: Text("Upload failed")),
       );
     }
   }
@@ -84,59 +128,55 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
       final user = FirebaseAuth.instance.currentUser;
 
-      if (user == null) {
-        throw "User not logged in";
-      }
-
-      if (businessController.text.trim().isEmpty) {
+      if (user == null) throw "User not logged in";
+      if (businessController.text.trim().isEmpty)
         throw "Business name required";
-      }
-
-      if (selectedCategories.isEmpty) {
+      if (selectedCategories.isEmpty)
         throw "Select at least one category";
+
+      /// 🔥 IMAGE UPLOAD
+      String imageUrl = "";
+      if (businessImage != null) {
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child("provider_images/${user.uid}.jpg");
+
+        await ref.putFile(businessImage!);
+        imageUrl = await ref.getDownloadURL();
       }
 
       final providerRef =
           FirebaseFirestore.instance.collection("providers").doc();
 
-      final businessName = businessController.text.trim();
-      final ownerName = ownerController.text.trim();
-      final phone = phoneController.text.trim();
-
       await providerRef.set({
-        /// 🔑 IDS
         "providerId": providerRef.id,
         "userId": user.uid,
 
-        /// 🔥 BASIC INFO
-        "providerName": businessName,
-        "ownerName": ownerName,
-        "phone": phone,
+        "providerName": businessController.text.trim(),
+        "ownerName": ownerController.text.trim(),
+        "phone": phoneController.text.trim(),
 
-        /// 🔥 TYPE
         "serviceType": widget.type,
         "providerType": widget.providerType,
         "categories": selectedCategories,
 
-        /// 🏢 BUSINESS INFO
         "business": {
-          "businessName": businessName,
-          "ownerName": ownerName,
-          "phone": phone,
+          "businessName": businessController.text.trim(),
+          "ownerName": ownerController.text.trim(),
+          "phone": phoneController.text.trim(),
           "email": emailController.text.trim(),
           "address": addressController.text.trim(),
           "city": cityController.text.trim(),
           "state": stateController.text.trim(),
           "pincode": pincodeController.text.trim(),
+          "image": imageUrl,
         },
 
-        /// 🔧 SERVICE
         "service": {
           "price": priceController.text.trim(),
           "ownTools": ownTools,
         },
 
-        /// 💳 BANK
         "bank": {
           "accountHolder": bankHolderController.text.trim(),
           "accountNumber": accountController.text.trim(),
@@ -144,14 +184,10 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
           "upi": upiController.text.trim(),
         },
 
-        /// 📂 DOCUMENTS
         "documents": uploadedDocs,
 
-        /// 🔥 STATUS
         "status": "pending",
         "isActive": false,
-
-        /// ⏱ META
         "createdAt": FieldValue.serverTimestamp(),
       });
 
@@ -161,7 +197,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         context,
         MaterialPageRoute(
           builder: (_) => SuccessPage(
-            businessName: businessName,
+            businessName: businessController.text.trim(),
             providerType: widget.providerType,
             serviceType: widget.type,
           ),
@@ -191,42 +227,24 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
-
       appBar: AppBar(
         title: Text("${widget.type} Registration"),
       ),
-
       body: Stack(
         children: [
           SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
             child: Column(
               children: [
-                /// STEP INDICATOR
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: List.generate(5, (i) {
-                    return CircleAvatar(
-                      radius: 14,
-                      backgroundColor:
-                          i <= currentStep ? Colors.blue : Colors.grey,
-                      child: Text("${i + 1}",
-                          style: const TextStyle(color: Colors.white)),
-                    );
-                  }),
+                LinearProgressIndicator(
+                  value: (currentStep + 1) / 5,
                 ),
-
                 const SizedBox(height: 20),
-
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: _buildStep(config),
-                ),
+                _buildStep(config),
               ],
             ),
           ),
 
-          /// BUTTON
           Positioned(
             bottom: 0,
             left: 0,
@@ -256,109 +274,125 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     switch (currentStep) {
 
       case 0:
-        return _card(
-          "Categories",
-          Icons.category,
-          Column(
-            children: config.serviceCategories.map<Widget>((cat) {
-              return CheckboxListTile(
-                title: Text(cat),
-                value: selectedCategories.contains(cat),
-                onChanged: (val) {
-                  setState(() {
-                    val!
-                        ? selectedCategories.add(cat)
-                        : selectedCategories.remove(cat);
-                  });
-                },
-              );
-            }).toList(),
-          ),
-        );
+        return _card("Categories", Icons.category, Column(
+          children: config.serviceCategories.map<Widget>((cat) {
+            return CheckboxListTile(
+              title: Text(cat),
+              value: selectedCategories.contains(cat),
+              onChanged: (val) {
+                setState(() {
+                  val!
+                      ? selectedCategories.add(cat)
+                      : selectedCategories.remove(cat);
+                });
+              },
+            );
+          }).toList(),
+        ));
 
       case 1:
-        return _card(
-          "Business Info",
-          Icons.business,
-          Column(
-            children: [
-              _field(businessController, "Business Name"),
-              _field(ownerController, "Owner Name"),
-              _field(phoneController, "Phone"),
-              _field(emailController, "Email"),
-              _field(addressController, "Address"),
-            ],
-          ),
-        );
+        return _card("Business Info", Icons.business, Column(
+          children: [
+
+            GestureDetector(
+              onTap: pickBusinessImage,
+              child: CircleAvatar(
+                radius: 40,
+                backgroundColor: Colors.grey.shade200,
+                backgroundImage:
+                businessImage != null ? FileImage(businessImage!) : null,
+                child: businessImage == null
+                    ? const Icon(Icons.camera_alt)
+                    : null,
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            _field(businessController, "Business Name", Icons.store),
+            _field(ownerController, "Owner Name", Icons.person),
+            _field(phoneController, "Phone", Icons.phone),
+            _field(emailController, "Email", Icons.email),
+
+            Row(
+              children: [
+                Expanded(
+                  child: _field(addressController, "Address", Icons.location_on),
+                ),
+                IconButton(
+                  onPressed: fillLocation,
+                  icon: const Icon(Icons.my_location),
+                )
+              ],
+            ),
+
+            _field(cityController, "City", Icons.location_city),
+            _field(stateController, "State", Icons.map),
+            _field(pincodeController, "Pincode", Icons.pin),
+          ],
+        ));
 
       case 2:
-        return _card(
-          "Service",
-          Icons.build,
-          Column(
-            children: [
-              _field(priceController, "Price"),
-              SwitchListTile(
-                title: const Text("Own Tools"),
-                value: ownTools,
-                onChanged: (v) => setState(() => ownTools = v),
-              ),
-            ],
-          ),
-        );
+        return _card("Service", Icons.build, Column(
+          children: [
+            _field(priceController, "Price", Icons.currency_rupee),
+            SwitchListTile(
+              title: const Text("Own Tools"),
+              value: ownTools,
+              onChanged: (v) => setState(() => ownTools = v),
+            ),
+          ],
+        ));
 
       case 3:
-        return _card(
-          "Bank Details",
-          Icons.account_balance,
-          Column(
-            children: [
-              _field(bankHolderController, "Holder Name"),
-              _field(accountController, "Account Number"),
-              _field(ifscController, "IFSC"),
-              _field(upiController, "UPI"),
-            ],
-          ),
-        );
+        return _card("Bank Details", Icons.account_balance, Column(
+          children: [
+            _field(bankHolderController, "Holder Name", Icons.person),
+            _field(accountController, "Account Number", Icons.numbers),
+            _field(ifscController, "IFSC", Icons.code),
+            _field(upiController, "UPI", Icons.qr_code),
+          ],
+        ));
 
       case 4:
-        return _card(
-          "Documents",
-          Icons.upload_file,
-          Column(
-            children: config.requiredDocuments.map<Widget>((doc) {
-              final uploaded = uploadedDocs.containsKey(doc);
+        return _card("Documents", Icons.upload_file, Column(
+          children: config.requiredDocuments.map<Widget>((doc) {
+            final uploaded = uploadedDocs.containsKey(doc);
 
-              return ListTile(
-                title: Text(doc),
-                trailing: ElevatedButton(
-                  onPressed: () => _uploadDocument(doc),
-                  child: Text(uploaded ? "Update" : "Upload"),
-                ),
-              );
-            }).toList(),
-          ),
-        );
+            return ListTile(
+              title: Text(doc),
+              trailing: ElevatedButton(
+                onPressed: () => _uploadDocument(doc),
+                child: Text(uploaded ? "Update" : "Upload"),
+              ),
+            );
+          }).toList(),
+        ));
 
       default:
         return const SizedBox();
     }
   }
 
-  /// ================= HELPERS =================
+  /// ================= UI HELPERS =================
   Widget _card(String title, IconData icon, Widget child) {
     return Container(
-      key: ValueKey(title),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 10,
+            color: Colors.black.withOpacity(0.05),
+          )
+        ],
       ),
       child: Column(
         children: [
           Row(
             children: [
-              Icon(icon),
+              Icon(icon, color: Colors.deepPurple),
               const SizedBox(width: 10),
               Text(title,
                   style: const TextStyle(
@@ -372,15 +406,19 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     );
   }
 
-  Widget _field(TextEditingController c, String hint) {
+  Widget _field(TextEditingController c, String hint, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 14),
       child: TextField(
         controller: c,
         decoration: InputDecoration(
+          prefixIcon: Icon(icon),
           hintText: hint,
+          filled: true,
+          fillColor: Colors.grey.shade100,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
           ),
         ),
       ),

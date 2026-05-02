@@ -5,13 +5,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-class ProfilePage extends StatefulWidget {
-  final String phone; // ✅ FIXED
+import 'map_picker_page.dart'; // ✅ your existing map page
 
-  const ProfilePage({
-    super.key,
-    required this.phone,
-  });
+class ProfilePage extends StatefulWidget {
+  final String phone;
+
+  const ProfilePage({super.key, required this.phone});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -30,6 +29,8 @@ class _ProfilePageState extends State<ProfilePage> {
   final firestore = FirebaseFirestore.instance;
 
   File? _image;
+  String? _networkImage;
+
   bool isLoading = false;
 
   @override
@@ -42,30 +43,42 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> loadUserData() async {
     try {
       if (user != null) {
+        /// 🔥 GOOGLE AUTO-FILL
+        emailController.text = user!.email ?? "";
+        phoneController.text = widget.phone;
+
+        if (user!.displayName != null) {
+          final parts = user!.displayName!.split(" ");
+          firstNameController.text = parts.first;
+          if (parts.length > 1) {
+            lastNameController.text = parts.sublist(1).join(" ");
+          }
+        }
+
+        if (user!.photoURL != null) {
+          _networkImage = user!.photoURL;
+        }
+
+        /// 🔄 FIRESTORE DATA (override if exists)
         final doc =
             await firestore.collection('users').doc(user!.uid).get();
 
         if (doc.exists) {
           final data = doc.data()!;
 
-          firstNameController.text = data['firstName'] ?? "";
-          lastNameController.text = data['lastName'] ?? "";
-          emailController.text =
-              data['email'] ?? user!.email ?? "";
-          phoneController.text =
-              data['phone'] ?? widget.phone;
+          firstNameController.text =
+              data['firstName'] ?? firstNameController.text;
+          lastNameController.text =
+              data['lastName'] ?? lastNameController.text;
           addressController.text = data['address'] ?? "";
-        } else {
-          /// fallback
-          emailController.text = user!.email ?? "";
-          phoneController.text = widget.phone;
         }
       } else {
-        /// if no firebase auth (phone login/manual)
         phoneController.text = widget.phone;
       }
+
+      setState(() {});
     } catch (e) {
-      debugPrint("Load user error: $e");
+      debugPrint("Load error: $e");
     }
   }
 
@@ -77,18 +90,34 @@ class _ProfilePageState extends State<ProfilePage> {
     if (picked != null) {
       setState(() {
         _image = File(picked.path);
+        _networkImage = null; // override google image
       });
     }
   }
 
-  /// ================= SAVE PROFILE =================
+  /// ================= OPEN MAP =================
+  Future<void> openMap() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const MapPickerPage(),
+      ),
+    );
+
+    if (result != null && result is String) {
+      setState(() {
+        addressController.text = result;
+      });
+    }
+  }
+
+  /// ================= SAVE =================
   Future<void> saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
     try {
       setState(() => isLoading = true);
 
-      /// 🔥 use uid if available else phone
       final docId = user?.uid ?? widget.phone;
 
       await firestore.collection('users').doc(docId).set({
@@ -97,8 +126,6 @@ class _ProfilePageState extends State<ProfilePage> {
         'email': emailController.text.trim(),
         'phone': phoneController.text.trim(),
         'address': addressController.text.trim(),
-
-        /// (future ready)
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -116,20 +143,10 @@ class _ProfilePageState extends State<ProfilePage> {
 
   /// ================= LOGOUT =================
   Future<void> logout() async {
-    try {
-      await FirebaseAuth.instance.signOut();
-      await GoogleSignIn().signOut();
+    await FirebaseAuth.instance.signOut();
+    await GoogleSignIn().signOut();
 
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        '/',
-        (route) => false,
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Logout Failed")),
-      );
-    }
+    Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
   }
 
   @override
@@ -143,7 +160,6 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   /// ================= UI =================
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,8 +167,6 @@ class _ProfilePageState extends State<ProfilePage> {
       appBar: AppBar(
         title: const Text("My Profile"),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -171,22 +185,21 @@ class _ProfilePageState extends State<ProfilePage> {
                           backgroundColor: Colors.grey.shade200,
                           backgroundImage: _image != null
                               ? FileImage(_image!)
-                              : const AssetImage("assets/user.jfif")
-                                  as ImageProvider,
+                              : _networkImage != null
+                                  ? NetworkImage(_networkImage!)
+                                  : const AssetImage("assets/user.jfif")
+                                      as ImageProvider,
                         ),
                         Positioned(
                           bottom: 0,
                           right: 0,
                           child: InkWell(
                             onTap: pickImage,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: const BoxDecoration(
-                                color: Colors.indigo,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.edit,
-                                  color: Colors.white, size: 18),
+                            child: const CircleAvatar(
+                              radius: 18,
+                              backgroundColor: Colors.indigo,
+                              child: Icon(Icons.edit,
+                                  color: Colors.white, size: 16),
                             ),
                           ),
                         )
@@ -199,7 +212,8 @@ class _ProfilePageState extends State<ProfilePage> {
                     Row(
                       children: [
                         Expanded(
-                          child: _field(firstNameController, "First Name"),
+                          child:
+                              _field(firstNameController, "First Name"),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -222,8 +236,22 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     const SizedBox(height: 15),
 
-                    /// ADDRESS
-                    _field(addressController, "Address", maxLines: 3),
+                    /// ADDRESS + MAP BUTTON
+                    Column(
+                      children: [
+                        _field(addressController, "Address", maxLines: 3),
+                        const SizedBox(height: 8),
+
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: openMap,
+                            icon: const Icon(Icons.map),
+                            label: const Text("Select on Map"),
+                          ),
+                        ),
+                      ],
+                    ),
 
                     const SizedBox(height: 25),
 
@@ -234,13 +262,13 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: ElevatedButton(
                         onPressed: saveProfile,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo,
+                          backgroundColor: const Color.fromARGB(255, 111, 127, 217),
                         ),
                         child: const Text("Save Profile"),
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 15),
 
                     /// LOGOUT
                     SizedBox(
@@ -248,9 +276,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       height: 50,
                       child: OutlinedButton.icon(
                         onPressed: logout,
-                        icon: const Icon(Icons.logout, color: Colors.red),
+                        icon:
+                            const Icon(Icons.logout, color: Color.fromARGB(255, 185, 22, 10)),
                         label: const Text("Logout",
-                            style: TextStyle(color: Colors.red)),
+                            style: TextStyle(color: Color.fromARGB(255, 185, 22, 10))),
                       ),
                     ),
                   ],
