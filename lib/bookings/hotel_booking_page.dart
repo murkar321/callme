@@ -20,7 +20,6 @@ class HotelBookingPage extends StatefulWidget {
 }
 
 class _HotelBookingPageState extends State<HotelBookingPage> {
-
   final name = TextEditingController();
   final phone = TextEditingController();
   final email = TextEditingController();
@@ -42,6 +41,15 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
   }
 
   @override
+  void dispose() {
+    name.dispose();
+    phone.dispose();
+    email.dispose();
+    address.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Hotel Booking")),
@@ -49,6 +57,7 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
         padding: const EdgeInsets.all(16),
         children: [
 
+          /// HOTEL INFO
           Card(
             child: ListTile(
               leading: const Icon(Icons.hotel),
@@ -61,6 +70,7 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
 
           const Text("Your Selection"),
 
+          /// CART ITEMS
           Card(
             child: Column(
               children: cart.map((e) => ListTile(
@@ -71,6 +81,7 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
             ),
           ),
 
+          /// TOTAL
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -81,20 +92,29 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
 
           const SizedBox(height: 20),
 
+          /// DATE
           ListTile(
             leading: const Icon(Icons.calendar_today),
-            title: Text(date == null ? "Select Date" : "${date!.day}/${date!.month}/${date!.year}"),
+            title: Text(
+              date == null
+                  ? "Select Date"
+                  : "${date!.day}/${date!.month}/${date!.year}",
+            ),
             onTap: _pickDate,
           ),
 
+          /// TIME
           ListTile(
             leading: const Icon(Icons.access_time),
-            title: Text(time == null ? "Select Time" : time!.format(context)),
+            title: Text(
+              time == null ? "Select Time" : time!.format(context),
+            ),
             onTap: _pickTime,
           ),
 
           const SizedBox(height: 20),
 
+          /// INPUTS
           TextField(controller: name, decoration: const InputDecoration(labelText: "Name")),
           TextField(controller: phone, decoration: const InputDecoration(labelText: "Phone")),
           TextField(controller: email, decoration: const InputDecoration(labelText: "Email")),
@@ -102,6 +122,7 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
 
           const SizedBox(height: 30),
 
+          /// BUTTON
           ElevatedButton(
             onPressed: isLoading ? null : _submit,
             child: isLoading
@@ -113,10 +134,14 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
     );
   }
 
+  /// ================= SUBMIT =================
   void _submit() async {
     final user = FirebaseAuth.instance.currentUser;
 
-    if (name.text.isEmpty || phone.text.isEmpty || email.text.isEmpty || address.text.isEmpty) {
+    if (name.text.isEmpty ||
+        phone.text.isEmpty ||
+        email.text.isEmpty ||
+        address.text.isEmpty) {
       _show("Fill all details");
       return;
     }
@@ -126,31 +151,51 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
       return;
     }
 
+    if (user == null) {
+      _show("User not logged in");
+      return;
+    }
+
     setState(() => isLoading = true);
 
     try {
       await OrderService.placeOrder(
-        serviceType: "Hotel",
-        services: cart.map((e) => "${e.name} x${e.quantity}").toList(),
+        serviceType: "hotel", // ✅ IMPORTANT
 
-        /// ✅ FIX
-        userId: user?.uid ?? "",
-        createdBy: user?.phoneNumber ?? phone.text,
+        services: cart
+            .map((e) => "${e.name} x${e.quantity}")
+            .toList(),
+
+        /// USER
+        userId: user.uid,
+        userName: name.text.trim(),
+        phone: phone.text.trim(),
+        email: email.text.trim(),
+
+        /// CREATOR
+        createdBy: user.uid,
         createdByRole: "user",
 
-        userName: name.text,
-        phone: phone.text,
-        email: email.text,
-        address: address.text,
+        /// LOCATION
+        address: address.text.trim(),
         note: "",
+
+        /// SCHEDULE
         date: date!,
         time: time!.format(context),
-        totalAmount: total.toDouble(), isEnquiry: true,
+
+        /// PAYMENT
+        totalAmount: total.toDouble(),
+
+        /// BOOKING
+        isEnquiry: false,
       );
 
       Cart.clear("Hotel");
 
       _show("Booking Confirmed ✅");
+
+      if (!mounted) return;
 
       Navigator.pushAndRemoveUntil(
         context,
@@ -171,9 +216,8 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
   }
 
   void _show(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   void _pickDate() async {

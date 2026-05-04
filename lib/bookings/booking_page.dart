@@ -16,7 +16,8 @@ class BookingPage extends StatefulWidget {
     super.key,
     required this.serviceName,
     this.product,
-    this.cart, required List<CartItem> products,
+    this.cart, required List<dynamic> products,
+    // ❌ removed unused products param
   });
 
   @override
@@ -25,7 +26,6 @@ class BookingPage extends StatefulWidget {
 
 class _BookingPageState extends State<BookingPage> {
 
-  /// CONTROLLERS
   final name = TextEditingController();
   final email = TextEditingController();
   final phone = TextEditingController();
@@ -35,7 +35,6 @@ class _BookingPageState extends State<BookingPage> {
   DateTime? date;
   TimeOfDay? time;
 
-  /// SUCCESS STATE
   bool isSuccess = false;
   String bookingId = "";
 
@@ -50,6 +49,9 @@ class _BookingPageState extends State<BookingPage> {
     if (isSingle) return widget.product!.calculatedFinalPrice.toDouble();
     return 0;
   }
+
+  /// 🔥 NORMALIZE SERVICE TYPE (CRITICAL FIX)
+  String normalize(String s) => s.trim().toLowerCase();
 
   @override
   void dispose() {
@@ -69,7 +71,7 @@ class _BookingPageState extends State<BookingPage> {
     );
   }
 
-  /// ================= BOOKING FORM =================
+  /// ================= FORM =================
 
   Widget _bookingForm() {
     return Padding(
@@ -128,7 +130,7 @@ class _BookingPageState extends State<BookingPage> {
     );
   }
 
-  /// ================= SUCCESS VIEW =================
+  /// ================= SUCCESS =================
 
   Widget _successView() {
     return Padding(
@@ -291,7 +293,7 @@ class _BookingPageState extends State<BookingPage> {
     if (success == true) _save();
   }
 
-  /// 🔥 FINAL SAVE (PROPER STRUCTURE)
+  /// 🔥 FINAL SAVE (FIXED)
   void _save() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -303,7 +305,9 @@ class _BookingPageState extends State<BookingPage> {
           : [widget.product?.name ?? widget.serviceName];
 
       final docRef = await OrderService.placeOrder(
-        serviceType: widget.serviceName,
+        /// 🔥 FIXED (NORMALIZED)
+        serviceType: normalize(widget.serviceName),
+
         services: services,
 
         userId: user.uid,
@@ -319,11 +323,16 @@ class _BookingPageState extends State<BookingPage> {
 
         totalAmount: total,
 
-        /// ✅ FIXED
         createdBy: user.uid,
         createdByRole: "user",
 
-        providerId: null, isEnquiry: true,
+        /// 🔥 FIXED (NO NULL)
+        providerId: "",
+        providerUserId: "",
+        providerName: "",
+
+        /// 🔥 FIXED (THIS IS BOOKING, NOT ENQUIRY)
+        isEnquiry: false,
       );
 
       setState(() {
@@ -333,7 +342,6 @@ class _BookingPageState extends State<BookingPage> {
 
       if (isCart) Cart.clear(widget.serviceName);
 
-      /// 🔥 REDIRECT TO HOME WITH NAV
       Future.delayed(const Duration(seconds: 3), () {
         if (!mounted) return;
 

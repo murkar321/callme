@@ -25,6 +25,7 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
   String visitType = "Home";
   bool isLoading = false;
 
+  /// ✅ TOTAL
   int get totalAmount {
     int total = 0;
     for (var item in widget.services) {
@@ -34,12 +35,21 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
   }
 
   @override
+  void dispose() {
+    phone.dispose();
+    email.dispose();
+    address.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Salon Booking")),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+
           const Text("Selected Services",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
 
@@ -91,20 +101,32 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
 
           const SizedBox(height: 10),
 
-          TextField(controller: phone, decoration: const InputDecoration(labelText: "Phone")),
+          TextField(
+            controller: phone,
+            decoration: const InputDecoration(labelText: "Phone"),
+          ),
+
           const SizedBox(height: 10),
-          TextField(controller: email, decoration: const InputDecoration(labelText: "Email")),
+
+          TextField(
+            controller: email,
+            decoration: const InputDecoration(labelText: "Email"),
+          ),
+
           const SizedBox(height: 10),
 
           if (visitType == "Home")
-            TextField(controller: address, decoration: const InputDecoration(labelText: "Address")),
+            TextField(
+              controller: address,
+              decoration: const InputDecoration(labelText: "Address"),
+            ),
 
           const SizedBox(height: 30),
 
           ElevatedButton(
             onPressed: isLoading ? null : _submit,
             child: isLoading
-                ? const CircularProgressIndicator()
+                ? const CircularProgressIndicator(color: Colors.white)
                 : const Text("Confirm Booking"),
           )
         ],
@@ -112,6 +134,7 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
     );
   }
 
+  /// ================= SUBMIT =================
   void _submit() async {
     final user = FirebaseAuth.instance.currentUser;
 
@@ -125,26 +148,53 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
       return;
     }
 
+    if (user == null) {
+      _show("User not logged in");
+      return;
+    }
+
     setState(() => isLoading = true);
 
     try {
       await OrderService.placeOrder(
-        serviceType: "Salon",
+        /// ✅ IMPORTANT: ALWAYS LOWERCASE
+        serviceType: "salon",
+
+        /// ✅ CLEAN SERVICE LIST
         services: widget.services.map((e) => e.name).toList(),
+
+        /// 👤 USER
+        userId: user.uid,
         userName: "Salon User",
-        phone: phone.text,
-        email: email.text,
-        address: visitType == "Home" ? address.text : "Salon Visit",
-        note: "",
+        phone: phone.text.trim(),
+        email: email.text.trim(),
+
+        /// 🔥 CREATOR (FIXED)
+        createdBy: user.uid,
+        createdByRole: "user",
+
+        /// 📍 LOCATION
+        address: visitType == "Home"
+            ? address.text.trim()
+            : "Salon Visit",
+
+        /// 📅 SCHEDULE
         date: DateTime.now(),
         time: TimeOfDay.now().format(context),
+
+        /// 💰 PAYMENT
         totalAmount: totalAmount.toDouble(),
+
+        /// EXTRA
         visitType: visitType,
 
-        /// ✅ FIX
-        userId: user?.uid ?? "",
-        createdBy: user?.phoneNumber ?? phone.text,
-        createdByRole: "user",
+        /// 🔥 VERY IMPORTANT FIX
+        providerId: null,
+        providerUserId: null,
+        providerName: null,
+
+        /// 🔥 THIS IS BOOKING NOT ENQUIRY
+        isEnquiry: false,
       );
 
       _show("Booking Confirmed ✅");

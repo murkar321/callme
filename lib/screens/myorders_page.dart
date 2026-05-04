@@ -6,22 +6,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 class MyOrdersPage extends StatelessWidget {
   const MyOrdersPage({super.key, required String phone});
 
-  /// 🔥 GET USER ORDERS (SAFE VERSION)
+  /// 🔥 GET USER ORDERS
   Stream<QuerySnapshot> getMyOrders() {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      debugPrint("❌ USER NOT LOGGED IN");
       return const Stream.empty();
     }
-
-    debugPrint("🔥 CURRENT UID: ${user.uid}");
 
     return FirebaseFirestore.instance
         .collection('orders')
         .where('userId', isEqualTo: user.uid)
-        // ❗ TEMP REMOVE orderBy (until index ready)
-        //.orderBy('createdAt', descending: true)
         .snapshots();
   }
 
@@ -30,18 +25,18 @@ class MyOrdersPage extends StatelessWidget {
     switch (status.toLowerCase()) {
       case "accepted":
         return Colors.green;
-      case "rejected":
-        return Colors.red;
       case "completed":
         return Colors.blue;
       case "cancelled":
         return Colors.grey;
+      case "rejected":
+        return Colors.red;
       default:
         return Colors.orange;
     }
   }
 
-  /// 📅 FORMAT DATE (SAFE)
+  /// 📅 FORMAT DATE
   String formatDate(dynamic ts) {
     try {
       if (ts is Timestamp) {
@@ -53,7 +48,7 @@ class MyOrdersPage extends StatelessWidget {
   }
 
   /// ❌ CANCEL ORDER
-  Future<void> cancelOrder(String orderId) async {
+  Future<void> cancelOrder(BuildContext context, String orderId) async {
     await FirebaseFirestore.instance
         .collection("orders")
         .doc(orderId)
@@ -61,150 +56,243 @@ class MyOrdersPage extends StatelessWidget {
       "status": "cancelled",
       "updatedAt": FieldValue.serverTimestamp(),
     });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Order cancelled")),
+    );
   }
+
+  /// 🧠 STATUS MESSAGE (NEW 🔥)
+  String getStatusMessage(String status) {
+    switch (status) {
+      case "accepted":
+        return "Provider assigned & will contact you";
+      case "completed":
+        return "Service completed successfully";
+      case "cancelled":
+        return "Order cancelled";
+      case "rejected":
+        return "Request rejected by provider";
+      default:
+        return "Waiting for provider to accept";
+    }
+  }
+
+  /// 🧱 ORDER CARD
+  Widget _orderCard(BuildContext context, QueryDocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+
+    final schedule = (data['schedule'] ?? {}) as Map<String, dynamic>;
+    final payment = (data['payment'] ?? {}) as Map<String, dynamic>;
+    final location = (data['location'] ?? {}) as Map<String, dynamic>;
+
+    final status = (data['status'] ?? "pending").toString();
+
+    final services = (data['services'] as List?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        [];
+
+    /// 🔥 PROVIDER INFO (NEW)
+    final providerName = data['providerName'] ?? "";
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OrderDetailPage(data: data),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            /// 🔹 HEADER
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  data['serviceType'] ?? "Service",
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: getStatusColor(status),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    status.toUpperCase(),
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            /// 🔹 SERVICES
+            Text(services.join(", ")),
+
+            const SizedBox(height: 10),
+
+            /// 📅 DATE
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 14),
+                const SizedBox(width: 6),
+                Text(formatDate(schedule['date'])),
+              ],
+            ),
+
+            const SizedBox(height: 4),
+
+            /// ⏰ TIME
+            Row(
+              children: [
+                const Icon(Icons.access_time, size: 14),
+                const SizedBox(width: 6),
+                Text(schedule['time'] ?? "-"),
+              ],
+            ),
+
+            const SizedBox(height: 4),
+
+            /// 📍 LOCATION
+            Row(
+              children: [
+                const Icon(Icons.location_on, size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    location['address'] ?? "",
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            /// 🔥 PROVIDER INFO (NEW COMMUNICATION)
+            if (providerName.toString().isNotEmpty)
+              Row(
+                children: [
+                  const Icon(Icons.business, size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    "Provider: $providerName",
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+
+            const SizedBox(height: 6),
+
+            /// 🧠 STATUS MESSAGE (NEW UX)
+            Text(
+              getStatusMessage(status),
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            /// 💰 PRICE + ACTION
+            Row(
+              children: [
+                Text(
+                  "₹${payment['totalAmount'] ?? 0}",
+                  style: const TextStyle(
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+
+                const Spacer(),
+
+                if (status == "pending")
+                  TextButton(
+                    onPressed: () => cancelOrder(context, doc.id),
+                    child: const Text(
+                      "Cancel",
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+              ],
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// ================= UI =================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("My Orders")),
-
+      backgroundColor: const Color(0xFFF4F6FA),
+      appBar: AppBar(
+        title: const Text("My Orders"),
+        centerTitle: true,
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: getMyOrders(),
         builder: (context, snapshot) {
 
-          /// ❌ ERROR
           if (snapshot.hasError) {
-            debugPrint("🔥 ERROR: ${snapshot.error}");
             return const Center(child: Text("Error loading orders"));
           }
 
-          /// ⏳ LOADING
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
           final orders = snapshot.data!.docs;
 
-          /// 📭 EMPTY
           if (orders.isEmpty) {
-            return const Center(child: Text("No orders yet"));
+            return const Center(
+              child: Text("No orders yet"),
+            );
           }
 
-          /// 📋 LIST
+          /// 🔽 SORT LOCALLY
+          orders.sort((a, b) {
+            final aTime = (a['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+            final bTime = (b['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+            return bTime.compareTo(aTime);
+          });
+
           return ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: orders.length,
             itemBuilder: (context, index) {
-
-              final doc = orders[index];
-              final data = doc.data() as Map<String, dynamic>;
-
-              /// ✅ SAFE MAP ACCESS
-              final schedule = (data['schedule'] ?? {}) as Map<String, dynamic>;
-              final payment = (data['payment'] ?? {}) as Map<String, dynamic>;
-
-              final status = (data['status'] ?? "pending").toString();
-
-              final services = (data['services'] as List?)
-                      ?.map((e) => e.toString())
-                      .toList() ??
-                  [];
-
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => OrderDetailPage(data: data),
-                    ),
-                  );
-                },
-
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.shade200,
-                        blurRadius: 6,
-                      )
-                    ],
-                  ),
-
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-
-                      /// SERVICE TYPE
-                      Text(
-                        data['serviceType'] ?? "Service",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 5),
-
-                      /// SERVICES
-                      Text(services.join(", ")),
-
-                      const SizedBox(height: 6),
-
-                      /// DATE + TIME
-                      Text("📅 ${formatDate(schedule['date'])}"),
-                      Text("⏰ ${schedule['time'] ?? "-"}"),
-
-                      const SizedBox(height: 6),
-
-                      /// PRICE
-                      Text(
-                        "₹${payment['totalAmount'] ?? 0}",
-                        style: const TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      Row(
-                        children: [
-
-                          /// STATUS
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: getStatusColor(status),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              status.toUpperCase(),
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ),
-
-                          const Spacer(),
-
-                          /// CANCEL
-                          if (status == "pending")
-                            TextButton(
-                              onPressed: () => cancelOrder(doc.id),
-                              child: const Text(
-                                "Cancel",
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            ),
-                        ],
-                      )
-                    ],
-                  ),
-                ),
-              );
+              return _orderCard(context, orders[index]);
             },
           );
         },

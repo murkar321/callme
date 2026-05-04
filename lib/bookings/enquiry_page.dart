@@ -29,15 +29,33 @@ class _EnquiryPageState extends State<EnquiryPage> {
   bool isLoading = false;
 
   /// =========================
+  /// 🔥 SERVICE TYPE NORMALIZER
+  /// =========================
+  String _getServiceType(String name) {
+    switch (name) {
+      case "Educational Services":
+        return "education";
+      case "Salon":
+        return "salon";
+      case "Cleaning":
+        return "cleaning";
+      case "Hotel":
+        return "hotel";
+      case "Resort":
+        return "resort";
+      default:
+        return name.toLowerCase().trim();
+    }
+  }
+
+  /// =========================
   /// 🚀 SUBMIT ENQUIRY
   /// =========================
   Future<void> submitEnquiry() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (selectedTime == null || selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Select date & time")),
-      );
+    if (selectedDate == null || selectedTime == null) {
+      _showMessage("Please select date & time");
       return;
     }
 
@@ -52,24 +70,29 @@ class _EnquiryPageState extends State<EnquiryPage> {
         throw Exception("User not logged in");
       }
 
-      final servicesList = widget.cart != null && widget.cart!.isNotEmpty
+      final serviceType = _getServiceType(widget.serviceName);
+
+      debugPrint("🔥 Enquiry ServiceType: $serviceType");
+
+      final servicesList = (widget.cart != null && widget.cart!.isNotEmpty)
           ? widget.cart!
-              .map((e) => "${e.name} x${e.quantity}")
+              .map((e) => "${e.name ?? "Service"} x${e.quantity ?? 1}")
               .toList()
           : [widget.serviceName];
 
-      /// ✅ CALL COMMON ORDER SERVICE
       await OrderService.placeOrder(
-        serviceType: widget.serviceName,
+        serviceType: serviceType,
         services: servicesList,
 
         /// USER
         userId: user.uid,
         userName: nameController.text.trim(),
         phone: phoneController.text.trim(),
-        email: emailController.text.trim(),
+        email: emailController.text.trim().isEmpty
+            ? null
+            : emailController.text.trim(),
 
-        /// CREATED BY
+        /// CREATOR
         createdBy: user.uid,
         createdByRole: "user",
 
@@ -83,186 +106,34 @@ class _EnquiryPageState extends State<EnquiryPage> {
         /// PAYMENT
         totalAmount: 0,
 
-        /// ENQUIRY FLAG
+        /// ENQUIRY MODE
         isEnquiry: true,
       );
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Enquiry Submitted Successfully")),
-      );
+      _showMessage("Enquiry submitted successfully");
 
       Navigator.pop(context);
-
     } catch (e) {
       debugPrint("🔥 Enquiry Error: $e");
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      _showMessage("Error: $e");
     }
 
     setState(() => isLoading = false);
   }
 
-  @override
-  void dispose() {
-    nameController.dispose();
-    phoneController.dispose();
-    emailController.dispose();
-    super.dispose();
+  /// =========================
+  /// UI HELPERS
+  /// =========================
+
+  void _showMessage(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
-
-  /// =========================
-  /// 🎨 UI
-  /// =========================
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
-
-      appBar: AppBar(
-        title: const Text("Enquiry"),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.shade300,
-                  blurRadius: 12,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-                  /// HEADER
-                  Text(
-                    widget.serviceName,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 5),
-
-                  const Text(
-                    "Request callback / visit",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-
-                  const SizedBox(height: 25),
-
-                  /// NAME
-                  _inputField(
-                    controller: nameController,
-                    label: "Full Name",
-                    icon: Icons.person,
-                    validator: (v) =>
-                        v!.isEmpty ? "Enter your name" : null,
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  /// PHONE
-                  _inputField(
-                    controller: phoneController,
-                    label: "Phone Number",
-                    icon: Icons.phone,
-                    keyboard: TextInputType.phone,
-                    validator: (v) =>
-                        v!.isEmpty ? "Enter phone number" : null,
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  /// EMAIL
-                  _inputField(
-                    controller: emailController,
-                    label: "Email",
-                    icon: Icons.email,
-                    keyboard: TextInputType.emailAddress,
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  /// DATE
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.calendar_today),
-                    title: Text(
-                      selectedDate == null
-                          ? "Select Date"
-                          : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-                    ),
-                    onTap: _pickDate,
-                  ),
-
-                  /// TIME
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.access_time),
-                    title: Text(
-                      selectedTime == null
-                          ? "Select Time"
-                          : selectedTime!.format(context),
-                    ),
-                    onTap: _pickTime,
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  /// SUBMIT
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: isLoading ? null : submitEnquiry,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFAE91BA),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text(
-                              "Submit Enquiry",
-                              style: TextStyle(fontSize: 16),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// =========================
-  /// HELPERS
-  /// =========================
 
   void _pickDate() async {
     final picked = await showDatePicker(
@@ -307,6 +178,153 @@ class _EnquiryPageState extends State<EnquiryPage> {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  /// =========================
+  /// 🎨 UI
+  /// =========================
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6FA),
+
+      appBar: AppBar(
+        title: const Text("Enquiry"),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.shade300,
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+
+            child: Form(
+              key: _formKey,
+
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  /// 🔹 HEADER
+                  Text(
+                    widget.serviceName,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 5),
+
+                  const Text(
+                    "Request callback / visit",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  /// 👤 NAME
+                  _inputField(
+                    controller: nameController,
+                    label: "Full Name",
+                    icon: Icons.person,
+                    validator: (v) =>
+                        v == null || v.isEmpty ? "Enter your name" : null,
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  /// 📞 PHONE
+                  _inputField(
+                    controller: phoneController,
+                    label: "Phone Number",
+                    icon: Icons.phone,
+                    keyboard: TextInputType.phone,
+                    validator: (v) =>
+                        v == null || v.isEmpty ? "Enter phone number" : null,
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  /// 📧 EMAIL
+                  _inputField(
+                    controller: emailController,
+                    label: "Email (optional)",
+                    icon: Icons.email,
+                    keyboard: TextInputType.emailAddress,
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  /// 📅 DATE
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.calendar_today),
+                    title: Text(
+                      selectedDate == null
+                          ? "Select Date"
+                          : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
+                    ),
+                    onTap: _pickDate,
+                  ),
+
+                  /// ⏰ TIME
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.access_time),
+                    title: Text(
+                      selectedTime == null
+                          ? "Select Time"
+                          : selectedTime!.format(context),
+                    ),
+                    onTap: _pickTime,
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  /// 🚀 SUBMIT
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: isLoading ? null : submitEnquiry,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFAE91BA),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              "Submit Enquiry",
+                              style: TextStyle(fontSize: 16),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

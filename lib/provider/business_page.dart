@@ -41,17 +41,17 @@ class _BusinessPageState extends State<BusinessPage> {
     _getLocation();
   }
 
-  /// 📍 FAST LOCATION (NON-BLOCKING)
+  /// 📍 LOCATION
   Future<void> _getLocation() async {
     try {
       await Geolocator.requestPermission();
 
       Position pos = await Geolocator.getCurrentPosition(
-          timeLimit: const Duration(seconds: 5));
+        timeLimit: const Duration(seconds: 5),
+      );
 
       List<Placemark> placemarks =
-          await placemarkFromCoordinates(
-              pos.latitude, pos.longitude);
+          await placemarkFromCoordinates(pos.latitude, pos.longitude);
 
       setState(() {
         city = placemarks.first.locality ?? "";
@@ -62,64 +62,61 @@ class _BusinessPageState extends State<BusinessPage> {
     }
   }
 
-  /// ================= SERVICE TYPE =================
+  /// 🔥 NORMALIZE SERVICE TYPE
+  String normalize(String s) => s.trim().toLowerCase();
+
   String _getServiceType(String name) {
-    switch (name) {
-      case "Educational Services":
-        return "education";
-      default:
-        return name.toLowerCase();
-    }
+    if (name == "Educational Services") return "education";
+    return normalize(name);
   }
 
-  /// ================= MESSAGE =================
-  void _showMessage(BuildContext context, String msg) {
+  void _showMessage(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  /// ================= MAIN TAP =================
+  /// ================= TAP =================
   void _handleTap(
-      BuildContext context,
-      ServiceCategory service,
-      Map<String, dynamic>? provider,
-      ) {
-
+    ServiceCategory service,
+    Map<String, dynamic>? provider,
+  ) {
     final serviceType = _getServiceType(service.name);
 
     if (user == null) {
-      _showMessage(context, "Please login to continue");
+      _showMessage("Please login to continue");
       return;
     }
 
+    /// 🔥 NO PROVIDER → REGISTER
     if (provider == null) {
-      _showProviderTypeSelector(context, service);
+      _showProviderTypeSelector(service);
       return;
     }
 
     final status = provider['status'] ?? "pending";
-    final rejectReason =
-        provider['rejectReason'] ?? "No reason provided";
 
     if (status == "pending") {
-      _showMessage(context, "⏳ Under review");
+      _showMessage("⏳ Under review");
       return;
     }
 
     if (status == "rejected") {
-      _showRejectedDialog(context, service, rejectReason);
+      _showRejectedDialog(
+        service,
+        provider['rejectReason'] ?? "No reason provided",
+      );
       return;
     }
 
+    /// ✅ APPROVED → DASHBOARD
     if (status == "approved") {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => BusinessDashboardPage(
-            providerId: provider['providerId'] ?? "",
+            providerId: provider['providerId'],
             businessName:
-                provider['business']?['businessName'] ??
-                    "My Business",
+                provider['business']?['businessName'] ?? "My Business",
             serviceType: serviceType,
           ),
         ),
@@ -127,12 +124,11 @@ class _BusinessPageState extends State<BusinessPage> {
     }
   }
 
-  /// ================= REJECTED =================
+  /// ================= REJECT =================
   void _showRejectedDialog(
-      BuildContext context,
-      ServiceCategory service,
-      String reason,
-      ) {
+    ServiceCategory service,
+    String reason,
+  ) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -142,7 +138,7 @@ class _BusinessPageState extends State<BusinessPage> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _showProviderTypeSelector(context, service);
+              _showProviderTypeSelector(service);
             },
             child: const Text("Reapply"),
           ),
@@ -151,16 +147,13 @@ class _BusinessPageState extends State<BusinessPage> {
     );
   }
 
-  /// ================= TYPE SELECTOR =================
-  void _showProviderTypeSelector(
-      BuildContext context,
-      ServiceCategory service,
-      ) {
+  /// ================= TYPE =================
+  void _showProviderTypeSelector(ServiceCategory service) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius:
-        BorderRadius.vertical(top: Radius.circular(22)),
+            BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (_) {
         return Padding(
@@ -174,9 +167,9 @@ class _BusinessPageState extends State<BusinessPage> {
                       fontWeight: FontWeight.bold)),
               const SizedBox(height: 20),
 
-              _typeTile(context, service, "Individual", Icons.person),
-              _typeTile(context, service, "Agency", Icons.groups),
-              _typeTile(context, service, "Business", Icons.business),
+              _typeTile(service, "Individual", Icons.person),
+              _typeTile(service, "Agency", Icons.groups),
+              _typeTile(service, "Business", Icons.business),
             ],
           ),
         );
@@ -185,11 +178,10 @@ class _BusinessPageState extends State<BusinessPage> {
   }
 
   Widget _typeTile(
-      BuildContext context,
-      ServiceCategory service,
-      String type,
-      IconData icon,
-      ) {
+    ServiceCategory service,
+    String type,
+    IconData icon,
+  ) {
     return ListTile(
       leading: Icon(icon),
       title: Text(type),
@@ -233,7 +225,7 @@ class _BusinessPageState extends State<BusinessPage> {
             margin: const EdgeInsets.all(12),
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
+              gradient: const LinearGradient(
                 colors: [Colors.blue, Colors.purple],
               ),
               borderRadius: BorderRadius.circular(16),
@@ -259,75 +251,67 @@ class _BusinessPageState extends State<BusinessPage> {
 
           const SizedBox(height: 10),
 
-          /// GRID
+          /// 🔥 SINGLE STREAM (IMPORTANT FIX)
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: businessCategories.length,
-              gridDelegate:
-              SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: size.width < 600 ? 2 : 3,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
+            child: user == null
+                ? _buildGrid({}, size)
+                : StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection("providers")
+                        .where("userId", isEqualTo: user!.uid)
+                        .snapshots(),
+                    builder: (context, snapshot) {
 
-              itemBuilder: (_, i) {
-                final category = businessCategories[i];
-                final serviceType =
-                _getServiceType(category.name);
+                      Map<String, Map<String, dynamic>> providerMap = {};
 
-                /// ✅ GUEST → NO STREAM
-                if (user == null) {
-                  return GestureDetector(
-                    onTap: () =>
-                        _handleTap(context, category, null),
-                    child: CategoryCard(
-                      name: category.name,
-                      icon: category.icon,
-                      showName: true,
-                      imagePath: '',
-                    ),
-                  );
-                }
+                      if (snapshot.hasData) {
+                        for (var doc in snapshot.data!.docs) {
+                          final data =
+                              doc.data() as Map<String, dynamic>;
 
-                /// ✅ USER → STREAM SAFE
-                return StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection("providers")
-                      .where("userId",
-                      isEqualTo: user?.uid)
-                      .where("serviceType",
-                      isEqualTo: serviceType)
-                      .limit(1)
-                      .snapshots(),
+                          final type = normalize(data['serviceType'] ?? "");
+                          providerMap[type] = data;
+                        }
+                      }
 
-                  builder: (context, snapshot) {
-                    Map<String, dynamic>? provider;
-
-                    if (snapshot.hasData &&
-                        snapshot.data!.docs.isNotEmpty) {
-                      provider =
-                      snapshot.data!.docs.first.data()
-                      as Map<String, dynamic>;
-                    }
-
-                    return GestureDetector(
-                      onTap: () => _handleTap(
-                          context, category, provider),
-                      child: CategoryCard(
-                        name: category.name,
-                        icon: category.icon,
-                        showName: true,
-                        imagePath: '',
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+                      return _buildGrid(providerMap, size);
+                    },
+                  ),
           ),
         ],
       ),
+    );
+  }
+
+  /// 🔥 GRID BUILDER
+  Widget _buildGrid(
+    Map<String, Map<String, dynamic>> providerMap,
+    Size size,
+  ) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: businessCategories.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: size.width < 600 ? 2 : 3,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemBuilder: (_, i) {
+        final category = businessCategories[i];
+        final serviceType = _getServiceType(category.name);
+
+        final provider = providerMap[serviceType];
+
+        return GestureDetector(
+          onTap: () => _handleTap(category, provider),
+          child: CategoryCard(
+            name: category.name,
+            icon: category.icon,
+            showName: true,
+            imagePath: '',
+          ),
+        );
+      },
     );
   }
 }

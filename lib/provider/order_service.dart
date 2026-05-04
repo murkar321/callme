@@ -7,80 +7,76 @@ class OrderService {
     required String serviceType,
     required List<String> services,
 
-    /// 👤 CUSTOMER
     required String userId,
     required String userName,
     required String phone,
     String? email,
 
-    /// 🔥 WHO CREATED
     required String createdBy,
     required String createdByRole,
 
-    /// 📍 LOCATION
     required String address,
     String? note,
 
-    /// 📅 SCHEDULE
     required DateTime date,
     required String time,
 
-    /// 💰 PAYMENT
     required double totalAmount,
 
-    /// OPTIONAL
     int? adults,
     int? children,
     String? visitType,
 
-    /// 🔧 PROVIDER (OPTIONAL)
     String? providerId,
     String? providerName,
+    String? providerUserId,
 
-    /// ENQUIRY
     bool isEnquiry = false,
   }) async {
 
     final docRef = _db.collection("orders").doc();
 
-    await docRef.set({
+    /// 🔥 ALWAYS NORMALIZE
+    final normalizedServiceType = serviceType.trim().toLowerCase();
 
-      /// 🔑 IDS
+    await docRef.set({
       "orderId": docRef.id,
       "userId": userId,
 
-      /// 🔥 FIXED PROVIDER LOGIC (NO NULL EVER)
+      /// ✅ ALWAYS EMPTY STRING (NEVER NULL)
       "providerId": providerId ?? "",
+      "providerUserId": providerUserId ?? "",
       "providerName": providerName ?? "",
 
-      /// 🔥 CREATOR INFO
+      /// 🔥 IMPORTANT FLAGS
+      "isAssigned": false,
+      "isCompleted": false,
+
       "createdBy": createdBy,
       "createdByRole": createdByRole,
 
-      /// 🧾 SERVICE
-      "serviceType": serviceType,
+      /// 🔥 SERVICE TYPE FIX
+      "serviceType": normalizedServiceType,
+
       "services": services,
 
-      /// 👤 USER SNAPSHOT
       "user": {
         "name": userName,
         "phone": phone,
         "email": email ?? "",
       },
 
-      /// 📅 SCHEDULE
       "schedule": {
         "date": Timestamp.fromDate(date),
         "time": time,
       },
 
-      /// 📍 LOCATION
       "location": {
         "address": address.isEmpty ? "Not Provided" : address,
         "note": note ?? "",
       },
 
-      /// 🧠 META
+      /// 🔥 META CLEAN STRUCTURE
       "meta": {
         "adults": adults ?? 0,
         "children": children ?? 0,
@@ -88,17 +84,20 @@ class OrderService {
         "isEnquiry": isEnquiry,
       },
 
-      /// 💳 PAYMENT
+      /// 💰 PAYMENT
       "payment": {
         "totalAmount": totalAmount,
         "paid": isEnquiry ? false : true,
         "method": isEnquiry ? "enquiry" : "upi",
       },
 
-      /// 📦 STATUS
+      /// 🔥 STATUS LOGIC
       "status": isEnquiry ? "enquiry" : "pending",
 
-      /// ⏱ TIME
+      /// 🔥 TRACKING
+      "lastActionBy": "user",
+      "lastActionAt": FieldValue.serverTimestamp(),
+
       "createdAt": FieldValue.serverTimestamp(),
       "updatedAt": FieldValue.serverTimestamp(),
     });

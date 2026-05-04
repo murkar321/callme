@@ -24,59 +24,56 @@ class BottomNavPage extends StatefulWidget {
 class _BottomNavPageState extends State<BottomNavPage> {
   int _currentIndex = 0;
 
+  late List<Widget> _screens;
+  late List<BottomNavigationBarItem> _items;
+
   bool isAdmin = false;
   bool isGuest = false;
-
-  List<Widget> _screens = [];
-  List<BottomNavigationBarItem> _items = [];
 
   @override
   void initState() {
     super.initState();
-    _initUserRole();
+    _setupNavigation();
   }
 
-  /// 🔥 INIT ROLE
-  void _initUserRole() {
+  /// 🔥 SETUP NAV (SAFE INIT)
+  void _setupNavigation() {
     final user = FirebaseAuth.instance.currentUser;
 
     isGuest = user == null;
 
-    isAdmin = (user?.email ?? "").toLowerCase().trim() ==
+    isAdmin = (user?.email ?? "")
+        .toLowerCase()
+        .trim() ==
         "allinonecallme@gmail.com";
 
     debugPrint("User Email: ${user?.email}");
     debugPrint("Is Guest: $isGuest");
     debugPrint("Is Admin: $isAdmin");
 
-    _buildNav();
-  }
-
-  /// 🔥 BUILD NAV
-  void _buildNav() {
-
-    /// ✅ COMMON SCREENS (ALL USERS INCLUDING GUEST)
-    _screens = [
+    /// ✅ BASE SCREENS
+    final screens = <Widget>[
       const HomePage(),
-      BusinessPage(), // 👈 ALWAYS visible
+      const BusinessPage(),
       MyOrdersPage(phone: widget.userPhone),
       ProfilePage(phone: widget.userPhone),
     ];
 
-    _items = const [
-      BottomNavigationBarItem(
+    /// ✅ BASE NAV ITEMS (NO CONST LIST ❗)
+    final items = <BottomNavigationBarItem>[
+      const BottomNavigationBarItem(
         icon: Icon(Icons.home),
         label: "Home",
       ),
-      BottomNavigationBarItem(
+      const BottomNavigationBarItem(
         icon: Icon(Icons.business),
         label: "Business",
       ),
-      BottomNavigationBarItem(
+      const BottomNavigationBarItem(
         icon: Icon(Icons.shopping_bag),
         label: "Orders",
       ),
-      BottomNavigationBarItem(
+      const BottomNavigationBarItem(
         icon: Icon(Icons.person),
         label: "Profile",
       ),
@@ -84,8 +81,8 @@ class _BottomNavPageState extends State<BottomNavPage> {
 
     /// 👑 ADMIN EXTRA TAB
     if (isAdmin) {
-      _screens.add(AdminDashboard());
-      _items.add(
+      screens.add(AdminDashboard());
+      items.add(
         const BottomNavigationBarItem(
           icon: Icon(Icons.admin_panel_settings),
           label: "Admin",
@@ -93,14 +90,17 @@ class _BottomNavPageState extends State<BottomNavPage> {
       );
     }
 
+    _screens = screens;
+    _items = items;
+
     setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
 
-    /// ⏳ SAFE LOADING
-    if (_screens.isEmpty) {
+    /// ⏳ LOADING SAFETY
+    if (_screens.isEmpty || _items.isEmpty) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );

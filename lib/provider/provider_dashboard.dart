@@ -19,32 +19,52 @@ class BusinessDashboardPage extends StatefulWidget {
       _BusinessDashboardPageState();
 }
 
-class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
+class _BusinessDashboardPageState
+    extends State<BusinessDashboardPage> {
   final ordersRef = FirebaseFirestore.instance.collection('orders');
-  final providersRef = FirebaseFirestore.instance.collection('providers');
+  final providersRef =
+      FirebaseFirestore.instance.collection('providers');
 
   final user = FirebaseAuth.instance.currentUser;
 
-  /// ================= STREAMS =================
+  /// 🔥 NORMALIZER (VERY IMPORTANT)
+  String normalize(String s) => s.trim().toLowerCase();
 
+  /// ================= PROVIDER =================
   Stream<DocumentSnapshot> providerStream() {
     return providersRef.doc(widget.providerId).snapshots();
   }
 
-  /// 🔥 AVAILABLE JOBS (FIXED NULL ISSUE)
+  /// ================= AVAILABLE JOBS =================
   Stream<QuerySnapshot> availableJobs() {
     return ordersRef
-        .where('serviceType', isEqualTo: widget.serviceType)
-        .where('status', isEqualTo: "pending")
-        .where('providerId', isNull: true) // ✅ IMPORTANT FIX
+        .where('serviceType',
+            isEqualTo: normalize(widget.serviceType))
+
+        /// ONLY UNASSIGNED
+        .where('providerUserId', isEqualTo: "")
+
+        /// OPEN JOBS
+        .where('status', whereIn: ["pending", "enquiry"])
+
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
-  /// 🔥 MY JOBS (USE AUTH UID)
+  /// ================= MY JOBS (🔥 FIXED) =================
   Stream<QuerySnapshot> myJobs() {
     return ordersRef
+        /// ONLY MY JOBS
         .where('providerUserId', isEqualTo: user!.uid)
+
+        /// 🔥 CRITICAL FIX (NO MIXING)
+        .where('serviceType',
+            isEqualTo: normalize(widget.serviceType))
+
+        /// ONLY ACTIVE/COMPLETED
+        .where('status',
+            whereIn: ["accepted", "completed"])
+
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
@@ -60,20 +80,22 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         final snap = await tx.get(ref);
         final data = snap.data() as Map<String, dynamic>;
 
-        if (data['providerId'] != null) {
-          throw Exception("Taken");
+        /// 🔥 PREVENT DOUBLE ACCEPT
+        if ((data['providerUserId'] ?? "") != "") {
+          throw Exception("Already taken");
         }
 
         tx.update(ref, {
-          "providerId": widget.providerId,        // old logic kept
-          "providerUserId": user!.uid,            // 🔥 NEW (for rules)
+          "providerId": widget.providerId,
+          "providerUserId": user!.uid,
           "providerName": widget.businessName,
           "status": "accepted",
+          "isAssigned": true,
           "updatedAt": FieldValue.serverTimestamp(),
         });
       });
 
-      _msg("✅ Order Accepted");
+      _msg("✅ Order accepted");
     } catch (e) {
       _msg("❌ Already taken");
     }
@@ -83,22 +105,28 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   Future<void> completeOrder(String id) async {
     await ordersRef.doc(id).update({
       "status": "completed",
+      "isCompleted": true,
       "updatedAt": FieldValue.serverTimestamp(),
     });
 
-    _msg("✅ Job Completed");
+    _msg("✅ Job completed");
   }
 
   /// ❌ CANCEL
   Future<void> cancelOrder(String id) async {
     await ordersRef.doc(id).update({
       "status": "pending",
-      "providerId": null,
-      "providerUserId": null,
+
+      /// 🔥 RESET FULLY
+      "providerId": "",
+      "providerUserId": "",
+      "providerName": "",
+
+      "isAssigned": false,
       "updatedAt": FieldValue.serverTimestamp(),
     });
 
-    _msg("❌ Job Cancelled");
+    _msg("❌ Job cancelled & reopened");
   }
 
   void _msg(String m) {
@@ -106,21 +134,33 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         .showSnackBar(SnackBar(content: Text(m)));
   }
 
+  /// ================= UI HELPERS =================
+
   Color getColor(String status) {
     switch (status) {
       case "accepted":
         return Colors.green;
       case "completed":
         return Colors.blue;
-      case "cancelled":
-        return Colors.red;
       default:
         return Colors.orange;
     }
   }
 
-  /// ================= UI =================
+  String getStatusMessage(String status) {
+    switch (status) {
+      case "accepted":
+        return "Contact customer & start work";
+      case "completed":
+        return "Work completed successfully";
+      case "enquiry":
+        return "Customer requested callback";
+      default:
+        return "New job available";
+    }
+  }
 
+  /// ================= MAIN UI =================
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
@@ -128,17 +168,19 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
       builder: (context, snap) {
         if (!snap.hasData) {
           return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
 
         final provider =
             snap.data!.data() as Map<String, dynamic>?;
 
+        /// 🔒 APPROVAL CHECK
         if (provider?['status'] != "approved") {
           return Scaffold(
             appBar: AppBar(title: const Text("Dashboard")),
             body: const Center(
-              child: Text("⏳ Waiting for Admin Approval"),
+              child: Text("⏳ Waiting for admin approval"),
             ),
           );
         }
@@ -147,8 +189,8 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
           length: 2,
           child: Scaffold(
             backgroundColor: const Color(0xFFF4F6FA),
+
             appBar: AppBar(
-              elevation: 0,
               title: Text(widget.businessName),
               bottom: const TabBar(
                 tabs: [
@@ -157,6 +199,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                 ],
               ),
             ),
+
             body: TabBarView(
               children: [
                 _jobList(availableJobs(), true),
@@ -170,20 +213,15 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   }
 
   /// ================= JOB LIST =================
-
   Widget _jobList(Stream<QuerySnapshot> stream, bool isAvailable) {
     return StreamBuilder<QuerySnapshot>(
       stream: stream,
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
+        if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (snap.hasError) {
-          return Center(child: Text("Error: ${snap.error}"));
-        }
-
-        final docs = snap.data?.docs ?? [];
+        final docs = snap.data!.docs;
 
         if (docs.isEmpty) {
           return const Center(child: Text("No jobs found"));
@@ -194,10 +232,17 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
           itemCount: docs.length,
           itemBuilder: (_, i) {
             final doc = docs[i];
-            final data = doc.data() as Map<String, dynamic>;
+            final data =
+                doc.data() as Map<String, dynamic>;
 
             final userData = data['user'] ?? {};
             final payment = data['payment'] ?? {};
+            final schedule = data['schedule'] ?? {};
+            final services = (data['services'] as List?)
+                    ?.map((e) => e.toString())
+                    .toList() ??
+                [];
+
             final status = data['status'] ?? "pending";
 
             return Container(
@@ -213,11 +258,12 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                   )
                 ],
               ),
+
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
 
-                  /// NAME
                   Text(
                     userData['name'] ?? "No Name",
                     style: const TextStyle(
@@ -227,7 +273,6 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
 
                   const SizedBox(height: 6),
 
-                  /// PHONE
                   Row(
                     children: [
                       const Icon(Icons.phone, size: 14),
@@ -238,7 +283,6 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
 
                   const SizedBox(height: 4),
 
-                  /// LOCATION
                   Row(
                     children: [
                       const Icon(Icons.location_on, size: 14),
@@ -252,23 +296,30 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                     ],
                   ),
 
+                  const SizedBox(height: 6),
+
+                  Text(services.join(", ")),
+
+                  const SizedBox(height: 4),
+
+                  Text("📅 ${schedule['time'] ?? ""}"),
+
                   const SizedBox(height: 8),
 
-                  /// PRICE + STATUS
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        "₹${payment['totalAmount'] ?? 0}",
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold),
-                      ),
+                      Text("₹${payment['totalAmount'] ?? 0}"),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                        padding:
+                            const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4),
                         decoration: BoxDecoration(
                           color: getColor(status),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius:
+                              BorderRadius.circular(20),
                         ),
                         child: Text(
                           status.toUpperCase(),
@@ -280,29 +331,44 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                     ],
                   ),
 
+                  const SizedBox(height: 6),
+
+                  Text(
+                    getStatusMessage(status),
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey),
+                  ),
+
                   const SizedBox(height: 10),
 
-                  /// ACTIONS
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                    mainAxisAlignment:
+                        MainAxisAlignment.end,
                     children: [
+
                       if (isAvailable)
                         ElevatedButton(
-                          onPressed: () => acceptOrder(doc.id),
+                          onPressed: () =>
+                              acceptOrder(doc.id),
                           child: const Text("Accept"),
                         ),
 
-                      if (!isAvailable && status == "accepted")
+                      if (!isAvailable &&
+                          status == "accepted")
                         ElevatedButton(
-                          onPressed: () => completeOrder(doc.id),
+                          onPressed: () =>
+                              completeOrder(doc.id),
                           child: const Text("Complete"),
                         ),
 
                       const SizedBox(width: 8),
 
-                      if (!isAvailable && status == "accepted")
+                      if (!isAvailable &&
+                          status == "accepted")
                         OutlinedButton(
-                          onPressed: () => cancelOrder(doc.id),
+                          onPressed: () =>
+                              cancelOrder(doc.id),
                           child: const Text("Cancel"),
                         ),
                     ],
