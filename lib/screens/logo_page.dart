@@ -33,7 +33,7 @@ class _LogoPageState extends State<LogoPage>
 
     _controller.forward();
 
-    Timer(const Duration(seconds: 5), () {
+    Timer(const Duration(seconds: 2), () {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const SignupPage()),

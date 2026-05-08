@@ -1,7 +1,6 @@
 import 'package:callme/data/cleaning_data.dart';
 import 'package:callme/data/service_product.dart';
 
-
 /// 🌍 UNIVERSAL CART ITEM
 class CartItem {
   final String id;
@@ -15,7 +14,7 @@ class CartItem {
   int adults;
   int children;
 
-  /// Salon support
+  /// 💇 Salon support
   String? visitType;
 
   CartItem({
@@ -42,7 +41,7 @@ class Cart {
   static void add(CartItem item, {required String service}) {
     final index = _items.indexWhere(
       (e) =>
-          e.id.toString().trim() == item.id.toString().trim() &&
+          e.id.trim() == item.id.trim() &&
           e.service == service,
     );
 
@@ -54,7 +53,7 @@ class Cart {
   }
 
   /// =========================
-  /// ➕ ADD GENERIC
+  /// ➕ GENERIC ADD
   /// =========================
   static void addItem({
     required String id,
@@ -82,7 +81,7 @@ class Cart {
   }
 
   /// =========================
-  /// 💧 WATER / 🧹 CLEANING / 🚿 PLUMBING
+  /// 💧 / 🧹 / 🚿 PRODUCTS
   /// =========================
   static void addProduct(ServiceProduct product, String service) {
     add(
@@ -119,12 +118,41 @@ class Cart {
   }
 
   /// =========================
+  /// 💇 SALON (FIXED)
+  /// =========================
+  static void addSalon({
+    required String id,
+    required String name,
+    required int price,
+    required String category,
+    required String visitType,
+    String? image,
+  }) {
+    add(
+      CartItem(
+        id: id,
+        name: name,
+        price: price,
+        service: "Salon",
+        category: category,
+        image: image,
+        visitType: visitType,
+
+        /// 🔥 SAFE VALUES
+        adults: 1,
+        children: 0,
+      ),
+      service: "Salon",
+    );
+  }
+
+  /// =========================
   /// ➖ REMOVE
   /// =========================
   static void removeById(String id, String service) {
     final index = _items.indexWhere(
       (e) =>
-          e.id.toString().trim() == id.toString().trim() &&
+          e.id.trim() == id.trim() &&
           e.service == service,
     );
 
@@ -143,7 +171,7 @@ class Cart {
   static void delete(String id, String service) {
     _items.removeWhere(
       (e) =>
-          e.id.toString().trim() == id.toString().trim() &&
+          e.id.trim() == id.trim() &&
           e.service == service,
     );
   }
@@ -165,28 +193,38 @@ class Cart {
   }
 
   /// =========================
-  /// 💰 TOTAL PRICE
+  /// 💰 TOTAL PRICE (🔥 FIXED)
   /// =========================
   static int getTotal(String service) {
     return _items
         .where((e) => e.service == service)
-        .fold(
-          0,
-          (sum, e) =>
-              sum +
-              (e.price * e.quantity * e.adults) +
-              ((e.price ~/ 2) * e.children),
-        );
+        .fold(0, (sum, e) {
+
+      /// 💇 SALON FIX
+      if (service == "Salon") {
+        return sum + (e.price * e.quantity);
+      }
+
+      /// 🎓 EDUCATION
+      if (service == "Education") {
+        return sum + (e.price * e.quantity);
+      }
+
+      /// 🌍 DEFAULT (HOTEL / PEOPLE)
+      return sum +
+          (e.price * e.quantity * e.adults) +
+          ((e.price ~/ 2) * e.children);
+    });
   }
 
   /// =========================
-  /// 🔥 FIXED (IMPORTANT)
+  /// 🔢 GET QUANTITY
   /// =========================
   static int getQuantity(String id, String service) {
     try {
       final item = _items.firstWhere(
         (e) =>
-            e.id.toString().trim() == id.toString().trim() &&
+            e.id.trim() == id.trim() &&
             e.service == service,
       );
       return item.quantity;
@@ -196,7 +234,7 @@ class Cart {
   }
 
   /// =========================
-  /// 🧹 CLEANING SUPPORT (OLD SAFE)
+  /// 🧹 CLEANING
   /// =========================
   static void addCleaning(CleaningService service) {
     addItem(
@@ -210,7 +248,7 @@ class Cart {
   }
 
   /// =========================
-  /// 🧺 LAUNDRY (UNCHANGED)
+  /// 🧺 LAUNDRY
   /// =========================
   static void addLaundry({
     required String id,
@@ -233,31 +271,6 @@ class Cart {
   }
 
   /// =========================
-  /// 💇 SALON (UNCHANGED)
-  /// =========================
-  static void addSalon({
-    required String id,
-    required String name,
-    required int price,
-    required String category,
-    required String visitType,
-    String? image,
-  }) {
-    add(
-      CartItem(
-        id: id,
-        name: name,
-        price: price,
-        service: "Salon",
-        category: category,
-        image: image,
-        visitType: visitType,
-      ),
-      service: "Salon",
-    );
-  }
-
-  /// =========================
   /// 🧹 CLEAR
   /// =========================
   static void clear([String? service]) {
@@ -267,13 +280,15 @@ class Cart {
       _items.removeWhere((e) => e.service == service);
     }
   }
-/// 🔁 BACKWARD COMPATIBILITY (IMPORTANT)
-static int totalItems(String service) {
-  return getTotalItems(service);
-}
 
-static int totalPrice(String service) {
-  return getTotal(service);
-}
+  /// =========================
+  /// 🔁 BACKWARD COMPAT
+  /// =========================
+  static int totalItems(String service) {
+    return getTotalItems(service);
+  }
 
+  static int totalPrice(String service) {
+    return getTotal(service);
+  }
 }

@@ -1,9 +1,10 @@
-import 'package:callme/data/hotel_data.dart';
-import 'package:callme/provider/order_service.dart';
-import 'package:callme/screens/bottom_nav_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/cart.dart';
+
+import 'package:callme/data/hotel_data.dart';
+import 'package:callme/models/cart.dart';
+import 'package:callme/provider/order_service.dart';
+import 'package:callme/screens/bottom_nav_page.dart';
 
 class HotelBookingPage extends StatefulWidget {
   final HotelRoom hotel;
@@ -30,15 +31,9 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
 
   bool isLoading = false;
 
-  List<CartItem> get cart => Cart.getItems("Hotel");
+  List<CartItem> get cartItems => Cart.getItems("Hotel");
 
-  int get total {
-    int sum = 0;
-    for (var item in cart) {
-      sum += item.price * item.quantity;
-    }
-    return sum;
-  }
+  double get total => Cart.getTotal("Hotel").toDouble();
 
   @override
   void dispose() {
@@ -51,93 +46,146 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cart = cartItems;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Hotel Booking")),
+      backgroundColor: const Color(0xFFF5F6FA),
+      appBar: AppBar(
+        elevation: 0,
+        centerTitle: true,
+        title: const Text("Hotel Booking"),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-
-          /// HOTEL INFO
-          Card(
+          _card(
             child: ListTile(
-              leading: const Icon(Icons.hotel),
-              title: Text(widget.hotel.name),
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                child: Icon(Icons.hotel),
+              ),
+              title: Text(
+                widget.hotel.name,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               subtitle: Text(widget.hotel.location),
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          const Text("Your Selection"),
+          _title("Selected Rooms"),
 
-          /// CART ITEMS
-          Card(
+          _card(
+            child: cart.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text("No items selected"),
+                  )
+                : Column(
+                    children: cart
+                        .map(
+                          (e) => ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(e.name),
+                            subtitle: Text("Qty: ${e.quantity}"),
+                            trailing: Text(
+                              "₹${e.price * e.quantity}",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+          ),
+
+          const SizedBox(height: 16),
+
+          _card(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "Total Amount",
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  "₹${total.toStringAsFixed(0)}",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          _title("Schedule"),
+
+          _card(
             child: Column(
-              children: cart.map((e) => ListTile(
-                title: Text(e.name),
-                subtitle: Text("Qty: ${e.quantity}"),
-                trailing: Text("₹${e.price * e.quantity}"),
-              )).toList(),
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.calendar_today),
+                  title: Text(
+                    date == null
+                        ? "Select Date"
+                        : "${date!.day}/${date!.month}/${date!.year}",
+                  ),
+                  onTap: _pickDate,
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.access_time),
+                  title: Text(
+                    time == null ? "Select Time" : time!.format(context),
+                  ),
+                  onTap: _pickTime,
+                ),
+              ],
             ),
           ),
 
-          /// TOTAL
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text("Total Amount"),
-              Text("₹$total"),
-            ],
-          ),
+          const SizedBox(height: 16),
 
-          const SizedBox(height: 20),
+          _title("Guest Details"),
 
-          /// DATE
-          ListTile(
-            leading: const Icon(Icons.calendar_today),
-            title: Text(
-              date == null
-                  ? "Select Date"
-                  : "${date!.day}/${date!.month}/${date!.year}",
+          _card(
+            child: Column(
+              children: [
+                _field(name, "Full Name"),
+                _field(phone, "Phone"),
+                _field(email, "Email"),
+                _field(address, "Address"),
+              ],
             ),
-            onTap: _pickDate,
           ),
 
-          /// TIME
-          ListTile(
-            leading: const Icon(Icons.access_time),
-            title: Text(
-              time == null ? "Select Time" : time!.format(context),
+          const SizedBox(height: 24),
+
+          SizedBox(
+            height: 52,
+            child: ElevatedButton(
+              onPressed: isLoading ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFAE91BA),
+              ),
+              child: isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("Confirm Booking"),
             ),
-            onTap: _pickTime,
           ),
-
-          const SizedBox(height: 20),
-
-          /// INPUTS
-          TextField(controller: name, decoration: const InputDecoration(labelText: "Name")),
-          TextField(controller: phone, decoration: const InputDecoration(labelText: "Phone")),
-          TextField(controller: email, decoration: const InputDecoration(labelText: "Email")),
-          TextField(controller: address, decoration: const InputDecoration(labelText: "Address")),
-
-          const SizedBox(height: 30),
-
-          /// BUTTON
-          ElevatedButton(
-            onPressed: isLoading ? null : _submit,
-            child: isLoading
-                ? const CircularProgressIndicator()
-                : const Text("Confirm Booking"),
-          )
         ],
       ),
     );
   }
 
-  /// ================= SUBMIT =================
-  void _submit() async {
-    final user = FirebaseAuth.instance.currentUser;
-
+  Future<void> _submit() async {
     if (name.text.isEmpty ||
         phone.text.isEmpty ||
         email.text.isEmpty ||
@@ -151,6 +199,8 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
       return;
     }
 
+    final user = FirebaseAuth.instance.currentUser;
+
     if (user == null) {
       _show("User not logged in");
       return;
@@ -160,72 +210,92 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
 
     try {
       await OrderService.placeOrder(
-        serviceType: "hotel", // ✅ IMPORTANT
-
-        services: cart
-            .map((e) => "${e.name} x${e.quantity}")
-            .toList(),
-
-        /// USER
+        serviceType: "hotel",
+        services: cartItems.map((e) => "${e.name} x${e.quantity}").toList(),
         userId: user.uid,
         userName: name.text.trim(),
         phone: phone.text.trim(),
         email: email.text.trim(),
-
-        /// CREATOR
         createdBy: user.uid,
         createdByRole: "user",
-
-        /// LOCATION
         address: address.text.trim(),
-        note: "",
-
-        /// SCHEDULE
         date: date!,
         time: time!.format(context),
-
-        /// PAYMENT
-        totalAmount: total.toDouble(),
-
-        /// BOOKING
+        totalAmount: total,
         isEnquiry: false,
       );
 
+      /// IMPORTANT FIX
       Cart.clear("Hotel");
 
-      _show("Booking Confirmed ✅");
-
       if (!mounted) return;
+
+      _show("Booking Confirmed ✅");
 
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (_) => BottomNavPage(
-            userPhone: phone.text,
-            userEmail: email.text,
+            userPhone: phone.text.trim(),
+            userEmail: email.text.trim(),
           ),
         ),
-        (route) => false,
+        (_) => false,
       );
-
     } catch (e) {
       _show("Error: $e");
     }
 
-    setState(() => isLoading = false);
+    if (mounted) {
+      setState(() => isLoading = false);
+    }
   }
 
-  void _show(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+  Widget _title(String t) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        t,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _field(TextEditingController c, String hint) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: c,
+        decoration: InputDecoration(
+          labelText: hint,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
   }
 
   void _pickDate() async {
     final d = await showDatePicker(
       context: context,
+      initialDate: DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
-      initialDate: DateTime.now(),
     );
     if (d != null) setState(() => date = d);
   }
@@ -236,5 +306,10 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
       initialTime: TimeOfDay.now(),
     );
     if (t != null) setState(() => time = t);
+  }
+
+  void _show(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 }

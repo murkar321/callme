@@ -1,7 +1,6 @@
-import 'package:callme/bookings/resort_booking.dart';
 import 'package:flutter/material.dart';
+import 'package:callme/bookings/resort_booking.dart';
 import '../data/resorts_data.dart';
-// ✅ USE NEW PAGE
 
 class ResortDetailPage extends StatelessWidget {
   final Resort resort;
@@ -14,10 +13,10 @@ class ResortDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: const Color(0xFFF4F6FA),
 
       appBar: AppBar(
-        title: const Text("Resort Details"),
+        title: Text(resort.name),
         backgroundColor: Colors.blue,
       ),
 
@@ -26,45 +25,47 @@ class ResortDetailPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            /// 🖼 IMAGE + DISCOUNT
+            /// ================= IMAGE =================
             Stack(
               children: [
                 Image.asset(
                   resort.image,
+                  height: 250,
                   width: double.infinity,
-                  height: 240,
                   fit: BoxFit.cover,
                 ),
 
-                Positioned(
-                  top: 15,
-                  right: 15,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      "${resort.discount}% OFF",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                if (resort.discount > 0)
+                  Positioned(
+                    top: 15,
+                    right: 15,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        "${resort.discount}% OFF",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
-                )
               ],
             ),
 
+            /// ================= CONTENT =================
             Padding(
-              padding: const EdgeInsets.all(15),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
-                  /// 🏷 NAME
+                  /// NAME
                   Text(
                     resort.name,
                     style: const TextStyle(
@@ -75,29 +76,31 @@ class ResortDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 8),
 
-                  /// 📍 CITY + ⭐ RATING
+                  /// LOCATION + RATING
                   Row(
                     children: [
-                      const Icon(Icons.location_on, color: Colors.red),
-                      const SizedBox(width: 5),
+                      const Icon(Icons.location_on, color: Colors.red, size: 18),
+                      const SizedBox(width: 4),
                       Text(resort.city),
+
                       const Spacer(),
+
                       Row(
                         children: List.generate(
-                          resort.rating,
+                          resort.rating as int,
                           (index) => const Icon(
                             Icons.star,
+                            size: 16,
                             color: Colors.orange,
-                            size: 18,
                           ),
                         ),
-                      )
+                      ),
                     ],
                   ),
 
                   const SizedBox(height: 15),
 
-                  /// 💰 PRICE
+                  /// PRICE
                   Row(
                     children: [
                       Text(
@@ -109,6 +112,7 @@ class ResortDetailPage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
+
                       Text(
                         "₹${resort.originalPrice}",
                         style: const TextStyle(
@@ -116,20 +120,12 @@ class ResortDetailPage extends StatelessWidget {
                           color: Colors.grey,
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Text(
-                        "${resort.discount}% OFF",
-                        style: const TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
                     ],
                   ),
 
                   const SizedBox(height: 20),
 
-                  /// 🏨 FACILITIES
+                  /// FACILITIES
                   const Text(
                     "Facilities",
                     style: TextStyle(
@@ -144,16 +140,21 @@ class ResortDetailPage extends StatelessWidget {
                     spacing: 10,
                     runSpacing: 10,
                     children: resort.facilities.map((f) {
-                      return Chip(
-                        label: Text(f),
-                        backgroundColor: Colors.blue.shade50,
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(f),
                       );
                     }).toList(),
                   ),
 
                   const SizedBox(height: 20),
 
-                  /// 📖 DESCRIPTION
+                  /// DESCRIPTION
                   const Text(
                     "Description",
                     style: TextStyle(
@@ -166,10 +167,10 @@ class ResortDetailPage extends StatelessWidget {
 
                   Text(
                     resort.description,
-                    style: const TextStyle(fontSize: 15),
+                    style: const TextStyle(fontSize: 14, height: 1.5),
                   ),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 80),
                 ],
               ),
             ),
@@ -177,24 +178,27 @@ class ResortDetailPage extends StatelessWidget {
         ),
       ),
 
-      /// ✅ FIXED BOOK BUTTON (DIRECT FLOW)
+      /// ================= BOOK BUTTON =================
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(12),
-        color: Colors.white,
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(color: Colors.black12, blurRadius: 10)
+          ],
+        ),
         child: ElevatedButton(
           onPressed: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ResortBookingPage(
-                  resort: resort,
-                ),
+                builder: (_) => ResortBookingPage(resort: resort),
               ),
             );
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
-            padding: const EdgeInsets.symmetric(vertical: 15),
+            padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),

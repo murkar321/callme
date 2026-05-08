@@ -1,16 +1,16 @@
-import 'package:callme/provider/order_service.dart';
-import 'package:callme/screens/bottom_nav_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../data/salon_data.dart';
+
+import '../models/cart.dart';
+import '../provider/order_service.dart';
+import '../screens/bottom_nav_page.dart';
 
 class SalonBookingPage extends StatefulWidget {
-  final List<SalonService> services;
+  final List<dynamic> cartItems;
 
   const SalonBookingPage({
     super.key,
-    required this.services,
-    required Map<dynamic, dynamic> visitTypeMap,
+    required this.cartItems,
   });
 
   @override
@@ -18,18 +18,25 @@ class SalonBookingPage extends StatefulWidget {
 }
 
 class _SalonBookingPageState extends State<SalonBookingPage> {
+
   final phone = TextEditingController();
   final email = TextEditingController();
   final address = TextEditingController();
 
-  String visitType = "Home";
   bool isLoading = false;
 
-  /// ✅ TOTAL
-  int get totalAmount {
-    int total = 0;
-    for (var item in widget.services) {
-      total += item.finalPrice;
+  /// ================= VISIT TYPE =================
+  bool get hasHome =>
+      widget.cartItems.any((e) => e.id.toString().contains("Home"));
+
+  bool get hasSalon =>
+      widget.cartItems.any((e) => e.id.toString().contains("Salon"));
+
+  /// ================= TOTAL (SAFE FIX) =================
+  double get totalAmount {
+    double total = 0;
+    for (var item in widget.cartItems) {
+      total += item.price * item.quantity;
     }
     return total;
   }
@@ -45,91 +52,112 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Salon Booking")),
+      backgroundColor: const Color(0xFFF5F5F7),
+
+      appBar: AppBar(
+        elevation: 0,
+        title: const Text("Confirm Booking"),
+        centerTitle: true,
+      ),
+
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
 
-          const Text("Selected Services",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          /// SERVICES
+          _sectionTitle("Selected Services"),
 
-          const SizedBox(height: 10),
-
-          Card(
+          _card(
             child: Column(
-              children: widget.services.map((s) => ListTile(
-                title: Text(s.name),
-                subtitle: Text(s.time),
-                trailing: Text("₹${s.finalPrice}"),
-              )).toList(),
+              children: widget.cartItems.map((item) {
+                final isHome =
+                    item.id.toString().contains("Home");
+
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(item.name),
+                  subtitle: Text(
+                    "${isHome ? "Home" : "Salon"} • ${item.quantity} item(s)",
+                  ),
+                  trailing: Text(
+                    "₹${item.price * item.quantity}",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                );
+              }).toList(),
             ),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text("Total Amount"),
-              Text("₹$totalAmount"),
-            ],
-          ),
+          /// VISIT TYPE
+          _sectionTitle("Appointment Type"),
 
-          const SizedBox(height: 20),
-
-          const Text("Service Type"),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ChoiceChip(
-                label: const Text("Home"),
-                selected: visitType == "Home",
-                onSelected: (_) => setState(() => visitType = "Home"),
-              ),
-              const SizedBox(width: 10),
-              ChoiceChip(
-                label: const Text("Salon"),
-                selected: visitType == "Salon",
-                onSelected: (_) => setState(() => visitType = "Salon"),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          const Text("Your Details"),
-
-          const SizedBox(height: 10),
-
-          TextField(
-            controller: phone,
-            decoration: const InputDecoration(labelText: "Phone"),
-          ),
-
-          const SizedBox(height: 10),
-
-          TextField(
-            controller: email,
-            decoration: const InputDecoration(labelText: "Email"),
-          ),
-
-          const SizedBox(height: 10),
-
-          if (visitType == "Home")
-            TextField(
-              controller: address,
-              decoration: const InputDecoration(labelText: "Address"),
+          _card(
+            child: Row(
+              children: [
+                _chip(Icons.home, "Home", hasHome),
+                const SizedBox(width: 10),
+                _chip(Icons.store, "Salon", hasSalon),
+              ],
             ),
+          ),
 
-          const SizedBox(height: 30),
+          const SizedBox(height: 16),
 
-          ElevatedButton(
-            onPressed: isLoading ? null : _submit,
-            child: isLoading
-                ? const CircularProgressIndicator(color: Colors.white)
-                : const Text("Confirm Booking"),
-          )
+          /// DETAILS
+          _sectionTitle("Your Details"),
+
+          _card(
+            child: Column(
+              children: [
+                _input(phone, "Phone"),
+                _input(email, "Email"),
+
+                if (hasHome)
+                  _input(address, "Address"),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 100),
         ],
+      ),
+
+      /// BOTTOM BAR
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(color: Colors.black12, blurRadius: 8)
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                "₹$totalAmount",
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: isLoading ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFAE91BA),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("Confirm Booking"),
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
@@ -143,13 +171,13 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
       return;
     }
 
-    if (visitType == "Home" && address.text.isEmpty) {
+    if (hasHome && address.text.isEmpty) {
       _show("Address required");
       return;
     }
 
     if (user == null) {
-      _show("User not logged in");
+      _show("Login required");
       return;
     }
 
@@ -157,45 +185,44 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
 
     try {
       await OrderService.placeOrder(
-        /// ✅ IMPORTANT: ALWAYS LOWERCASE
         serviceType: "salon",
 
-        /// ✅ CLEAN SERVICE LIST
-        services: widget.services.map((e) => e.name).toList(),
+        services: widget.cartItems.map((e) =>
+            "${e.name} (${e.id.toString().contains("Home") ? "Home" : "Salon"}) x${e.quantity}"
+        ).toList(),
 
-        /// 👤 USER
         userId: user.uid,
         userName: "Salon User",
         phone: phone.text.trim(),
         email: email.text.trim(),
 
-        /// 🔥 CREATOR (FIXED)
         createdBy: user.uid,
         createdByRole: "user",
 
-        /// 📍 LOCATION
-        address: visitType == "Home"
+        address: hasHome
             ? address.text.trim()
             : "Salon Visit",
 
-        /// 📅 SCHEDULE
         date: DateTime.now(),
         time: TimeOfDay.now().format(context),
 
-        /// 💰 PAYMENT
         totalAmount: totalAmount.toDouble(),
 
-        /// EXTRA
-        visitType: visitType,
+        visitType: hasHome && hasSalon
+            ? "Mixed"
+            : hasHome
+                ? "Home"
+                : "Salon",
 
-        /// 🔥 VERY IMPORTANT FIX
         providerId: null,
         providerUserId: null,
         providerName: null,
 
-        /// 🔥 THIS IS BOOKING NOT ENQUIRY
         isEnquiry: false,
       );
+
+      /// 🔥 MOST IMPORTANT FIX
+      Cart.clear("Salon");
 
       _show("Booking Confirmed ✅");
 
@@ -217,9 +244,73 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
     setState(() => isLoading = false);
   }
 
-  void _show(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
+  /// ================= UI HELPERS =================
+  Widget _sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+            fontSize: 16, fontWeight: FontWeight.bold),
+      ),
     );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _chip(IconData icon, String label, bool active) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFAE91BA) : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon,
+                size: 16,
+                color: active ? Colors.white : Colors.black54),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? Colors.white : Colors.black54,
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _input(TextEditingController c, String hint) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: c,
+        decoration: InputDecoration(
+          labelText: hint,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _show(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 }

@@ -16,8 +16,8 @@ class BookingPage extends StatefulWidget {
     super.key,
     required this.serviceName,
     this.product,
-    this.cart, required List<dynamic> products,
-    // ❌ removed unused products param
+    this.cart,
+    required List<dynamic> products,
   });
 
   @override
@@ -38,19 +38,31 @@ class _BookingPageState extends State<BookingPage> {
   bool isSuccess = false;
   String bookingId = "";
 
+  /// ================= SAFE CART =================
   List<CartItem> get cartItems =>
       widget.cart ?? Cart.getItems(widget.serviceName);
 
   bool get isCart => cartItems.isNotEmpty;
   bool get isSingle => widget.product != null && cartItems.isEmpty;
 
+  /// ================= FIXED TOTAL =================
   double get total {
-    if (isCart) return Cart.getTotal(widget.serviceName).toDouble();
-    if (isSingle) return widget.product!.calculatedFinalPrice.toDouble();
+    if (isCart) {
+      double sum = 0;
+      for (var item in cartItems) {
+        sum += item.price * item.quantity;
+      }
+      return sum;
+    }
+
+    if (isSingle) {
+      return widget.product!.calculatedFinalPrice.toDouble();
+    }
+
     return 0;
   }
 
-  /// 🔥 NORMALIZE SERVICE TYPE (CRITICAL FIX)
+  /// ================= NORMALIZE =================
   String normalize(String s) => s.trim().toLowerCase();
 
   @override
@@ -106,6 +118,7 @@ class _BookingPageState extends State<BookingPage> {
 
           const SizedBox(height: 20),
 
+          /// 🔥 FIXED TOTAL DISPLAY
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -113,7 +126,7 @@ class _BookingPageState extends State<BookingPage> {
               color: Colors.green.shade50,
             ),
             child: Text(
-              "Total: ₹$total",
+              "Total: ₹${total.toStringAsFixed(0)}",
               style: const TextStyle(
                   fontSize: 16, fontWeight: FontWeight.bold),
             ),
@@ -189,7 +202,7 @@ class _BookingPageState extends State<BookingPage> {
 
                   const Divider(),
 
-                  Text("Total: ₹$total",
+                  Text("Total: ₹${total.toStringAsFixed(0)}",
                       style: const TextStyle(
                           fontWeight: FontWeight.bold)),
                 ],
@@ -293,7 +306,7 @@ class _BookingPageState extends State<BookingPage> {
     if (success == true) _save();
   }
 
-  /// 🔥 FINAL SAVE (FIXED)
+  /// ================= FINAL SAVE =================
   void _save() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -305,9 +318,7 @@ class _BookingPageState extends State<BookingPage> {
           : [widget.product?.name ?? widget.serviceName];
 
       final docRef = await OrderService.placeOrder(
-        /// 🔥 FIXED (NORMALIZED)
         serviceType: normalize(widget.serviceName),
-
         services: services,
 
         userId: user.uid,
@@ -326,23 +337,24 @@ class _BookingPageState extends State<BookingPage> {
         createdBy: user.uid,
         createdByRole: "user",
 
-        /// 🔥 FIXED (NO NULL)
         providerId: "",
         providerUserId: "",
         providerName: "",
 
-        /// 🔥 FIXED (THIS IS BOOKING, NOT ENQUIRY)
         isEnquiry: false,
       );
+
+      /// 🔥 CLEAR CART (FIXED ISSUE YOU HAD)
+      if (isCart) {
+        Cart.clear(widget.serviceName);
+      }
 
       setState(() {
         isSuccess = true;
         bookingId = docRef.id;
       });
 
-      if (isCart) Cart.clear(widget.serviceName);
-
-      Future.delayed(const Duration(seconds: 3), () {
+      Future.delayed(const Duration(seconds: 2), () {
         if (!mounted) return;
 
         Navigator.pushAndRemoveUntil(

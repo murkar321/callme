@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-import 'map_picker_page.dart'; // ✅ your existing map page
+import 'map_picker_page.dart';
 
 class ProfilePage extends StatefulWidget {
   final String phone;
@@ -39,13 +39,53 @@ class _ProfilePageState extends State<ProfilePage> {
     loadUserData();
   }
 
+  /// ================= MERGE OLD USERS =================
+  Future<void> mergeOldUserIfExists(User user) async {
+    final usersRef = firestore.collection('users');
+    Map<String, dynamic> mergedData = {};
+
+    /// CHECK PHONE
+    if (user.phoneNumber != null && user.phoneNumber!.isNotEmpty) {
+      final phoneMatch = await usersRef
+          .where('phone', isEqualTo: user.phoneNumber)
+          .get();
+
+      for (var doc in phoneMatch.docs) {
+        if (doc.id != user.uid) {
+          mergedData.addAll(doc.data());
+          await usersRef.doc(doc.id).delete();
+        }
+      }
+    }
+
+    /// CHECK EMAIL
+    if (user.email != null && user.email!.isNotEmpty) {
+      final emailMatch = await usersRef
+          .where('email', isEqualTo: user.email)
+          .get();
+
+      for (var doc in emailMatch.docs) {
+        if (doc.id != user.uid) {
+          mergedData.addAll(doc.data());
+          await usersRef.doc(doc.id).delete();
+        }
+      }
+    }
+
+    if (mergedData.isNotEmpty) {
+      await usersRef.doc(user.uid).set(
+        mergedData,
+        SetOptions(merge: true),
+      );
+    }
+  }
+
   /// ================= LOAD USER =================
   Future<void> loadUserData() async {
     try {
       if (user != null) {
-        /// 🔥 GOOGLE AUTO-FILL
         emailController.text = user!.email ?? "";
-        phoneController.text = widget.phone;
+        phoneController.text = user!.phoneNumber ?? widget.phone;
 
         if (user!.displayName != null) {
           final parts = user!.displayName!.split(" ");
@@ -59,7 +99,7 @@ class _ProfilePageState extends State<ProfilePage> {
           _networkImage = user!.photoURL;
         }
 
-        /// 🔄 FIRESTORE DATA (override if exists)
+        /// 🔄 FIRESTORE DATA
         final doc =
             await firestore.collection('users').doc(user!.uid).get();
 
@@ -90,12 +130,12 @@ class _ProfilePageState extends State<ProfilePage> {
     if (picked != null) {
       setState(() {
         _image = File(picked.path);
-        _networkImage = null; // override google image
+        _networkImage = null;
       });
     }
   }
 
-  /// ================= OPEN MAP =================
+  /// ================= MAP =================
   Future<void> openMap() async {
     final result = await Navigator.push(
       context,
@@ -118,14 +158,21 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       setState(() => isLoading = true);
 
-      final docId = user?.uid ?? widget.phone;
+      if (user == null) {
+        throw Exception("User not logged in");
+      }
 
-      await firestore.collection('users').doc(docId).set({
+      /// 🔥 MERGE BEFORE SAVE
+      await mergeOldUserIfExists(user!);
+
+      await firestore.collection('users').doc(user!.uid).set({
+        'uid': user!.uid,
         'firstName': firstNameController.text.trim(),
         'lastName': lastNameController.text.trim(),
         'email': emailController.text.trim(),
         'phone': phoneController.text.trim(),
         'address': addressController.text.trim(),
+        'photo': _networkImage ?? "",
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -177,7 +224,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Column(
                   children: [
 
-                    /// 👤 PROFILE IMAGE
                     Stack(
                       children: [
                         CircleAvatar(
@@ -208,40 +254,30 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     const SizedBox(height: 25),
 
-                    /// NAME
                     Row(
                       children: [
-                        Expanded(
-                          child:
-                              _field(firstNameController, "First Name"),
-                        ),
+                        Expanded(child: _field(firstNameController, "First Name")),
                         const SizedBox(width: 10),
-                        Expanded(
-                          child: _field(lastNameController, "Last Name"),
-                        ),
+                        Expanded(child: _field(lastNameController, "Last Name")),
                       ],
                     ),
 
                     const SizedBox(height: 15),
 
-                    /// EMAIL
                     _field(emailController, "Email",
                         keyboard: TextInputType.emailAddress),
 
                     const SizedBox(height: 15),
 
-                    /// PHONE
                     _field(phoneController, "Mobile Number",
                         keyboard: TextInputType.phone),
 
                     const SizedBox(height: 15),
 
-                    /// ADDRESS + MAP BUTTON
                     Column(
                       children: [
                         _field(addressController, "Address", maxLines: 3),
                         const SizedBox(height: 8),
-
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton.icon(
@@ -255,7 +291,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     const SizedBox(height: 25),
 
-                    /// SAVE
                     SizedBox(
                       width: double.infinity,
                       height: 50,
@@ -270,14 +305,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     const SizedBox(height: 15),
 
-                    /// LOGOUT
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: OutlinedButton.icon(
                         onPressed: logout,
-                        icon:
-                            const Icon(Icons.logout, color: Color.fromARGB(255, 185, 22, 10)),
+                        icon: const Icon(Icons.logout, color: Color.fromARGB(255, 185, 22, 10)),
                         label: const Text("Logout",
                             style: TextStyle(color: Color.fromARGB(255, 185, 22, 10))),
                       ),
@@ -289,7 +322,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  /// 🔹 FIELD
   Widget _field(TextEditingController c, String label,
       {TextInputType keyboard = TextInputType.text, int maxLines = 1}) {
     return TextFormField(

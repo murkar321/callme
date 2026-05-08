@@ -32,11 +32,36 @@ class _SignupPageState extends State<SignupPage> {
       'name': user.displayName ?? "",
       'phone': user.phoneNumber ?? "",
       'photo': user.photoURL ?? "",
-      'createdAt': FieldValue.serverTimestamp(),
+      'providers': user.providerData.map((e) => e.providerId).toList(),
+      'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
-  /// ================= HOME =================
+  /// ================= LINK GOOGLE =================
+  Future<void> linkGoogle(User user) async {
+    final providers =
+        user.providerData.map((e) => e.providerId).toList();
+
+    if (providers.contains('google.com')) return;
+
+    try {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return;
+
+      final googleAuth = await googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      await user.linkWithCredential(credential);
+    } catch (e) {
+      debugPrint("Google link error: $e");
+    }
+  }
+
+  /// ================= NAVIGATION =================
   void goToHome(User user) {
     Navigator.pushReplacement(
       context,
@@ -49,41 +74,55 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  /// ================= GOOGLE SIGN-IN (FIXED PROPERLY) =================
+  /// ================= GOOGLE SIGN-IN =================
   Future<void> signInWithGoogle() async {
     try {
       setState(() => loading = true);
 
-      final GoogleSignIn googleSignIn = GoogleSignIn();
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
 
-      await googleSignIn.signOut(); // reset previous session
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return;
 
-      final GoogleSignInAccount? googleUser =
-          await googleSignIn.signIn();
-
-      if (googleUser == null) {
-        setState(() => loading = false);
-        return;
-      }
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final googleAuth = await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final userCredential =
-          await _auth.signInWithCredential(credential);
+      UserCredential userCredential;
+
+      try {
+        userCredential =
+            await _auth.signInWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code ==
+            'account-exists-with-different-credential') {
+          showError("Login with email first, then try Google");
+          return;
+        }
+        rethrow;
+      }
 
       final user = userCredential.user!;
+
+      /// 🔥 LINK IF ALREADY LOGGED IN (OTP/EMAIL FLOW)
+      if (_auth.currentUser != null &&
+          _auth.currentUser!.uid != user.uid) {
+        try {
+          await _auth.currentUser!
+              .linkWithCredential(credential);
+        } catch (e) {
+          debugPrint("Link error: $e");
+        }
+      }
 
       await saveUser(user);
       goToHome(user);
 
     } catch (e) {
-      debugPrint("Google Sign-In Error: $e");
       showError("Google Sign-In failed");
     } finally {
       setState(() => loading = false);
@@ -95,19 +134,42 @@ class _SignupPageState extends State<SignupPage> {
     try {
       setState(() => loading = true);
 
+      final email = emailController.text.trim();
+      final password = passwordController.text.trim();
+
+      /// 🔥 IF USER ALREADY EXISTS (OTP USER)
+      if (_auth.currentUser != null) {
+        final credential = EmailAuthProvider.credential(
+          email: email,
+          password: password,
+        );
+
+        final userCred = await _auth.currentUser!
+            .linkWithCredential(credential);
+
+        final user = userCred.user!;
+        await saveUser(user);
+        goToHome(user);
+        return;
+      }
+
+      /// NORMAL SIGNUP
       final userCredential =
           await _auth.createUserWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+        email: email,
+        password: password,
       );
 
       final user = userCredential.user!;
       await saveUser(user);
-
       goToHome(user);
-    } catch (e) {
-      debugPrint(e.toString());
-      showError("Signup failed");
+
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        showError("Email already exists. Please login.");
+      } else {
+        showError(e.message ?? "Signup failed");
+      }
     } finally {
       setState(() => loading = false);
     }
@@ -118,18 +180,24 @@ class _SignupPageState extends State<SignupPage> {
     try {
       setState(() => loading = true);
 
+      final email = emailController.text.trim();
+      final password = passwordController.text.trim();
+
       final userCredential =
           await _auth.signInWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+        email: email,
+        password: password,
       );
 
       final user = userCredential.user!;
-      await saveUser(user);
 
+      /// 🔥 LINK GOOGLE AUTOMATICALLY
+      await linkGoogle(user);
+
+      await saveUser(user);
       goToHome(user);
+
     } catch (e) {
-      debugPrint(e.toString());
       showError("Login failed");
     } finally {
       setState(() => loading = false);
@@ -143,6 +211,7 @@ class _SignupPageState extends State<SignupPage> {
 
   @override
   Widget build(BuildContext context) {
+    /// ✅ UI SAME (UNCHANGED)
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(

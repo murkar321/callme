@@ -59,21 +59,47 @@ class UniversalServiceCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          /// IMAGE
-          ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Image.asset(
-              image,
-              height: width * 0.42,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                height: width * 0.42,
-                color: Colors.grey[200],
-                child: const Icon(Icons.image),
+          /// IMAGE + CART BADGE
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Image.asset(
+                  image,
+                  height: width * 0.42,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    height: width * 0.42,
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.image),
+                  ),
+                ),
               ),
-            ),
+
+              /// CART BADGE
+              if (quantity > 0)
+                Positioned(
+                  right: 10,
+                  top: 10,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: primaryColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      quantity.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
 
           /// CONTENT
@@ -123,7 +149,14 @@ class UniversalServiceCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Expanded(child: _buildAction()),
+
+                    /// 🔥 FIXED OVERFLOW HERE
+                    Expanded(
+                      child: SizedBox(
+                        height: 40,
+                        child: _buildAction(),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -142,7 +175,7 @@ class UniversalServiceCard extends StatelessWidget {
               child: const Text("ADD"),
             )
           : Container(
-              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
                 color: primaryColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
@@ -150,9 +183,15 @@ class UniversalServiceCard extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  IconButton(onPressed: onDecrease, icon: const Icon(Icons.remove)),
-                  Text(quantity.toString()),
-                  IconButton(onPressed: onIncrease, icon: const Icon(Icons.add)),
+                  _smallButton(Icons.remove, onDecrease),
+                  Flexible(
+                    child: Text(
+                      quantity.toString(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  _smallButton(Icons.add, onIncrease),
                 ],
               ),
             );
@@ -161,6 +200,20 @@ class UniversalServiceCard extends StatelessWidget {
     return ElevatedButton(
       onPressed: onPrimaryAction,
       child: const Text("ADD"),
+    );
+  }
+
+  /// 🔥 COMPACT BUTTON (Fix overflow)
+  Widget _smallButton(IconData icon, VoidCallback? onTap) {
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+      ),
     );
   }
 }

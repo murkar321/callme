@@ -20,9 +20,13 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
   void refresh() => setState(() {});
 
-  String get id => "Salon_${widget.service.id}";
+  /// ✅ FIXED IDS (IMPORTANT)
+  String _id(String type) => "${widget.service.id}_$type";
 
-  int get qty => Cart.getQuantity(id, serviceName);
+  int _qty(String type) =>
+      Cart.getQuantity(_id(type), serviceName);
+
+  int get totalQty => _qty("Home") + _qty("Salon");
 
   @override
   Widget build(BuildContext context) {
@@ -101,9 +105,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                 fontSize: 16,
               ),
             ),
-
             const SizedBox(height: 8),
-
             Text(widget.service.description),
 
             const SizedBox(height: 20),
@@ -116,26 +118,22 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                 fontSize: 16,
               ),
             ),
-
             const SizedBox(height: 8),
 
             ...widget.service.includes.map(
-              (e) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check,
-                        color: Colors.green, size: 18),
-                    const SizedBox(width: 6),
-                    Expanded(child: Text(e)),
-                  ],
-                ),
+              (e) => Row(
+                children: [
+                  const Icon(Icons.check,
+                      color: Colors.green, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(e)),
+                ],
               ),
             ),
 
             const SizedBox(height: 25),
 
-            /// BOOK BUTTON
+            /// ================= BUTTON =================
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -143,13 +141,11 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFAE91BA),
                 ),
-                onPressed: () {
-                  _showBookingPopup(context);
-                },
+                onPressed: () => _showBookingPopup(context),
                 child: Text(
-                  qty == 0
+                  totalQty == 0
                       ? "Book Service"
-                      : "Added ($qty) • Add More",
+                      : "Added ($totalQty) • Add More",
                   style: const TextStyle(fontSize: 16),
                 ),
               ),
@@ -158,7 +154,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
             const SizedBox(height: 12),
 
             /// VIEW CART
-            if (qty > 0)
+            if (totalQty > 0)
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -178,15 +174,13 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                   child: const Text("View Cart"),
                 ),
               ),
-
-            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
 
-  /// POPUP
+  /// ================= POPUP =================
   void _showBookingPopup(BuildContext context) {
     showDialog(
       context: context,
@@ -206,18 +200,17 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                 title: const Text("Home Appointment"),
                 onTap: () {
                   Cart.addSalon(
-                    id: id,
+                    id: _id("Home"), // ✅ FIXED
                     name: widget.service.name,
                     price: widget.service.finalPrice,
                     category: widget.service.category,
-                    visitType: "Home Appointment",
+                    visitType: "Home", // ✅ FIXED
                     image: widget.service.image,
                   );
 
                   Navigator.pop(context);
                   refresh();
-
-                  _showSnack("Added to Cart (Home Appointment)");
+                  _showSnack("Added to Cart (Home)");
                 },
               ),
 
@@ -229,18 +222,17 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                 title: const Text("Salon Appointment"),
                 onTap: () {
                   Cart.addSalon(
-                    id: id,
+                    id: _id("Salon"), // ✅ FIXED
                     name: widget.service.name,
                     price: widget.service.finalPrice,
                     category: widget.service.category,
-                    visitType: "Salon Appointment",
+                    visitType: "Salon", // ✅ FIXED
                     image: widget.service.image,
                   );
 
                   Navigator.pop(context);
                   refresh();
-
-                  _showSnack("Added to Cart (Salon Appointment)");
+                  _showSnack("Added to Cart (Salon)");
                 },
               ),
             ],
@@ -252,10 +244,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(seconds: 1),
-      ),
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 1)),
     );
   }
 }

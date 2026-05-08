@@ -1,4 +1,5 @@
 import 'package:callme/provider/order_service.dart';
+import 'package:callme/models/cart.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -29,33 +30,31 @@ class _EnquiryPageState extends State<EnquiryPage> {
   bool isLoading = false;
 
   /// =========================
-  /// 🔥 SERVICE TYPE NORMALIZER
+  /// 🔥 NORMALIZED SERVICE TYPE
   /// =========================
-  String _getServiceType(String name) {
-    switch (name) {
-      case "Educational Services":
-        return "education";
-      case "Salon":
-        return "salon";
-      case "Cleaning":
-        return "cleaning";
-      case "Hotel":
-        return "hotel";
-      case "Resort":
-        return "resort";
-      default:
-        return name.toLowerCase().trim();
+  String get serviceType =>
+      widget.serviceName.trim().toLowerCase();
+
+  /// =========================
+  /// 📦 SAFE SERVICES LIST
+  /// =========================
+  List<String> get servicesList {
+    if (widget.cart != null && widget.cart!.isNotEmpty) {
+      return widget.cart!
+          .map((e) => "${e.name} x${e.quantity}")
+          .toList();
     }
+    return [widget.serviceName];
   }
 
   /// =========================
-  /// 🚀 SUBMIT ENQUIRY
+  /// 🚀 SUBMIT
   /// =========================
   Future<void> submitEnquiry() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (selectedDate == null || selectedTime == null) {
-      _showMessage("Please select date & time");
+      _show("Please select date & time");
       return;
     }
 
@@ -69,16 +68,6 @@ class _EnquiryPageState extends State<EnquiryPage> {
       if (user == null) {
         throw Exception("User not logged in");
       }
-
-      final serviceType = _getServiceType(widget.serviceName);
-
-      debugPrint("🔥 Enquiry ServiceType: $serviceType");
-
-      final servicesList = (widget.cart != null && widget.cart!.isNotEmpty)
-          ? widget.cart!
-              .map((e) => "${e.name ?? "Service"} x${e.quantity ?? 1}")
-              .toList()
-          : [widget.serviceName];
 
       await OrderService.placeOrder(
         serviceType: serviceType,
@@ -103,24 +92,26 @@ class _EnquiryPageState extends State<EnquiryPage> {
         date: selectedDate!,
         time: selectedTime!.format(context),
 
-        /// PAYMENT
+        /// 💰 ENQUIRY (NO PAYMENT)
         totalAmount: 0,
 
-        /// ENQUIRY MODE
+        /// 🔥 IMPORTANT
         isEnquiry: true,
       );
 
+      /// 🔥 CLEAR CART (THIS WAS MISSING)
+      if (widget.cart != null && widget.cart!.isNotEmpty) {
+        Cart.clear(widget.serviceName);
+      }
+
       if (!mounted) return;
 
-      _showMessage("Enquiry submitted successfully");
+      _show("Enquiry submitted successfully ✅");
 
       Navigator.pop(context);
+
     } catch (e) {
-      debugPrint("🔥 Enquiry Error: $e");
-
-      if (!mounted) return;
-
-      _showMessage("Error: $e");
+      _show("Error: $e");
     }
 
     setState(() => isLoading = false);
@@ -130,7 +121,7 @@ class _EnquiryPageState extends State<EnquiryPage> {
   /// UI HELPERS
   /// =========================
 
-  void _showMessage(String msg) {
+  void _show(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
   }
@@ -159,32 +150,35 @@ class _EnquiryPageState extends State<EnquiryPage> {
     }
   }
 
-  Widget _inputField({
+  Widget _input({
     required TextEditingController controller,
     required String label,
     required IconData icon,
     String? Function(String?)? validator,
     TextInputType keyboard = TextInputType.text,
   }) {
-    return TextFormField(
-      controller: controller,
-      validator: validator,
-      keyboardType: keyboard,
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon),
-        labelText: label,
-        filled: true,
-        fillColor: const Color(0xFFF9FAFB),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextFormField(
+        controller: controller,
+        validator: validator,
+        keyboardType: keyboard,
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon),
+          labelText: label,
+          filled: true,
+          fillColor: const Color(0xFFF9FAFB),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
         ),
       ),
     );
   }
 
   /// =========================
-  /// 🎨 UI
+  /// UI
   /// =========================
 
   @override
@@ -224,7 +218,7 @@ class _EnquiryPageState extends State<EnquiryPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
-                  /// 🔹 HEADER
+                  /// HEADER
                   Text(
                     widget.serviceName,
                     style: const TextStyle(
@@ -240,10 +234,27 @@ class _EnquiryPageState extends State<EnquiryPage> {
                     style: TextStyle(color: Colors.grey),
                   ),
 
-                  const SizedBox(height: 25),
+                  const SizedBox(height: 20),
 
-                  /// 👤 NAME
-                  _inputField(
+                  /// SERVICES PREVIEW (NEW UX)
+                  if (widget.cart != null && widget.cart!.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: servicesList
+                            .map((e) => Text("• $e"))
+                            .toList(),
+                      ),
+                    ),
+
+                  /// NAME
+                  _input(
                     controller: nameController,
                     label: "Full Name",
                     icon: Icons.person,
@@ -251,10 +262,8 @@ class _EnquiryPageState extends State<EnquiryPage> {
                         v == null || v.isEmpty ? "Enter your name" : null,
                   ),
 
-                  const SizedBox(height: 15),
-
-                  /// 📞 PHONE
-                  _inputField(
+                  /// PHONE
+                  _input(
                     controller: phoneController,
                     label: "Phone Number",
                     icon: Icons.phone,
@@ -263,19 +272,15 @@ class _EnquiryPageState extends State<EnquiryPage> {
                         v == null || v.isEmpty ? "Enter phone number" : null,
                   ),
 
-                  const SizedBox(height: 15),
-
-                  /// 📧 EMAIL
-                  _inputField(
+                  /// EMAIL
+                  _input(
                     controller: emailController,
                     label: "Email (optional)",
                     icon: Icons.email,
                     keyboard: TextInputType.emailAddress,
                   ),
 
-                  const SizedBox(height: 15),
-
-                  /// 📅 DATE
+                  /// DATE
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.calendar_today),
@@ -287,7 +292,7 @@ class _EnquiryPageState extends State<EnquiryPage> {
                     onTap: _pickDate,
                   ),
 
-                  /// ⏰ TIME
+                  /// TIME
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.access_time),
@@ -299,9 +304,9 @@ class _EnquiryPageState extends State<EnquiryPage> {
                     onTap: _pickTime,
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 25),
 
-                  /// 🚀 SUBMIT
+                  /// SUBMIT
                   SizedBox(
                     width: double.infinity,
                     height: 50,

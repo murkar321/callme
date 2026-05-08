@@ -36,31 +36,30 @@ class _BottomNavPageState extends State<BottomNavPage> {
     _setupNavigation();
   }
 
-  /// 🔥 SETUP NAV (SAFE INIT)
+  /// 🔥 SETUP NAVIGATION
   void _setupNavigation() {
     final user = FirebaseAuth.instance.currentUser;
 
     isGuest = user == null;
 
-    isAdmin = (user?.email ?? "")
-        .toLowerCase()
-        .trim() ==
+    /// ✅ ADMIN CHECK
+    isAdmin = user?.email?.toLowerCase().trim() ==
         "allinonecallme@gmail.com";
 
     debugPrint("User Email: ${user?.email}");
     debugPrint("Is Guest: $isGuest");
     debugPrint("Is Admin: $isAdmin");
 
-    /// ✅ BASE SCREENS
-    final screens = <Widget>[
+    /// ✅ BASE SCREENS (MUTABLE LIST)
+    _screens = [
       const HomePage(),
       const BusinessPage(),
       MyOrdersPage(phone: widget.userPhone),
       ProfilePage(phone: widget.userPhone),
     ];
 
-    /// ✅ BASE NAV ITEMS (NO CONST LIST ❗)
-    final items = <BottomNavigationBarItem>[
+    /// ✅ BASE NAV ITEMS (REMOVE const HERE)
+    _items = [
       const BottomNavigationBarItem(
         icon: Icon(Icons.home),
         label: "Home",
@@ -79,27 +78,21 @@ class _BottomNavPageState extends State<BottomNavPage> {
       ),
     ];
 
-    /// 👑 ADMIN EXTRA TAB
+    /// 👑 ADMIN TAB (NOW SAFE)
     if (isAdmin) {
-      screens.add(AdminDashboard());
-      items.add(
+      _screens.add(AdminDashboard());
+      _items.add(
         const BottomNavigationBarItem(
           icon: Icon(Icons.admin_panel_settings),
           label: "Admin",
         ),
       );
     }
-
-    _screens = screens;
-    _items = items;
-
-    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-
-    /// ⏳ LOADING SAFETY
+    /// SAFETY CHECK
     if (_screens.isEmpty || _items.isEmpty) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+
 import '../data/salon_data.dart';
 import '../models/cart.dart';
 import '../screens/salon_detail_page.dart';
 import '../models/cart_page.dart';
 
-class SalonServiceCard extends StatelessWidget {
+class SalonServiceCard extends StatefulWidget {
   final SalonService service;
   final VoidCallback? onUpdate;
 
@@ -14,35 +15,48 @@ class SalonServiceCard extends StatelessWidget {
     this.onUpdate,
   });
 
-  /// =========================
-  /// EXISTING LOGIC (UNCHANGED)
-  /// =========================
-  String _key(String visitType) {
-    return "${service.id}_$visitType";
+  @override
+  State<SalonServiceCard> createState() => _SalonServiceCardState();
+}
+
+class _SalonServiceCardState extends State<SalonServiceCard> {
+
+  /// ================= KEY LOGIC =================
+  String _key(String visitType) => "${widget.service.id}_$visitType";
+
+  int _getQty(String visitType) =>
+      Cart.getQuantity(_key(visitType), "Salon");
+
+  void _add(String visitType) {
+    Cart.addSalon(
+      id: _key(visitType),
+      name: widget.service.name,
+      price: widget.service.finalPrice,
+      category: widget.service.category,
+      visitType: visitType,
+      image: widget.service.image,
+    );
+
+    setState(() {});
+    widget.onUpdate?.call();
   }
 
-  int _getQty(String visitType) {
-    return Cart.getQuantity(_key(visitType), "Salon");
+  void _remove(String visitType) {
+    Cart.removeById(_key(visitType), "Salon");
+
+    setState(() {});
+    widget.onUpdate?.call();
   }
 
-  /// =========================
-  /// AUTO UI HELPERS (NEW)
-  /// =========================
+  /// ================= UI HELPERS =================
   String getAutoBadge() {
-    if (service.discount >= 25) return "Best Deal";
-    if (service.price <= 300) return "Budget";
+    if (widget.service.discount >= 25) return "Best Deal";
+    if (widget.service.price <= 300) return "Budget";
     return "Popular";
   }
 
   double getAutoRating() {
-    return 4.2 + (service.id % 5) * 0.1;
-  }
-
-  String getDiscountLabel() {
-    if (service.discount > 0) {
-      return "${service.discount}% OFF";
-    }
-    return "";
+    return 4.2 + (widget.service.id % 5) * 0.1;
   }
 
   @override
@@ -64,23 +78,19 @@ class SalonServiceCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          /// =========================
-          /// IMAGE + BADGE
-          /// =========================
+          /// IMAGE
           Stack(
             children: [
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(14),
-                ),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(14)),
                 child: Image.asset(
-                  service.image,
+                  widget.service.image,
                   height: 150,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
               ),
-
               Positioned(
                 top: 8,
                 left: 8,
@@ -104,151 +114,111 @@ class SalonServiceCard extends StatelessWidget {
             ],
           ),
 
-          /// =========================
           /// CONTENT
-          /// =========================
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
-                /// NAME
                 Text(
-                  service.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  widget.service.name,
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
+                      fontWeight: FontWeight.bold, fontSize: 15),
                 ),
 
                 const SizedBox(height: 5),
 
-                /// SLOGAN
                 Text(
-                  service.slogan,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
+                  widget.service.slogan,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
 
                 const SizedBox(height: 6),
 
-                /// ⭐ RATING + ⏱ TIME
                 Row(
                   children: [
                     const Icon(Icons.star,
                         size: 14, color: Colors.orange),
                     const SizedBox(width: 4),
-                    Text(
-                      getAutoRating().toStringAsFixed(1),
-                      style: const TextStyle(fontSize: 12),
-                    ),
+                    Text(getAutoRating().toStringAsFixed(1)),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        service.time,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: Text(widget.service.time,
+                          overflow: TextOverflow.ellipsis),
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 10),
 
-                /// 💸 PRICE + DISCOUNT
                 Row(
                   children: [
-                    Text(
-                      "₹${service.finalPrice}",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      "₹${service.price}",
-                      style: const TextStyle(
-                        decoration: TextDecoration.lineThrough,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    if (service.discount > 0)
-                      Text(
-                        getDiscountLabel(),
+                    Text("₹${widget.service.finalPrice}",
                         style: const TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
+                            fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 10),
+                    Text("₹${widget.service.price}",
+                        style: const TextStyle(
+                            decoration: TextDecoration.lineThrough,
+                            color: Colors.grey)),
                   ],
                 ),
 
                 const SizedBox(height: 12),
 
-                /// =========================
-                /// BUTTONS (RESPONSIVE SAFE)
-                /// =========================
-                Row(
-                  children: [
-
-                    /// VIEW BUTTON
-                    Expanded(
-                      child: SizedBox(
-                        height: 40,
+                /// BUTTON AREA
+                if (totalQty == 0)
+                  Row(
+                    children: [
+                      Expanded(
                         child: OutlinedButton(
                           onPressed: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) =>
-                                    SalonDetailPage(service: service),
+                                    SalonDetailPage(service: widget.service),
                               ),
                             );
                           },
-                          child: const FittedBox(
-                            child: Text("View"),
-                          ),
+                          child: const Text("View"),
                         ),
                       ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    /// BOOK BUTTON
-                    Expanded(
-                      child: SizedBox(
-                        height: 40,
+                      const SizedBox(width: 10),
+                      Expanded(
                         child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFAE91BA),
-                          ),
                           onPressed: () => _showPopup(context),
-                          child: FittedBox(
-                            child: Text(
-                              totalQty == 0
-                                  ? "Book"
-                                  : "Added ($totalQty)",
-                            ),
-                          ),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFAE91BA)),
+                          child: const Text("Book"),
                         ),
                       ),
-                    ),
-                  ],
-                )
+                    ],
+                  )
+                else
+                  Column(
+                    children: [
+                      _qtyRow("Home", homeQty),
+                      _qtyRow("Salon", salonQty),
+                      const SizedBox(height: 10),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CartPage(
+                                service: "Salon",
+                                serviceName: "Salon",
+                                cart: [],
+                              ),
+                            ),
+                          );
+                        },
+                        child: Text("View Cart ($totalQty)"),
+                      )
+                    ],
+                  )
               ],
             ),
           )
@@ -257,82 +227,144 @@ class SalonServiceCard extends StatelessWidget {
     );
   }
 
-  /// =========================
-  /// POPUP (UNCHANGED)
-  /// =========================
+  /// ================= QTY ROW =================
+  Widget _qtyRow(String type, int qty) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(type),
+        qty == 0
+            ? TextButton(
+                onPressed: () => _add(type),
+                child: const Text("Add"),
+              )
+            : Row(
+                children: [
+                  IconButton(
+                    onPressed: () => _remove(type),
+                    icon: const Icon(Icons.remove),
+                  ),
+                  Text("$qty"),
+                  IconButton(
+                    onPressed: () => _add(type),
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              )
+      ],
+    );
+  }
+
+  /// ================= 🔥 PREMIUM POPUP =================
   void _showPopup(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) {
         return Padding(
           padding: const EdgeInsets.all(16),
-          child: Wrap(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Center(
-                child: Text(
-                  "Choose Appointment Type",
-                  style: TextStyle(fontWeight: FontWeight.bold),
+
+              /// DRAG HANDLE
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
+
+              const Text(
+                "Choose Appointment Type",
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+
               const SizedBox(height: 20),
 
-              ListTile(
-                leading: const Icon(Icons.home),
-                title: const Text("Home Appointment"),
+              /// HOME CARD
+              _optionCard(
+                icon: Icons.home,
+                title: "Home Appointment",
+                subtitle: "Service at your doorstep",
+                color: Colors.purple,
                 onTap: () {
-                  Cart.addSalon(
-                    id: _key("Home"),
-                    name: service.name,
-                    price: service.finalPrice,
-                    category: service.category,
-                    visitType: "Home",
-                    image: service.image,
-                  );
+                  _add("Home");
                   Navigator.pop(context);
-                  onUpdate?.call();
                 },
               ),
 
-              ListTile(
-                leading: const Icon(Icons.store),
-                title: const Text("Salon Appointment"),
+              const SizedBox(height: 12),
+
+              /// SALON CARD
+              _optionCard(
+                icon: Icons.store,
+                title: "Salon Visit",
+                subtitle: "Visit nearest salon",
+                color: Colors.green,
                 onTap: () {
-                  Cart.addSalon(
-                    id: _key("Salon"),
-                    name: service.name,
-                    price: service.finalPrice,
-                    category: service.category,
-                    visitType: "Salon",
-                    image: service.image,
-                  );
+                  _add("Salon");
                   Navigator.pop(context);
-                  onUpdate?.call();
                 },
               ),
 
-              const Divider(),
-
-              ListTile(
-                leading: const Icon(Icons.shopping_cart),
-                title: const Text("View Cart"),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const CartPage(
-                        service: "Salon",
-                        serviceName: "Salon",
-                        cart: [],
-                      ),
-                    ),
-                  );
-                },
-              ),
+              const SizedBox(height: 10),
             ],
           ),
         );
       },
+    );
+  }
+
+  /// OPTION CARD UI
+  Widget _optionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withOpacity(0.1),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style:
+                          const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 14)
+          ],
+        ),
+      ),
     );
   }
 }
