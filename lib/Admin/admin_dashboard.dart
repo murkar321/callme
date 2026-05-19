@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
 
-import 'users_details.dart';
-import 'providers_details.dart';
-import 'orders_detail.dart';
 import 'approve_providers_page.dart';
+import 'orders_detail.dart';
+import 'providers_details.dart';
+import 'users_details.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -18,36 +18,83 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState
     extends State<AdminDashboard> {
 
-  final usersRef =
-      FirebaseFirestore.instance.collection(
-          "users");
+  final FirebaseFirestore firestore =
+      FirebaseFirestore.instance;
 
-  final providersRef =
-      FirebaseFirestore.instance.collection(
-          "providers");
+  bool isLoading = true;
 
-  final ordersRef =
-      FirebaseFirestore.instance.collection(
-          "orders");
+  Map<String, dynamic> dashboardData = {
 
-  /// ================= DASHBOARD STREAM =================
-  Stream<Map<String, dynamic>>
-      dashboardStream() {
+    "users": 0,
+    "providers": 0,
+    "orders": 0,
+    "approvals": 0,
 
-    return ordersRef.snapshots().map((snapshot) {
+    "pending": 0,
+    "accepted": 0,
+    "completed": 0,
+    "rejected": 0,
+  };
 
-      int totalOrders =
-          snapshot.docs.length;
+  @override
+  void initState() {
+    super.initState();
+    loadDashboard();
+  }
+
+  /// ================= LOAD DASHBOARD =================
+  Future<void> loadDashboard() async {
+
+    try {
+
+      setState(() {
+        isLoading = true;
+      });
+
+      /// USERS COUNT
+      final usersSnapshot =
+          await firestore
+              .collection("users")
+              .count()
+              .get();
+
+      /// PROVIDERS COUNT
+      final providersSnapshot =
+          await firestore
+              .collection("providers")
+              .count()
+              .get();
+
+      /// APPROVALS COUNT
+      final approvalsSnapshot =
+          await firestore
+              .collection("providers")
+              .where(
+                "status",
+                isEqualTo: "pending",
+              )
+              .count()
+              .get();
+
+      /// ORDERS
+      final ordersSnapshot =
+          await firestore
+              .collection("orders")
+              .get();
 
       int pending = 0;
       int accepted = 0;
       int completed = 0;
       int rejected = 0;
 
-      for (var doc in snapshot.docs) {
+      for (var doc in ordersSnapshot.docs) {
+
+        final data = doc.data();
 
         final status =
-            doc['status'] ?? "pending";
+            (data['status'] ?? "pending")
+                .toString()
+                .toLowerCase();
 
         switch (status) {
 
@@ -68,35 +115,53 @@ class _AdminDashboardState
         }
       }
 
-      return {
-        "total": totalOrders,
+      dashboardData = {
+
+        "users":
+            usersSnapshot.count ?? 0,
+
+        "providers":
+            providersSnapshot.count ?? 0,
+
+        "orders":
+            ordersSnapshot.docs.length,
+
+        "approvals":
+            approvalsSnapshot.count ?? 0,
+
         "pending": pending,
         "accepted": accepted,
         "completed": completed,
         "rejected": rejected,
       };
-    });
+
+      if (mounted) {
+
+        setState(() {
+          isLoading = false;
+        });
+      }
+
+    } catch (e) {
+
+      if (mounted) {
+
+        setState(() {
+          isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
+
+          SnackBar(
+            content: Text(
+              "Error: $e",
+            ),
+          ),
+        );
+      }
+    }
   }
-
-  /// ================= COUNTS =================
-  Stream<int> usersCount() =>
-      usersRef
-          .snapshots()
-          .map((e) => e.docs.length);
-
-  Stream<int> providersCount() =>
-      providersRef
-          .snapshots()
-          .map((e) => e.docs.length);
-
-  Stream<int> approvalsCount() =>
-      providersRef
-          .where(
-            "status",
-            isEqualTo: "pending",
-          )
-          .snapshots()
-          .map((e) => e.docs.length);
 
   @override
   Widget build(BuildContext context) {
@@ -107,695 +172,810 @@ class _AdminDashboardState
     final bool isMobile =
         size.width < 700;
 
+    final int pending =
+        dashboardData['pending'];
+
+    final int accepted =
+        dashboardData['accepted'];
+
+    final int completed =
+        dashboardData['completed'];
+
+    final int rejected =
+        dashboardData['rejected'];
+
+    final int maxValue = [
+
+      pending,
+      accepted,
+      completed,
+      rejected,
+
+    ].reduce(
+      (a, b) => a > b ? a : b,
+    );
+
     return Scaffold(
       backgroundColor:
           const Color(0xfff5f7fb),
 
       body: SafeArea(
-        child: StreamBuilder<
-            Map<String, dynamic>>(
-          stream: dashboardStream(),
 
-          builder:
-              (context, snapshot) {
+        child: isLoading
 
-            if (!snapshot.hasData) {
-
-              return const Center(
+            ? const Center(
                 child:
                     CircularProgressIndicator(),
-              );
-            }
+              )
 
-            final data =
-                snapshot.data!;
+            : RefreshIndicator(
+                onRefresh:
+                    loadDashboard,
 
-            return SingleChildScrollView(
-              physics:
-                  const BouncingScrollPhysics(),
+                child:
+                    SingleChildScrollView(
 
-              padding:
-                  const EdgeInsets.all(16),
+                  physics:
+                      const AlwaysScrollableScrollPhysics(),
 
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
+                  padding:
+                      const EdgeInsets.all(
+                          16),
 
-                children: [
-
-                  /// ================= HEADER =================
-                  Container(
-                    width:
-                        double.infinity,
-
-                    padding:
-                        const EdgeInsets.all(
-                            22),
-
-                    decoration: BoxDecoration(
-                      gradient:
-                          const LinearGradient(
-                        colors: [
-                          Color(0xff2563eb),
-                          Color(0xff7c3aed),
-                        ],
-                      ),
-
-                      borderRadius:
-                          BorderRadius.circular(
-                              30),
-                    ),
-
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment
-                              .start,
-
-                      children: [
-
-                        Row(
-                          children: [
-
-                            Container(
-                              padding:
-                                  const EdgeInsets
-                                      .all(14),
-
-                              decoration:
-                                  BoxDecoration(
-                                color: Colors
-                                    .white
-                                    .withOpacity(
-                                        .15),
-
-                                shape:
-                                    BoxShape.circle,
-                              ),
-
-                              child: const Icon(
-                                Icons
-                                    .admin_panel_settings_rounded,
-
-                                color:
-                                    Colors.white,
-
-                                size: 30,
-                              ),
-                            ),
-
-                            const Spacer(),
-
-                            Container(
-                              padding:
-                                  const EdgeInsets
-                                      .all(12),
-
-                              decoration:
-                                  BoxDecoration(
-                                color: Colors
-                                    .white
-                                    .withOpacity(
-                                        .15),
-
-                                borderRadius:
-                                    BorderRadius
-                                        .circular(
-                                            16),
-                              ),
-
-                              child: const Icon(
-                                Icons
-                                    .notifications_active_rounded,
-
-                                color:
-                                    Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(
-                            height: 24),
-
-                        Text(
-                          "Admin Dashboard",
-
-                          style:
-                              TextStyle(
-                            color:
-                                Colors.white,
-
-                            fontSize:
-                                isMobile
-                                    ? 28
-                                    : 36,
-
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
-
-                        const SizedBox(
-                            height: 8),
-
-                        const Text(
-                          "Manage users, providers and orders",
-
-                          style:
-                              TextStyle(
-                            color:
-                                Colors.white70,
-                            fontSize: 15,
-                          ),
-                        ),
-
-                        const SizedBox(
-                            height: 24),
-
-                        /// SEARCH
-                        Container(
-                          decoration:
-                              BoxDecoration(
-                            color:
-                                Colors.white,
-
-                            borderRadius:
-                                BorderRadius
-                                    .circular(
-                                        18),
-                          ),
-
-                          child:
-                              TextField(
-                            decoration:
-                                const InputDecoration(
-                              hintText:
-                                  "Search dashboard...",
-                              prefixIcon:
-                                  Icon(
-                                Icons.search,
-                              ),
-                              border:
-                                  InputBorder.none,
-                              contentPadding:
-                                  EdgeInsets.symmetric(
-                                vertical: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  /// ================= QUICK ACCESS =================
-                  const Text(
-                    "Quick Access",
-
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  GridView(
-                    shrinkWrap: true,
-
-                    physics:
-                        const NeverScrollableScrollPhysics(),
-
-                    gridDelegate:
-                        SliverGridDelegateWithFixedCrossAxisCount(
-
-                      crossAxisCount:
-                          isMobile ? 2 : 4,
-
-                      crossAxisSpacing:
-                          14,
-
-                      mainAxisSpacing:
-                          14,
-
-                      childAspectRatio:
-                          isMobile
-                              ? 1.05
-                              : 1.2,
-                    ),
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment
+                            .start,
 
                     children: [
 
-                      _dashboardCard(
-                        context,
-                        title: "Users",
-                        icon: Icons.people,
-                        color: Colors.blue,
-                        page: UsersPage(),
-                        stream:
-                            usersCount(),
-                      ),
+                      /// ================= HEADER =================
+                      Container(
+                        width:
+                            double.infinity,
 
-                      _dashboardCard(
-                        context,
-                        title:
-                            "Providers",
-                        icon: Icons
-                            .business_center_rounded,
-                        color:
-                            Colors.green,
-                        page:
-                            ProvidersPage(),
-                        stream:
-                            providersCount(),
-                      ),
+                        padding:
+                            const EdgeInsets
+                                .all(22),
 
-                      _dashboardCard(
-                        context,
-                        title: "Orders",
-                        icon: Icons
-                            .shopping_bag_rounded,
-                        color:
-                            Colors.orange,
-                        page:
-                            const AdminOrdersPage(),
-                        stream: null,
-                      ),
+                        decoration:
+                            BoxDecoration(
+                          gradient:
+                              const LinearGradient(
+                            colors: [
 
-                      _dashboardCard(
-                        context,
-                        title:
-                            "Approvals",
-                        icon: Icons
-                            .pending_actions_rounded,
-                        color: Colors.red,
-                        page:
-                            ApproveProvidersPage(),
-                        stream:
-                            approvalsCount(),
-                      ),
-                    ],
-                  ),
+                              Color(
+                                  0xff2563eb),
 
-                  const SizedBox(height: 30),
+                              Color(
+                                  0xff7c3aed),
+                            ],
+                          ),
 
-                  /// ================= GRAPH =================
-                  Container(
-                    width:
-                        double.infinity,
-
-                    padding:
-                        const EdgeInsets.all(
-                            22),
-
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-
-                      borderRadius:
-                          BorderRadius.circular(
-                              28),
-
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black
-                              .withOpacity(.04),
-
-                          blurRadius: 10,
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                                      30),
                         ),
-                      ],
-                    ),
 
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment
-                              .start,
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment
+                                  .start,
 
-                      children: [
-
-                        Row(
                           children: [
 
-                            Container(
-                              padding:
-                                  const EdgeInsets
-                                      .all(12),
+                            Row(
+                              children: [
 
-                              decoration:
-                                  BoxDecoration(
+                                Container(
+                                  padding:
+                                      const EdgeInsets
+                                          .all(
+                                              14),
+
+                                  decoration:
+                                      BoxDecoration(
+                                    color: Colors
+                                        .white
+                                        .withOpacity(
+                                            .15),
+
+                                    shape:
+                                        BoxShape
+                                            .circle,
+                                  ),
+
+                                  child:
+                                      const Icon(
+
+                                    Icons
+                                        .admin_panel_settings_rounded,
+
+                                    color:
+                                        Colors
+                                            .white,
+
+                                    size: 30,
+                                  ),
+                                ),
+
+                                const Spacer(),
+
+                                GestureDetector(
+                                  onTap:
+                                      loadDashboard,
+
+                                  child:
+                                      Container(
+                                    padding:
+                                        const EdgeInsets
+                                            .all(
+                                                12),
+
+                                    decoration:
+                                        BoxDecoration(
+                                      color: Colors
+                                          .white
+                                          .withOpacity(
+                                              .15),
+
+                                      borderRadius:
+                                          BorderRadius
+                                              .circular(
+                                                  16),
+                                    ),
+
+                                    child:
+                                        const Icon(
+
+                                      Icons
+                                          .refresh_rounded,
+
+                                      color:
+                                          Colors
+                                              .white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(
+                                height: 24),
+
+                            Text(
+                              "Admin Dashboard",
+
+                              style:
+                                  TextStyle(
+
                                 color: Colors
-                                    .blue
-                                    .withOpacity(
-                                        .1),
+                                    .white,
 
-                                borderRadius:
-                                    BorderRadius
-                                        .circular(
-                                            14),
-                              ),
+                                fontSize:
+                                    isMobile
+                                        ? 28
+                                        : 36,
 
-                              child: const Icon(
-                                Icons
-                                    .bar_chart_rounded,
-
-                                color:
-                                    Colors.blue,
+                                fontWeight:
+                                    FontWeight
+                                        .bold,
                               ),
                             ),
 
                             const SizedBox(
-                                width: 14),
+                                height: 8),
 
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment
-                                        .start,
-
-                                children: [
-
-                                  Text(
-                                    "Orders Analytics",
-
-                                    style:
-                                        TextStyle(
-                                      fontSize:
-                                          18,
-                                      fontWeight:
-                                          FontWeight
-                                              .bold,
-                                    ),
-                                  ),
-
-                                  SizedBox(
-                                      height:
-                                          4),
-
-                                  Text(
-                                    "Track all order activities visually",
-
-                                    style:
-                                        TextStyle(
-                                      color:
-                                          Colors.grey,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(
-                            height: 28),
-
-                        SizedBox(
-                          height:
-                              isMobile
-                                  ? 280
-                                  : 340,
-
-                          child:
-                              BarChart(
-                            BarChartData(
-
-                              alignment:
-                                  BarChartAlignment.spaceAround,
-
-                              maxY: ([
-                                            data[
-                                                'pending'],
-                                            data[
-                                                'accepted'],
-                                            data[
-                                                'completed'],
-                                            data[
-                                                'rejected']
-                                          ]
-                                              .reduce((a,
-                                                      b) =>
-                                                  a >
-                                                          b
-                                                      ? a
-                                                      : b) +
-                                          2)
-                                      .toDouble(),
-
-                              borderData:
-                                  FlBorderData(
-                                show: false,
-                              ),
-
-                              gridData:
-                                  FlGridData(
-                                show: true,
-                                drawVerticalLine:
-                                    false,
-                                horizontalInterval:
-                                    1,
-                              ),
-
-                              titlesData:
-                                  FlTitlesData(
-
-                                topTitles:
-                                    const AxisTitles(
-                                  sideTitles:
-                                      SideTitles(
-                                    showTitles:
-                                        false,
-                                  ),
-                                ),
-
-                                rightTitles:
-                                    const AxisTitles(
-                                  sideTitles:
-                                      SideTitles(
-                                    showTitles:
-                                        false,
-                                  ),
-                                ),
-
-                                leftTitles:
-                                    AxisTitles(
-                                  sideTitles:
-                                      SideTitles(
-                                    showTitles:
-                                        true,
-                                    reservedSize:
-                                        28,
-                                  ),
-                                ),
-
-                                bottomTitles:
-                                    AxisTitles(
-                                  sideTitles:
-                                      SideTitles(
-
-                                    showTitles:
-                                        true,
-
-                                    getTitlesWidget:
-                                        (
-                                      value,
-                                      meta,
-                                    ) {
-
-                                      final titles =
-                                          [
-                                        "Pending",
-                                        "Accepted",
-                                        "Completed",
-                                        "Rejected",
-                                      ];
-
-                                      return Padding(
-                                        padding:
-                                            const EdgeInsets.only(
-                                                top:
-                                                    10),
-
-                                        child:
-                                            Text(
-                                          titles[
-                                              value
-                                                  .toInt()],
-
-                                          style:
-                                              TextStyle(
-                                            fontSize: isMobile
-                                                ? 10
-                                                : 12,
-
-                                            fontWeight:
-                                                FontWeight.w600,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-
-                              barGroups: [
-
-                                _bar(
-                                  0,
-                                  data[
-                                      'pending'],
-                                  Colors.orange,
-                                ),
-
-                                _bar(
-                                  1,
-                                  data[
-                                      'accepted'],
-                                  Colors.green,
-                                ),
-
-                                _bar(
-                                  2,
-                                  data[
-                                      'completed'],
-                                  Colors.blue,
-                                ),
-
-                                _bar(
-                                  3,
-                                  data[
-                                      'rejected'],
-                                  Colors.red,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(
-                            height: 22),
-
-                        Wrap(
-                          spacing: 18,
-                          runSpacing: 12,
-
-                          children: [
-
-                            _legend(
-                              Colors.orange,
-                              "Pending",
-                            ),
-
-                            _legend(
-                              Colors.green,
-                              "Accepted",
-                            ),
-
-                            _legend(
-                              Colors.blue,
-                              "Completed",
-                            ),
-
-                            _legend(
-                              Colors.red,
-                              "Rejected",
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  /// ================= ALERT =================
-                  if (data['pending'] > 0)
-
-                    Container(
-                      width:
-                          double.infinity,
-
-                      padding:
-                          const EdgeInsets.all(
-                              18),
-
-                      decoration:
-                          BoxDecoration(
-                        gradient:
-                            LinearGradient(
-                          colors: [
-                            Colors.orange
-                                .shade400,
-                            Colors.orange
-                                .shade600,
-                          ],
-                        ),
-
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                                    24),
-                      ),
-
-                      child: Row(
-                        children: [
-
-                          Container(
-                            padding:
-                                const EdgeInsets
-                                    .all(12),
-
-                            decoration:
-                                BoxDecoration(
-                              color: Colors
-                                  .white
-                                  .withOpacity(
-                                      .2),
-
-                              shape:
-                                  BoxShape.circle,
-                            ),
-
-                            child: const Icon(
-                              Icons
-                                  .notifications_active_rounded,
-
-                              color:
-                                  Colors.white,
-                            ),
-                          ),
-
-                          const SizedBox(
-                              width: 14),
-
-                          Expanded(
-                            child: Text(
-                              "${data['pending']} pending orders require your attention",
+                            const Text(
+                              "Manage users, providers and orders",
 
                               style:
-                                  const TextStyle(
-                                color:
-                                    Colors.white,
-
-                                fontWeight:
-                                    FontWeight.w600,
+                                  TextStyle(
+                                color: Colors
+                                    .white70,
 
                                 fontSize: 15,
                               ),
                             ),
+
+                            const SizedBox(
+                                height: 24),
+
+                            /// SEARCH
+                            Container(
+                              decoration:
+                                  BoxDecoration(
+                                color: Colors
+                                    .white,
+
+                                borderRadius:
+                                    BorderRadius
+                                        .circular(
+                                            18),
+                              ),
+
+                              child:
+                                  const TextField(
+
+                                decoration:
+                                    InputDecoration(
+
+                                  hintText:
+                                      "Search dashboard...",
+
+                                  prefixIcon:
+                                      Icon(
+                                    Icons
+                                        .search,
+                                  ),
+
+                                  border:
+                                      InputBorder
+                                          .none,
+
+                                  contentPadding:
+                                      EdgeInsets.symmetric(
+                                    vertical:
+                                        16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(
+                          height: 30),
+
+                      /// ================= QUICK ACCESS =================
+                      const Text(
+                        "Quick Access",
+
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(
+                          height: 18),
+
+                      GridView(
+                        shrinkWrap: true,
+
+                        physics:
+                            const NeverScrollableScrollPhysics(),
+
+                        gridDelegate:
+                            SliverGridDelegateWithFixedCrossAxisCount(
+
+                          crossAxisCount:
+                              isMobile
+                                  ? 2
+                                  : 4,
+
+                          crossAxisSpacing:
+                              14,
+
+                          mainAxisSpacing:
+                              14,
+
+                          childAspectRatio:
+                              isMobile
+                                  ? 1.05
+                                  : 1.2,
+                        ),
+
+                        children: [
+
+                          _dashboardCard(
+                            context,
+
+                            title:
+                                "Users",
+
+                            icon:
+                                Icons.people,
+
+                            color:
+                                Colors.blue,
+
+                            count:
+                                dashboardData[
+                                    'users'],
+
+                            page:
+                                UsersPage(),
+                          ),
+
+                          _dashboardCard(
+                            context,
+
+                            title:
+                                "Providers",
+
+                            icon: Icons
+                                .business_center_rounded,
+
+                            color:
+                                Colors.green,
+
+                            count:
+                                dashboardData[
+                                    'providers'],
+
+                            page:
+                                ProvidersPage(),
+                          ),
+
+                          _dashboardCard(
+                            context,
+
+                            title:
+                                "Orders",
+
+                            icon: Icons
+                                .shopping_bag_rounded,
+
+                            color:
+                                Colors.orange,
+
+                            count:
+                                dashboardData[
+                                    'orders'],
+
+                            page:
+                                const AdminOrdersPage(),
+                          ),
+
+                          _dashboardCard(
+                            context,
+
+                            title:
+                                "Approvals",
+
+                            icon: Icons
+                                .pending_actions_rounded,
+
+                            color:
+                                Colors.red,
+
+                            count:
+                                dashboardData[
+                                    'approvals'],
+
+                            page:
+                                const ApproveProvidersPage(),
                           ),
                         ],
                       ),
-                    ),
 
-                  const SizedBox(height: 24),
-                ],
+                      const SizedBox(
+                          height: 30),
+
+                      /// ================= GRAPH =================
+                      Container(
+                        width:
+                            double.infinity,
+
+                        padding:
+                            const EdgeInsets
+                                .all(22),
+
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              Colors.white,
+
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                                      28),
+
+                          boxShadow: [
+
+                            BoxShadow(
+                              color: Colors
+                                  .black
+                                  .withOpacity(
+                                      .04),
+
+                              blurRadius:
+                                  10,
+                            ),
+                          ],
+                        ),
+
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment
+                                  .start,
+
+                          children: [
+
+                            Row(
+                              children: [
+
+                                Container(
+                                  padding:
+                                      const EdgeInsets
+                                          .all(
+                                              12),
+
+                                  decoration:
+                                      BoxDecoration(
+                                    color: Colors
+                                        .blue
+                                        .withOpacity(
+                                            .1),
+
+                                    borderRadius:
+                                        BorderRadius
+                                            .circular(
+                                                14),
+                                  ),
+
+                                  child:
+                                      const Icon(
+
+                                    Icons
+                                        .bar_chart_rounded,
+
+                                    color:
+                                        Colors
+                                            .blue,
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                    width:
+                                        14),
+
+                                const Expanded(
+                                  child:
+                                      Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
+
+                                    children: [
+
+                                      Text(
+                                        "Orders Analytics",
+
+                                        style:
+                                            TextStyle(
+
+                                          fontSize:
+                                              18,
+
+                                          fontWeight:
+                                              FontWeight.bold,
+                                        ),
+                                      ),
+
+                                      SizedBox(
+                                          height:
+                                              4),
+
+                                      Text(
+                                        "Track all order activities visually",
+
+                                        style:
+                                            TextStyle(
+                                          color:
+                                              Colors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(
+                                height: 28),
+
+                            SizedBox(
+                              height:
+                                  isMobile
+                                      ? 280
+                                      : 340,
+
+                              child:
+                                  BarChart(
+
+                                BarChartData(
+
+                                  alignment:
+                                      BarChartAlignment.spaceAround,
+
+                                  maxY:
+                                      (maxValue +
+                                              2)
+                                          .toDouble(),
+
+                                  borderData:
+                                      FlBorderData(
+                                    show:
+                                        false,
+                                  ),
+
+                                  gridData:
+                                      FlGridData(
+                                    show:
+                                        true,
+
+                                    drawVerticalLine:
+                                        false,
+
+                                    horizontalInterval:
+                                        1,
+                                  ),
+
+                                  titlesData:
+                                      FlTitlesData(
+
+                                    topTitles:
+                                        const AxisTitles(
+                                      sideTitles:
+                                          SideTitles(
+                                        showTitles:
+                                            false,
+                                      ),
+                                    ),
+
+                                    rightTitles:
+                                        const AxisTitles(
+                                      sideTitles:
+                                          SideTitles(
+                                        showTitles:
+                                            false,
+                                      ),
+                                    ),
+
+                                    leftTitles:
+                                        AxisTitles(
+                                      sideTitles:
+                                          SideTitles(
+                                        showTitles:
+                                            true,
+
+                                        reservedSize:
+                                            28,
+                                      ),
+                                    ),
+
+                                    bottomTitles:
+                                        AxisTitles(
+
+                                      sideTitles:
+                                          SideTitles(
+
+                                        showTitles:
+                                            true,
+
+                                        getTitlesWidget:
+                                            (
+                                          value,
+                                          meta,
+                                        ) {
+
+                                          final titles =
+                                              [
+
+                                            "Pending",
+                                            "Accepted",
+                                            "Completed",
+                                            "Rejected",
+                                          ];
+
+                                          return Padding(
+                                            padding:
+                                                const EdgeInsets.only(
+                                              top:
+                                                  10,
+                                            ),
+
+                                            child:
+                                                Text(
+
+                                              titles[
+                                                  value
+                                                      .toInt()],
+
+                                              style:
+                                                  TextStyle(
+
+                                                fontSize:
+                                                    isMobile
+                                                        ? 10
+                                                        : 12,
+
+                                                fontWeight:
+                                                    FontWeight.w600,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+
+                                  barGroups: [
+
+                                    _bar(
+                                      0,
+                                      pending,
+                                      Colors
+                                          .orange,
+                                    ),
+
+                                    _bar(
+                                      1,
+                                      accepted,
+                                      Colors
+                                          .green,
+                                    ),
+
+                                    _bar(
+                                      2,
+                                      completed,
+                                      Colors
+                                          .blue,
+                                    ),
+
+                                    _bar(
+                                      3,
+                                      rejected,
+                                      Colors.red,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(
+                                height: 22),
+
+                            Wrap(
+                              spacing: 18,
+                              runSpacing: 12,
+
+                              children: [
+
+                                _legend(
+                                  Colors.orange,
+                                  "Pending",
+                                ),
+
+                                _legend(
+                                  Colors.green,
+                                  "Accepted",
+                                ),
+
+                                _legend(
+                                  Colors.blue,
+                                  "Completed",
+                                ),
+
+                                _legend(
+                                  Colors.red,
+                                  "Rejected",
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(
+                          height: 30),
+
+                      /// ================= ALERT =================
+                      if (pending > 0)
+
+                        Container(
+                          width:
+                              double.infinity,
+
+                          padding:
+                              const EdgeInsets
+                                  .all(18),
+
+                          decoration:
+                              BoxDecoration(
+
+                            gradient:
+                                LinearGradient(
+                              colors: [
+
+                                Colors.orange
+                                    .shade400,
+
+                                Colors.orange
+                                    .shade600,
+                              ],
+                            ),
+
+                            borderRadius:
+                                BorderRadius
+                                    .circular(
+                                        24),
+                          ),
+
+                          child: Row(
+                            children: [
+
+                              Container(
+                                padding:
+                                    const EdgeInsets
+                                        .all(
+                                            12),
+
+                                decoration:
+                                    BoxDecoration(
+                                  color: Colors
+                                      .white
+                                      .withOpacity(
+                                          .2),
+
+                                  shape:
+                                      BoxShape
+                                          .circle,
+                                ),
+
+                                child:
+                                    const Icon(
+
+                                  Icons
+                                      .notifications_active_rounded,
+
+                                  color:
+                                      Colors
+                                          .white,
+                                ),
+                              ),
+
+                              const SizedBox(
+                                  width:
+                                      14),
+
+                              Expanded(
+                                child:
+                                    Text(
+
+                                  "$pending pending orders require your attention",
+
+                                  style:
+                                      const TextStyle(
+
+                                    color:
+                                        Colors
+                                            .white,
+
+                                    fontWeight:
+                                        FontWeight
+                                            .w600,
+
+                                    fontSize:
+                                        15,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      const SizedBox(
+                          height: 24),
+                    ],
+                  ),
+                ),
               ),
-            );
-          },
-        ),
       ),
     );
   }
@@ -807,12 +987,12 @@ class _AdminDashboardState
     required String title,
     required IconData icon,
     required Color color,
+    required int count,
     required Widget page,
-
-    Stream<int>? stream,
   }) {
 
     return GestureDetector(
+
       onTap: () {
 
         Navigator.push(
@@ -836,6 +1016,7 @@ class _AdminDashboardState
                   24),
 
           boxShadow: [
+
             BoxShadow(
               color: Colors.black
                   .withOpacity(.04),
@@ -881,29 +1062,19 @@ class _AdminDashboardState
 
               children: [
 
-                if (stream != null)
+                FittedBox(
+                  child: Text(
+                    "$count",
 
-                  StreamBuilder<int>(
-                    stream: stream,
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight:
+                          FontWeight.bold,
 
-                    builder:
-                        (_, snapshot) {
-
-                      return FittedBox(
-                        child: Text(
-                          "${snapshot.data ?? 0}",
-
-                          style:
-                              TextStyle(
-                            fontSize: 28,
-                            fontWeight:
-                                FontWeight.bold,
-                            color: color,
-                          ),
-                        ),
-                      );
-                    },
+                      color: color,
+                    ),
                   ),
+                ),
 
                 const SizedBox(
                     height: 4),
@@ -937,12 +1108,14 @@ class _AdminDashboardState
   ) {
 
     return BarChartGroupData(
+
       x: x,
 
       barRods: [
 
         BarChartRodData(
-          toY: value.toDouble(),
+          toY:
+              value.toDouble(),
 
           width: 24,
 
@@ -953,6 +1126,7 @@ class _AdminDashboardState
           gradient:
               LinearGradient(
             colors: [
+
               color.withOpacity(.7),
               color,
             ],

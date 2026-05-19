@@ -13,13 +13,15 @@ class AdminOrdersPage extends StatefulWidget {
 class _AdminOrdersPageState
     extends State<AdminOrdersPage> {
 
-  final CollectionReference ref =
-      FirebaseFirestore.instance.collection("orders");
+  final CollectionReference ordersRef =
+      FirebaseFirestore.instance.collection(
+    "orders",
+  );
 
   String search = "";
   String filter = "all";
 
-  // STATUS COLOR
+  /// ================= STATUS COLOR =================
   Color getColor(String status) {
     switch (status.toLowerCase()) {
 
@@ -40,7 +42,7 @@ class _AdminOrdersPageState
     }
   }
 
-  // STATUS ICON
+  /// ================= STATUS ICON =================
   IconData getStatusIcon(String status) {
     switch (status.toLowerCase()) {
 
@@ -53,8 +55,52 @@ class _AdminOrdersPageState
       case "rejected":
         return Icons.cancel;
 
+      case "cancelled":
+        return Icons.cancel_schedule_send;
+
       default:
         return Icons.pending_actions_rounded;
+    }
+  }
+
+  /// ================= UPDATE STATUS =================
+  Future<void> updateStatus(
+    String orderId,
+    String status,
+  ) async {
+
+    try {
+
+      await ordersRef.doc(orderId).update({
+
+        "status": status,
+
+        "updatedAt":
+            FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+
+        SnackBar(
+          content: Text(
+            "Order marked as $status",
+          ),
+        ),
+      );
+    } catch (e) {
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+
+        SnackBar(
+          content: Text(
+            "Failed: $e",
+          ),
+        ),
+      );
     }
   }
 
@@ -62,13 +108,15 @@ class _AdminOrdersPageState
   Widget build(BuildContext context) {
 
     return Scaffold(
-      backgroundColor: const Color(0xfff5f7fb),
+      backgroundColor:
+          const Color(0xfff5f7fb),
 
       appBar: AppBar(
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
         centerTitle: true,
+
         title: const Text(
           "All Orders",
           style: TextStyle(
@@ -81,29 +129,41 @@ class _AdminOrdersPageState
       body: Column(
         children: [
 
-          // TOP STATS CARD
+          /// ================= TOP CARD =================
           Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
+            margin:
+                const EdgeInsets.all(16),
+
+            padding:
+                const EdgeInsets.all(20),
+
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
+              gradient:
+                  const LinearGradient(
                 colors: [
                   Color(0xff2563eb),
                   Color(0xff7c3aed),
                 ],
               ),
-              borderRadius: BorderRadius.circular(24),
+
+              borderRadius:
+                  BorderRadius.circular(24),
             ),
 
             child: Row(
               children: [
 
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding:
+                      const EdgeInsets.all(14),
+
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.15),
+                    color: Colors.white
+                        .withOpacity(.15),
+
                     shape: BoxShape.circle,
                   ),
+
                   child: const Icon(
                     Icons.shopping_bag_rounded,
                     color: Colors.white,
@@ -116,13 +176,17 @@ class _AdminOrdersPageState
                 const Expanded(
                   child: Column(
                     crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        CrossAxisAlignment
+                            .start,
+
                     children: [
 
                       Text(
-                        "Manage All Service Orders",
+                        "Manage Service Orders",
+
                         style: TextStyle(
-                          color: Colors.white70,
+                          color:
+                              Colors.white70,
                           fontSize: 15,
                         ),
                       ),
@@ -131,9 +195,11 @@ class _AdminOrdersPageState
 
                       Text(
                         "Admin Dashboard",
+
                         style: TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          fontWeight:
+                              FontWeight.bold,
                           fontSize: 26,
                         ),
                       ),
@@ -144,19 +210,25 @@ class _AdminOrdersPageState
             ),
           ),
 
-          // SEARCH BAR
+          /// ================= SEARCH =================
           Padding(
             padding:
-                const EdgeInsets.symmetric(horizontal: 16),
+                const EdgeInsets.symmetric(
+              horizontal: 16,
+            ),
+
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white,
+
                 borderRadius:
                     BorderRadius.circular(18),
+
                 boxShadow: [
                   BoxShadow(
-                    color:
-                        Colors.black.withOpacity(.04),
+                    color: Colors.black
+                        .withOpacity(.04),
+
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -165,20 +237,26 @@ class _AdminOrdersPageState
 
               child: TextField(
                 onChanged: (val) {
+
                   setState(() {
-                    search = val.toLowerCase();
+                    search =
+                        val.toLowerCase();
                   });
                 },
 
-                decoration: InputDecoration(
+                decoration:
+                    const InputDecoration(
                   hintText:
-                      "Search by user, phone or service",
-                  prefixIcon: const Icon(
+                      "Search by customer, phone or service",
+
+                  prefixIcon: Icon(
                     Icons.search_rounded,
                   ),
+
                   border: InputBorder.none,
+
                   contentPadding:
-                      const EdgeInsets.symmetric(
+                      EdgeInsets.symmetric(
                     vertical: 18,
                   ),
                 ),
@@ -188,15 +266,19 @@ class _AdminOrdersPageState
 
           const SizedBox(height: 16),
 
-          // FILTER CHIPS
+          /// ================= FILTER =================
           SizedBox(
             height: 45,
+
             child: ListView(
-              scrollDirection: Axis.horizontal,
+              scrollDirection:
+                  Axis.horizontal,
+
               padding:
                   const EdgeInsets.symmetric(
                 horizontal: 12,
               ),
+
               children: [
 
                 _chip("all"),
@@ -204,45 +286,53 @@ class _AdminOrdersPageState
                 _chip("accepted"),
                 _chip("completed"),
                 _chip("rejected"),
+                _chip("cancelled"),
               ],
             ),
           ),
 
           const SizedBox(height: 10),
 
-          // ORDERS LIST
+          /// ================= ORDERS =================
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: ref.snapshots(),
+            child:
+                StreamBuilder<QuerySnapshot>(
+              stream:
+                  ordersRef.snapshots(),
 
-              builder: (context, snapshot) {
+              builder:
+                  (context, snapshot) {
 
-                // LOADING
                 if (snapshot.connectionState ==
                     ConnectionState.waiting) {
+
                   return const Center(
                     child:
                         CircularProgressIndicator(),
                   );
                 }
 
-                // EMPTY
                 if (!snapshot.hasData ||
-                    snapshot.data!.docs.isEmpty) {
+                    snapshot
+                        .data!.docs.isEmpty) {
+
                   return const Center(
                     child: Text(
                       "No Orders Found",
+
                       style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w600,
+                        fontWeight:
+                            FontWeight.w600,
                       ),
                     ),
                   );
                 }
 
-                final docs = snapshot.data!.docs;
+                final docs =
+                    snapshot.data!.docs;
 
-                // SAFE SORT
+                /// SORT
                 docs.sort((a, b) {
 
                   final aTime =
@@ -257,48 +347,75 @@ class _AdminOrdersPageState
                               ?.millisecondsSinceEpoch ??
                           0;
 
-                  return bTime.compareTo(aTime);
+                  return bTime.compareTo(
+                    aTime,
+                  );
                 });
 
-                // FILTER
+                /// FILTER
                 final filtered =
                     docs.where((doc) {
 
                   final data =
                       doc.data()
-                          as Map<String, dynamic>;
+                          as Map<String,
+                              dynamic>;
 
-                  final user =
-                      data['user'] ?? {};
-
-                  final service =
-                      (data['serviceType'] ?? "")
-                          .toString()
-                          .toLowerCase();
-
-                  final name =
-                      (user['name'] ?? "")
+                  final customer =
+                      (data['customerName'] ??
+                              "")
                           .toString()
                           .toLowerCase();
 
                   final phone =
-                      (user['phone'] ?? "")
-                          .toString();
+                      (data['customerPhone'] ??
+                              "")
+                          .toString()
+                          .toLowerCase();
+
+                  final service =
+                      (data['serviceName'] ??
+                              data['serviceType'] ??
+                              "")
+                          .toString()
+                          .toLowerCase();
+
+                  final provider =
+                      (data['providerName'] ??
+                              "")
+                          .toString()
+                          .toLowerCase();
+
+                  final status =
+                      (data['status'] ??
+                              "pending")
+                          .toString()
+                          .toLowerCase();
 
                   final matchesSearch =
-                      service.contains(search) ||
-                          name.contains(search) ||
-                          phone.contains(search);
+                      customer.contains(
+                            search,
+                          ) ||
+                          phone.contains(
+                            search,
+                          ) ||
+                          service.contains(
+                            search,
+                          ) ||
+                          provider.contains(
+                            search,
+                          );
 
                   final matchesFilter =
                       filter == "all" ||
-                          data['status'] == filter;
+                          status == filter;
 
                   return matchesSearch &&
                       matchesFilter;
                 }).toList();
 
                 if (filtered.isEmpty) {
+
                   return const Center(
                     child: Text(
                       "No Matching Orders",
@@ -308,47 +425,57 @@ class _AdminOrdersPageState
 
                 return ListView.builder(
                   padding:
-                      const EdgeInsets.all(16),
+                      const EdgeInsets.all(
+                    16,
+                  ),
 
-                  itemCount: filtered.length,
+                  itemCount:
+                      filtered.length,
 
-                  itemBuilder: (_, i) {
+                  itemBuilder:
+                      (_, index) {
+
+                    final doc =
+                        filtered[index];
 
                     final data =
-                        filtered[i].data()
-                            as Map<String, dynamic>;
+                        doc.data()
+                            as Map<String,
+                                dynamic>;
 
-                    final user =
-                        data['user'] ?? {};
-
-                    final meta =
-                        data['meta'] ?? {};
-
-                    final status =
-                        data['status'] ?? "pending";
+                    final String status =
+                        data['status'] ??
+                            "pending";
 
                     final String service =
-                        data['serviceType'] ??
-                            "";
-
-                    final String provider =
-                        meta['providerName'] ??
-                            "Not Assigned";
+                        data['serviceName'] ??
+                            data['serviceType'] ??
+                            "Service";
 
                     final String customer =
-                        user['name'] ??
+                        data['customerName'] ??
                             "Unknown";
 
                     final String phone =
-                        user['phone'] ??
-                            "";
+                        data['customerPhone'] ??
+                            "-";
 
-                    final Timestamp? createdAt =
+                    final String provider =
+                        data['providerName'] ??
+                            "Not Assigned";
+
+                    final String address =
+                        data['address'] ??
+                            "-";
+
+                    final Timestamp?
+                        createdAt =
                         data['createdAt'];
 
-                    String date = "";
+                    String date = "-";
 
                     if (createdAt != null) {
+
                       date = DateFormat(
                         'dd MMM yyyy • hh:mm a',
                       ).format(
@@ -362,26 +489,36 @@ class _AdminOrdersPageState
                         bottom: 18,
                       ),
 
-                      decoration: BoxDecoration(
+                      decoration:
+                          BoxDecoration(
                         color: Colors.white,
+
                         borderRadius:
                             BorderRadius.circular(
-                                24),
+                          24,
+                        ),
 
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black
-                                .withOpacity(.05),
+                                .withOpacity(
+                                    .05),
+
                             blurRadius: 12,
+
                             offset:
-                                const Offset(0, 5),
+                                const Offset(
+                              0,
+                              5,
+                            ),
                           ),
                         ],
                       ),
 
                       child: Padding(
                         padding:
-                            const EdgeInsets.all(18),
+                            const EdgeInsets
+                                .all(18),
 
                         child: Column(
                           crossAxisAlignment:
@@ -390,7 +527,7 @@ class _AdminOrdersPageState
 
                           children: [
 
-                            // TOP ROW
+                            /// TOP
                             Row(
                               children: [
 
@@ -413,20 +550,25 @@ class _AdminOrdersPageState
                                     borderRadius:
                                         BorderRadius
                                             .circular(
-                                                20),
+                                      20,
+                                    ),
                                   ),
 
-                                  child: const Icon(
+                                  child:
+                                      const Icon(
                                     Icons
                                         .miscellaneous_services_rounded,
-                                    color:
-                                        Colors.white,
+
+                                    color: Colors
+                                        .white,
+
                                     size: 32,
                                   ),
                                 ),
 
                                 const SizedBox(
-                                    width: 16),
+                                  width: 16,
+                                ),
 
                                 Expanded(
                                   child: Column(
@@ -444,6 +586,7 @@ class _AdminOrdersPageState
                                             const TextStyle(
                                           fontSize:
                                               20,
+
                                           fontWeight:
                                               FontWeight
                                                   .bold,
@@ -451,15 +594,18 @@ class _AdminOrdersPageState
                                       ),
 
                                       const SizedBox(
-                                          height: 6),
+                                        height: 6,
+                                      ),
 
                                       Text(
                                         customer,
+
                                         style:
                                             TextStyle(
                                           color: Colors
                                               .grey
                                               .shade700,
+
                                           fontSize:
                                               15,
                                         ),
@@ -468,7 +614,7 @@ class _AdminOrdersPageState
                                   ),
                                 ),
 
-                                // STATUS BADGE
+                                /// STATUS
                                 Container(
                                   padding:
                                       const EdgeInsets
@@ -483,14 +629,15 @@ class _AdminOrdersPageState
                                       BoxDecoration(
                                     color:
                                         getColor(
-                                                status)
-                                            .withOpacity(
-                                                .12),
+                                      status,
+                                    ).withOpacity(
+                                      .12,
+                                    ),
 
                                     borderRadius:
-                                        BorderRadius
-                                            .circular(
-                                                30),
+                                        BorderRadius.circular(
+                                      30,
+                                    ),
                                   ),
 
                                   child: Row(
@@ -498,16 +645,20 @@ class _AdminOrdersPageState
 
                                       Icon(
                                         getStatusIcon(
-                                            status),
+                                          status,
+                                        ),
 
                                         size: 18,
+
                                         color:
                                             getColor(
-                                                status),
+                                          status,
+                                        ),
                                       ),
 
                                       const SizedBox(
-                                          width: 6),
+                                        width: 6,
+                                      ),
 
                                       Text(
                                         status
@@ -517,11 +668,11 @@ class _AdminOrdersPageState
                                             TextStyle(
                                           color:
                                               getColor(
-                                                  status),
+                                            status,
+                                          ),
 
                                           fontWeight:
-                                              FontWeight
-                                                  .bold,
+                                              FontWeight.bold,
                                         ),
                                       ),
                                     ],
@@ -531,53 +682,205 @@ class _AdminOrdersPageState
                             ),
 
                             const SizedBox(
-                                height: 20),
+                              height: 20,
+                            ),
 
                             Divider(
                               color: Colors
-                                  .grey.shade200,
+                                  .grey
+                                  .shade200,
                             ),
 
                             const SizedBox(
-                                height: 16),
+                              height: 16,
+                            ),
 
-                            // INFO TILES
+                            /// DETAILS
                             _infoTile(
-                              icon:
-                                  Icons.person_rounded,
-                              title: "Customer",
-                              value: customer,
+                              icon: Icons.person,
+
+                              title:
+                                  "Customer",
+
+                              value:
+                                  customer,
                             ),
 
                             const SizedBox(
-                                height: 14),
+                              height: 14,
+                            ),
 
                             _infoTile(
                               icon:
-                                  Icons.phone_rounded,
+                                  Icons.phone,
+
                               title: "Phone",
+
                               value: phone,
                             ),
 
                             const SizedBox(
-                                height: 14),
+                              height: 14,
+                            ),
 
                             _infoTile(
-                              icon:
-                                  Icons.engineering_rounded,
-                              title: "Provider",
-                              value: provider,
+                              icon: Icons
+                                  .engineering,
+
+                              title:
+                                  "Provider",
+
+                              value:
+                                  provider,
                             ),
 
                             const SizedBox(
-                                height: 14),
+                              height: 14,
+                            ),
 
                             _infoTile(
-                              icon:
-                                  Icons.calendar_month_rounded,
-                              title: "Ordered On",
+                              icon: Icons
+                                  .location_on,
+
+                              title:
+                                  "Address",
+
+                              value:
+                                  address,
+                            ),
+
+                            const SizedBox(
+                              height: 14,
+                            ),
+
+                            _infoTile(
+                              icon: Icons
+                                  .calendar_month,
+
+                              title:
+                                  "Ordered On",
+
                               value: date,
                             ),
+
+                            const SizedBox(
+                              height: 20,
+                            ),
+
+                            /// ACTION BUTTONS
+                            if (status !=
+                                "completed")
+
+                              Row(
+                                children: [
+
+                                  Expanded(
+                                    child:
+                                        OutlinedButton(
+                                      onPressed:
+                                          () {
+
+                                        updateStatus(
+                                          doc.id,
+                                          "rejected",
+                                        );
+                                      },
+
+                                      style:
+                                          OutlinedButton.styleFrom(
+                                        side:
+                                            const BorderSide(
+                                          color:
+                                              Colors.red,
+                                        ),
+
+                                        shape:
+                                            RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                            14,
+                                          ),
+                                        ),
+
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                          vertical:
+                                              14,
+                                        ),
+                                      ),
+
+                                      child:
+                                          const Text(
+                                        "Reject",
+
+                                        style:
+                                            TextStyle(
+                                          color:
+                                              Colors.red,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(
+                                    width: 12,
+                                  ),
+
+                                  Expanded(
+                                    child:
+                                        ElevatedButton(
+                                      onPressed:
+                                          () {
+
+                                        final nextStatus =
+                                            status ==
+                                                    "pending"
+                                                ? "accepted"
+                                                : "completed";
+
+                                        updateStatus(
+                                          doc.id,
+                                          nextStatus,
+                                        );
+                                      },
+
+                                      style:
+                                          ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            Colors.green,
+
+                                        shape:
+                                            RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                            14,
+                                          ),
+                                        ),
+
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                          vertical:
+                                              14,
+                                        ),
+                                      ),
+
+                                      child:
+                                          Text(
+                                        status ==
+                                                "pending"
+                                            ? "Accept"
+                                            : "Complete",
+
+                                        style:
+                                            const TextStyle(
+                                          color:
+                                              Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                       ),
@@ -592,10 +895,11 @@ class _AdminOrdersPageState
     );
   }
 
-  // FILTER CHIP
+  /// ================= CHIP =================
   Widget _chip(String value) {
 
-    final selected = filter == value;
+    final selected =
+        filter == value;
 
     return Padding(
       padding:
@@ -606,11 +910,14 @@ class _AdminOrdersPageState
       child: ChoiceChip(
         label: Text(
           value.toUpperCase(),
+
           style: TextStyle(
             color: selected
                 ? Colors.white
                 : Colors.black87,
-            fontWeight: FontWeight.w600,
+
+            fontWeight:
+                FontWeight.w600,
           ),
         ),
 
@@ -619,16 +926,22 @@ class _AdminOrdersPageState
         selectedColor:
             const Color(0xff2563eb),
 
-        backgroundColor: Colors.white,
+        backgroundColor:
+            Colors.white,
 
-        elevation: selected ? 2 : 0,
+        elevation:
+            selected ? 2 : 0,
 
-        shape: RoundedRectangleBorder(
+        shape:
+            RoundedRectangleBorder(
           borderRadius:
-              BorderRadius.circular(30),
+              BorderRadius.circular(
+            30,
+          ),
         ),
 
         onSelected: (_) {
+
           setState(() {
             filter = value;
           });
@@ -637,8 +950,9 @@ class _AdminOrdersPageState
     );
   }
 
-  // INFO TILE
+  /// ================= INFO TILE =================
   Widget _infoTile({
+
     required IconData icon,
     required String title,
     required String value,
@@ -651,14 +965,19 @@ class _AdminOrdersPageState
       children: [
 
         Container(
-          padding: const EdgeInsets.all(10),
+          padding:
+              const EdgeInsets.all(10),
 
           decoration: BoxDecoration(
             color:
-                Colors.indigo.withOpacity(.08),
+                Colors.indigo.withOpacity(
+              .08,
+            ),
 
             borderRadius:
-                BorderRadius.circular(14),
+                BorderRadius.circular(
+              14,
+            ),
           ),
 
           child: Icon(
@@ -681,7 +1000,9 @@ class _AdminOrdersPageState
                 title,
 
                 style: TextStyle(
-                  color: Colors.grey.shade600,
+                  color:
+                      Colors.grey.shade600,
+
                   fontSize: 13,
                 ),
               ),
@@ -689,11 +1010,15 @@ class _AdminOrdersPageState
               const SizedBox(height: 4),
 
               Text(
-                value.isEmpty ? "-" : value,
+                value.isEmpty
+                    ? "-"
+                    : value,
 
-                style: const TextStyle(
+                style:
+                    const TextStyle(
                   fontWeight:
                       FontWeight.w600,
+
                   fontSize: 15,
                 ),
               ),

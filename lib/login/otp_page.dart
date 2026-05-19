@@ -1,13 +1,17 @@
 import 'dart:async';
+
 import 'package:callme/screens/bottom_nav_page.dart';
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 
 class OtpPage extends StatefulWidget {
   final String phone;
 
-  const OtpPage({super.key, required this.phone});
+  const OtpPage({
+    super.key,
+    required this.phone,
+  });
 
   @override
   State<OtpPage> createState() => _OtpPageState();
@@ -15,231 +19,620 @@ class OtpPage extends StatefulWidget {
 
 class _OtpPageState extends State<OtpPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
+
+  final TextEditingController otpController =
+      TextEditingController();
 
   String verificationId = "";
-  final otpController = TextEditingController();
 
-  bool loading = false;
-  int timer = 120;
-  Timer? t;
+  bool isLoading = false;
+
+  int resendSeconds = 120;
+
+  Timer? timer;
 
   @override
   void initState() {
     super.initState();
     sendOtp();
-    startTimer();
   }
+
+  /// =====================================================
+  /// START TIMER
+  /// =====================================================
 
   void startTimer() {
-    timer = 120;
-    t?.cancel();
+    resendSeconds = 120;
 
-    t = Timer.periodic(const Duration(seconds: 1), (x) {
-      if (timer == 0) {
-        x.cancel();
-      } else {
-        setState(() => timer--);
-      }
-    });
-  }
+    timer?.cancel();
 
-  /// ================= LINK OR SIGNIN =================
-  Future<User> linkOrSignIn(PhoneAuthCredential credential) async {
-    try {
-      if (_auth.currentUser != null) {
-        return (await _auth.currentUser!
-                .linkWithCredential(credential))
-            .user!;
-      }
-      return (await _auth.signInWithCredential(credential)).user!;
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'credential-already-in-use') {
-        return (await _auth.signInWithCredential(credential)).user!;
-      } else {
-        rethrow;
-      }
-    }
-  }
-
-  /// ================= 🔥 SAFE MERGE =================
-  Future<void> mergeOldUserIfExists(User user) async {
-    final usersRef = _firestore.collection('users');
-
-    Map<String, dynamic> mergedData = {};
-
-    /// ---------- PHONE MATCH ----------
-    if (user.phoneNumber != null && user.phoneNumber!.isNotEmpty) {
-      final phoneMatch = await usersRef
-          .where('phone', isEqualTo: user.phoneNumber)
-          .get();
-
-      for (var doc in phoneMatch.docs) {
-        if (doc.id != user.uid) {
-          final data = Map<String, dynamic>.from(doc.data());
-
-          /// 🔥 FIX UNMODIFIABLE LISTS
-          if (data['providers'] != null) {
-            data['providers'] = List.from(data['providers']);
+    timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (t) {
+        if (resendSeconds <= 0) {
+          t.cancel();
+        } else {
+          if (mounted) {
+            setState(() {
+              resendSeconds--;
+            });
           }
-
-          mergedData.addAll(data);
-          await usersRef.doc(doc.id).delete();
         }
-      }
-    }
-
-    /// ---------- EMAIL MATCH ----------
-    if (user.email != null && user.email!.isNotEmpty) {
-      final emailMatch = await usersRef
-          .where('email', isEqualTo: user.email)
-          .get();
-
-      for (var doc in emailMatch.docs) {
-        if (doc.id != user.uid) {
-          final data = Map<String, dynamic>.from(doc.data());
-
-          /// 🔥 FIX AGAIN
-          if (data['providers'] != null) {
-            data['providers'] = List.from(data['providers']);
-          }
-
-          mergedData.addAll(data);
-          await usersRef.doc(doc.id).delete();
-        }
-      }
-    }
-
-    /// ---------- APPLY MERGE ----------
-    if (mergedData.isNotEmpty) {
-      await usersRef.doc(user.uid).set(
-        mergedData,
-        SetOptions(merge: true),
-      );
-    }
-  }
-
-  /// ================= SAVE USER =================
-  Future<void> saveUser(User user) async {
-    await _firestore.collection('users').doc(user.uid).set({
-      'uid': user.uid,
-      'phone': user.phoneNumber ?? widget.phone,
-      'email': user.email ?? "",
-      'providers': user.providerData.map((e) => e.providerId).toList(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  /// ================= SEND OTP =================
-  Future<void> sendOtp() async {
-    await _auth.verifyPhoneNumber(
-      phoneNumber: widget.phone,
-
-      verificationCompleted: (cred) async {
-        final user = await linkOrSignIn(cred);
-
-        await mergeOldUserIfExists(user);
-        await saveUser(user);
-
-        goHome(user);
-      },
-
-      verificationFailed: (e) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message ?? "")));
-      },
-
-      codeSent: (vid, _) {
-        setState(() => verificationId = vid);
-      },
-
-      codeAutoRetrievalTimeout: (vid) {
-        verificationId = vid;
       },
     );
   }
 
-  /// ================= VERIFY OTP =================
-  Future<void> verifyOtp() async {
-    try {
-      setState(() => loading = true);
+  /// =====================================================
+  /// GENERATE USER DOC ID
+  /// =====================================================
 
-      final cred = PhoneAuthProvider.credential(
-        verificationId: verificationId,
-        smsCode: otpController.text.trim(),
-      );
+  String generateUserId(User user) {
+    String base = "";
 
-      final user = await linkOrSignIn(cred);
-
-      await mergeOldUserIfExists(user);
-      await saveUser(user);
-
-      goHome(user);
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Invalid OTP")));
+    if (user.email != null &&
+        user.email!.isNotEmpty) {
+      base = user.email!
+          .split("@")
+          .first;
+    } else if (user.phoneNumber != null &&
+        user.phoneNumber!.isNotEmpty) {
+      base = user.phoneNumber!
+          .replaceAll("+91", "");
+    } else {
+      base = "user";
     }
 
-    setState(() => loading = false);
+    base = base
+        .toLowerCase()
+        .replaceAll(
+          RegExp(r'[^a-z0-9]'),
+          '',
+        );
+
+    return "${base}_${DateTime.now().millisecondsSinceEpoch}";
   }
 
-  /// ================= NAVIGATION =================
+  /// =====================================================
+  /// SAVE USER
+  /// =====================================================
+
+  Future<void> saveUser(User user) async {
+    try {
+      /// CHECK EXISTING USER
+      final existingUser =
+          await _firestore
+              .collection("users")
+              .where(
+                "authUid",
+                isEqualTo: user.uid,
+              )
+              .limit(1)
+              .get();
+
+      String docId;
+
+      if (existingUser.docs.isNotEmpty) {
+        docId = existingUser.docs.first.id;
+      } else {
+        docId = generateUserId(user);
+      }
+
+      await _firestore
+          .collection("users")
+          .doc(docId)
+          .set(
+        {
+          "docId": docId,
+
+          /// AUTH
+          "authUid": user.uid,
+          "uid": user.uid,
+
+          /// USER INFO
+          "name": user.displayName ?? "",
+          "email": user.email ?? "",
+          "phone":
+              user.phoneNumber ??
+                  widget.phone,
+          "photo": user.photoURL ?? "",
+
+          /// LOGIN PROVIDERS
+          "providers": user.providerData
+              .map((e) => e.providerId)
+              .toList(),
+
+          /// STATUS
+          "isActive": true,
+
+          /// TIMESTAMPS
+          "updatedAt":
+              FieldValue.serverTimestamp(),
+
+          "lastLogin":
+              FieldValue.serverTimestamp(),
+
+          "createdAt":
+              FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint(
+        "SAVE USER ERROR: $e",
+      );
+    }
+  }
+
+  /// =====================================================
+  /// SEND OTP
+  /// =====================================================
+
+  Future<void> sendOtp() async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      await _auth.verifyPhoneNumber(
+        phoneNumber: widget.phone,
+
+        timeout: const Duration(
+          seconds: 120,
+        ),
+
+        /// AUTO VERIFY
+        verificationCompleted:
+            (
+              PhoneAuthCredential
+                  credential,
+            ) async {
+          try {
+            final userCredential =
+                await _auth
+                    .signInWithCredential(
+              credential,
+            );
+
+            final user =
+                userCredential.user;
+
+            if (user != null) {
+              await saveUser(user);
+
+              if (!mounted) return;
+
+              goHome(user);
+            }
+          } catch (e) {
+            showMessage(
+              "Auto verification failed",
+              isError: true,
+            );
+          }
+        },
+
+        /// FAILED
+        verificationFailed:
+            (
+              FirebaseAuthException e,
+            ) {
+          showMessage(
+            e.message ??
+                "OTP verification failed",
+            isError: true,
+          );
+
+          setState(() {
+            isLoading = false;
+          });
+        },
+
+        /// OTP SENT
+        codeSent: (
+          String verification,
+          int? resendToken,
+        ) {
+          verificationId = verification;
+
+          startTimer();
+
+          showMessage(
+            "OTP sent successfully",
+          );
+
+          setState(() {
+            isLoading = false;
+          });
+        },
+
+        /// TIMEOUT
+        codeAutoRetrievalTimeout:
+            (String verification) {
+          verificationId = verification;
+        },
+      );
+    } catch (e) {
+      showMessage(
+        "Failed to send OTP",
+        isError: true,
+      );
+
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  /// =====================================================
+  /// VERIFY OTP
+  /// =====================================================
+
+  Future<void> verifyOtp() async {
+    final otp =
+        otpController.text.trim();
+
+    if (otp.length != 6) {
+      showMessage(
+        "Enter valid 6 digit OTP",
+        isError: true,
+      );
+      return;
+    }
+
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      final credential =
+          PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: otp,
+      );
+
+      final userCredential =
+          await _auth
+              .signInWithCredential(
+        credential,
+      );
+
+      final user =
+          userCredential.user;
+
+      if (user == null) {
+        throw Exception(
+          "User not found",
+        );
+      }
+
+      await saveUser(user);
+
+      if (!mounted) return;
+
+      goHome(user);
+    } on FirebaseAuthException catch (e) {
+      showMessage(
+        e.message ?? "Invalid OTP",
+        isError: true,
+      );
+    } catch (e) {
+      showMessage(
+        "Something went wrong",
+        isError: true,
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  /// =====================================================
+  /// MESSAGE
+  /// =====================================================
+
+  void showMessage(
+    String message, {
+    bool isError = false,
+  }) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        backgroundColor:
+            isError
+                ? Colors.red
+                : Colors.green,
+        content: Text(message),
+      ),
+    );
+  }
+
+  /// =====================================================
+  /// GO HOME
+  /// =====================================================
+
   void goHome(User user) {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
         builder: (_) => BottomNavPage(
-          userPhone: user.phoneNumber ?? widget.phone,
-          userEmail: user.email ?? "",
+          userPhone:
+              user.phoneNumber ??
+                  widget.phone,
+          userEmail:
+              user.email ?? "",
         ),
       ),
       (route) => false,
     );
   }
 
+  /// =====================================================
+  /// DISPOSE
+  /// =====================================================
+
   @override
   void dispose() {
-    t?.cancel();
+    timer?.cancel();
+
     otpController.dispose();
+
     super.dispose();
   }
 
-  /// ================= UI =================
+  /// =====================================================
+  /// UI
+  /// =====================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            const SizedBox(height: 40),
-            Text("OTP sent to ${widget.phone}"),
-            TextField(
-              controller: otpController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Enter OTP",
+      backgroundColor:
+          const Color(0xFFF5F7FB),
+
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 20,
+          ),
+
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+
+            children: [
+              const SizedBox(height: 10),
+
+              /// BACK BUTTON
+              InkWell(
+                borderRadius:
+                    BorderRadius.circular(
+                  14,
+                ),
+
+                onTap: () {
+                  Navigator.pop(context);
+                },
+
+                child: Container(
+                  padding:
+                      const EdgeInsets.all(
+                    12,
+                  ),
+
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+
+                    borderRadius:
+                        BorderRadius.circular(
+                      14,
+                    ),
+
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black
+                            .withOpacity(
+                          0.04,
+                        ),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+
+                  child: const Icon(
+                    Icons
+                        .arrow_back_ios_new_rounded,
+                    size: 20,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: loading ? null : verifyOtp,
-              child: loading
-                  ? const CircularProgressIndicator()
-                  : const Text("Verify OTP"),
-            ),
-            TextButton(
-              onPressed: timer == 0
-                  ? () {
-                      sendOtp();
-                      startTimer();
-                    }
-                  : null,
-              child: Text(timer == 0
-                  ? "Resend OTP"
-                  : "Resend in $timer sec"),
-            ),
-          ],
+
+              const SizedBox(height: 50),
+
+              /// TITLE
+              const Text(
+                "OTP Verification",
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight:
+                      FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Text(
+                "Enter the verification code sent to",
+
+                style: TextStyle(
+                  color:
+                      Colors.grey.shade600,
+                  fontSize: 16,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                widget.phone,
+
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight:
+                      FontWeight.w700,
+                ),
+              ),
+
+              const SizedBox(height: 50),
+
+              /// OTP BOX
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+
+                  borderRadius:
+                      BorderRadius.circular(
+                    24,
+                  ),
+
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black
+                          .withOpacity(
+                        0.05,
+                      ),
+                      blurRadius: 12,
+                    ),
+                  ],
+                ),
+
+                child: TextField(
+                  controller: otpController,
+
+                  keyboardType:
+                      TextInputType.number,
+
+                  maxLength: 6,
+
+                  textAlign:
+                      TextAlign.center,
+
+                  style: const TextStyle(
+                    fontSize: 28,
+                    letterSpacing: 12,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+
+                  decoration:
+                      const InputDecoration(
+                    counterText: "",
+                    border:
+                        InputBorder.none,
+                    hintText: "------",
+                    contentPadding:
+                        EdgeInsets.symmetric(
+                      vertical: 22,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 40),
+
+              /// VERIFY BUTTON
+              SizedBox(
+                width: double.infinity,
+                height: 58,
+
+                child: ElevatedButton(
+                  onPressed:
+                      isLoading
+                          ? null
+                          : verifyOtp,
+
+                  style:
+                      ElevatedButton.styleFrom(
+                    backgroundColor:
+                        Colors.black,
+
+                    foregroundColor:
+                        Colors.white,
+
+                    elevation: 0,
+
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(
+                        18,
+                      ),
+                    ),
+                  ),
+
+                  child:
+                      isLoading
+                          ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child:
+                                CircularProgressIndicator(
+                              color:
+                                  Colors
+                                      .white,
+                              strokeWidth:
+                                  2.5,
+                            ),
+                          )
+                          : const Text(
+                            "Verify OTP",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight:
+                                  FontWeight
+                                      .bold,
+                            ),
+                          ),
+                ),
+              ),
+
+              const SizedBox(height: 28),
+
+              /// RESEND
+              Center(
+                child: TextButton(
+                  onPressed:
+                      resendSeconds == 0
+                          ? sendOtp
+                          : null,
+
+                  child: Text(
+                    resendSeconds == 0
+                        ? "Resend OTP"
+                        : "Resend OTP in $resendSeconds sec",
+
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight:
+                          FontWeight.w600,
+
+                      color:
+                          resendSeconds == 0
+                              ? Colors.black
+                              : Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

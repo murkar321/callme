@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/salon_data.dart';
 import '../models/cart.dart';
 import '../models/cart_page.dart';
-import '../models/salon_service_card.dart';
+import '../widgets/salon_service_card.dart';
 
 class SalonPage extends StatefulWidget {
   const SalonPage({super.key});

@@ -3,73 +3,347 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth auth =
+      FirebaseAuth.instance;
 
-  /// 🔥 Save / update user
-  Future<void> saveUser(User user, String provider) async {
-    final userRef = _firestore.collection('users').doc(user.uid);
+  final FirebaseFirestore firestore =
+      FirebaseFirestore.instance;
 
-    final doc = await userRef.get();
+  /// =========================================================
+  /// GENERATE READABLE USER ID
+  /// =========================================================
 
-    if (!doc.exists) {
-      await userRef.set({
-        'uid': user.uid,
-        'email': user.email ?? "",
-        'phone': user.phoneNumber ?? "",
-        'name': user.displayName ?? "",
-        'photo': user.photoURL ?? "",
-        'provider': provider,
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastLogin': FieldValue.serverTimestamp(),
-      });
+  String generateUserId(String value) {
+    final clean = value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+    final unique =
+        DateTime.now()
+            .millisecondsSinceEpoch
+            .toString()
+            .substring(7);
+
+    return "${clean}_$unique";
+  }
+
+  /// =========================================================
+  /// FIND EXISTING USER
+  /// =========================================================
+
+  Future<DocumentSnapshot?> findExistingUser({
+    String? authUid,
+    String? email,
+    String? phone,
+  }) async {
+
+    /// AUTH UID
+    if (authUid != null &&
+        authUid.isNotEmpty) {
+
+      final result = await firestore
+          .collection("users")
+          .where(
+            "authUid",
+            isEqualTo: authUid,
+          )
+          .limit(1)
+          .get();
+
+      if (result.docs.isNotEmpty) {
+        return result.docs.first;
+      }
+    }
+
+    /// EMAIL
+    if (email != null &&
+        email.isNotEmpty) {
+
+      final result = await firestore
+          .collection("users")
+          .where(
+            "email",
+            isEqualTo: email,
+          )
+          .limit(1)
+          .get();
+
+      if (result.docs.isNotEmpty) {
+        return result.docs.first;
+      }
+    }
+
+    /// PHONE
+    if (phone != null &&
+        phone.isNotEmpty) {
+
+      final result = await firestore
+          .collection("users")
+          .where(
+            "phone",
+            isEqualTo: phone,
+          )
+          .limit(1)
+          .get();
+
+      if (result.docs.isNotEmpty) {
+        return result.docs.first;
+      }
+    }
+
+    return null;
+  }
+
+  /// =========================================================
+  /// SAVE USER
+  /// =========================================================
+
+  Future<void> saveUser(
+    User user,
+    String provider,
+  ) async {
+
+    /// FIND EXISTING USER
+    final existing =
+        await findExistingUser(
+      authUid: user.uid,
+      email: user.email,
+      phone: user.phoneNumber,
+    );
+
+    String userDocId;
+
+    /// EXISTING USER
+    if (existing != null) {
+
+      userDocId = existing.id;
+
     } else {
-      await userRef.update({
-        'lastLogin': FieldValue.serverTimestamp(),
-      });
+
+      /// NEW USER
+      userDocId = generateUserId(
+        user.displayName ??
+            user.email ??
+            user.phoneNumber ??
+            "user",
+      );
+    }
+
+    /// GET EXISTING PROVIDERS
+    List providers = [];
+
+    if (existing != null) {
+      final data =
+          existing.data()
+              as Map<String, dynamic>;
+
+      providers =
+          List.from(
+            data['providers'] ?? [],
+          );
+    }
+
+    /// ADD CURRENT PROVIDER
+    if (!providers.contains(provider)) {
+      providers.add(provider);
+    }
+
+    await firestore
+        .collection('users')
+        .doc(userDocId)
+        .set({
+
+      /// IDS
+      'userId': userDocId,
+      'authUid': user.uid,
+      'uid': user.uid,
+
+      /// USER DATA
+      'email': user.email ?? "",
+      'phone': user.phoneNumber ?? "",
+      'name': user.displayName ?? "",
+      'photo': user.photoURL ?? "",
+
+      /// LOGIN PROVIDERS
+      'provider': provider,
+      'providers': providers,
+
+      /// STATUS
+      'role': 'user',
+      'status': 'active',
+
+      /// TIMESTAMPS
+      'updatedAt':
+          FieldValue.serverTimestamp(),
+
+      'lastLogin':
+          FieldValue.serverTimestamp(),
+
+      'createdAt':
+          existing == null
+              ? FieldValue.serverTimestamp()
+              : existing['createdAt'],
+    }, SetOptions(merge: true));
+  }
+
+  /// =========================================================
+  /// GOOGLE SIGN IN
+  /// =========================================================
+
+  Future<User?> signInWithGoogle() async {
+
+    try {
+
+      final googleSignIn =
+          GoogleSignIn();
+
+      await googleSignIn.signOut();
+
+      final googleUser =
+          await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        return null;
+      }
+
+      final googleAuth =
+          await googleUser.authentication;
+
+      final credential =
+          GoogleAuthProvider.credential(
+
+        accessToken:
+            googleAuth.accessToken,
+
+        idToken:
+            googleAuth.idToken,
+      );
+
+      final result =
+          await auth.signInWithCredential(
+        credential,
+      );
+
+      await saveUser(
+        result.user!,
+        "google",
+      );
+
+      return result.user;
+
+    } catch (e) {
+
+      rethrow;
     }
   }
 
-  /// 🔹 Google Sign-In
-  Future<User?> signInWithGoogle() async {
-    final googleUser = await GoogleSignIn().signIn();
-    if (googleUser == null) return null;
+  /// =========================================================
+  /// EMAIL SIGNUP
+  /// =========================================================
 
-    final googleAuth = await googleUser.authentication;
+  Future<User?> signUpEmail(
+    String email,
+    String password,
+    String name,
+  ) async {
 
-    final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
-    );
+    try {
 
-    final result = await _auth.signInWithCredential(credential);
-    await saveUser(result.user!, "google");
+      final result =
+          await auth
+              .createUserWithEmailAndPassword(
 
-    return result.user;
+        email: email.trim(),
+        password: password.trim(),
+      );
+
+      await result.user!
+          .updateDisplayName(name);
+
+      await result.user!.reload();
+
+      final updatedUser =
+          auth.currentUser!;
+
+      await saveUser(
+        updatedUser,
+        "email",
+      );
+
+      return updatedUser;
+
+    } catch (e) {
+
+      rethrow;
+    }
   }
 
-  /// 🔹 Email Signup
-  Future<User?> signUpEmail(String email, String password) async {
-    final result = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
+  /// =========================================================
+  /// EMAIL LOGIN
+  /// =========================================================
 
-    await saveUser(result.user!, "email");
-    return result.user;
+  Future<User?> loginEmail(
+    String email,
+    String password,
+  ) async {
+
+    try {
+
+      final result =
+          await auth
+              .signInWithEmailAndPassword(
+
+        email: email.trim(),
+        password: password.trim(),
+      );
+
+      await saveUser(
+        result.user!,
+        "email",
+      );
+
+      return result.user;
+
+    } catch (e) {
+
+      rethrow;
+    }
   }
 
-  /// 🔹 Email Login
-  Future<User?> loginEmail(String email, String password) async {
-    final result = await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
+  /// =========================================================
+  /// PHONE LOGIN
+  /// =========================================================
 
-    await saveUser(result.user!, "email");
-    return result.user;
+  Future<void> savePhoneUser(
+    User user,
+  ) async {
+
+    await saveUser(
+      user,
+      "phone",
+    );
   }
 
-  /// 🔹 Current User
-  User? get currentUser => _auth.currentUser;
+  /// =========================================================
+  /// CURRENT USER
+  /// =========================================================
+
+  User? get currentUser =>
+      auth.currentUser;
+
+  /// =========================================================
+  /// LOGOUT
+  /// =========================================================
+
+  Future<void> logout() async {
+
+    try {
+
+      await GoogleSignIn().signOut();
+
+    } catch (_) {}
+
+    await auth.signOut();
+  }
 }

@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'home_page.dart';
 import 'myorders_page.dart';
-import 'profile_page.dart';
+import 'package:callme/profile/profile_page.dart';
 import 'package:callme/provider/business_page.dart';
 import 'package:callme/Admin/admin_dashboard.dart';
 
