@@ -1,8 +1,13 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
+
+  /// =========================================================
+  /// FIREBASE
+  /// =========================================================
+
   final FirebaseAuth auth =
       FirebaseAuth.instance;
 
@@ -10,14 +15,28 @@ class AuthService {
       FirebaseFirestore.instance;
 
   /// =========================================================
-  /// GENERATE READABLE USER ID
+  /// CURRENT USER
+  /// =========================================================
+
+  User? get currentUser =>
+      auth.currentUser;
+
+  /// =========================================================
+  /// GENERATE USER ID
   /// =========================================================
 
   String generateUserId(String value) {
+
     final clean = value
+
         .trim()
+
         .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+        .replaceAll(
+          RegExp(r'[^a-z0-9]'),
+          '',
+        );
 
     final unique =
         DateTime.now()
@@ -33,66 +52,97 @@ class AuthService {
   /// =========================================================
 
   Future<DocumentSnapshot?> findExistingUser({
+
     String? authUid,
+
     String? email,
+
     String? phone,
   }) async {
 
-    /// AUTH UID
-    if (authUid != null &&
-        authUid.isNotEmpty) {
+    try {
 
-      final result = await firestore
-          .collection("users")
-          .where(
-            "authUid",
-            isEqualTo: authUid,
-          )
-          .limit(1)
-          .get();
+      /// AUTH UID
 
-      if (result.docs.isNotEmpty) {
-        return result.docs.first;
+      if (authUid != null &&
+          authUid.isNotEmpty) {
+
+        final result =
+            await firestore
+
+                .collection("users")
+
+                .where(
+                  "authUid",
+                  isEqualTo: authUid,
+                )
+
+                .limit(1)
+
+                .get();
+
+        if (result.docs.isNotEmpty) {
+
+          return result.docs.first;
+        }
       }
-    }
 
-    /// EMAIL
-    if (email != null &&
-        email.isNotEmpty) {
+      /// EMAIL
 
-      final result = await firestore
-          .collection("users")
-          .where(
-            "email",
-            isEqualTo: email,
-          )
-          .limit(1)
-          .get();
+      if (email != null &&
+          email.isNotEmpty) {
 
-      if (result.docs.isNotEmpty) {
-        return result.docs.first;
+        final result =
+            await firestore
+
+                .collection("users")
+
+                .where(
+                  "email",
+                  isEqualTo: email,
+                )
+
+                .limit(1)
+
+                .get();
+
+        if (result.docs.isNotEmpty) {
+
+          return result.docs.first;
+        }
       }
-    }
 
-    /// PHONE
-    if (phone != null &&
-        phone.isNotEmpty) {
+      /// PHONE
 
-      final result = await firestore
-          .collection("users")
-          .where(
-            "phone",
-            isEqualTo: phone,
-          )
-          .limit(1)
-          .get();
+      if (phone != null &&
+          phone.isNotEmpty) {
 
-      if (result.docs.isNotEmpty) {
-        return result.docs.first;
+        final result =
+            await firestore
+
+                .collection("users")
+
+                .where(
+                  "phone",
+                  isEqualTo: phone,
+                )
+
+                .limit(1)
+
+                .get();
+
+        if (result.docs.isNotEmpty) {
+
+          return result.docs.first;
+        }
       }
-    }
 
-    return null;
+      return null;
+
+    } catch (e) {
+
+      rethrow;
+    }
   }
 
   /// =========================================================
@@ -100,137 +150,261 @@ class AuthService {
   /// =========================================================
 
   Future<void> saveUser(
-    User user,
-    String provider,
-  ) async {
 
-    /// FIND EXISTING USER
-    final existing =
-        await findExistingUser(
-      authUid: user.uid,
-      email: user.email,
-      phone: user.phoneNumber,
-    );
+      User user,
 
-    String userDocId;
+      String provider,
+      ) async {
 
-    /// EXISTING USER
-    if (existing != null) {
+    try {
 
-      userDocId = existing.id;
+      /// FIND EXISTING USER
 
-    } else {
+      final existing =
+          await findExistingUser(
 
-      /// NEW USER
-      userDocId = generateUserId(
-        user.displayName ??
-            user.email ??
-            user.phoneNumber ??
-            "user",
+        authUid: user.uid,
+
+        email: user.email,
+
+        phone: user.phoneNumber,
       );
+
+      String userDocId;
+
+      Map<String, dynamic> oldData = {};
+
+      /// EXISTING USER
+
+      if (existing != null) {
+
+        userDocId =
+            existing.id;
+
+        oldData =
+            existing.data()
+            as Map<String, dynamic>;
+
+      } else {
+
+        /// NEW USER
+
+        userDocId =
+            generateUserId(
+
+              user.displayName ??
+
+                  user.email ??
+
+                  user.phoneNumber ??
+
+                  "user",
+            );
+      }
+
+      /// =====================================================
+      /// PROVIDERS
+      /// =====================================================
+
+      List providers =
+      List.from(
+        oldData['providers'] ?? [],
+      );
+
+      if (!providers.contains(provider)) {
+
+        providers.add(provider);
+      }
+
+      /// =====================================================
+      /// SAFE DATA
+      /// PREVENTS PROFILE RESET
+      /// =====================================================
+
+      final data = {
+
+        /// IDS
+
+        'userId':
+        userDocId,
+
+        'authUid':
+        user.uid,
+
+        'uid':
+        user.uid,
+
+        /// PROFILE DATA
+
+        'email':
+
+        user.email != null &&
+            user.email!.trim().isNotEmpty
+
+            ? user.email
+
+            : oldData['email'] ?? "",
+
+        'phone':
+
+        user.phoneNumber != null &&
+            user.phoneNumber!
+                .trim()
+                .isNotEmpty
+
+            ? user.phoneNumber
+
+            : oldData['phone'] ?? "",
+
+        'name':
+
+        user.displayName != null &&
+            user.displayName!
+                .trim()
+                .isNotEmpty
+
+            ? user.displayName
+
+            : oldData['name'] ?? "",
+
+        'photo':
+
+        user.photoURL != null &&
+            user.photoURL!
+                .trim()
+                .isNotEmpty
+
+            ? user.photoURL
+
+            : oldData['photo'] ?? "",
+
+        /// IMPORTANT
+        /// PRESERVE CUSTOM PROFILE DATA
+
+        'firstName':
+        oldData['firstName'] ?? "",
+
+        'lastName':
+        oldData['lastName'] ?? "",
+
+        'address':
+        oldData['address'] ?? "",
+
+        /// LOGIN PROVIDERS
+
+        'provider':
+        provider,
+
+        'providers':
+        providers,
+
+        /// STATUS
+
+        'role':
+        oldData['role'] ?? "user",
+
+        'status':
+        oldData['status'] ?? "active",
+
+        /// TIMESTAMPS
+
+        'updatedAt':
+        FieldValue.serverTimestamp(),
+
+        'lastLogin':
+        FieldValue.serverTimestamp(),
+
+        'createdAt':
+
+        oldData['createdAt'] ??
+
+            FieldValue.serverTimestamp(),
+      };
+
+      /// =====================================================
+      /// SAVE
+      /// =====================================================
+
+      await firestore
+
+          .collection("users")
+
+          .doc(userDocId)
+
+          .set(
+
+        data,
+
+        SetOptions(
+          merge: true,
+        ),
+      );
+
+    } catch (e) {
+
+      rethrow;
     }
-
-    /// GET EXISTING PROVIDERS
-    List providers = [];
-
-    if (existing != null) {
-      final data =
-          existing.data()
-              as Map<String, dynamic>;
-
-      providers =
-          List.from(
-            data['providers'] ?? [],
-          );
-    }
-
-    /// ADD CURRENT PROVIDER
-    if (!providers.contains(provider)) {
-      providers.add(provider);
-    }
-
-    await firestore
-        .collection('users')
-        .doc(userDocId)
-        .set({
-
-      /// IDS
-      'userId': userDocId,
-      'authUid': user.uid,
-      'uid': user.uid,
-
-      /// USER DATA
-      'email': user.email ?? "",
-      'phone': user.phoneNumber ?? "",
-      'name': user.displayName ?? "",
-      'photo': user.photoURL ?? "",
-
-      /// LOGIN PROVIDERS
-      'provider': provider,
-      'providers': providers,
-
-      /// STATUS
-      'role': 'user',
-      'status': 'active',
-
-      /// TIMESTAMPS
-      'updatedAt':
-          FieldValue.serverTimestamp(),
-
-      'lastLogin':
-          FieldValue.serverTimestamp(),
-
-      'createdAt':
-          existing == null
-              ? FieldValue.serverTimestamp()
-              : existing['createdAt'],
-    }, SetOptions(merge: true));
   }
 
   /// =========================================================
-  /// GOOGLE SIGN IN
+  /// GOOGLE LOGIN
   /// =========================================================
 
   Future<User?> signInWithGoogle() async {
 
     try {
 
-      final googleSignIn =
-          GoogleSignIn();
+      final GoogleSignIn googleSignIn =
+      GoogleSignIn();
+
+      /// FORCE ACCOUNT PICKER
 
       await googleSignIn.signOut();
 
-      final googleUser =
-          await googleSignIn.signIn();
+      final GoogleSignInAccount?
+      googleUser =
+
+      await googleSignIn.signIn();
 
       if (googleUser == null) {
+
         return null;
       }
 
       final googleAuth =
-          await googleUser.authentication;
+      await googleUser.authentication;
 
       final credential =
-          GoogleAuthProvider.credential(
+      GoogleAuthProvider.credential(
 
         accessToken:
-            googleAuth.accessToken,
+        googleAuth.accessToken,
 
         idToken:
-            googleAuth.idToken,
+        googleAuth.idToken,
       );
 
       final result =
-          await auth.signInWithCredential(
+      await auth.signInWithCredential(
         credential,
       );
 
-      await saveUser(
-        result.user!,
-        "google",
-      );
+      /// REFRESH USER
 
-      return result.user;
+      await result.user?.reload();
+
+      final updatedUser =
+          auth.currentUser;
+
+      if (updatedUser != null) {
+
+        await saveUser(
+          updatedUser,
+          "google",
+        );
+      }
+
+      return updatedUser;
 
     } catch (e) {
 
@@ -243,33 +417,50 @@ class AuthService {
   /// =========================================================
 
   Future<User?> signUpEmail(
-    String email,
-    String password,
-    String name,
-  ) async {
+
+      String email,
+
+      String password,
+
+      String name,
+      ) async {
 
     try {
 
       final result =
-          await auth
-              .createUserWithEmailAndPassword(
 
-        email: email.trim(),
-        password: password.trim(),
+      await auth
+
+          .createUserWithEmailAndPassword(
+
+        email:
+        email.trim(),
+
+        password:
+        password.trim(),
       );
 
-      await result.user!
-          .updateDisplayName(name);
+      /// UPDATE NAME
 
-      await result.user!.reload();
+      await result.user
+          ?.updateDisplayName(
+        name.trim(),
+      );
+
+      /// REFRESH USER
+
+      await result.user?.reload();
 
       final updatedUser =
-          auth.currentUser!;
+          auth.currentUser;
 
-      await saveUser(
-        updatedUser,
-        "email",
-      );
+      if (updatedUser != null) {
+
+        await saveUser(
+          updatedUser,
+          "email",
+        );
+      }
 
       return updatedUser;
 
@@ -284,26 +475,43 @@ class AuthService {
   /// =========================================================
 
   Future<User?> loginEmail(
-    String email,
-    String password,
-  ) async {
+
+      String email,
+
+      String password,
+      ) async {
 
     try {
 
       final result =
-          await auth
-              .signInWithEmailAndPassword(
 
-        email: email.trim(),
-        password: password.trim(),
+      await auth
+
+          .signInWithEmailAndPassword(
+
+        email:
+        email.trim(),
+
+        password:
+        password.trim(),
       );
 
-      await saveUser(
-        result.user!,
-        "email",
-      );
+      /// REFRESH USER
 
-      return result.user;
+      await result.user?.reload();
+
+      final updatedUser =
+          auth.currentUser;
+
+      if (updatedUser != null) {
+
+        await saveUser(
+          updatedUser,
+          "email",
+        );
+      }
+
+      return updatedUser;
 
     } catch (e) {
 
@@ -316,21 +524,29 @@ class AuthService {
   /// =========================================================
 
   Future<void> savePhoneUser(
-    User user,
-  ) async {
+      User user,
+      ) async {
 
-    await saveUser(
-      user,
-      "phone",
-    );
+    try {
+
+      await user.reload();
+
+      final updatedUser =
+          auth.currentUser;
+
+      if (updatedUser != null) {
+
+        await saveUser(
+          updatedUser,
+          "phone",
+        );
+      }
+
+    } catch (e) {
+
+      rethrow;
+    }
   }
-
-  /// =========================================================
-  /// CURRENT USER
-  /// =========================================================
-
-  User? get currentUser =>
-      auth.currentUser;
 
   /// =========================================================
   /// LOGOUT
@@ -340,10 +556,22 @@ class AuthService {
 
     try {
 
-      await GoogleSignIn().signOut();
+      /// GOOGLE
 
-    } catch (_) {}
+      try {
 
-    await auth.signOut();
+        await GoogleSignIn()
+            .signOut();
+
+      } catch (_) {}
+
+      /// FIREBASE AUTH
+
+      await auth.signOut();
+
+    } catch (e) {
+
+      rethrow;
+    }
   }
 }

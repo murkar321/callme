@@ -30,21 +30,23 @@ class ServiceProviderForm extends StatefulWidget {
 class _ServiceProviderFormState
     extends State<ServiceProviderForm> {
   int currentStep = 0;
+
   bool isLoading = false;
+
+  bool ownTools = false;
+
+  File? businessImage;
 
   final PageController _pageController =
       PageController();
 
   final List<String> selectedCategories = [];
 
-  Map<String, String> uploadedDocs =
+  final Map<String, String> uploadedDocs =
       {};
 
-  bool ownTools = false;
+  /// ================= CONTROLLERS =================
 
-  File? businessImage;
-
-  /// CONTROLLERS
   final businessController =
       TextEditingController();
 
@@ -81,7 +83,28 @@ class _ServiceProviderFormState
   final upiController =
       TextEditingController();
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+
+    businessController.dispose();
+    ownerController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+    addressController.dispose();
+    cityController.dispose();
+    stateController.dispose();
+    pincodeController.dispose();
+    bankHolderController.dispose();
+    accountController.dispose();
+    ifscController.dispose();
+    upiController.dispose();
+
+    super.dispose();
+  }
+
   /// ================= IMAGE PICK =================
+
   Future<void> pickBusinessImage() async {
     final picked =
         await ImagePicker().pickImage(
@@ -98,6 +121,7 @@ class _ServiceProviderFormState
   }
 
   /// ================= LOCATION =================
+
   Future<void> fillLocation() async {
     try {
       LocationPermission permission =
@@ -105,8 +129,7 @@ class _ServiceProviderFormState
               .requestPermission();
 
       if (permission ==
-              LocationPermission
-                  .denied ||
+              LocationPermission.denied ||
           permission ==
               LocationPermission
                   .deniedForever) {
@@ -133,8 +156,7 @@ class _ServiceProviderFormState
             place.locality ?? "";
 
         stateController.text =
-            place.administrativeArea ??
-                "";
+            place.administrativeArea ?? "";
 
         pincodeController.text =
             place.postalCode ?? "";
@@ -160,7 +182,8 @@ class _ServiceProviderFormState
     }
   }
 
-  /// ================= FILE UPLOAD =================
+  /// ================= DOCUMENT UPLOAD =================
+
   Future<void> _uploadDocument(
       String docName) async {
     try {
@@ -215,7 +238,458 @@ class _ServiceProviderFormState
     }
   }
 
+  /// ================= PROVIDER ID =================
+
+  String generateProviderId() {
+    final now = DateTime.now();
+
+    final type =
+        widget.type.substring(0, 3)
+            .toUpperCase();
+
+    final random =
+        now.millisecondsSinceEpoch
+            .toString()
+            .substring(7);
+
+    return "$type-$random";
+  }
+
+  /// ================= AGREEMENT POPUP =================
+
+  Future<void> _showAgreementDialog() async {
+    bool accepted = false;
+
+    final result = await showModalBottomSheet<
+        bool>(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder:
+              (context, setStateDialog) {
+            return SafeArea(
+              child: DraggableScrollableSheet(
+                initialChildSize: 0.88,
+                minChildSize: 0.75,
+                maxChildSize: 0.95,
+                expand: false,
+                builder: (
+                  context,
+                  scrollController,
+                ) {
+                  return Container(
+                    decoration:
+                        const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                          BorderRadius.vertical(
+                        top: Radius.circular(
+                          32,
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        const SizedBox(
+                            height: 12),
+
+                        Container(
+                          width: 60,
+                          height: 6,
+                          decoration:
+                              BoxDecoration(
+                            color: Colors
+                                .grey.shade300,
+                            borderRadius:
+                                BorderRadius
+                                    .circular(
+                              100,
+                            ),
+                          ),
+                        ),
+
+                        Expanded(
+                          child:
+                              SingleChildScrollView(
+                            controller:
+                                scrollController,
+                            padding:
+                                EdgeInsets.only(
+                              left: 22,
+                              right: 22,
+                              top: 24,
+                              bottom:
+                                  MediaQuery.of(
+                                        context,
+                                      )
+                                          .viewInsets
+                                          .bottom +
+                                      24,
+                            ),
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment
+                                      .start,
+                              children: [
+                                Container(
+                                  padding:
+                                      const EdgeInsets
+                                          .all(18),
+                                  decoration:
+                                      BoxDecoration(
+                                    color: Colors
+                                        .deepPurple
+                                        .withOpacity(
+                                      0.08,
+                                    ),
+                                    borderRadius:
+                                        BorderRadius
+                                            .circular(
+                                      24,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding:
+                                            const EdgeInsets
+                                                .all(
+                                          14,
+                                        ),
+                                        decoration:
+                                            BoxDecoration(
+                                          color: Colors
+                                              .deepPurple,
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                            18,
+                                          ),
+                                        ),
+                                        child:
+                                            const Icon(
+                                          Icons
+                                              .verified_user_rounded,
+                                          color: Colors
+                                              .white,
+                                          size: 32,
+                                        ),
+                                      ),
+
+                                      const SizedBox(
+                                          width: 16),
+
+                                      const Expanded(
+                                        child:
+                                            Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment
+                                                  .start,
+                                          children: [
+                                            Text(
+                                              "Provider Agreement",
+                                              style:
+                                                  TextStyle(
+                                                fontSize:
+                                                    24,
+                                                fontWeight:
+                                                    FontWeight.bold,
+                                              ),
+                                            ),
+                                            SizedBox(
+                                                height:
+                                                    6),
+                                            Text(
+                                              "Please review before submission",
+                                              style:
+                                                  TextStyle(
+                                                color:
+                                                    Colors.black54,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                    height: 28),
+
+                                _agreementTile(
+                                  Icons
+                                      .verified_outlined,
+                                  "All submitted information and documents are authentic and valid.",
+                                ),
+
+                                _agreementTile(
+                                  Icons
+                                      .gpp_bad_outlined,
+                                  "Fraudulent activity or fake documents may permanently suspend the account.",
+                                ),
+
+                                _agreementTile(
+                                  Icons
+                                      .support_agent,
+                                  "Professional and respectful service behavior must be maintained.",
+                                ),
+
+                                _agreementTile(
+                                  Icons
+                                      .fact_check_outlined,
+                                  "Your profile will be manually reviewed before approval.",
+                                ),
+
+                                const SizedBox(
+                                    height: 24),
+
+                                Container(
+                                  padding:
+                                      const EdgeInsets
+                                          .all(18),
+                                  decoration:
+                                      BoxDecoration(
+                                    color: accepted
+                                        ? Colors.green
+                                            .withOpacity(
+                                            0.08,
+                                          )
+                                        : Colors
+                                            .grey
+                                            .shade100,
+                                    borderRadius:
+                                        BorderRadius
+                                            .circular(
+                                      22,
+                                    ),
+                                    border: Border.all(
+                                      color: accepted
+                                          ? Colors
+                                              .green
+                                          : Colors
+                                              .grey
+                                              .shade300,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
+                                    children: [
+                                      Checkbox(
+                                        value:
+                                            accepted,
+                                        activeColor:
+                                            Colors
+                                                .deepPurple,
+                                        onChanged:
+                                            (v) {
+                                          setStateDialog(
+                                            () {
+                                              accepted =
+                                                  v ??
+                                                      false;
+                                            },
+                                          );
+                                        },
+                                      ),
+
+                                      const Expanded(
+                                        child:
+                                            Padding(
+                                          padding:
+                                              EdgeInsets.only(
+                                            top: 10,
+                                          ),
+                                          child:
+                                              Text(
+                                            "I confirm that all details provided are genuine and I agree to the provider terms.",
+                                            style:
+                                                TextStyle(
+                                              fontSize:
+                                                  15,
+                                              fontWeight:
+                                                  FontWeight.w600,
+                                              height:
+                                                  1.5,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                    height: 32),
+
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child:
+                                          OutlinedButton(
+                                        onPressed:
+                                            () {
+                                          Navigator.pop(
+                                            context,
+                                            false,
+                                          );
+                                        },
+                                        style:
+                                            OutlinedButton.styleFrom(
+                                          minimumSize:
+                                              const Size(
+                                            double
+                                                .infinity,
+                                            58,
+                                          ),
+                                          shape:
+                                              RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(
+                                              18,
+                                            ),
+                                          ),
+                                        ),
+                                        child:
+                                            const Text(
+                                          "Cancel",
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(
+                                        width: 14),
+
+                                    Expanded(
+                                      flex: 2,
+                                      child:
+                                          ElevatedButton(
+                                        onPressed:
+                                            accepted
+                                                ? () {
+                                                    Navigator.pop(
+                                                      context,
+                                                      true,
+                                                    );
+                                                  }
+                                                : null,
+                                        style:
+                                            ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              Colors
+                                                  .deepPurple,
+                                          foregroundColor:
+                                              Colors
+                                                  .white,
+                                          minimumSize:
+                                              const Size(
+                                            double
+                                                .infinity,
+                                            58,
+                                          ),
+                                          shape:
+                                              RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(
+                                              18,
+                                            ),
+                                          ),
+                                        ),
+                                        child:
+                                            const Text(
+                                          "Accept & Submit",
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      _submitForm();
+    }
+  }
+
+  Widget _agreementTile(
+    IconData icon,
+    String text,
+  ) {
+    return Container(
+      margin:
+          const EdgeInsets.only(
+        bottom: 16,
+      ),
+      padding:
+          const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color:
+            const Color(0xFFF8F8FC),
+        borderRadius:
+            BorderRadius.circular(
+          22,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.all(
+              12,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.deepPurple
+                  .withOpacity(0.1),
+              borderRadius:
+                  BorderRadius.circular(
+                16,
+              ),
+            ),
+            child: Icon(
+              icon,
+              color: Colors.deepPurple,
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 15,
+                height: 1.6,
+                fontWeight:
+                    FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// ================= SUBMIT =================
+
   Future<void> _submitForm() async {
     try {
       setState(() => isLoading = true);
@@ -228,18 +702,14 @@ class _ServiceProviderFormState
         throw "User not logged in";
       }
 
-      if (businessController.text
-          .trim()
-          .isEmpty) {
-        throw "Business name required";
-      }
-
       if (selectedCategories
           .isEmpty) {
         throw "Select at least one category";
       }
 
-      /// IMAGE UPLOAD
+      final providerId =
+          generateProviderId();
+
       String imageUrl = "";
 
       if (businessImage != null) {
@@ -247,7 +717,7 @@ class _ServiceProviderFormState
             FirebaseStorage.instance
                 .ref()
                 .child(
-                  "provider_images/${user.uid}.jpg",
+                  "provider_images/$providerId.jpg",
                 );
 
         await ref.putFile(
@@ -257,74 +727,53 @@ class _ServiceProviderFormState
             await ref.getDownloadURL();
       }
 
-      final providerRef =
-          FirebaseFirestore.instance
-              .collection(
-                "providers",
-              )
-              .doc();
-
-      await providerRef.set({
-        "providerId":
-            providerRef.id,
-
+      await FirebaseFirestore.instance
+          .collection("providers")
+          .doc(providerId)
+          .set({
+        "providerId": providerId,
         "userId": user.uid,
-
         "providerName":
             businessController.text
                 .trim(),
-
         "ownerName":
             ownerController.text
                 .trim(),
-
         "phone":
             phoneController.text
                 .trim(),
-
         "serviceType":
             widget.type,
-
         "providerType":
             widget.providerType,
-
         "categories":
             selectedCategories,
 
         "business": {
           "businessName":
-              businessController
-                  .text
+              businessController.text
                   .trim(),
-
           "ownerName":
               ownerController.text
                   .trim(),
-
           "phone":
               phoneController.text
                   .trim(),
-
           "email":
               emailController.text
                   .trim(),
-
           "address":
               addressController.text
                   .trim(),
-
           "city":
               cityController.text
                   .trim(),
-
           "state":
               stateController.text
                   .trim(),
-
           "pincode":
               pincodeController.text
                   .trim(),
-
           "image": imageUrl,
         },
 
@@ -337,15 +786,12 @@ class _ServiceProviderFormState
               bankHolderController
                   .text
                   .trim(),
-
           "accountNumber":
               accountController.text
                   .trim(),
-
           "ifsc":
               ifscController.text
                   .trim(),
-
           "upi":
               upiController.text
                   .trim(),
@@ -353,6 +799,13 @@ class _ServiceProviderFormState
 
         "documents":
             uploadedDocs,
+
+        "agreementAccepted":
+            true,
+
+        "agreementAcceptedAt":
+            FieldValue
+                .serverTimestamp(),
 
         "status": "pending",
 
@@ -370,13 +823,10 @@ class _ServiceProviderFormState
         MaterialPageRoute(
           builder: (_) => SuccessPage(
             businessName:
-                businessController
-                    .text
+                businessController.text
                     .trim(),
-
             providerType:
                 widget.providerType,
-
             serviceType:
                 widget.type,
           ),
@@ -396,7 +846,9 @@ class _ServiceProviderFormState
     }
   }
 
-  void nextStep() {
+  /// ================= NAVIGATION =================
+
+  void nextStep() async {
     if (currentStep < 4) {
       setState(() {
         currentStep++;
@@ -405,11 +857,12 @@ class _ServiceProviderFormState
       _pageController.animateToPage(
         currentStep,
         duration: const Duration(
-            milliseconds: 350),
+          milliseconds: 350,
+        ),
         curve: Curves.easeInOut,
       );
     } else {
-      _submitForm();
+      await _showAgreementDialog();
     }
   }
 
@@ -422,32 +875,23 @@ class _ServiceProviderFormState
       _pageController.animateToPage(
         currentStep,
         duration: const Duration(
-            milliseconds: 350),
+          milliseconds: 350,
+        ),
         curve: Curves.easeInOut,
       );
     }
   }
 
   /// ================= UI =================
+
   @override
   Widget build(BuildContext context) {
     final config =
         serviceConfigs[widget.type]!;
 
-    final width =
-        MediaQuery.of(context)
-            .size
-            .width;
-
-    final isDesktop =
-        width > 900;
-
-    final isTablet =
-        width > 600;
-
     return Scaffold(
       backgroundColor:
-          const Color(0xFFF5F7FB),
+          const Color(0xFFF4F6FB),
 
       appBar: AppBar(
         elevation: 0,
@@ -455,355 +899,169 @@ class _ServiceProviderFormState
             Colors.white,
         foregroundColor:
             Colors.black,
-
+        centerTitle: true,
         title: Text(
           "${widget.type} Registration",
-
-          style: const TextStyle(
-            fontWeight:
-                FontWeight.w700,
-          ),
         ),
       ),
 
       body: Stack(
         children: [
           SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints:
-                    const BoxConstraints(
-                  maxWidth: 1100,
-                ),
+            child: Padding(
+              padding:
+                  const EdgeInsets.all(
+                16,
+              ),
+              child: Column(
+                children: [
+                  /// ================= PROGRESS =================
 
-                child: Row(
-                  children: [
-                    /// LEFT PANEL
-                    if (isDesktop)
-                      Expanded(
-                        flex: 2,
+                  Row(
+                    children: List.generate(
+                      5,
+                      (index) {
+                        final active =
+                            index <=
+                                currentStep;
 
-                        child: Container(
-                          margin:
-                              const EdgeInsets.all(
-                            20,
-                          ),
-
-                          decoration:
-                              BoxDecoration(
-                            gradient:
-                                const LinearGradient(
-                              colors: [
-                                Color(
-                                  0xFF6C63FF,
-                                ),
-                                Color(
-                                  0xFF8E7CFF,
-                                ),
-                              ],
+                        return Expanded(
+                          child: Container(
+                            margin:
+                                EdgeInsets.only(
+                              right:
+                                  index == 4
+                                      ? 0
+                                      : 8,
                             ),
-
-                            borderRadius:
-                                BorderRadius.circular(
-                              32,
-                            ),
-                          ),
-
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.all(
-                              40,
-                            ),
-
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment
-                                      .start,
-
-                              mainAxisAlignment:
-                                  MainAxisAlignment
-                                      .center,
-
-                              children: [
-                                const Icon(
-                                  Icons
-                                      .verified_user_rounded,
-                                  color:
-                                      Colors.white,
-                                  size: 70,
-                                ),
-
-                                const SizedBox(
-                                    height:
-                                        24),
-
-                                Text(
-                                  "Become a Verified ${widget.providerType}",
-
-                                  style:
-                                      const TextStyle(
-                                    color:
-                                        Colors.white,
-                                    fontSize:
-                                        34,
-                                    fontWeight:
-                                        FontWeight
-                                            .bold,
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                    height:
-                                        20),
-
-                                Text(
-                                  "Complete your registration and start receiving bookings instantly.",
-
-                                  style:
-                                      TextStyle(
-                                    color: Colors
-                                        .white
-                                        .withOpacity(
-                                      0.9,
-                                    ),
-
-                                    fontSize:
-                                        16,
-                                    height:
-                                        1.6,
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                    height:
-                                        40),
-
-                                _sideStep(
-                                  0,
-                                  "Select Categories",
-                                ),
-
-                                _sideStep(
-                                  1,
-                                  "Business Information",
-                                ),
-
-                                _sideStep(
-                                  2,
-                                  "Service Details",
-                                ),
-
-                                _sideStep(
-                                  3,
-                                  "Bank Details",
-                                ),
-
-                                _sideStep(
-                                  4,
-                                  "Documents Upload",
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    /// FORM AREA
-                    Expanded(
-                      flex: 3,
-
-                      child: Padding(
-                        padding:
-                            EdgeInsets.all(
-                          isTablet
-                              ? 24
-                              : 16,
-                        ),
-
-                        child: Column(
-                          children: [
-                            if (!isDesktop)
-                              _mobileHeader(),
-
-                            const SizedBox(
-                                height:
-                                    14),
-
-                            ClipRRect(
+                            height: 10,
+                            decoration:
+                                BoxDecoration(
+                              color: active
+                                  ? Colors
+                                      .deepPurple
+                                  : Colors
+                                      .grey
+                                      .shade300,
                               borderRadius:
                                   BorderRadius.circular(
                                 100,
                               ),
-
-                              child:
-                                  LinearProgressIndicator(
-                                minHeight:
-                                    10,
-
-                                value:
-                                    (currentStep +
-                                            1) /
-                                        5,
-
-                                backgroundColor:
-                                    Colors
-                                        .grey
-                                        .shade300,
-
-                                color: Colors
-                                    .deepPurple,
-                              ),
                             ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
 
-                            const SizedBox(
-                                height:
-                                    24),
+                  const SizedBox(
+                      height: 20),
 
-                            Expanded(
-                              child:
-                                  PageView(
-                                controller:
-                                    _pageController,
+                  Expanded(
+                    child: PageView(
+                      controller:
+                          _pageController,
+                      physics:
+                          const NeverScrollableScrollPhysics(),
+                      children: [
+                        _categoriesStep(
+                          config,
+                        ),
+                        _businessStep(),
+                        _serviceStep(),
+                        _bankStep(),
+                        _documentsStep(
+                          config,
+                        ),
+                      ],
+                    ),
+                  ),
 
-                                physics:
-                                    const NeverScrollableScrollPhysics(),
+                  const SizedBox(
+                      height: 16),
 
-                                children: [
-                                  _categoriesStep(
-                                    config,
-                                  ),
-
-                                  _businessStep(),
-
-                                  _serviceStep(),
-
-                                  _bankStep(),
-
-                                  _documentsStep(
-                                    config,
-                                  ),
-                                ],
+                  Row(
+                    children: [
+                      if (currentStep > 0)
+                        Expanded(
+                          child:
+                              OutlinedButton(
+                            onPressed:
+                                previousStep,
+                            style:
+                                OutlinedButton.styleFrom(
+                              minimumSize:
+                                  const Size(
+                                double
+                                    .infinity,
+                                58,
                               ),
-                            ),
-
-                            const SizedBox(
-                                height:
-                                    18),
-
-                            Row(
-                              children: [
-                                if (currentStep >
-                                    0)
-                                  Expanded(
-                                    child:
-                                        OutlinedButton(
-                                      onPressed:
-                                          previousStep,
-
-                                      style:
-                                          OutlinedButton.styleFrom(
-                                        minimumSize:
-                                            const Size(
-                                          double
-                                              .infinity,
-                                          58,
-                                        ),
-
-                                        shape:
-                                            RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(
-                                            18,
-                                          ),
-                                        ),
-                                      ),
-
-                                      child:
-                                          const Text(
-                                        "Back",
-                                      ),
-                                    ),
-                                  ),
-
-                                if (currentStep >
-                                    0)
-                                  const SizedBox(
-                                      width:
-                                          14),
-
-                                Expanded(
-                                  flex: 2,
-
-                                  child:
-                                      ElevatedButton(
-                                    onPressed:
-                                        isLoading
-                                            ? null
-                                            : nextStep,
-
-                                    style:
-                                        ElevatedButton.styleFrom(
-                                      elevation:
-                                          0,
-
-                                      backgroundColor:
-                                          Colors
-                                              .deepPurple,
-
-                                      foregroundColor:
-                                          Colors
-                                              .white,
-
-                                      minimumSize:
-                                          const Size(
-                                        double
-                                            .infinity,
-                                        58,
-                                      ),
-
-                                      shape:
-                                          RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(
-                                          18,
-                                        ),
-                                      ),
-                                    ),
-
-                                    child:
-                                        Text(
-                                      currentStep ==
-                                              4
-                                          ? "Submit Registration"
-                                          : "Continue",
-
-                                      style:
-                                          const TextStyle(
-                                        fontSize:
-                                            16,
-                                        fontWeight:
-                                            FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
+                              shape:
+                                  RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  18,
                                 ),
-                              ],
+                              ),
                             ),
-                          ],
+                            child:
+                                const Text(
+                              "Back",
+                            ),
+                          ),
+                        ),
+
+                      if (currentStep > 0)
+                        const SizedBox(
+                            width: 12),
+
+                      Expanded(
+                        flex: 2,
+                        child:
+                            ElevatedButton(
+                          onPressed:
+                              isLoading
+                                  ? null
+                                  : nextStep,
+                          style:
+                              ElevatedButton.styleFrom(
+                            backgroundColor:
+                                Colors
+                                    .deepPurple,
+                            foregroundColor:
+                                Colors
+                                    .white,
+                            minimumSize:
+                                const Size(
+                              double
+                                  .infinity,
+                              58,
+                            ),
+                            shape:
+                                RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(
+                                18,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            currentStep == 4
+                                ? "Submit Registration"
+                                : "Continue",
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
 
           if (isLoading)
             Container(
-              color: Colors.black
-                  .withOpacity(0.4),
-
+              color: Colors.black26,
               child: const Center(
                 child:
                     CircularProgressIndicator(),
@@ -814,392 +1072,139 @@ class _ServiceProviderFormState
     );
   }
 
-  /// ================= MOBILE HEADER =================
-  Widget _mobileHeader() {
-    return Container(
-      padding:
-          const EdgeInsets.all(20),
-
-      decoration: BoxDecoration(
-        gradient:
-            const LinearGradient(
-          colors: [
-            Color(0xFF6C63FF),
-            Color(0xFF8E7CFF),
-          ],
-        ),
-
-        borderRadius:
-            BorderRadius.circular(
-          24,
-        ),
-      ),
-
-      child: Row(
-        children: [
-          Container(
-            padding:
-                const EdgeInsets.all(
-              14,
-            ),
-
-            decoration:
-                BoxDecoration(
-              color: Colors.white
-                  .withOpacity(0.2),
-
-              shape: BoxShape.circle,
-            ),
-
-            child: const Icon(
-              Icons.workspace_premium,
-              color: Colors.white,
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment
-                      .start,
-
-              children: [
-                Text(
-                  widget.providerType,
-
-                  style:
-                      const TextStyle(
-                    color:
-                        Colors.white,
-                    fontWeight:
-                        FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-
-                const SizedBox(
-                    height: 4),
-
-                Text(
-                  "Complete all steps to activate your provider profile",
-
-                  style: TextStyle(
-                    color: Colors
-                        .white
-                        .withOpacity(
-                      0.9,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// ================= SIDE STEP =================
-  Widget _sideStep(
-      int index,
-      String title) {
-    final active =
-        currentStep == index;
-
-    final completed =
-        currentStep > index;
-
-    return Padding(
-      padding:
-          const EdgeInsets.only(
-        bottom: 22,
-      ),
-
-      child: Row(
-        children: [
-          AnimatedContainer(
-            duration:
-                const Duration(
-              milliseconds: 300,
-            ),
-
-            width: 34,
-            height: 34,
-
-            decoration:
-                BoxDecoration(
-              color: completed
-                  ? Colors.green
-                  : active
-                      ? Colors.white
-                      : Colors.white24,
-
-              shape: BoxShape.circle,
-            ),
-
-            child: Icon(
-              completed
-                  ? Icons.check
-                  : Icons.circle,
-
-              size: 16,
-
-              color: completed
-                  ? Colors.white
-                  : active
-                      ? Colors
-                          .deepPurple
-                      : Colors.white,
-            ),
-          ),
-
-          const SizedBox(width: 14),
-
-          Expanded(
-            child: Text(
-              title,
-
-              style: TextStyle(
-                color:
-                    Colors.white,
-
-                fontWeight: active
-                    ? FontWeight.bold
-                    : FontWeight
-                        .w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// ================= CATEGORY STEP =================
+
   Widget _categoriesStep(
       dynamic config) {
     return _glassCard(
       title: "Select Categories",
-
       subtitle:
-          "Choose the services you provide",
-
+          "Choose services you provide",
       child: Wrap(
         spacing: 12,
         runSpacing: 12,
-
         children: config
             .serviceCategories
-            .map<Widget>(
-          (cat) {
-            final selected =
-                selectedCategories
-                    .contains(cat);
+            .map<Widget>((cat) {
+          final selected =
+              selectedCategories
+                  .contains(cat);
 
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  selected
-                      ? selectedCategories
-                          .remove(cat)
-                      : selectedCategories
-                          .add(cat);
-                });
-              },
-
-              child:
-                  AnimatedContainer(
-                duration:
-                    const Duration(
-                  milliseconds:
-                      250,
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                selected
+                    ? selectedCategories
+                        .remove(cat)
+                    : selectedCategories
+                        .add(cat);
+              });
+            },
+            child: AnimatedContainer(
+              duration:
+                  const Duration(
+                milliseconds: 250,
+              ),
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 14,
+              ),
+              decoration:
+                  BoxDecoration(
+                color: selected
+                    ? Colors.deepPurple
+                    : Colors.white,
+                borderRadius:
+                    BorderRadius.circular(
+                  18,
                 ),
-
-                padding:
-                    const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
-
-                decoration:
-                    BoxDecoration(
+                border: Border.all(
                   color: selected
-                      ? Colors
-                          .deepPurple
-                      : Colors.white,
-
-                  borderRadius:
-                      BorderRadius.circular(
-                    18,
-                  ),
-
-                  border:
-                      Border.all(
-                    color: selected
-                        ? Colors
-                            .deepPurple
-                        : Colors.grey
-                            .shade300,
-                  ),
-                ),
-
-                child: Row(
-                  mainAxisSize:
-                      MainAxisSize
-                          .min,
-
-                  children: [
-                    Icon(
-                      selected
-                          ? Icons
-                              .check_circle
-                          : Icons
-                              .circle_outlined,
-
-                      color: selected
-                          ? Colors
-                              .white
-                          : Colors
-                              .grey,
-                    ),
-
-                    const SizedBox(
-                        width:
-                            10),
-
-                    Text(
-                      cat,
-
-                      style:
-                          TextStyle(
-                        color: selected
-                            ? Colors
-                                .white
-                            : Colors
-                                .black87,
-
-                        fontWeight:
-                            FontWeight
-                                .w600,
-                      ),
-                    ),
-                  ],
+                      ? Colors.deepPurple
+                      : Colors.grey
+                          .shade300,
                 ),
               ),
-            );
-          },
-        ).toList(),
+              child: Text(
+                cat,
+                style: TextStyle(
+                  color: selected
+                      ? Colors.white
+                      : Colors.black87,
+                  fontWeight:
+                      FontWeight.w600,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
 
   /// ================= BUSINESS STEP =================
+
   Widget _businessStep() {
     return _glassCard(
       title: "Business Information",
-
       subtitle:
-          "Fill your professional details",
-
+          "Enter business details",
       child: Column(
         children: [
           GestureDetector(
             onTap:
                 pickBusinessImage,
-
-            child: Stack(
-              children: [
-                CircleAvatar(
-                  radius: 55,
-
-                  backgroundColor:
-                      Colors
-                          .deepPurple
-                          .withOpacity(
-                    0.1,
-                  ),
-
-                  backgroundImage:
-                      businessImage !=
-                              null
-                          ? FileImage(
-                              businessImage!,
-                            )
-                          : null,
-
-                  child: businessImage ==
+            child: CircleAvatar(
+              radius: 56,
+              backgroundColor:
+                  Colors.deepPurple
+                      .withOpacity(
+                0.1,
+              ),
+              backgroundImage:
+                  businessImage !=
                           null
-                      ? const Icon(
-                          Icons
-                              .camera_alt,
-                          size: 34,
-                          color: Colors
-                              .deepPurple,
+                      ? FileImage(
+                          businessImage!,
                         )
                       : null,
-                ),
-
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-
-                  child: Container(
-                    padding:
-                        const EdgeInsets
-                            .all(8),
-
-                    decoration:
-                        const BoxDecoration(
-                      color: Colors
-                          .deepPurple,
-
-                      shape: BoxShape
-                          .circle,
-                    ),
-
-                    child:
-                        const Icon(
-                      Icons.edit,
+              child: businessImage ==
+                      null
+                  ? const Icon(
+                      Icons.camera_alt,
+                      size: 34,
                       color:
-                          Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
-              ],
+                          Colors.deepPurple,
+                    )
+                  : null,
             ),
           ),
 
-          const SizedBox(height: 26),
+          const SizedBox(height: 24),
 
           _field(
             businessController,
             "Business Name",
-            Icons.storefront_rounded,
+            Icons.store,
           ),
 
           _field(
             ownerController,
             "Owner Name",
-            Icons.person_outline,
+            Icons.person,
           ),
 
           _field(
             phoneController,
             "Phone Number",
-            Icons.phone_outlined,
-            keyboard:
-                TextInputType.phone,
+            Icons.phone,
           ),
 
           _field(
             emailController,
             "Email Address",
-            Icons.email_outlined,
-            keyboard: TextInputType
-                .emailAddress,
+            Icons.email,
           ),
 
           Row(
@@ -1208,8 +1213,7 @@ class _ServiceProviderFormState
                 child: _field(
                   addressController,
                   "Business Address",
-                  Icons
-                      .location_on_outlined,
+                  Icons.location_on,
                 ),
               ),
 
@@ -1219,26 +1223,20 @@ class _ServiceProviderFormState
               Container(
                 height: 58,
                 width: 58,
-
                 decoration:
                     BoxDecoration(
-                  color: Colors
-                      .deepPurple,
-
+                  color:
+                      Colors.deepPurple,
                   borderRadius:
-                      BorderRadius
-                          .circular(
+                      BorderRadius.circular(
                     16,
                   ),
                 ),
-
                 child: IconButton(
                   onPressed:
                       fillLocation,
-
                   icon: const Icon(
-                    Icons
-                        .my_location,
+                    Icons.my_location,
                     color:
                         Colors.white,
                   ),
@@ -1253,8 +1251,7 @@ class _ServiceProviderFormState
                 child: _field(
                   cityController,
                   "City",
-                  Icons
-                      .location_city,
+                  Icons.location_city,
                 ),
               ),
 
@@ -1265,8 +1262,7 @@ class _ServiceProviderFormState
                 child: _field(
                   stateController,
                   "State",
-                  Icons
-                      .map_outlined,
+                  Icons.map,
                 ),
               ),
             ],
@@ -1275,10 +1271,7 @@ class _ServiceProviderFormState
           _field(
             pincodeController,
             "Pincode",
-            Icons
-                .pin_drop_outlined,
-            keyboard:
-                TextInputType.number,
+            Icons.pin_drop,
           ),
         ],
       ),
@@ -1286,90 +1279,61 @@ class _ServiceProviderFormState
   }
 
   /// ================= SERVICE STEP =================
+
   Widget _serviceStep() {
     return _glassCard(
       title: "Service Details",
-
       subtitle:
-          "Configure your working preferences",
-
-      child: Column(
-        children: [
-          Container(
-            padding:
-                const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 8,
-            ),
-
-            decoration:
-                BoxDecoration(
-              color:
-                  Colors.grey.shade100,
-
-              borderRadius:
-                  BorderRadius.circular(
-                18,
-              ),
-            ),
-
-            child: SwitchListTile(
-              contentPadding:
-                  EdgeInsets.zero,
-
-              value: ownTools,
-
-              activeColor:
-                  Colors.deepPurple,
-
-              title: const Text(
-                "I have my own tools & equipment",
-
-                style: TextStyle(
-                  fontWeight:
-                      FontWeight.w600,
-                ),
-              ),
-
-              subtitle: const Text(
-                "Customers will know you're fully equipped",
-              ),
-
-              onChanged: (v) {
-                setState(() {
-                  ownTools = v;
-                });
-              },
-            ),
+          "Configure preferences",
+      child: Container(
+        padding:
+            const EdgeInsets.all(
+          8,
+        ),
+        decoration: BoxDecoration(
+          color:
+              const Color(0xFFF8F8FC),
+          borderRadius:
+              BorderRadius.circular(
+            20,
           ),
-        ],
+        ),
+        child: SwitchListTile(
+          value: ownTools,
+          activeColor:
+              Colors.deepPurple,
+          title: const Text(
+            "I have my own tools & equipment",
+          ),
+          onChanged: (v) {
+            setState(() {
+              ownTools = v;
+            });
+          },
+        ),
       ),
     );
   }
 
   /// ================= BANK STEP =================
+
   Widget _bankStep() {
     return _glassCard(
       title: "Bank Details",
-
       subtitle:
-          "Secure payout information",
-
+          "Secure payout details",
       child: Column(
         children: [
           _field(
             bankHolderController,
-            "Account Holder Name",
-            Icons.person_outline,
+            "Account Holder",
+            Icons.person,
           ),
 
           _field(
             accountController,
             "Account Number",
-            Icons
-                .account_balance_wallet,
-            keyboard:
-                TextInputType.number,
+            Icons.account_balance,
           ),
 
           _field(
@@ -1381,8 +1345,7 @@ class _ServiceProviderFormState
           _field(
             upiController,
             "UPI ID",
-            Icons
-                .qr_code_2_outlined,
+            Icons.qr_code,
           ),
         ],
       ),
@@ -1390,14 +1353,13 @@ class _ServiceProviderFormState
   }
 
   /// ================= DOCUMENT STEP =================
+
   Widget _documentsStep(
       dynamic config) {
     return _glassCard(
       title: "Upload Documents",
-
       subtitle:
-          "Required verification documents",
-
+          "Verification documents",
       child: Column(
         children: config
             .requiredDocuments
@@ -1411,22 +1373,18 @@ class _ServiceProviderFormState
                 const EdgeInsets.only(
               bottom: 14,
             ),
-
             padding:
                 const EdgeInsets.all(
               16,
             ),
-
             decoration:
                 BoxDecoration(
               color:
                   Colors.grey.shade50,
-
               borderRadius:
                   BorderRadius.circular(
                 18,
               ),
-
               border: Border.all(
                 color: uploaded
                     ? Colors.green
@@ -1434,86 +1392,16 @@ class _ServiceProviderFormState
                         .shade300,
               ),
             ),
-
             child: Row(
               children: [
-                Container(
-                  padding:
-                      const EdgeInsets
-                          .all(12),
-
-                  decoration:
-                      BoxDecoration(
-                    color: uploaded
-                        ? Colors.green
-                            .withOpacity(
-                            0.1,
-                          )
-                        : Colors
-                            .deepPurple
-                            .withOpacity(
-                            0.08,
-                          ),
-
-                    borderRadius:
-                        BorderRadius
-                            .circular(
-                      14,
-                    ),
-                  ),
-
-                  child: Icon(
-                    uploaded
-                        ? Icons
-                            .check_circle
-                        : Icons
-                            .upload_file,
-
-                    color: uploaded
-                        ? Colors.green
-                        : Colors
-                            .deepPurple,
-                  ),
-                ),
-
-                const SizedBox(
-                    width: 14),
-
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment
-                            .start,
-
-                    children: [
-                      Text(
-                        doc,
-
-                        style:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight
-                                  .bold,
-                        ),
-                      ),
-
-                      const SizedBox(
-                          height:
-                              4),
-
-                      Text(
-                        uploaded
-                            ? "Uploaded Successfully"
-                            : "Tap upload button",
-
-                        style:
-                            TextStyle(
-                          color: Colors
-                              .grey
-                              .shade600,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    doc,
+                    style:
+                        const TextStyle(
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
                   ),
                 ),
 
@@ -1522,7 +1410,6 @@ class _ServiceProviderFormState
                       _uploadDocument(
                     doc,
                   ),
-
                   style:
                       ElevatedButton.styleFrom(
                     backgroundColor:
@@ -1531,24 +1418,12 @@ class _ServiceProviderFormState
                                 .green
                             : Colors
                                 .deepPurple,
-
                     foregroundColor:
                         Colors.white,
-
-                    elevation: 0,
-
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        12,
-                      ),
-                    ),
                   ),
-
                   child: Text(
                     uploaded
-                        ? "Update"
+                        ? "Uploaded"
                         : "Upload",
                   ),
                 ),
@@ -1561,6 +1436,7 @@ class _ServiceProviderFormState
   }
 
   /// ================= GLASS CARD =================
+
   Widget _glassCard({
     required String title,
     required String subtitle,
@@ -1568,40 +1444,34 @@ class _ServiceProviderFormState
   }) {
     return Container(
       width: double.infinity,
-
       padding:
-          const EdgeInsets.all(24),
-
+          const EdgeInsets.all(
+        22,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
-
         borderRadius:
             BorderRadius.circular(
           28,
         ),
-
         boxShadow: [
           BoxShadow(
-            blurRadius: 20,
+            blurRadius: 18,
             spreadRadius: 2,
             offset:
                 const Offset(0, 10),
             color: Colors.black
-                .withOpacity(0.05),
+                .withOpacity(0.04),
           ),
         ],
       ),
-
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment:
-              CrossAxisAlignment
-                  .start,
-
+              CrossAxisAlignment.start,
           children: [
             Text(
               title,
-
               style:
                   const TextStyle(
                 fontSize: 24,
@@ -1610,20 +1480,19 @@ class _ServiceProviderFormState
               ),
             ),
 
-            const SizedBox(height: 6),
+            const SizedBox(
+                height: 6),
 
             Text(
               subtitle,
-
               style: TextStyle(
                 color: Colors
                     .grey.shade600,
-                height: 1.5,
               ),
             ),
 
             const SizedBox(
-                height: 28),
+                height: 24),
 
             child,
           ],
@@ -1633,23 +1502,19 @@ class _ServiceProviderFormState
   }
 
   /// ================= FIELD =================
+
   Widget _field(
     TextEditingController c,
     String hint,
-    IconData icon, {
-    TextInputType keyboard =
-        TextInputType.text,
-  }) {
+    IconData icon,
+  ) {
     return Padding(
       padding:
           const EdgeInsets.only(
         bottom: 18,
       ),
-
       child: TextField(
         controller: c,
-        keyboardType: keyboard,
-
         decoration: InputDecoration(
           hintText: hint,
 
@@ -1668,8 +1533,21 @@ class _ServiceProviderFormState
 
           contentPadding:
               const EdgeInsets.symmetric(
+            horizontal: 18,
             vertical: 18,
-            horizontal: 16,
+          ),
+
+          border:
+              OutlineInputBorder(
+            borderRadius:
+                BorderRadius.circular(
+              18,
+            ),
+            borderSide:
+                BorderSide(
+              color: Colors
+                  .grey.shade300,
+            ),
           ),
 
           enabledBorder:
@@ -1678,7 +1556,6 @@ class _ServiceProviderFormState
                 BorderRadius.circular(
               18,
             ),
-
             borderSide:
                 BorderSide(
               color: Colors
@@ -1692,12 +1569,10 @@ class _ServiceProviderFormState
                 BorderRadius.circular(
               18,
             ),
-
             borderSide:
                 const BorderSide(
               color:
                   Colors.deepPurple,
-              width: 1.5,
             ),
           ),
         ),

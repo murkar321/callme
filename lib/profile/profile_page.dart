@@ -1,12 +1,10 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:callme/screens/map_picker_page.dart';
 
@@ -33,6 +31,10 @@ class _ProfilePageState
 
   final _formKey =
       GlobalKey<FormState>();
+
+  /// =====================================================
+  /// CONTROLLERS
+  /// =====================================================
 
   final firstNameController =
       TextEditingController();
@@ -68,12 +70,10 @@ class _ProfilePageState
 
   bool isLoading = false;
 
-  File? _image;
+  File? imageFile;
 
-  String? _networkImage;
+  String networkImage = "";
 
-  /// IMPORTANT
-  /// THIS STORES ORIGINAL FIRESTORE DOC ID
   String? userDocId;
 
   /// =====================================================
@@ -87,7 +87,7 @@ class _ProfilePageState
   }
 
   /// =====================================================
-  /// FIND EXISTING USER DOCUMENT
+  /// GET USER DOCUMENT
   /// =====================================================
 
   Future<DocumentSnapshot?> getUserDoc() async {
@@ -98,7 +98,6 @@ class _ProfilePageState
         return null;
       }
 
-      /// FIND EXISTING DOC
       final query =
           await firestore
               .collection("users")
@@ -113,7 +112,6 @@ class _ProfilePageState
         return null;
       }
 
-      /// STORE ORIGINAL DOC ID
       userDocId =
           query.docs.first.id;
 
@@ -139,7 +137,12 @@ class _ProfilePageState
 
       if (user == null) return;
 
+      setState(() {
+        isLoading = true;
+      });
+
       /// AUTH DATA
+
       emailController.text =
           user!.email ?? "";
 
@@ -170,6 +173,7 @@ class _ProfilePageState
       }
 
       /// FIRESTORE DATA
+
       final doc =
           await getUserDoc();
 
@@ -195,8 +199,8 @@ class _ProfilePageState
         addressController.text =
             data['address'] ?? "";
 
-        _networkImage =
-            data['photo'];
+        networkImage =
+            data['photo'] ?? "";
       }
 
       if (mounted) {
@@ -206,8 +210,21 @@ class _ProfilePageState
     } catch (e) {
 
       debugPrint(
-        "Load Error: $e",
+        "Load User Error: $e",
       );
+
+      showMsg(
+        "Failed to load profile",
+      );
+
+    } finally {
+
+      if (mounted) {
+
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -222,8 +239,10 @@ class _ProfilePageState
       final picked =
           await ImagePicker()
               .pickImage(
+
         source:
-            ImageSource.gallery,
+        ImageSource.gallery,
+
         imageQuality: 70,
       );
 
@@ -231,7 +250,7 @@ class _ProfilePageState
 
         setState(() {
 
-          _image =
+          imageFile =
               File(picked.path);
         });
       }
@@ -239,23 +258,25 @@ class _ProfilePageState
     } catch (e) {
 
       debugPrint(
-        "Pick Image Error: $e",
+        "Image Pick Error: $e",
       );
     }
   }
 
   /// =====================================================
-  /// MAP PICKER
+  /// OPEN MAP
   /// =====================================================
 
   Future<void> openMap() async {
 
     final result =
         await Navigator.push(
+
       context,
+
       MaterialPageRoute(
         builder: (_) =>
-            const MapPickerPage(),
+        const MapPickerPage(),
       ),
     );
 
@@ -288,11 +309,12 @@ class _ProfilePageState
       });
 
       if (user == null) {
+
         throw Exception(
-            "User not logged in");
+          "User not logged in",
+        );
       }
 
-      /// GET ORIGINAL DOC
       final doc =
           await getUserDoc();
 
@@ -303,84 +325,83 @@ class _ProfilePageState
         );
       }
 
-      /// IMPORTANT
-      /// USE EXISTING DOC ID
       final docId =
           doc.id;
 
       final fullName =
           "${firstNameController.text.trim()} ${lastNameController.text.trim()}";
 
-      /// UPDATE AUTH
+      /// UPDATE FIREBASE AUTH
+
       await user!
           .updateDisplayName(
         fullName,
       );
 
+      /// IMPORTANT
+      /// FORCE REFRESH USER
+
+      await user!.reload();
+
       /// UPDATE FIRESTORE
+
       await firestore
           .collection("users")
           .doc(docId)
-          .update({
+          .set({
+
+        "authUid":
+        user!.uid,
 
         "firstName":
-            firstNameController.text
-                .trim(),
+        firstNameController.text
+            .trim(),
 
         "lastName":
-            lastNameController.text
-                .trim(),
+        lastNameController.text
+            .trim(),
 
         "name":
-            fullName,
+        fullName,
 
         "email":
-            emailController.text
-                .trim(),
+        emailController.text
+            .trim(),
 
         "phone":
-            phoneController.text
-                .trim(),
+        phoneController.text
+            .trim(),
 
         "address":
-            addressController.text
-                .trim(),
+        addressController.text
+            .trim(),
 
         "photo":
-            _networkImage ?? "",
+        networkImage,
 
         "updatedAt":
-            FieldValue.serverTimestamp(),
-      });
+        FieldValue.serverTimestamp(),
 
-      if (!mounted) return;
+      }, SetOptions(
+        merge: true,
+      ));
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      /// REFRESH LOCAL DATA
 
-        const SnackBar(
-          content: Text(
-            "Profile Updated Successfully",
-          ),
-        ),
+      await loadUserData();
+
+      showMsg(
+        "Profile Updated Successfully",
       );
 
     } catch (e) {
 
       debugPrint(
-        "Save Error: $e",
+        "Save Profile Error: $e",
       );
 
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-
-        SnackBar(
-          content: Text(
-            "Error: $e",
-          ),
-        ),
+      showMsg(
+        "Failed to update profile",
       );
 
     } finally {
@@ -400,18 +421,731 @@ class _ProfilePageState
 
   Future<void> logout() async {
 
-    await GoogleSignIn()
-        .signOut();
+    try {
 
-    await FirebaseAuth.instance
-        .signOut();
+      setState(() {
+        isLoading = true;
+      });
+
+      await GoogleSignIn()
+          .signOut();
+
+      await FirebaseAuth.instance
+          .signOut();
+
+      if (!mounted) return;
+
+      Navigator.pushNamedAndRemoveUntil(
+
+        context,
+
+        '/',
+
+            (route) => false,
+      );
+
+    } catch (e) {
+
+      debugPrint(
+        "Logout Error: $e",
+      );
+
+    } finally {
+
+      if (mounted) {
+
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  /// =====================================================
+  /// MESSAGE
+  /// =====================================================
+
+  void showMsg(String msg) {
 
     if (!mounted) return;
 
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/',
-      (route) => false,
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+
+      SnackBar(
+
+        behavior:
+        SnackBarBehavior.floating,
+
+        content: Text(msg),
+      ),
+    );
+  }
+
+  /// =====================================================
+  /// IMAGE PROVIDER
+  /// =====================================================
+
+  ImageProvider buildImage() {
+
+    if (imageFile != null) {
+      return FileImage(imageFile!);
+    }
+
+    if (networkImage.isNotEmpty) {
+      return NetworkImage(networkImage);
+    }
+
+    return const AssetImage(
+      "assets/user.jfif",
+    );
+  }
+
+  /// =====================================================
+  /// UI
+  /// =====================================================
+
+  @override
+  Widget build(BuildContext context) {
+
+    final width =
+        MediaQuery.of(context)
+            .size
+            .width;
+
+    final isTablet =
+        width > 700;
+
+    return Scaffold(
+
+      backgroundColor:
+      const Color(0xFFF4F6FB),
+
+      appBar: AppBar(
+
+        elevation: 0,
+
+        backgroundColor:
+        Colors.transparent,
+
+        surfaceTintColor:
+        Colors.transparent,
+
+        centerTitle: true,
+
+        title: const Text(
+
+          "My Profile",
+
+          style: TextStyle(
+
+            color: Colors.black87,
+
+            fontWeight:
+            FontWeight.bold,
+          ),
+        ),
+      ),
+
+      body: Stack(
+
+        children: [
+
+          SafeArea(
+
+            child: SingleChildScrollView(
+
+              padding:
+              EdgeInsets.symmetric(
+
+                horizontal:
+                isTablet ? 28 : 16,
+
+                vertical: 16,
+              ),
+
+              child: Center(
+
+                child: ConstrainedBox(
+
+                  constraints:
+                  const BoxConstraints(
+                    maxWidth: 850,
+                  ),
+
+                  child: Form(
+
+                    key: _formKey,
+
+                    child: Column(
+
+                      children: [
+
+                        /// PROFILE CARD
+
+                        Container(
+
+                          width: double.infinity,
+
+                          padding:
+                          const EdgeInsets.all(24),
+
+                          decoration:
+                          BoxDecoration(
+
+                            gradient:
+                            const LinearGradient(
+
+                              colors: [
+
+                                Color(0xFF5B67F1),
+
+                                Color(0xFF7D89FF),
+                              ],
+                            ),
+
+                            borderRadius:
+                            BorderRadius.circular(30),
+
+                            boxShadow: [
+
+                              BoxShadow(
+
+                                color:
+                                Colors.indigo
+                                    .withOpacity(0.2),
+
+                                blurRadius: 18,
+
+                                offset:
+                                const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+
+                          child: Column(
+
+                            children: [
+
+                              Stack(
+
+                                children: [
+
+                                  Container(
+
+                                    padding:
+                                    const EdgeInsets.all(4),
+
+                                    decoration:
+                                    BoxDecoration(
+
+                                      shape:
+                                      BoxShape.circle,
+
+                                      border: Border.all(
+
+                                        color:
+                                        Colors.white,
+
+                                        width: 3,
+                                      ),
+                                    ),
+
+                                    child: CircleAvatar(
+
+                                      radius:
+                                      isTablet
+                                          ? 62
+                                          : 55,
+
+                                      backgroundImage:
+                                      buildImage(),
+                                    ),
+                                  ),
+
+                                  Positioned(
+
+                                    bottom: 0,
+
+                                    right: 0,
+
+                                    child: InkWell(
+
+                                      onTap:
+                                      pickImage,
+
+                                      child:
+                                      Container(
+
+                                        padding:
+                                        const EdgeInsets.all(10),
+
+                                        decoration:
+                                        const BoxDecoration(
+
+                                          color:
+                                          Colors.white,
+
+                                          shape:
+                                          BoxShape.circle,
+                                        ),
+
+                                        child: const Icon(
+
+                                          Icons.edit,
+
+                                          size: 18,
+
+                                          color:
+                                          Colors.indigo,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 18),
+
+                              Text(
+
+                                "${firstNameController.text} ${lastNameController.text}",
+
+                                textAlign:
+                                TextAlign.center,
+
+                                style:
+                                const TextStyle(
+
+                                  color:
+                                  Colors.white,
+
+                                  fontSize: 24,
+
+                                  fontWeight:
+                                  FontWeight.bold,
+                                ),
+                              ),
+
+                              const SizedBox(height: 8),
+
+                              Text(
+
+                                phoneController.text,
+
+                                style:
+                                const TextStyle(
+
+                                  color:
+                                  Colors.white70,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        /// FORM SECTION
+
+                        _section(
+
+                          title:
+                          "Personal Information",
+
+                          child: Column(
+
+                            children: [
+
+                              isTablet
+
+                                  ? Row(
+
+                                children: [
+
+                                  Expanded(
+                                    child: _field(
+                                      firstNameController,
+                                      "First Name",
+                                      Icons.person,
+                                    ),
+                                  ),
+
+                                  const SizedBox(width: 16),
+
+                                  Expanded(
+                                    child: _field(
+                                      lastNameController,
+                                      "Last Name",
+                                      Icons.person_outline,
+                                    ),
+                                  ),
+                                ],
+                              )
+
+                                  : Column(
+
+                                children: [
+
+                                  _field(
+                                    firstNameController,
+                                    "First Name",
+                                    Icons.person,
+                                  ),
+
+                                  _field(
+                                    lastNameController,
+                                    "Last Name",
+                                    Icons.person_outline,
+                                  ),
+                                ],
+                              ),
+
+                              _field(
+                                emailController,
+                                "Email Address",
+                                Icons.email,
+                                keyboard:
+                                TextInputType.emailAddress,
+                              ),
+
+                              _field(
+                                phoneController,
+                                "Mobile Number",
+                                Icons.phone,
+                                keyboard:
+                                TextInputType.phone,
+                              ),
+
+                              _field(
+                                addressController,
+                                "Address",
+                                Icons.location_on,
+                                maxLines: 3,
+                              ),
+
+                              Align(
+
+                                alignment:
+                                Alignment.centerRight,
+
+                                child:
+                                TextButton.icon(
+
+                                  onPressed:
+                                  openMap,
+
+                                  icon:
+                                  const Icon(
+                                    Icons.map,
+                                  ),
+
+                                  label:
+                                  const Text(
+                                    "Pick From Map",
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 28),
+
+                        /// BUTTONS
+
+                        SizedBox(
+
+                          width: double.infinity,
+
+                          height: 56,
+
+                          child: ElevatedButton.icon(
+
+                            onPressed:
+                            saveProfile,
+
+                            icon:
+                            const Icon(Icons.save),
+
+                            label:
+                            const Text(
+
+                              "Save Profile",
+
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight:
+                                FontWeight.w600,
+                              ),
+                            ),
+
+                            style:
+                            ElevatedButton.styleFrom(
+
+                              elevation: 0,
+
+                              backgroundColor:
+                              Colors.indigo,
+
+                              foregroundColor:
+                              Colors.white,
+
+                              shape:
+                              RoundedRectangleBorder(
+
+                                borderRadius:
+                                BorderRadius.circular(18),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        SizedBox(
+
+                          width: double.infinity,
+
+                          height: 56,
+
+                          child:
+                          OutlinedButton.icon(
+
+                            onPressed:
+                            logout,
+
+                            icon:
+                            const Icon(
+                              Icons.logout,
+                            ),
+
+                            label:
+                            const Text(
+
+                              "Logout",
+
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight:
+                                FontWeight.w600,
+                              ),
+                            ),
+
+                            style:
+                            OutlinedButton.styleFrom(
+
+                              foregroundColor:
+                              Colors.red,
+
+                              side:
+                              BorderSide(
+                                color:
+                                Colors.red.shade200,
+                              ),
+
+                              shape:
+                              RoundedRectangleBorder(
+
+                                borderRadius:
+                                BorderRadius.circular(18),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          if (isLoading)
+
+            Container(
+
+              color:
+              Colors.black.withOpacity(0.2),
+
+              child:
+              const Center(
+
+                child:
+                CircularProgressIndicator(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// =====================================================
+  /// SECTION
+  /// =====================================================
+
+  Widget _section({
+
+    required String title,
+
+    required Widget child,
+  }) {
+
+    return Container(
+
+      width: double.infinity,
+
+      padding:
+      const EdgeInsets.all(22),
+
+      decoration:
+      BoxDecoration(
+
+        color: Colors.white,
+
+        borderRadius:
+        BorderRadius.circular(28),
+
+        boxShadow: [
+
+          BoxShadow(
+
+            color:
+            Colors.black.withOpacity(0.05),
+
+            blurRadius: 14,
+
+            offset:
+            const Offset(0, 6),
+          ),
+        ],
+      ),
+
+      child: Column(
+
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+
+        children: [
+
+          Text(
+
+            title,
+
+            style: const TextStyle(
+
+              fontSize: 20,
+
+              fontWeight:
+              FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 22),
+
+          child,
+        ],
+      ),
+    );
+  }
+
+  /// =====================================================
+  /// FIELD
+  /// =====================================================
+
+  Widget _field(
+
+      TextEditingController c,
+      String hint,
+      IconData icon, {
+
+        TextInputType keyboard =
+            TextInputType.text,
+
+        int maxLines = 1,
+      }) {
+
+    return Padding(
+
+      padding:
+      const EdgeInsets.only(
+        bottom: 16,
+      ),
+
+      child: TextFormField(
+
+        controller: c,
+
+        keyboardType:
+        keyboard,
+
+        maxLines:
+        maxLines,
+
+        validator: (v) {
+
+          if (v == null ||
+              v.trim().isEmpty) {
+
+            return "Required";
+          }
+
+          return null;
+        },
+
+        decoration:
+        InputDecoration(
+
+          hintText: hint,
+
+          prefixIcon:
+          Icon(
+            icon,
+            color:
+            Colors.indigo,
+          ),
+
+          filled: true,
+
+          fillColor:
+          const Color(0xFFF7F8FC),
+
+          contentPadding:
+          const EdgeInsets.symmetric(
+
+            horizontal: 18,
+            vertical: 18,
+          ),
+
+          enabledBorder:
+          OutlineInputBorder(
+
+            borderRadius:
+            BorderRadius.circular(18),
+
+            borderSide:
+            BorderSide(
+              color:
+              Colors.grey.shade200,
+            ),
+          ),
+
+          focusedBorder:
+          OutlineInputBorder(
+
+            borderRadius:
+            BorderRadius.circular(18),
+
+            borderSide:
+            const BorderSide(
+              color: Colors.indigo,
+              width: 1.3,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -429,289 +1163,5 @@ class _ProfilePageState
     addressController.dispose();
 
     super.dispose();
-  }
-
-  /// =====================================================
-  /// UI
-  /// =====================================================
-
-  @override
-  Widget build(BuildContext context) {
-
-    return Scaffold(
-
-      backgroundColor:
-          const Color(0xFFF5F7FB),
-
-      appBar: AppBar(
-
-        title:
-            const Text("My Profile"),
-
-        centerTitle: true,
-      ),
-
-      body: isLoading
-
-          ? const Center(
-              child:
-                  CircularProgressIndicator(),
-            )
-
-          : SingleChildScrollView(
-
-              padding:
-                  const EdgeInsets.all(16),
-
-              child: Form(
-
-                key: _formKey,
-
-                child: Column(
-
-                  children: [
-
-                    /// PROFILE IMAGE
-
-                    Stack(
-
-                      children: [
-
-                        CircleAvatar(
-
-                          radius: 55,
-
-                          backgroundColor:
-                              Colors.grey.shade200,
-
-                          backgroundImage:
-
-                              _image != null
-
-                                  ? FileImage(_image!)
-
-                                  : _networkImage != null
-
-                                      ? NetworkImage(
-                                          _networkImage!,
-                                        )
-
-                                      : const AssetImage(
-                                              "assets/user.jfif")
-                                          as ImageProvider,
-                        ),
-
-                        Positioned(
-
-                          bottom: 0,
-
-                          right: 0,
-
-                          child: InkWell(
-
-                            onTap: pickImage,
-
-                            child:
-                                const CircleAvatar(
-
-                              radius: 18,
-
-                              backgroundColor:
-                                  Colors.indigo,
-
-                              child: Icon(
-
-                                Icons.edit,
-
-                                color:
-                                    Colors.white,
-
-                                size: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    Row(
-
-                      children: [
-
-                        Expanded(
-                          child: _field(
-                            firstNameController,
-                            "First Name",
-                          ),
-                        ),
-
-                        const SizedBox(width: 10),
-
-                        Expanded(
-                          child: _field(
-                            lastNameController,
-                            "Last Name",
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 15),
-
-                    _field(
-                      emailController,
-                      "Email",
-                      keyboard:
-                          TextInputType.emailAddress,
-                    ),
-
-                    const SizedBox(height: 15),
-
-                    _field(
-                      phoneController,
-                      "Mobile Number",
-                      keyboard:
-                          TextInputType.phone,
-                    ),
-
-                    const SizedBox(height: 15),
-
-                    Column(
-
-                      children: [
-
-                        _field(
-                          addressController,
-                          "Address",
-                          maxLines: 3,
-                        ),
-
-                        Align(
-
-                          alignment:
-                              Alignment.centerRight,
-
-                          child:
-                              TextButton.icon(
-
-                            onPressed:
-                                openMap,
-
-                            icon:
-                                const Icon(
-                              Icons.map,
-                            ),
-
-                            label:
-                                const Text(
-                              "Select on Map",
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    SizedBox(
-
-                      width: double.infinity,
-
-                      height: 50,
-
-                      child: ElevatedButton(
-
-                        onPressed:
-                            saveProfile,
-
-                        child:
-                            const Text(
-                          "Save Profile",
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 15),
-
-                    SizedBox(
-
-                      width: double.infinity,
-
-                      height: 50,
-
-                      child:
-                          OutlinedButton.icon(
-
-                        onPressed:
-                            logout,
-
-                        icon: const Icon(
-                          Icons.logout,
-                        ),
-
-                        label:
-                            const Text(
-                          "Logout",
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-    );
-  }
-
-  /// =====================================================
-  /// FIELD
-  /// =====================================================
-
-  Widget _field(
-    TextEditingController c,
-    String label, {
-
-    TextInputType keyboard =
-        TextInputType.text,
-
-    int maxLines = 1,
-  }) {
-
-    return TextFormField(
-
-      controller: c,
-
-      keyboardType: keyboard,
-
-      maxLines: maxLines,
-
-      validator: (v) {
-
-        if (v == null ||
-            v.trim().isEmpty) {
-
-          return "Required";
-        }
-
-        return null;
-      },
-
-      decoration: InputDecoration(
-
-        labelText: label,
-
-        filled: true,
-
-        fillColor: Colors.white,
-
-        border:
-            OutlineInputBorder(
-
-          borderRadius:
-              BorderRadius.circular(12),
-        ),
-      ),
-    );
   }
 }

@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import '../provider/service_config.dart';
 
 class ProviderProfilePage extends StatefulWidget {
-
   final String providerId;
 
   const ProviderProfilePage({
@@ -179,8 +178,8 @@ class _ProviderProfilePageState
 
       selectedCategories =
           List<String>.from(
-        data['categories'] ?? [],
-      );
+            data['categories'] ?? [],
+          );
 
       final serviceType =
           data['serviceType'] ?? "";
@@ -190,9 +189,9 @@ class _ProviderProfilePageState
 
         allCategories =
             List<String>.from(
-          serviceConfigs[serviceType]!
-              .serviceCategories,
-        );
+              serviceConfigs[serviceType]!
+                  .serviceCategories,
+            );
       }
 
     } catch (e) {
@@ -222,10 +221,10 @@ class _ProviderProfilePageState
       final picked =
           await ImagePicker().pickImage(
 
-        source: ImageSource.gallery,
+            source: ImageSource.gallery,
 
-        imageQuality: 70,
-      );
+            imageQuality: 70,
+          );
 
       if (picked != null) {
 
@@ -282,72 +281,72 @@ class _ProviderProfilePageState
           .update({
 
         "updatedAt":
-            FieldValue.serverTimestamp(),
+        FieldValue.serverTimestamp(),
 
         "isActive":
-            isActive,
+        isActive,
 
         "categories":
-            selectedCategories,
+        selectedCategories,
 
         "providerName":
-            businessController.text.trim(),
+        businessController.text.trim(),
 
         "ownerName":
-            ownerController.text.trim(),
+        ownerController.text.trim(),
 
         "phone":
-            phoneController.text.trim(),
+        phoneController.text.trim(),
 
         "business": {
 
           "businessName":
-              businessController.text.trim(),
+          businessController.text.trim(),
 
           "ownerName":
-              ownerController.text.trim(),
+          ownerController.text.trim(),
 
           "phone":
-              phoneController.text.trim(),
+          phoneController.text.trim(),
 
           "email":
-              emailController.text.trim(),
+          emailController.text.trim(),
 
           "address":
-              addressController.text.trim(),
+          addressController.text.trim(),
 
           "city":
-              cityController.text.trim(),
+          cityController.text.trim(),
 
           "state":
-              stateController.text.trim(),
+          stateController.text.trim(),
 
           "pincode":
-              pincodeController.text.trim(),
+          pincodeController.text.trim(),
 
           "image":
-              updatedImage,
+          updatedImage,
         },
 
         "service": {
 
           "ownTools":
-              ownTools,
+          ownTools,
         },
 
         "bank": {
 
           "accountHolder":
-              bankHolderController.text.trim(),
+          bankHolderController.text.trim(),
 
           "accountNumber":
-              accountController.text.trim(),
+          accountController.text.trim(),
 
           "ifsc":
-              ifscController.text.trim(),
+          ifscController.text.trim(),
 
           "upi":
-              upiController.text.trim(),
+          upiController.text.trim(),
         },
       });
 
@@ -387,6 +386,7 @@ class _ProviderProfilePageState
         .showSnackBar(
 
       SnackBar(
+        behavior: SnackBarBehavior.floating,
         content: Text(msg),
       ),
     );
@@ -416,17 +416,29 @@ class _ProviderProfilePageState
   @override
   Widget build(BuildContext context) {
 
+    final size =
+        MediaQuery.of(context).size;
+
+    final width =
+        size.width;
+
+    final isTablet =
+        width >= 700;
+
     return Scaffold(
 
       backgroundColor:
-      const Color(0xFFF4F7FC),
+      const Color(0xFFF3F5FA),
 
       appBar: AppBar(
 
         elevation: 0,
 
         backgroundColor:
-        Colors.white,
+        Colors.transparent,
+
+        surfaceTintColor:
+        Colors.transparent,
 
         centerTitle: true,
 
@@ -435,8 +447,8 @@ class _ProviderProfilePageState
           "Provider Profile",
 
           style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
           ),
         ),
 
@@ -446,7 +458,7 @@ class _ProviderProfilePageState
 
             padding:
             const EdgeInsets.only(
-              right: 12,
+              right: 16,
             ),
 
             child: ElevatedButton.icon(
@@ -456,8 +468,16 @@ class _ProviderProfilePageState
                   ? null
                   : saveProfile,
 
+              icon:
+              const Icon(Icons.save),
+
+              label:
+              const Text("Save"),
+
               style:
               ElevatedButton.styleFrom(
+
+                elevation: 0,
 
                 backgroundColor:
                 Colors.deepPurple,
@@ -465,19 +485,19 @@ class _ProviderProfilePageState
                 foregroundColor:
                 Colors.white,
 
+                padding:
+                const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
+                ),
+
                 shape:
                 RoundedRectangleBorder(
 
                   borderRadius:
-                  BorderRadius.circular(14),
+                  BorderRadius.circular(16),
                 ),
               ),
-
-              icon:
-              const Icon(Icons.save),
-
-              label:
-              const Text("Save"),
             ),
           ),
         ],
@@ -487,341 +507,672 @@ class _ProviderProfilePageState
 
         children: [
 
-          SingleChildScrollView(
+          SafeArea(
 
-            padding:
-            const EdgeInsets.all(16),
+            child: SingleChildScrollView(
 
-            child: Column(
+              padding:
+              EdgeInsets.symmetric(
+                horizontal:
+                isTablet ? 28 : 16,
+                vertical: 16,
+              ),
 
-              children: [
+              child: Center(
 
-                /// PROFILE CARD
+                child: ConstrainedBox(
 
-                Container(
-
-                  width: double.infinity,
-
-                  padding:
-                  const EdgeInsets.all(24),
-
-                  decoration: BoxDecoration(
-
-                    color: Colors.white,
-
-                    borderRadius:
-                    BorderRadius.circular(24),
+                  constraints:
+                  const BoxConstraints(
+                    maxWidth: 950,
                   ),
 
                   child: Column(
 
                     children: [
 
-                      GestureDetector(
+                      /// TOP PROFILE CARD
 
-                        onTap: pickImage,
+                      Container(
 
-                        child: Stack(
+                        width: double.infinity,
+
+                        padding:
+                        EdgeInsets.all(
+                          isTablet ? 30 : 22,
+                        ),
+
+                        decoration:
+                        BoxDecoration(
+
+                          gradient:
+                          const LinearGradient(
+
+                            colors: [
+                              Color(0xFF6D5DF6),
+                              Color(0xFF8E7BFF),
+                            ],
+
+                            begin:
+                            Alignment.topLeft,
+
+                            end:
+                            Alignment.bottomRight,
+                          ),
+
+                          borderRadius:
+                          BorderRadius.circular(30),
+
+                          boxShadow: [
+
+                            BoxShadow(
+
+                              color:
+                              Colors.deepPurple
+                                  .withOpacity(0.18),
+
+                              blurRadius: 18,
+
+                              offset:
+                              const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+
+                        child: Column(
 
                           children: [
 
-                            CircleAvatar(
+                            GestureDetector(
 
-                              radius: 55,
+                              onTap: pickImage,
 
-                              backgroundColor:
-                              Colors.deepPurple
-                                  .withOpacity(0.1),
+                              child: Stack(
 
-                              backgroundImage:
-                              buildImageProvider(),
+                                children: [
 
-                              child:
+                                  Container(
 
-                              profileImage == null &&
-                                  imageUrl.isEmpty
+                                    padding:
+                                    const EdgeInsets.all(4),
 
-                                  ? const Icon(
-                                Icons.camera_alt,
-                                size: 30,
-                                color: Colors.deepPurple,
-                              )
+                                    decoration:
+                                    BoxDecoration(
 
-                                  : null,
+                                      shape:
+                                      BoxShape.circle,
+
+                                      border: Border.all(
+                                        color:
+                                        Colors.white,
+                                        width: 3,
+                                      ),
+                                    ),
+
+                                    child: CircleAvatar(
+
+                                      radius:
+                                      isTablet
+                                          ? 62
+                                          : 52,
+
+                                      backgroundColor:
+                                      Colors.white,
+
+                                      backgroundImage:
+                                      buildImageProvider(),
+
+                                      child:
+                                      profileImage == null &&
+                                          imageUrl.isEmpty
+
+                                          ? Icon(
+                                        Icons.person,
+                                        size:
+                                        isTablet
+                                            ? 55
+                                            : 42,
+                                        color:
+                                        Colors.deepPurple,
+                                      )
+
+                                          : null,
+                                    ),
+                                  ),
+
+                                  Positioned(
+
+                                    bottom: 0,
+
+                                    right: 0,
+
+                                    child: Container(
+
+                                      padding:
+                                      const EdgeInsets.all(10),
+
+                                      decoration:
+                                      const BoxDecoration(
+
+                                        color:
+                                        Colors.white,
+
+                                        shape:
+                                        BoxShape.circle,
+                                      ),
+
+                                      child: const Icon(
+
+                                        Icons.camera_alt,
+
+                                        color:
+                                        Colors.deepPurple,
+
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
 
-                            Positioned(
+                            const SizedBox(height: 18),
 
-                              bottom: 0,
+                            Text(
 
-                              right: 0,
+                              businessController
+                                  .text
+                                  .isEmpty
+                                  ? "Business Name"
+                                  : businessController.text,
 
-                              child: Container(
+                              textAlign:
+                              TextAlign.center,
 
-                                padding:
-                                const EdgeInsets.all(8),
+                              style: TextStyle(
 
-                                decoration:
-                                const BoxDecoration(
+                                color: Colors.white,
 
-                                  color:
-                                  Colors.deepPurple,
+                                fontSize:
+                                isTablet
+                                    ? 28
+                                    : 22,
 
-                                  shape:
-                                  BoxShape.circle,
-                                ),
+                                fontWeight:
+                                FontWeight.bold,
+                              ),
+                            ),
 
-                                child: const Icon(
+                            const SizedBox(height: 8),
 
-                                  Icons.edit,
+                            Container(
 
-                                  size: 16,
+                              padding:
+                              const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
 
+                              decoration:
+                              BoxDecoration(
+
+                                color:
+                                Colors.white
+                                    .withOpacity(0.18),
+
+                                borderRadius:
+                                BorderRadius.circular(30),
+                              ),
+
+                              child: Text(
+
+                                widget.providerId,
+
+                                style: const TextStyle(
                                   color: Colors.white,
                                 ),
                               ),
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            Row(
+
+                              mainAxisAlignment:
+                              MainAxisAlignment.center,
+
+                              children: [
+
+                                Text(
+
+                                  isActive
+                                      ? "Active"
+                                      : "Inactive",
+
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight:
+                                    FontWeight.w600,
+                                  ),
+                                ),
+
+                                const SizedBox(width: 12),
+
+                                Switch(
+
+                                  value: isActive,
+
+                                  activeColor:
+                                  Colors.white,
+
+                                  activeTrackColor:
+                                  Colors.green,
+
+                                  onChanged: (v) {
+
+                                    setState(() {
+                                      isActive = v;
+                                    });
+                                  },
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 22),
 
-                      Text(
+                      /// BUSINESS INFO
 
-                        businessController.text.isEmpty
-                            ? "Business Name"
-                            : businessController.text,
+                      buildSection(
 
-                        style: const TextStyle(
+                        title:
+                        "Business Information",
 
-                          fontSize: 22,
+                        child: Column(
 
-                          fontWeight:
-                          FontWeight.bold,
-                        ),
-                      ),
+                          children: [
 
-                      const SizedBox(height: 6),
+                            isTablet
 
-                      Text(
+                                ? Row(
 
-                        widget.providerId,
+                              children: [
 
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                                Expanded(
+                                  child: buildField(
+                                    businessController,
+                                    "Business Name",
+                                    Icons.storefront,
+                                  ),
+                                ),
 
-                const SizedBox(height: 18),
+                                const SizedBox(width: 16),
 
-                buildSection(
+                                Expanded(
+                                  child: buildField(
+                                    ownerController,
+                                    "Owner Name",
+                                    Icons.person,
+                                  ),
+                                ),
+                              ],
+                            )
 
-                  title: "Business Information",
+                                : Column(
 
-                  child: Column(
+                              children: [
 
-                    children: [
+                                buildField(
+                                  businessController,
+                                  "Business Name",
+                                  Icons.storefront,
+                                ),
 
-                      buildField(
-                        businessController,
-                        "Business Name",
-                        Icons.store,
-                      ),
-
-                      buildField(
-                        ownerController,
-                        "Owner Name",
-                        Icons.person,
-                      ),
-
-                      buildField(
-                        phoneController,
-                        "Phone",
-                        Icons.phone,
-                        keyboard:
-                        TextInputType.phone,
-                      ),
-
-                      buildField(
-                        emailController,
-                        "Email",
-                        Icons.email,
-                        keyboard:
-                        TextInputType.emailAddress,
-                      ),
-
-                      buildField(
-                        addressController,
-                        "Address",
-                        Icons.location_on,
-                      ),
-
-                      Row(
-
-                        children: [
-
-                          Expanded(
-                            child: buildField(
-                              cityController,
-                              "City",
-                              Icons.location_city,
+                                buildField(
+                                  ownerController,
+                                  "Owner Name",
+                                  Icons.person,
+                                ),
+                              ],
                             ),
-                          ),
 
-                          const SizedBox(width: 12),
+                            isTablet
 
-                          Expanded(
-                            child: buildField(
-                              stateController,
-                              "State",
-                              Icons.map,
+                                ? Row(
+
+                              children: [
+
+                                Expanded(
+                                  child: buildField(
+                                    phoneController,
+                                    "Phone",
+                                    Icons.phone,
+                                    keyboard:
+                                    TextInputType.phone,
+                                  ),
+                                ),
+
+                                const SizedBox(width: 16),
+
+                                Expanded(
+                                  child: buildField(
+                                    emailController,
+                                    "Email",
+                                    Icons.email,
+                                    keyboard:
+                                    TextInputType.emailAddress,
+                                  ),
+                                ),
+                              ],
+                            )
+
+                                : Column(
+
+                              children: [
+
+                                buildField(
+                                  phoneController,
+                                  "Phone",
+                                  Icons.phone,
+                                  keyboard:
+                                  TextInputType.phone,
+                                ),
+
+                                buildField(
+                                  emailController,
+                                  "Email",
+                                  Icons.email,
+                                  keyboard:
+                                  TextInputType.emailAddress,
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
 
-                      buildField(
-                        pincodeController,
-                        "Pincode",
-                        Icons.pin_drop,
-                        keyboard:
-                        TextInputType.number,
-                      ),
-                    ],
-                  ),
-                ),
+                            buildField(
+                              addressController,
+                              "Address",
+                              Icons.location_on,
+                            ),
 
-                const SizedBox(height: 18),
+                            Row(
 
-                buildSection(
+                              children: [
 
-                  title: "Services",
+                                Expanded(
+                                  child: buildField(
+                                    cityController,
+                                    "City",
+                                    Icons.location_city,
+                                  ),
+                                ),
 
-                  child: Column(
+                                const SizedBox(width: 14),
 
-                    children: [
+                                Expanded(
+                                  child: buildField(
+                                    stateController,
+                                    "State",
+                                    Icons.map,
+                                  ),
+                                ),
+                              ],
+                            ),
 
-                      SwitchListTile(
-
-                        value: ownTools,
-
-                        activeColor:
-                        Colors.deepPurple,
-
-                        title: const Text(
-                          "Own Tools & Equipment",
+                            buildField(
+                              pincodeController,
+                              "Pincode",
+                              Icons.pin_drop,
+                              keyboard:
+                              TextInputType.number,
+                            ),
+                          ],
                         ),
-
-                        onChanged: (v) {
-
-                          setState(() {
-                            ownTools = v;
-                          });
-                        },
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 22),
 
-                      Wrap(
+                      /// SERVICES
 
-                        spacing: 10,
+                      buildSection(
 
-                        runSpacing: 10,
+                        title: "Services",
 
-                        children:
-                        allCategories.map(
+                        child: Column(
 
-                              (service) {
+                          children: [
 
-                            final selected =
-                            selectedCategories.contains(
-                              service,
-                            );
+                            Container(
 
-                            return FilterChip(
+                              decoration:
+                              BoxDecoration(
 
-                              label:
-                              Text(service),
+                                color:
+                                Colors.deepPurple
+                                    .withOpacity(0.06),
 
-                              selected:
-                              selected,
+                                borderRadius:
+                                BorderRadius.circular(18),
+                              ),
 
-                              selectedColor:
-                              Colors.deepPurple
-                                  .withOpacity(0.15),
+                              child: SwitchListTile(
 
-                              onSelected:
-                                  (value) {
+                                value: ownTools,
 
-                                setState(() {
+                                activeColor:
+                                Colors.deepPurple,
 
-                                  if (value) {
+                                title: const Text(
 
-                                    selectedCategories.add(
-                                      service,
-                                    );
+                                  "Own Tools & Equipment",
 
-                                  } else {
+                                  style: TextStyle(
+                                    fontWeight:
+                                    FontWeight.w600,
+                                  ),
+                                ),
 
-                                    selectedCategories.remove(
-                                      service,
-                                    );
-                                  }
-                                });
-                              },
-                            );
-                          },
-                        ).toList(),
+                                subtitle: const Text(
+                                  "Provider has tools available",
+                                ),
+
+                                onChanged: (v) {
+
+                                  setState(() {
+                                    ownTools = v;
+                                  });
+                                },
+                              ),
+                            ),
+
+                            const SizedBox(height: 22),
+
+                            Align(
+
+                              alignment:
+                              Alignment.centerLeft,
+
+                              child: Text(
+
+                                "Service Categories",
+
+                                style: TextStyle(
+
+                                  fontSize: 15,
+
+                                  fontWeight:
+                                  FontWeight.w600,
+
+                                  color:
+                                  Colors.grey.shade700,
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            Wrap(
+
+                              spacing: 10,
+
+                              runSpacing: 10,
+
+                              children:
+                              allCategories.map(
+
+                                    (service) {
+
+                                  final selected =
+                                  selectedCategories
+                                      .contains(
+                                    service,
+                                  );
+
+                                  return FilterChip(
+
+                                    label:
+                                    Text(service),
+
+                                    selected:
+                                    selected,
+
+                                    selectedColor:
+                                    Colors.deepPurple
+                                        .withOpacity(0.16),
+
+                                    checkmarkColor:
+                                    Colors.deepPurple,
+
+                                    backgroundColor:
+                                    Colors.grey.shade100,
+
+                                    labelStyle:
+                                    TextStyle(
+
+                                      color:
+                                      selected
+                                          ? Colors.deepPurple
+                                          : Colors.black87,
+
+                                      fontWeight:
+                                      FontWeight.w500,
+                                    ),
+
+                                    shape:
+                                    RoundedRectangleBorder(
+
+                                      borderRadius:
+                                      BorderRadius.circular(14),
+                                    ),
+
+                                    onSelected:
+                                        (value) {
+
+                                      setState(() {
+
+                                        if (value) {
+
+                                          selectedCategories.add(
+                                            service,
+                                          );
+
+                                        } else {
+
+                                          selectedCategories.remove(
+                                            service,
+                                          );
+                                        }
+                                      });
+                                    },
+                                  );
+                                },
+                              ).toList(),
+                            ),
+                          ],
+                        ),
                       ),
+
+                      const SizedBox(height: 22),
+
+                      /// BANK
+
+                      buildSection(
+
+                        title: "Bank Details",
+
+                        child: Column(
+
+                          children: [
+
+                            buildField(
+                              bankHolderController,
+                              "Account Holder",
+                              Icons.person_outline,
+                            ),
+
+                            isTablet
+
+                                ? Row(
+
+                              children: [
+
+                                Expanded(
+                                  child: buildField(
+                                    accountController,
+                                    "Account Number",
+                                    Icons.account_balance_wallet,
+                                    keyboard:
+                                    TextInputType.number,
+                                  ),
+                                ),
+
+                                const SizedBox(width: 16),
+
+                                Expanded(
+                                  child: buildField(
+                                    ifscController,
+                                    "IFSC Code",
+                                    Icons.code,
+                                  ),
+                                ),
+                              ],
+                            )
+
+                                : Column(
+
+                              children: [
+
+                                buildField(
+                                  accountController,
+                                  "Account Number",
+                                  Icons.account_balance_wallet,
+                                  keyboard:
+                                  TextInputType.number,
+                                ),
+
+                                buildField(
+                                  ifscController,
+                                  "IFSC Code",
+                                  Icons.code,
+                                ),
+                              ],
+                            ),
+
+                            buildField(
+                              upiController,
+                              "UPI ID",
+                              Icons.qr_code,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 40),
                     ],
                   ),
                 ),
-
-                const SizedBox(height: 18),
-
-                buildSection(
-
-                  title: "Bank Details",
-
-                  child: Column(
-
-                    children: [
-
-                      buildField(
-                        bankHolderController,
-                        "Account Holder",
-                        Icons.person,
-                      ),
-
-                      buildField(
-                        accountController,
-                        "Account Number",
-                        Icons.account_balance_wallet,
-                        keyboard:
-                        TextInputType.number,
-                      ),
-
-                      buildField(
-                        ifscController,
-                        "IFSC Code",
-                        Icons.code,
-                      ),
-
-                      buildField(
-                        upiController,
-                        "UPI ID",
-                        Icons.qr_code,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-              ],
+              ),
             ),
           ),
 
@@ -830,7 +1181,7 @@ class _ProviderProfilePageState
             Container(
 
               color:
-              Colors.black.withOpacity(0.2),
+              Colors.black.withOpacity(0.25),
 
               child:
               const Center(
@@ -860,14 +1211,28 @@ class _ProviderProfilePageState
       width: double.infinity,
 
       padding:
-      const EdgeInsets.all(20),
+      const EdgeInsets.all(22),
 
       decoration: BoxDecoration(
 
         color: Colors.white,
 
         borderRadius:
-        BorderRadius.circular(24),
+        BorderRadius.circular(28),
+
+        boxShadow: [
+
+          BoxShadow(
+
+            color:
+            Colors.black.withOpacity(0.04),
+
+            blurRadius: 14,
+
+            offset:
+            const Offset(0, 5),
+          ),
+        ],
       ),
 
       child: Column(
@@ -883,14 +1248,14 @@ class _ProviderProfilePageState
 
             style: const TextStyle(
 
-              fontSize: 18,
+              fontSize: 19,
 
               fontWeight:
               FontWeight.bold,
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
 
           child,
         ],
@@ -925,6 +1290,11 @@ class _ProviderProfilePageState
         keyboardType:
         keyboard,
 
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+
         decoration:
         InputDecoration(
 
@@ -945,19 +1315,36 @@ class _ProviderProfilePageState
           contentPadding:
           const EdgeInsets.symmetric(
             vertical: 18,
+            horizontal: 18,
           ),
 
-          border:
+          enabledBorder:
           OutlineInputBorder(
 
             borderRadius:
             BorderRadius.circular(18),
 
             borderSide:
-            BorderSide.none,
+            BorderSide(
+              color:
+              Colors.grey.shade200,
+            ),
+          ),
+
+          focusedBorder:
+          OutlineInputBorder(
+
+            borderRadius:
+            BorderRadius.circular(18),
+
+            borderSide:
+            const BorderSide(
+              color: Colors.deepPurple,
+              width: 1.4,
+            ),
           ),
         ),
       ),
     );
   }
-}
+}          
