@@ -40,7 +40,7 @@ class _BusinessDashboardPageState
   String normalize(String s) =>
       s.trim().toLowerCase();
 
-  /// ================= PROVIDER =================
+  /// ================= PROVIDER STREAM =================
   Stream<DocumentSnapshot> providerStream() {
     return providersRef
         .doc(widget.providerId)
@@ -99,7 +99,7 @@ class _BusinessDashboardPageState
         .snapshots();
   }
 
-  /// ================= ACCEPT =================
+  /// ================= ACCEPT ORDER =================
   Future<void> acceptOrder(
     String id,
   ) async {
@@ -141,7 +141,7 @@ class _BusinessDashboardPageState
     }
   }
 
-  /// ================= COMPLETE =================
+  /// ================= COMPLETE ORDER =================
   Future<void> completeOrder(
     String id,
   ) async {
@@ -155,7 +155,7 @@ class _BusinessDashboardPageState
     _msg("✅ Job completed");
   }
 
-  /// ================= CANCEL =================
+  /// ================= CANCEL ORDER =================
   Future<void> cancelOrder(
     String id,
   ) async {
@@ -172,8 +172,8 @@ class _BusinessDashboardPageState
     _msg("❌ Job reopened");
   }
 
-  /// ================= MESSAGE =================
-  void _msg(String m) {
+  /// ================= SNACKBAR =================
+  void _msg(String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(
       SnackBar(
@@ -181,12 +181,12 @@ class _BusinessDashboardPageState
             SnackBarBehavior.floating,
         backgroundColor:
             const Color(0xFF6C63FF),
-        content: Text(m),
+        content: Text(message),
       ),
     );
   }
 
-  /// ================= STATUS COLORS =================
+  /// ================= STATUS COLOR =================
   Color getColor(String status) {
     switch (status) {
       case "accepted":
@@ -243,14 +243,103 @@ class _BusinessDashboardPageState
         if (provider?['status'] !=
             "approved") {
           return Scaffold(
+            backgroundColor:
+                const Color(0xFFF6F7FB),
+
             appBar: AppBar(
-              title:
-                  const Text("Dashboard"),
+              elevation: 0,
+              backgroundColor:
+                  Colors.white,
+              foregroundColor:
+                  Colors.black,
+              title: const Text(
+                "Dashboard",
+              ),
             ),
 
-            body: const Center(
-              child: Text(
-                "⏳ Waiting for admin approval",
+            body: Center(
+              child: Container(
+                margin:
+                    const EdgeInsets.all(
+                  24,
+                ),
+
+                padding:
+                    const EdgeInsets.all(
+                  24,
+                ),
+
+                decoration:
+                    BoxDecoration(
+                  color: Colors.white,
+
+                  borderRadius:
+                      BorderRadius.circular(
+                    24,
+                  ),
+
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black
+                          .withOpacity(
+                        0.05,
+                      ),
+                      blurRadius: 12,
+                    ),
+                  ],
+                ),
+
+                child: const Column(
+                  mainAxisSize:
+                      MainAxisSize.min,
+
+                  children: [
+                    CircleAvatar(
+                      radius: 36,
+                      backgroundColor:
+                          Color(
+                        0xFFF1EEFF,
+                      ),
+
+                      child: Icon(
+                        Icons.hourglass_top,
+                        size: 36,
+                        color:
+                            Color(
+                          0xFF6C63FF,
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(
+                        height: 18),
+
+                    Text(
+                      "Waiting for Approval",
+
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight:
+                            FontWeight
+                                .bold,
+                      ),
+                    ),
+
+                    SizedBox(height: 8),
+
+                    Text(
+                      "Your profile is under admin review.",
+
+                      textAlign:
+                          TextAlign.center,
+
+                      style: TextStyle(
+                        color:
+                            Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -261,66 +350,61 @@ class _BusinessDashboardPageState
 
           child: Scaffold(
             backgroundColor:
-                const Color(0xFFF5F6FA),
+                const Color(0xFFF6F7FB),
 
             /// ================= APP BAR =================
             appBar: PreferredSize(
               preferredSize:
                   const Size.fromHeight(
-                150,
+                180,
               ),
 
               child: Container(
                 decoration:
                     const BoxDecoration(
-                  color: Colors.white,
-
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 10,
-                      color:
-                          Color(0x12000000),
-                    ),
-                  ],
+                  gradient:
+                      LinearGradient(
+                    colors: [
+                      Color(0xFF6C63FF),
+                      Color(0xFF8B80FF),
+                    ],
+                    begin:
+                        Alignment.topLeft,
+                    end:
+                        Alignment.bottomRight,
+                  ),
                 ),
 
                 child: SafeArea(
-                  child: Column(
-                    children: [
-                      /// HEADER
-                      Padding(
-                        padding:
-                            const EdgeInsets.fromLTRB(
-                          16,
-                          14,
-                          16,
-                          10,
-                        ),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.fromLTRB(
+                      18,
+                      16,
+                      18,
+                      16,
+                    ),
 
-                        child: Row(
+                    child: Column(
+                      children: [
+                        /// HEADER
+                        Row(
                           children: [
-                            /// LOGO
                             Container(
-                              width: 56,
-                              height: 56,
+                              width: 62,
+                              height: 62,
 
                               decoration:
                                   BoxDecoration(
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  16,
+                                color: Colors
+                                    .white
+                                    .withOpacity(
+                                  0.15,
                                 ),
 
-                                gradient:
-                                    const LinearGradient(
-                                  colors: [
-                                    Color(
-                                      0xFF6C63FF,
-                                    ),
-                                    Color(
-                                      0xFF8B80FF,
-                                    ),
-                                  ],
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  18,
                                 ),
                               ),
 
@@ -328,16 +412,16 @@ class _BusinessDashboardPageState
                                   const Icon(
                                 Icons
                                     .business_center,
+                                size: 30,
                                 color:
-                                    Colors.white,
-                                size: 28,
+                                    Colors
+                                        .white,
                               ),
                             ),
 
                             const SizedBox(
                                 width: 14),
 
-                            /// TITLE
                             Expanded(
                               child: Column(
                                 crossAxisAlignment:
@@ -357,6 +441,9 @@ class _BusinessDashboardPageState
 
                                     style:
                                         const TextStyle(
+                                      color:
+                                          Colors
+                                              .white,
                                       fontSize:
                                           22,
                                       fontWeight:
@@ -367,32 +454,53 @@ class _BusinessDashboardPageState
 
                                   const SizedBox(
                                       height:
-                                          4),
+                                          6),
 
-                                  Text(
-                                    widget
-                                        .serviceType,
+                                  Container(
+                                    padding:
+                                        const EdgeInsets.symmetric(
+                                      horizontal:
+                                          12,
+                                      vertical:
+                                          5,
+                                    ),
 
-                                    maxLines: 1,
-
-                                    overflow:
-                                        TextOverflow
-                                            .ellipsis,
-
-                                    style:
-                                        TextStyle(
+                                    decoration:
+                                        BoxDecoration(
                                       color: Colors
-                                          .grey
-                                          .shade600,
-                                      fontSize:
-                                          15,
+                                          .white
+                                          .withOpacity(
+                                        0.16,
+                                      ),
+
+                                      borderRadius:
+                                          BorderRadius.circular(
+                                        30,
+                                      ),
+                                    ),
+
+                                    child: Text(
+                                      widget
+                                          .serviceType,
+
+                                      style:
+                                          const TextStyle(
+                                        color:
+                                            Colors
+                                                .white,
+                                        fontWeight:
+                                            FontWeight
+                                                .w600,
+                                        fontSize:
+                                            13,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
 
-                            /// PROFILE
+                            /// PROFILE BUTTON
                             GestureDetector(
                               onTap: () {
                                 Navigator.push(
@@ -412,8 +520,8 @@ class _BusinessDashboardPageState
 
                               child:
                                   Container(
-                                width: 52,
-                                height: 52,
+                                width: 54,
+                                height: 54,
 
                                 decoration:
                                     BoxDecoration(
@@ -421,14 +529,19 @@ class _BusinessDashboardPageState
                                       BoxShape
                                           .circle,
 
+                                  color: Colors
+                                      .white
+                                      .withOpacity(
+                                    0.18,
+                                  ),
+
                                   border:
                                       Border.all(
                                     color:
-                                        const Color(
-                                      0xFF6C63FF,
-                                    ),
+                                        Colors
+                                            .white,
                                     width:
-                                        2.5,
+                                        2,
                                   ),
                                 ),
 
@@ -436,36 +549,32 @@ class _BusinessDashboardPageState
                                     const Icon(
                                   Icons.person,
                                   color:
-                                      Color(
-                                    0xFF6C63FF,
-                                  ),
+                                      Colors
+                                          .white,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ),
 
-                      /// MODERN TAB SWITCH
-                      Padding(
-                        padding:
-                            const EdgeInsets.symmetric(
-                          horizontal: 16,
-                        ),
+                        const SizedBox(
+                            height: 24),
 
-                        child: Container(
-                          height: 54,
+                        /// TABS
+                        Container(
+                          height: 56,
 
                           decoration:
                               BoxDecoration(
-                            color:
-                                const Color(
-                              0xFFF1F3F6,
+                            color: Colors
+                                .white
+                                .withOpacity(
+                              0.15,
                             ),
 
                             borderRadius:
                                 BorderRadius.circular(
-                              16,
+                              18,
                             ),
                           ),
 
@@ -477,9 +586,7 @@ class _BusinessDashboardPageState
                             indicator:
                                 BoxDecoration(
                               color:
-                                  const Color(
-                                0xFF6C63FF,
-                              ),
+                                  Colors.white,
 
                               borderRadius:
                                   BorderRadius.circular(
@@ -493,16 +600,17 @@ class _BusinessDashboardPageState
                             ),
 
                             labelColor:
-                                Colors.white,
+                                const Color(
+                              0xFF6C63FF,
+                            ),
 
                             unselectedLabelColor:
-                                Colors.black87,
+                                Colors.white,
 
                             labelStyle:
                                 const TextStyle(
                               fontWeight:
-                                  FontWeight
-                                      .bold,
+                                  FontWeight.bold,
                               fontSize: 14,
                             ),
 
@@ -563,11 +671,8 @@ class _BusinessDashboardPageState
                             ],
                           ),
                         ),
-                      ),
-
-                      const SizedBox(
-                          height: 14),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -612,19 +717,44 @@ class _BusinessDashboardPageState
         final docs = snap.data!.docs;
 
         if (docs.isEmpty) {
-          return const Center(
-            child: Text(
-              "No jobs found",
-              style: TextStyle(
-                fontSize: 18,
-              ),
+          return Center(
+            child: Column(
+              mainAxisAlignment:
+                  MainAxisAlignment
+                      .center,
+
+              children: [
+                Icon(
+                  Icons.work_off,
+                  size: 70,
+                  color: Colors
+                      .grey.shade400,
+                ),
+
+                const SizedBox(
+                    height: 16),
+
+                Text(
+                  "No jobs found",
+
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight:
+                        FontWeight.w600,
+                    color: Colors
+                        .grey.shade700,
+                  ),
+                ),
+              ],
             ),
           );
         }
 
         return ListView.builder(
           padding:
-              const EdgeInsets.all(12),
+              const EdgeInsets.all(
+            16,
+          ),
 
           itemCount: docs.length,
 
@@ -645,426 +775,552 @@ class _BusinessDashboardPageState
                 data['schedule'] ?? {};
 
             final services =
-                (data['services'] as List?)
+                (data['services']
+                            as List?)
                         ?.map(
-                          (e) =>
-                              e.toString(),
+                          (e) => e
+                              .toString(),
                         )
                         .toList() ??
                     [];
 
             final status =
-                data['status'] ?? "pending";
+                data['status'] ??
+                    "pending";
 
             return Container(
               margin:
                   const EdgeInsets.only(
-                bottom: 12,
+                bottom: 18,
               ),
 
-              padding:
-                  const EdgeInsets.all(
-                14,
-              ),
-
-              decoration: BoxDecoration(
+              decoration:
+                  BoxDecoration(
                 color: Colors.white,
 
                 borderRadius:
                     BorderRadius.circular(
-                  18,
+                  24,
                 ),
 
                 boxShadow: [
                   BoxShadow(
-                    blurRadius: 10,
                     color: Colors.black
                         .withOpacity(
                       0.05,
                     ),
-                  )
+                    blurRadius: 14,
+                    offset:
+                        const Offset(
+                      0,
+                      4,
+                    ),
+                  ),
                 ],
               ),
 
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+              child: Padding(
+                padding:
+                    const EdgeInsets.all(
+                  18,
+                ),
 
-                children: [
-                  /// NAME
-                  Text(
-                    userData['name'] ??
-                        "No Name",
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
 
-                    style:
-                        const TextStyle(
-                      fontSize: 16,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(
-                      height: 8),
-
-                  /// PHONE
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.phone,
-                        size: 16,
-                        color:
-                            Color(0xFF6C63FF),
-                      ),
-
-                      const SizedBox(
-                          width: 8),
-
-                      Expanded(
-                        child: Text(
-                          userData['phone'] ??
-                              "",
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(
-                      height: 6),
-
-                  /// LOCATION
-                  Row(
-                    crossAxisAlignment:
-                        CrossAxisAlignment
-                            .start,
-
-                    children: [
-                      const Icon(
-                        Icons.location_on,
-                        size: 16,
-                        color:
-                            Color(0xFF6C63FF),
-                      ),
-
-                      const SizedBox(
-                          width: 8),
-
-                      Expanded(
-                        child: Text(
-                          data['location']
-                                  ?['address'] ??
-                              "",
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(
-                      height: 8),
-
-                  /// SERVICES
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-
-                    children: services
-                        .map(
-                          (e) => Container(
-                            padding:
-                                const EdgeInsets.symmetric(
-                              horizontal:
-                                  10,
-                              vertical:
-                                  5,
-                            ),
-
-                            decoration:
-                                BoxDecoration(
-                              color:
-                                  const Color(
-                                0xFFF1EEFF,
-                              ),
-
-                              borderRadius:
-                                  BorderRadius.circular(
-                                20,
-                              ),
-                            ),
-
-                            child: Text(
-                              e,
-
-                              style:
-                                  const TextStyle(
-                                color:
-                                    Color(
-                                  0xFF6C63FF,
-                                ),
-                                fontSize:
-                                    12,
-                                fontWeight:
-                                    FontWeight
-                                        .w600,
-                              ),
-                            ),
+                  children: [
+                    /// TOP
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor:
+                              const Color(
+                            0xFFF1EEFF,
                           ),
-                        )
-                        .toList(),
-                  ),
 
-                  const SizedBox(
-                      height: 10),
-
-                  /// DATE
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.calendar_today,
-                        size: 15,
-                        color:
-                            Color(0xFF6C63FF),
-                      ),
-
-                      const SizedBox(
-                          width: 8),
-
-                      Expanded(
-                        child: Text(
-                          schedule['time'] ??
-                              "",
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(
-                      height: 12),
-
-                  /// PRICE + STATUS
-                  Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment
-                            .spaceBetween,
-
-                    children: [
-                      Text(
-                        "₹${payment['totalAmount'] ?? 0}",
-
-                        style:
-                            const TextStyle(
-                          fontSize: 18,
-                          fontWeight:
-                              FontWeight.bold,
-                        ),
-                      ),
-
-                      Container(
-                        padding:
-                            const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              getColor(status),
-
-                          borderRadius:
-                              BorderRadius.circular(
-                            20,
-                          ),
-                        ),
-
-                        child: Text(
-                          status
-                              .toUpperCase(),
-
-                          style:
-                              const TextStyle(
+                          child:
+                              const Icon(
+                            Icons.person,
                             color:
-                                Colors.white,
-                            fontSize: 11,
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(
-                      height: 6),
-
-                  Text(
-                    getStatusMessage(
-                      status,
-                    ),
-
-                    style:
-                        TextStyle(
-                      color:
-                          Colors.grey.shade600,
-                      fontSize: 12,
-                    ),
-                  ),
-
-                  const SizedBox(
-                      height: 14),
-
-                  /// ACTIONS
-                  Row(
-                    children: [
-                      if (isAvailable)
-                        Expanded(
-                          child:
-                              ElevatedButton(
-                            style:
-                                ElevatedButton.styleFrom(
-                              elevation:
-                                  0,
-
-                              backgroundColor:
-                                  const Color(
-                                0xFF6C63FF,
-                              ),
-
-                              padding:
-                                  const EdgeInsets.symmetric(
-                                vertical:
-                                    14,
-                              ),
-
-                              shape:
-                                  RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  14,
-                                ),
-                              ),
-                            ),
-
-                            onPressed:
-                                () =>
-                                    acceptOrder(
-                              doc.id,
-                            ),
-
-                            child:
-                                const Text(
-                              "Accept",
-                              style:
-                                  TextStyle(
-                                color:
-                                    Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                      if (!isAvailable &&
-                          status ==
-                              "accepted") ...[
-                        Expanded(
-                          child:
-                              ElevatedButton(
-                            style:
-                                ElevatedButton.styleFrom(
-                              elevation:
-                                  0,
-
-                              backgroundColor:
-                                  Colors.green,
-
-                              padding:
-                                  const EdgeInsets.symmetric(
-                                vertical:
-                                    14,
-                              ),
-
-                              shape:
-                                  RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  14,
-                                ),
-                              ),
-                            ),
-
-                            onPressed:
-                                () =>
-                                    completeOrder(
-                              doc.id,
-                            ),
-
-                            child:
-                                const Text(
-                              "Complete",
-                              style:
-                                  TextStyle(
-                                color:
-                                    Colors.white,
-                              ),
+                                Color(
+                              0xFF6C63FF,
                             ),
                           ),
                         ),
 
                         const SizedBox(
-                            width: 10),
+                            width: 12),
 
                         Expanded(
-                          child:
-                              OutlinedButton(
-                            style:
-                                OutlinedButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(
-                                vertical:
-                                    14,
-                              ),
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment
+                                    .start,
 
-                              side:
-                                  const BorderSide(
-                                color:
-                                    Colors.red,
-                              ),
+                            children: [
+                              Text(
+                                userData[
+                                        'name'] ??
+                                    "No Name",
 
-                              shape:
-                                  RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  14,
+                                maxLines: 1,
+
+                                overflow:
+                                    TextOverflow
+                                        .ellipsis,
+
+                                style:
+                                    const TextStyle(
+                                  fontSize:
+                                      17,
+                                  fontWeight:
+                                      FontWeight
+                                          .bold,
                                 ),
                               ),
-                            ),
 
-                            onPressed:
-                                () =>
-                                    cancelOrder(
-                              doc.id,
-                            ),
+                              const SizedBox(
+                                  height:
+                                      4),
 
-                            child:
-                                const Text(
-                              "Cancel",
+                              Text(
+                                getStatusMessage(
+                                  status,
+                                ),
 
-                              style:
-                                  TextStyle(
-                                color:
-                                    Colors.red,
+                                style:
+                                    TextStyle(
+                                  color: Colors
+                                      .grey
+                                      .shade600,
+                                  fontSize:
+                                      12,
+                                ),
                               ),
+                            ],
+                          ),
+                        ),
+
+                        Container(
+                          padding:
+                              const EdgeInsets.symmetric(
+                            horizontal:
+                                12,
+                            vertical:
+                                6,
+                          ),
+
+                          decoration:
+                              BoxDecoration(
+                            color:
+                                getColor(
+                              status,
+                            ),
+
+                            borderRadius:
+                                BorderRadius.circular(
+                              30,
+                            ),
+                          ),
+
+                          child: Text(
+                            status
+                                .toUpperCase(),
+
+                            style:
+                                const TextStyle(
+                              color: Colors
+                                  .white,
+                              fontSize:
+                                  11,
+                              fontWeight:
+                                  FontWeight
+                                      .bold,
                             ),
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                ],
+                    ),
+
+                    const SizedBox(
+                        height: 18),
+
+                    /// DETAILS
+                    _infoTile(
+                      Icons.phone,
+                      userData['phone'] ??
+                          "",
+                    ),
+
+                    const SizedBox(
+                        height: 10),
+
+                    _infoTile(
+                      Icons.location_on,
+                      data['location']
+                              ?['address'] ??
+                          "",
+                    ),
+
+                    const SizedBox(
+                        height: 10),
+
+                    _infoTile(
+                      Icons.calendar_today,
+                      schedule['time'] ??
+                          "",
+                    ),
+
+                    const SizedBox(
+                        height: 18),
+
+                    /// SERVICES
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+
+                      children: services
+                          .map(
+                            (e) =>
+                                Container(
+                              padding:
+                                  const EdgeInsets.symmetric(
+                                horizontal:
+                                    12,
+                                vertical:
+                                    7,
+                              ),
+
+                              decoration:
+                                  BoxDecoration(
+                                color:
+                                    const Color(
+                                  0xFFF4F1FF,
+                                ),
+
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  30,
+                                ),
+                              ),
+
+                              child: Text(
+                                e,
+
+                                style:
+                                    const TextStyle(
+                                  color:
+                                      Color(
+                                    0xFF6C63FF,
+                                  ),
+                                  fontWeight:
+                                      FontWeight
+                                          .w600,
+                                  fontSize:
+                                      12,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+
+                    const SizedBox(
+                        height: 20),
+
+                    /// PRICE
+                    Container(
+                      padding:
+                          const EdgeInsets.all(
+                        14,
+                      ),
+
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            const Color(
+                          0xFFF8F8FC,
+                        ),
+
+                        borderRadius:
+                            BorderRadius.circular(
+                          18,
+                        ),
+                      ),
+
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.payments,
+                            color:
+                                Color(
+                              0xFF6C63FF,
+                            ),
+                          ),
+
+                          const SizedBox(
+                              width: 10),
+
+                          const Text(
+                            "Total Amount",
+
+                            style:
+                                TextStyle(
+                              fontWeight:
+                                  FontWeight
+                                      .w600,
+                            ),
+                          ),
+
+                          const Spacer(),
+
+                          Text(
+                            "₹${payment['totalAmount'] ?? 0}",
+
+                            style:
+                                const TextStyle(
+                              fontSize:
+                                  20,
+                              fontWeight:
+                                  FontWeight
+                                      .bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(
+                        height: 18),
+
+                    /// ACTION BUTTONS
+                    Row(
+                      children: [
+                        if (isAvailable)
+                          Expanded(
+                            child:
+                                ElevatedButton(
+                              style:
+                                  ElevatedButton.styleFrom(
+                                elevation:
+                                    0,
+
+                                backgroundColor:
+                                    const Color(
+                                  0xFF6C63FF,
+                                ),
+
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                  vertical:
+                                      15,
+                                ),
+
+                                shape:
+                                    RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(
+                                    16,
+                                  ),
+                                ),
+                              ),
+
+                              onPressed:
+                                  () =>
+                                      acceptOrder(
+                                doc.id,
+                              ),
+
+                              child:
+                                  const Text(
+                                "Accept Job",
+
+                                style:
+                                    TextStyle(
+                                  color:
+                                      Colors
+                                          .white,
+                                  fontWeight:
+                                      FontWeight
+                                          .bold,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                        if (!isAvailable &&
+                            status ==
+                                "accepted") ...[
+                          Expanded(
+                            child:
+                                ElevatedButton(
+                              style:
+                                  ElevatedButton.styleFrom(
+                                elevation:
+                                    0,
+
+                                backgroundColor:
+                                    Colors.green,
+
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                  vertical:
+                                      15,
+                                ),
+
+                                shape:
+                                    RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(
+                                    16,
+                                  ),
+                                ),
+                              ),
+
+                              onPressed:
+                                  () =>
+                                      completeOrder(
+                                doc.id,
+                              ),
+
+                              child:
+                                  const Text(
+                                "Complete",
+
+                                style:
+                                    TextStyle(
+                                  color:
+                                      Colors
+                                          .white,
+                                  fontWeight:
+                                      FontWeight
+                                          .bold,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(
+                              width: 12),
+
+                          Expanded(
+                            child:
+                                OutlinedButton(
+                              style:
+                                  OutlinedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                  vertical:
+                                      15,
+                                ),
+
+                                side:
+                                    const BorderSide(
+                                  color:
+                                      Colors.red,
+                                ),
+
+                                shape:
+                                    RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(
+                                    16,
+                                  ),
+                                ),
+                              ),
+
+                              onPressed:
+                                  () =>
+                                      cancelOrder(
+                                doc.id,
+                              ),
+
+                              child:
+                                  const Text(
+                                "Cancel",
+
+                                style:
+                                    TextStyle(
+                                  color:
+                                      Colors.red,
+                                  fontWeight:
+                                      FontWeight
+                                          .bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             );
           },
         );
       },
+    );
+  }
+
+  /// ================= INFO TILE =================
+  Widget _infoTile(
+    IconData icon,
+    String text,
+  ) {
+    return Row(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+
+      children: [
+        Container(
+          padding:
+              const EdgeInsets.all(8),
+
+          decoration: BoxDecoration(
+            color:
+                const Color(0xFFF4F1FF),
+
+            borderRadius:
+                BorderRadius.circular(
+              12,
+            ),
+          ),
+
+          child: Icon(
+            icon,
+            size: 18,
+            color:
+                const Color(
+              0xFF6C63FF,
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        Expanded(
+          child: Padding(
+            padding:
+                const EdgeInsets.only(
+              top: 4,
+            ),
+
+            child: Text(
+              text,
+
+              style:
+                  const TextStyle(
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

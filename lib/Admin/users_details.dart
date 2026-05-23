@@ -6,340 +6,439 @@ class UsersPage extends StatefulWidget {
   const UsersPage({super.key});
 
   @override
-  State<UsersPage> createState() => _UsersPageState();
+  State<UsersPage> createState() =>
+      _UsersPageState();
 }
 
-class _UsersPageState extends State<UsersPage> {
+class _UsersPageState
+    extends State<UsersPage> {
   final CollectionReference usersRef =
-      FirebaseFirestore.instance.collection("users");
+      FirebaseFirestore.instance
+          .collection("users");
 
   String search = "";
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xfff5f7fb),
+      backgroundColor:
+          const Color(0xFFF6F7FB),
 
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        centerTitle: true,
-        title: const Text(
-          "All Users",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-          ),
-        ),
-      ),
-
-      body: Column(
-        children: [
-          /// ================= TOP CARD =================
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
-
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xff4f46e5),
-                  Color(0xff7c3aed),
-                ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            /// ================= HEADER =================
+            Container(
+              padding:
+                  const EdgeInsets.fromLTRB(
+                18,
+                18,
+                18,
+                22,
               ),
 
-              borderRadius: BorderRadius.circular(24),
-            ),
-
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.15),
-                    shape: BoxShape.circle,
-                  ),
-
-                  child: const Icon(
-                    Icons.people_alt_rounded,
-                    color: Colors.white,
-                    size: 32,
-                  ),
+              decoration:
+                  const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFF5B5FEF),
+                    Color(0xFF8B5CF6),
+                  ],
+                  begin:
+                      Alignment.topLeft,
+                  end:
+                      Alignment.bottomRight,
                 ),
-
-                const SizedBox(width: 16),
-
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-
-                    children: [
-                      Text(
-                        "Manage Registered Users",
-
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 15,
-                        ),
-                      ),
-
-                      SizedBox(height: 6),
-
-                      Text(
-                        "Users Dashboard",
-
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 26,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          /// ================= SEARCH =================
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16),
-
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
 
                 borderRadius:
-                    BorderRadius.circular(18),
-
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        Colors.black.withOpacity(.04),
-
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-
-              child: TextField(
-                onChanged: (value) {
-                  setState(() {
-                    search = value.toLowerCase();
-                  });
-                },
-
-                decoration: const InputDecoration(
-                  hintText:
-                      "Search by name, email or phone",
-
-                  border: InputBorder.none,
-
-                  prefixIcon: Icon(
-                    Icons.search_rounded,
-                  ),
-
-                  contentPadding:
-                      EdgeInsets.symmetric(
-                    vertical: 18,
-                  ),
+                    BorderRadius.only(
+                  bottomLeft:
+                      Radius.circular(30),
+                  bottomRight:
+                      Radius.circular(30),
                 ),
               ),
-            ),
-          ),
 
-          const SizedBox(height: 16),
+              child: Column(
+                children: [
+                  /// TOP BAR
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
 
-          /// ================= USERS =================
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: usersRef
-                  .orderBy(
-                    "createdAt",
-                    descending: true,
-                  )
-                  .snapshots(),
+                        decoration:
+                            BoxDecoration(
+                          color: Colors
+                              .white
+                              .withOpacity(
+                            .15,
+                          ),
 
-              builder: (context, snapshot) {
-                /// LOADING
-                if (snapshot.connectionState ==
-                    ConnectionState.waiting) {
-                  return const Center(
-                    child:
-                        CircularProgressIndicator(),
-                  );
-                }
-
-                /// ERROR
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      "Error: ${snapshot.error}",
-                    ),
-                  );
-                }
-
-                /// EMPTY
-                if (!snapshot.hasData ||
-                    snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "No Users Found",
-
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  );
-                }
-
-                final docs = snapshot.data!.docs;
-
-                /// FILTER SEARCH
-                final filtered = docs.where((doc) {
-                  final data =
-                      doc.data()
-                          as Map<String, dynamic>;
-
-                  final String name =
-                      (data['name'] ?? "")
-                          .toString()
-                          .toLowerCase();
-
-                  final String email =
-                      (data['email'] ?? "")
-                          .toString()
-                          .toLowerCase();
-
-                  final String phone =
-                      (data['phone'] ?? "")
-                          .toString()
-                          .toLowerCase();
-
-                  return name.contains(search) ||
-                      email.contains(search) ||
-                      phone.contains(search);
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "No Matching Users",
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding:
-                      const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 4,
-                  ),
-
-                  itemCount: filtered.length,
-
-                  itemBuilder: (context, index) {
-                    final data =
-                        filtered[index].data()
-                            as Map<String, dynamic>;
-
-                    /// ================= SAFE DATA =================
-                    final String uid =
-                        data['uid'] ??
-                            filtered[index].id;
-
-                    final String name =
-                        data['name'] ??
-                            "No Name";
-
-                    final String email =
-                        data['email'] ??
-                            "No Email";
-
-                    final String phone =
-                        data['phone'] ??
-                            "No Phone";
-
-                    final String address =
-                        data['address'] ??
-                            "No Address";
-
-                    final String photo =
-                        data['photo'] ??
-                            "";
-
-                    final bool isActive =
-                        data['isActive'] ?? true;
-
-                    final List providers =
-                        data['providers'] ?? [];
-
-                    final Timestamp? createdAt =
-                        data['createdAt']
-                            as Timestamp?;
-
-                    String joinedDate = "-";
-
-                    if (createdAt != null) {
-                      joinedDate = DateFormat(
-                        'dd MMM yyyy • hh:mm a',
-                      ).format(
-                        createdAt.toDate(),
-                      );
-                    }
-
-                    return Container(
-                      margin:
-                          const EdgeInsets.only(
-                        bottom: 18,
-                      ),
-
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-
-                        borderRadius:
-                            BorderRadius.circular(
-                          26,
+                          borderRadius:
+                              BorderRadius.circular(
+                            16,
+                          ),
                         ),
 
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black
-                                .withOpacity(.05),
-
-                            blurRadius: 12,
-
-                            offset:
-                                const Offset(0, 5),
-                          ),
-                        ],
+                        child: const Icon(
+                          Icons.people_alt,
+                          color:
+                              Colors.white,
+                          size: 24,
+                        ),
                       ),
 
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.all(18),
+                      const SizedBox(
+                          width: 14),
 
+                      const Expanded(
                         child: Column(
                           crossAxisAlignment:
                               CrossAxisAlignment
                                   .start,
 
                           children: [
-                            /// ================= TOP =================
+                            Text(
+                              "Users Dashboard",
+
+                              style:
+                                  TextStyle(
+                                color:
+                                    Colors
+                                        .white,
+                                fontSize:
+                                    22,
+                                fontWeight:
+                                    FontWeight
+                                        .bold,
+                              ),
+                            ),
+
+                            SizedBox(
+                                height: 3),
+
+                            Text(
+                              "Manage all registered users",
+
+                              style:
+                                  TextStyle(
+                                color:
+                                    Colors
+                                        .white70,
+                                fontSize:
+                                    13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(
+                      height: 22),
+
+                  /// SEARCH BAR
+                  Container(
+                    height: 58,
+
+                    decoration:
+                        BoxDecoration(
+                      color: Colors.white,
+
+                      borderRadius:
+                          BorderRadius.circular(
+                        18,
+                      ),
+                    ),
+
+                    child: TextField(
+                      onChanged: (value) {
+                        setState(() {
+                          search = value
+                              .toLowerCase();
+                        });
+                      },
+
+                      style:
+                          const TextStyle(
+                        fontSize: 15,
+                      ),
+
+                      decoration:
+                          InputDecoration(
+                        border:
+                            InputBorder.none,
+
+                        hintText:
+                            "Search users...",
+
+                        hintStyle:
+                            TextStyle(
+                          color: Colors
+                              .grey.shade500,
+                        ),
+
+                        prefixIcon:
+                            const Icon(
+                          Icons.search,
+                          color:
+                              Color(
+                            0xFF5B5FEF,
+                          ),
+                        ),
+
+                        suffixIcon:
+                            search.isNotEmpty
+                                ? IconButton(
+                                    onPressed:
+                                        () {
+                                      setState(
+                                        () {
+                                          search =
+                                              "";
+                                        },
+                                      );
+                                    },
+
+                                    icon:
+                                        const Icon(
+                                      Icons
+                                          .close,
+                                      size:
+                                          20,
+                                    ),
+                                  )
+                                : null,
+
+                        contentPadding:
+                            const EdgeInsets.symmetric(
+                          vertical: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            /// ================= USERS LIST =================
+            Expanded(
+              child: StreamBuilder<
+                  QuerySnapshot>(
+                stream: usersRef
+                    .orderBy(
+                      "createdAt",
+                      descending: true,
+                    )
+                    .snapshots(),
+
+                builder:
+                    (context, snapshot) {
+                  /// LOADING
+                  if (snapshot
+                          .connectionState ==
+                      ConnectionState
+                          .waiting) {
+                    return const Center(
+                      child:
+                          CircularProgressIndicator(),
+                    );
+                  }
+
+                  /// ERROR
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        "Error: ${snapshot.error}",
+                      ),
+                    );
+                  }
+
+                  /// EMPTY
+                  if (!snapshot
+                          .hasData ||
+                      snapshot
+                          .data!
+                          .docs
+                          .isEmpty) {
+                    return _emptyState(
+                      "No Users Found",
+                    );
+                  }
+
+                  final docs =
+                      snapshot.data!.docs;
+
+                  /// SEARCH FILTER
+                  final filtered =
+                      docs.where((doc) {
+                    final data =
+                        doc.data()
+                            as Map<String,
+                                dynamic>;
+
+                    final name =
+                        (data['name'] ??
+                                "")
+                            .toString()
+                            .toLowerCase();
+
+                    final email =
+                        (data['email'] ??
+                                "")
+                            .toString()
+                            .toLowerCase();
+
+                    final phone =
+                        (data['phone'] ??
+                                "")
+                            .toString()
+                            .toLowerCase();
+
+                    return name
+                            .contains(
+                                search) ||
+                        email.contains(
+                            search) ||
+                        phone.contains(
+                            search);
+                  }).toList();
+
+                  if (filtered.isEmpty) {
+                    return _emptyState(
+                      "No Matching Users",
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding:
+                        const EdgeInsets.all(
+                      16,
+                    ),
+
+                    itemCount:
+                        filtered.length,
+
+                    itemBuilder:
+                        (context, index) {
+                      final data =
+                          filtered[index]
+                                  .data()
+                              as Map<
+                                  String,
+                                  dynamic>;
+
+                      /// SAFE DATA
+                      final String uid =
+                          data['uid'] ??
+                              filtered[
+                                      index]
+                                  .id;
+
+                      final String name =
+                          data['name'] ??
+                              "No Name";
+
+                      final String email =
+                          data['email'] ??
+                              "No Email";
+
+                      final String phone =
+                          data['phone'] ??
+                              "-";
+
+                      final String address =
+                          data['address'] ??
+                              "-";
+
+                      final String photo =
+                          data['photo'] ??
+                              "";
+
+                      final bool isActive =
+                          data['isActive'] ??
+                              true;
+
+                      final List providers =
+                          data['providers'] ??
+                              [];
+
+                      final Timestamp?
+                          createdAt =
+                          data[
+                                  'createdAt']
+                              as Timestamp?;
+
+                      String joinedDate =
+                          "-";
+
+                      if (createdAt !=
+                          null) {
+                        joinedDate =
+                            DateFormat(
+                          'dd MMM yyyy',
+                        ).format(
+                          createdAt
+                              .toDate(),
+                        );
+                      }
+
+                      return Container(
+                        margin:
+                            const EdgeInsets.only(
+                          bottom: 16,
+                        ),
+
+                        padding:
+                            const EdgeInsets.all(
+                          16,
+                        ),
+
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              Colors.white,
+
+                          borderRadius:
+                              BorderRadius.circular(
+                            24,
+                          ),
+
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors
+                                  .black
+                                  .withOpacity(
+                                .04,
+                              ),
+
+                              blurRadius:
+                                  12,
+
+                              offset:
+                                  const Offset(
+                                0,
+                                5,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        child: Column(
+                          children: [
+                            /// TOP SECTION
                             Row(
                               children: [
                                 CircleAvatar(
-                                  radius: 36,
+                                  radius: 28,
 
                                   backgroundColor:
-                                      Colors.indigo
-                                          .withOpacity(.1),
+                                      const Color(
+                                    0xFFEEF0FF,
+                                  ),
 
                                   backgroundImage:
                                       photo.isNotEmpty
@@ -348,20 +447,28 @@ class _UsersPageState extends State<UsersPage> {
                                             )
                                           : null,
 
-                                  child: photo.isEmpty
+                                  child: photo
+                                          .isEmpty
                                       ? const Icon(
-                                          Icons.person,
-                                          size: 34,
+                                          Icons
+                                              .person,
+                                          size:
+                                              28,
                                           color:
-                                              Colors.indigo,
+                                              Color(
+                                            0xFF5B5FEF,
+                                          ),
                                         )
                                       : null,
                                 ),
 
-                                const SizedBox(width: 16),
+                                const SizedBox(
+                                    width:
+                                        14),
 
                                 Expanded(
-                                  child: Column(
+                                  child:
+                                      Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment
                                             .start,
@@ -370,289 +477,479 @@ class _UsersPageState extends State<UsersPage> {
                                       Text(
                                         name,
 
+                                        maxLines:
+                                            1,
+
+                                        overflow:
+                                            TextOverflow
+                                                .ellipsis,
+
                                         style:
                                             const TextStyle(
+                                          fontSize:
+                                              17,
                                           fontWeight:
-                                              FontWeight
-                                                  .bold,
-
-                                          fontSize: 20,
+                                              FontWeight.bold,
                                         ),
                                       ),
 
                                       const SizedBox(
-                                          height: 6),
+                                          height:
+                                              4),
 
                                       Text(
                                         email,
 
-                                        style: TextStyle(
+                                        maxLines:
+                                            1,
+
+                                        overflow:
+                                            TextOverflow
+                                                .ellipsis,
+
+                                        style:
+                                            TextStyle(
                                           color: Colors
                                               .grey
                                               .shade700,
-                                        ),
-                                      ),
 
-                                      const SizedBox(
-                                          height: 6),
-
-                                      Container(
-                                        padding:
-                                            const EdgeInsets
-                                                .symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-
-                                        decoration:
-                                            BoxDecoration(
-                                          color: isActive
-                                              ? Colors.green
-                                                  .withOpacity(
-                                                      .1)
-                                              : Colors.red
-                                                  .withOpacity(
-                                                      .1),
-
-                                          borderRadius:
-                                              BorderRadius
-                                                  .circular(
-                                            30,
-                                          ),
-                                        ),
-
-                                        child: Text(
-                                          isActive
-                                              ? "ACTIVE"
-                                              : "BLOCKED",
-
-                                          style:
-                                              TextStyle(
-                                            color: isActive
-                                                ? Colors
-                                                    .green
-                                                : Colors
-                                                    .red,
-
-                                            fontWeight:
-                                                FontWeight
-                                                    .bold,
-
-                                            fontSize: 12,
-                                          ),
+                                          fontSize:
+                                              13,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
+
+                                Container(
+                                  padding:
+                                      const EdgeInsets.symmetric(
+                                    horizontal:
+                                        12,
+                                    vertical:
+                                        7,
+                                  ),
+
+                                  decoration:
+                                      BoxDecoration(
+                                    color: isActive
+                                        ? Colors.green.withOpacity(
+                                            .10)
+                                        : Colors.red.withOpacity(
+                                            .10),
+
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      30,
+                                    ),
+                                  ),
+
+                                  child:
+                                      Text(
+                                    isActive
+                                        ? "ACTIVE"
+                                        : "BLOCKED",
+
+                                    style:
+                                        TextStyle(
+                                      color: isActive
+                                          ? Colors.green
+                                          : Colors.red,
+
+                                      fontWeight:
+                                          FontWeight.bold,
+
+                                      fontSize:
+                                          11,
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
 
-                            const SizedBox(height: 20),
+                            const SizedBox(
+                                height:
+                                    18),
 
-                            Divider(
-                              color:
-                                  Colors.grey.shade200,
-                            ),
+                            /// QUICK INFO
+                            Container(
+                              padding:
+                                  const EdgeInsets.all(
+                                14,
+                              ),
 
-                            const SizedBox(height: 16),
+                              decoration:
+                                  BoxDecoration(
+                                color:
+                                    const Color(
+                                  0xFFF7F8FD,
+                                ),
 
-                            /// ================= INFO =================
-                            _infoTile(
-                              icon:
-                                  Icons.phone_rounded,
-
-                              title: "Phone",
-
-                              value: phone,
-                            ),
-
-                            const SizedBox(height: 14),
-
-                            _infoTile(
-                              icon:
-                                  Icons.location_on_rounded,
-
-                              title: "Address",
-
-                              value: address,
-                            ),
-
-                            const SizedBox(height: 14),
-
-                            _infoTile(
-                              icon:
-                                  Icons.verified_user_rounded,
-
-                              title: "User ID",
-
-                              value: uid,
-                            ),
-
-                            const SizedBox(height: 14),
-
-                            _infoTile(
-                              icon:
-                                  Icons.calendar_month_rounded,
-
-                              title: "Joined On",
-
-                              value: joinedDate,
-                            ),
-
-                            /// ================= PROVIDERS =================
-                            if (providers.isNotEmpty) ...[
-                              const SizedBox(height: 22),
-
-                              const Text(
-                                "Linked Providers",
-
-                                style: TextStyle(
-                                  fontWeight:
-                                      FontWeight.bold,
-                                  fontSize: 16,
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  18,
                                 ),
                               ),
 
-                              const SizedBox(height: 12),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child:
+                                            _compactInfo(
+                                          Icons
+                                              .phone,
+                                          phone,
+                                        ),
+                                      ),
+
+                                      const SizedBox(
+                                          width:
+                                              12),
+
+                                      Expanded(
+                                        child:
+                                            _compactInfo(
+                                          Icons
+                                              .calendar_today,
+                                          joinedDate,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(
+                                      height:
+                                          14),
+
+                                  _compactInfo(
+                                    Icons
+                                        .location_on,
+                                    address,
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            /// PROVIDERS
+                            if (providers
+                                .isNotEmpty) ...[
+                              const SizedBox(
+                                  height:
+                                      18),
+
+                              Align(
+                                alignment:
+                                    Alignment
+                                        .centerLeft,
+
+                                child:
+                                    Text(
+                                  "Linked Providers",
+
+                                  style:
+                                      TextStyle(
+                                    color: Colors
+                                        .grey
+                                        .shade700,
+
+                                    fontWeight:
+                                        FontWeight
+                                            .w600,
+
+                                    fontSize:
+                                        14,
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(
+                                  height:
+                                      12),
 
                               Wrap(
-                                spacing: 10,
-                                runSpacing: 10,
+                                spacing: 8,
+                                runSpacing: 8,
 
                                 children:
-                                    providers.map((provider) {
-                                  return Container(
-                                    padding:
-                                        const EdgeInsets
-                                            .symmetric(
-                                      horizontal: 14,
-                                      vertical: 8,
-                                    ),
-
-                                    decoration:
-                                        BoxDecoration(
-                                      color: Colors
-                                          .indigo
-                                          .withOpacity(
-                                              .08),
-
-                                      borderRadius:
-                                          BorderRadius
-                                              .circular(
-                                        30,
+                                    providers
+                                        .map(
+                                  (
+                                    provider,
+                                  ) {
+                                    return Container(
+                                      padding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal:
+                                            12,
+                                        vertical:
+                                            7,
                                       ),
-                                    ),
 
-                                    child: Row(
-                                      mainAxisSize:
-                                          MainAxisSize.min,
-
-                                      children: [
-                                        const Icon(
-                                          Icons.link_rounded,
-                                          size: 16,
-                                          color:
-                                              Colors.indigo,
+                                      decoration:
+                                          BoxDecoration(
+                                        color:
+                                            const Color(
+                                          0xFFEEF0FF,
                                         ),
 
-                                        const SizedBox(
-                                            width: 6),
+                                        borderRadius:
+                                            BorderRadius.circular(
+                                          30,
+                                        ),
+                                      ),
 
-                                        Text(
-                                          provider
-                                              .toString(),
+                                      child:
+                                          Row(
+                                        mainAxisSize:
+                                            MainAxisSize.min,
 
-                                          style:
-                                              const TextStyle(
-                                            color: Colors
-                                                .indigo,
-
-                                            fontWeight:
-                                                FontWeight
-                                                    .w600,
+                                        children: [
+                                          const Icon(
+                                            Icons
+                                                .business_center,
+                                            size:
+                                                14,
+                                            color:
+                                                Color(
+                                              0xFF5B5FEF,
+                                            ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
+
+                                          const SizedBox(
+                                              width:
+                                                  6),
+
+                                          Text(
+                                            provider
+                                                .toString(),
+
+                                            style:
+                                                const TextStyle(
+                                              color:
+                                                  Color(
+                                                0xFF5B5FEF,
+                                              ),
+
+                                              fontWeight:
+                                                  FontWeight.w600,
+
+                                              fontSize:
+                                                  12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ).toList(),
                               ),
                             ],
+
+                            const SizedBox(
+                                height:
+                                    16),
+
+                            /// UID
+                            Container(
+                              width: double
+                                  .infinity,
+
+                              padding:
+                                  const EdgeInsets.symmetric(
+                                horizontal:
+                                    14,
+                                vertical:
+                                    12,
+                              ),
+
+                              decoration:
+                                  BoxDecoration(
+                                border:
+                                    Border.all(
+                                  color:
+                                      Colors
+                                          .grey
+                                          .shade200,
+                                ),
+
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  16,
+                                ),
+                              ),
+
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons
+                                        .verified_user,
+                                    size:
+                                        18,
+                                    color:
+                                        Color(
+                                      0xFF5B5FEF,
+                                    ),
+                                  ),
+
+                                  const SizedBox(
+                                      width:
+                                          10),
+
+                                  Expanded(
+                                    child:
+                                        Text(
+                                      uid,
+
+                                      maxLines:
+                                          1,
+
+                                      overflow:
+                                          TextOverflow
+                                              .ellipsis,
+
+                                      style:
+                                          const TextStyle(
+                                        fontSize:
+                                            13,
+                                        fontWeight:
+                                            FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                    );
-                  },
-                );
-              },
+                      );
+                    },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  /// ================= INFO TILE =================
-  Widget _infoTile({
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
+  /// ================= COMPACT INFO =================
+  Widget _compactInfo(
+    IconData icon,
+    String value,
+  ) {
     return Row(
       crossAxisAlignment:
           CrossAxisAlignment.start,
 
       children: [
         Container(
-          padding: const EdgeInsets.all(10),
+          padding:
+              const EdgeInsets.all(8),
 
           decoration: BoxDecoration(
             color:
-                Colors.indigo.withOpacity(.08),
+                Colors.white,
 
             borderRadius:
-                BorderRadius.circular(14),
+                BorderRadius.circular(
+              12,
+            ),
           ),
 
           child: Icon(
             icon,
-            color: Colors.indigo,
-            size: 20,
+            size: 16,
+            color:
+                const Color(
+              0xFF5B5FEF,
+            ),
           ),
         ),
 
-        const SizedBox(width: 14),
+        const SizedBox(width: 10),
 
         Expanded(
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+          child: Padding(
+            padding:
+                const EdgeInsets.only(
+              top: 2,
+            ),
 
-            children: [
-              Text(
-                title,
+            child: Text(
+              value,
 
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 13,
-                ),
+              maxLines: 2,
+
+              overflow:
+                  TextOverflow
+                      .ellipsis,
+
+              style:
+                  const TextStyle(
+                fontSize: 13,
+                fontWeight:
+                    FontWeight.w600,
+                height: 1.4,
               ),
-
-              const SizedBox(height: 4),
-
-              Text(
-                value.isEmpty ? "-" : value,
-
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  /// ================= EMPTY STATE =================
+  Widget _emptyState(
+    String title,
+  ) {
+    return Center(
+      child: Column(
+        mainAxisAlignment:
+            MainAxisAlignment.center,
+
+        children: [
+          Container(
+            width: 90,
+            height: 90,
+
+            decoration:
+                BoxDecoration(
+              color:
+                  const Color(
+                0xFFEEF0FF,
+              ),
+
+              borderRadius:
+                  BorderRadius.circular(
+                28,
+              ),
+            ),
+
+            child: const Icon(
+              Icons.people_outline,
+              size: 42,
+              color:
+                  Color(0xFF5B5FEF),
+            ),
+          ),
+
+          const SizedBox(
+              height: 18),
+
+          Text(
+            title,
+
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

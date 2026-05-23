@@ -12,7 +12,6 @@ class AdminOrdersPage extends StatefulWidget {
 
 class _AdminOrdersPageState
     extends State<AdminOrdersPage> {
-
   final CollectionReference ordersRef =
       FirebaseFirestore.instance.collection(
     "orders",
@@ -24,887 +23,755 @@ class _AdminOrdersPageState
   /// ================= STATUS COLOR =================
   Color getColor(String status) {
     switch (status.toLowerCase()) {
-
       case "accepted":
-        return Colors.green;
+        return const Color(0xFF16A34A);
 
       case "completed":
-        return Colors.blue;
+        return const Color(0xFF2563EB);
 
       case "rejected":
-        return Colors.red;
+        return const Color(0xFFDC2626);
 
       case "cancelled":
-        return Colors.redAccent;
+        return const Color(0xFFEF4444);
 
       default:
-        return Colors.orange;
+        return const Color(0xFFF59E0B);
     }
   }
 
   /// ================= STATUS ICON =================
   IconData getStatusIcon(String status) {
     switch (status.toLowerCase()) {
-
       case "accepted":
-        return Icons.check_circle;
+        return Icons.check_circle_rounded;
 
       case "completed":
         return Icons.task_alt_rounded;
 
       case "rejected":
-        return Icons.cancel;
+        return Icons.cancel_rounded;
 
       case "cancelled":
-        return Icons.cancel_schedule_send;
+        return Icons.remove_circle_rounded;
 
       default:
         return Icons.pending_actions_rounded;
     }
   }
 
-  /// ================= UPDATE STATUS =================
-  Future<void> updateStatus(
-    String orderId,
-    String status,
-  ) async {
+  /// ================= SERVICE ICON =================
+  IconData getServiceIcon(String service) {
+    final value = service.toLowerCase();
 
-    try {
-
-      await ordersRef.doc(orderId).update({
-
-        "status": status,
-
-        "updatedAt":
-            FieldValue.serverTimestamp(),
-      });
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-
-        SnackBar(
-          content: Text(
-            "Order marked as $status",
-          ),
-        ),
-      );
-    } catch (e) {
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-
-        SnackBar(
-          content: Text(
-            "Failed: $e",
-          ),
-        ),
-      );
+    if (value.contains("clean")) {
+      return Icons.cleaning_services_rounded;
     }
+
+    if (value.contains("electric")) {
+      return Icons.electrical_services_rounded;
+    }
+
+    if (value.contains("plumb")) {
+      return Icons.plumbing_rounded;
+    }
+
+    if (value.contains("water")) {
+      return Icons.water_drop_rounded;
+    }
+
+    if (value.contains("salon")) {
+      return Icons.content_cut_rounded;
+    }
+
+    return Icons.miscellaneous_services_rounded;
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       backgroundColor:
-          const Color(0xfff5f7fb),
+          const Color(0xFFF5F7FB),
 
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        centerTitle: true,
+      body: SafeArea(
+        child: StreamBuilder<QuerySnapshot>(
+          stream: ordersRef.snapshots(),
 
-        title: const Text(
-          "All Orders",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-          ),
-        ),
-      ),
+          builder: (context, snapshot) {
+            /// LOADING
+            if (snapshot.connectionState ==
+                ConnectionState.waiting) {
+              return const Center(
+                child:
+                    CircularProgressIndicator(),
+              );
+            }
 
-      body: Column(
-        children: [
+            /// EMPTY
+            if (!snapshot.hasData ||
+                snapshot.data!.docs.isEmpty) {
+              return _emptyState();
+            }
 
-          /// ================= TOP CARD =================
-          Container(
-            margin:
-                const EdgeInsets.all(16),
+            final docs =
+                snapshot.data!.docs;
 
-            padding:
-                const EdgeInsets.all(20),
+            /// SORT
+            docs.sort((a, b) {
+              final aTime =
+                  (a['createdAt']
+                              as Timestamp?)
+                          ?.millisecondsSinceEpoch ??
+                      0;
 
-            decoration: BoxDecoration(
-              gradient:
-                  const LinearGradient(
-                colors: [
-                  Color(0xff2563eb),
-                  Color(0xff7c3aed),
-                ],
-              ),
+              final bTime =
+                  (b['createdAt']
+                              as Timestamp?)
+                          ?.millisecondsSinceEpoch ??
+                      0;
 
-              borderRadius:
-                  BorderRadius.circular(24),
-            ),
+              return bTime.compareTo(
+                aTime,
+              );
+            });
 
-            child: Row(
+            /// FILTER
+            final filtered =
+                docs.where((doc) {
+              final data =
+                  doc.data()
+                      as Map<String, dynamic>;
+
+              final customer =
+                  (data['customerName'] ??
+                          "")
+                      .toString()
+                      .toLowerCase();
+
+              final phone =
+                  (data['customerPhone'] ??
+                          "")
+                      .toString()
+                      .toLowerCase();
+
+              final service =
+                  (data['serviceName'] ??
+                          data['serviceType'] ??
+                          "")
+                      .toString()
+                      .toLowerCase();
+
+              final provider =
+                  (data['providerName'] ??
+                          "")
+                      .toString()
+                      .toLowerCase();
+
+              final status =
+                  (data['status'] ??
+                          "pending")
+                      .toString()
+                      .toLowerCase();
+
+              final matchesSearch =
+                  customer.contains(
+                        search,
+                      ) ||
+                      phone.contains(
+                        search,
+                      ) ||
+                      service.contains(
+                        search,
+                      ) ||
+                      provider.contains(
+                        search,
+                      );
+
+              final matchesFilter =
+                  filter == "all" ||
+                      status == filter;
+
+              return matchesSearch &&
+                  matchesFilter;
+            }).toList();
+
+            return Column(
               children: [
-
+                /// ================= HEADER =================
                 Container(
                   padding:
-                      const EdgeInsets.all(14),
-
-                  decoration: BoxDecoration(
-                    color: Colors.white
-                        .withOpacity(.15),
-
-                    shape: BoxShape.circle,
+                      const EdgeInsets.fromLTRB(
+                    18,
+                    18,
+                    18,
+                    24,
                   ),
 
-                  child: const Icon(
-                    Icons.shopping_bag_rounded,
-                    color: Colors.white,
-                    size: 30,
+                  decoration:
+                      const BoxDecoration(
+                    gradient:
+                        LinearGradient(
+                      colors: [
+                        Color(
+                          0xFF2563EB,
+                        ),
+                        Color(
+                          0xFF7C3AED,
+                        ),
+                      ],
+
+                      begin:
+                          Alignment.topLeft,
+
+                      end: Alignment
+                          .bottomRight,
+                    ),
+
+                    borderRadius:
+                        BorderRadius.only(
+                      bottomLeft:
+                          Radius.circular(
+                        30,
+                      ),
+                      bottomRight:
+                          Radius.circular(
+                        30,
+                      ),
+                    ),
                   ),
-                ),
 
-                const SizedBox(width: 16),
-
-                const Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment
-                            .start,
-
                     children: [
-
-                      Text(
-                        "Manage Service Orders",
-
-                        style: TextStyle(
-                          color:
-                              Colors.white70,
-                          fontSize: 15,
-                        ),
-                      ),
-
-                      SizedBox(height: 6),
-
-                      Text(
-                        "Admin Dashboard",
-
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight:
-                              FontWeight.bold,
-                          fontSize: 26,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          /// ================= SEARCH =================
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(
-              horizontal: 16,
-            ),
-
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-
-                borderRadius:
-                    BorderRadius.circular(18),
-
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black
-                        .withOpacity(.04),
-
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-
-              child: TextField(
-                onChanged: (val) {
-
-                  setState(() {
-                    search =
-                        val.toLowerCase();
-                  });
-                },
-
-                decoration:
-                    const InputDecoration(
-                  hintText:
-                      "Search by customer, phone or service",
-
-                  prefixIcon: Icon(
-                    Icons.search_rounded,
-                  ),
-
-                  border: InputBorder.none,
-
-                  contentPadding:
-                      EdgeInsets.symmetric(
-                    vertical: 18,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          /// ================= FILTER =================
-          SizedBox(
-            height: 45,
-
-            child: ListView(
-              scrollDirection:
-                  Axis.horizontal,
-
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal: 12,
-              ),
-
-              children: [
-
-                _chip("all"),
-                _chip("pending"),
-                _chip("accepted"),
-                _chip("completed"),
-                _chip("rejected"),
-                _chip("cancelled"),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          /// ================= ORDERS =================
-          Expanded(
-            child:
-                StreamBuilder<QuerySnapshot>(
-              stream:
-                  ordersRef.snapshots(),
-
-              builder:
-                  (context, snapshot) {
-
-                if (snapshot.connectionState ==
-                    ConnectionState.waiting) {
-
-                  return const Center(
-                    child:
-                        CircularProgressIndicator(),
-                  );
-                }
-
-                if (!snapshot.hasData ||
-                    snapshot
-                        .data!.docs.isEmpty) {
-
-                  return const Center(
-                    child: Text(
-                      "No Orders Found",
-
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight:
-                            FontWeight.w600,
-                      ),
-                    ),
-                  );
-                }
-
-                final docs =
-                    snapshot.data!.docs;
-
-                /// SORT
-                docs.sort((a, b) {
-
-                  final aTime =
-                      (a['createdAt']
-                                  as Timestamp?)
-                              ?.millisecondsSinceEpoch ??
-                          0;
-
-                  final bTime =
-                      (b['createdAt']
-                                  as Timestamp?)
-                              ?.millisecondsSinceEpoch ??
-                          0;
-
-                  return bTime.compareTo(
-                    aTime,
-                  );
-                });
-
-                /// FILTER
-                final filtered =
-                    docs.where((doc) {
-
-                  final data =
-                      doc.data()
-                          as Map<String,
-                              dynamic>;
-
-                  final customer =
-                      (data['customerName'] ??
-                              "")
-                          .toString()
-                          .toLowerCase();
-
-                  final phone =
-                      (data['customerPhone'] ??
-                              "")
-                          .toString()
-                          .toLowerCase();
-
-                  final service =
-                      (data['serviceName'] ??
-                              data['serviceType'] ??
-                              "")
-                          .toString()
-                          .toLowerCase();
-
-                  final provider =
-                      (data['providerName'] ??
-                              "")
-                          .toString()
-                          .toLowerCase();
-
-                  final status =
-                      (data['status'] ??
-                              "pending")
-                          .toString()
-                          .toLowerCase();
-
-                  final matchesSearch =
-                      customer.contains(
-                            search,
-                          ) ||
-                          phone.contains(
-                            search,
-                          ) ||
-                          service.contains(
-                            search,
-                          ) ||
-                          provider.contains(
-                            search,
-                          );
-
-                  final matchesFilter =
-                      filter == "all" ||
-                          status == filter;
-
-                  return matchesSearch &&
-                      matchesFilter;
-                }).toList();
-
-                if (filtered.isEmpty) {
-
-                  return const Center(
-                    child: Text(
-                      "No Matching Orders",
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding:
-                      const EdgeInsets.all(
-                    16,
-                  ),
-
-                  itemCount:
-                      filtered.length,
-
-                  itemBuilder:
-                      (_, index) {
-
-                    final doc =
-                        filtered[index];
-
-                    final data =
-                        doc.data()
-                            as Map<String,
-                                dynamic>;
-
-                    final String status =
-                        data['status'] ??
-                            "pending";
-
-                    final String service =
-                        data['serviceName'] ??
-                            data['serviceType'] ??
-                            "Service";
-
-                    final String customer =
-                        data['customerName'] ??
-                            "Unknown";
-
-                    final String phone =
-                        data['customerPhone'] ??
-                            "-";
-
-                    final String provider =
-                        data['providerName'] ??
-                            "Not Assigned";
-
-                    final String address =
-                        data['address'] ??
-                            "-";
-
-                    final Timestamp?
-                        createdAt =
-                        data['createdAt'];
-
-                    String date = "-";
-
-                    if (createdAt != null) {
-
-                      date = DateFormat(
-                        'dd MMM yyyy • hh:mm a',
-                      ).format(
-                        createdAt.toDate(),
-                      );
-                    }
-
-                    return Container(
-                      margin:
-                          const EdgeInsets.only(
-                        bottom: 18,
-                      ),
-
-                      decoration:
-                          BoxDecoration(
-                        color: Colors.white,
-
-                        borderRadius:
-                            BorderRadius.circular(
-                          24,
-                        ),
-
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black
-                                .withOpacity(
-                                    .05),
-
-                            blurRadius: 12,
-
-                            offset:
-                                const Offset(
-                              0,
-                              5,
+                      /// TOP BAR
+                      Row(
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+
+                            decoration:
+                                BoxDecoration(
+                              color: Colors
+                                  .white
+                                  .withOpacity(
+                                .14,
+                              ),
+
+                              borderRadius:
+                                  BorderRadius.circular(
+                                16,
+                              ),
+                            ),
+
+                            child: const Icon(
+                              Icons
+                                  .shopping_bag_rounded,
+
+                              color:
+                                  Colors.white,
+                            ),
+                          ),
+
+                          const SizedBox(
+                              width: 14),
+
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment
+                                      .start,
+
+                              children: [
+                                const Text(
+                                  "Orders Dashboard",
+
+                                  style:
+                                      TextStyle(
+                                    color: Colors
+                                        .white,
+
+                                    fontWeight:
+                                        FontWeight
+                                            .bold,
+
+                                    fontSize: 22,
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                    height: 4),
+
+                                Text(
+                                  "${filtered.length} available orders",
+
+                                  style:
+                                      const TextStyle(
+                                    color: Colors
+                                        .white70,
+
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
 
-                      child: Padding(
-                        padding:
-                            const EdgeInsets
-                                .all(18),
+                      const SizedBox(
+                          height: 22),
 
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
+                      /// SEARCH
+                      Container(
+                        decoration:
+                            BoxDecoration(
+                          color: Colors.white,
+
+                          borderRadius:
+                              BorderRadius.circular(
+                            18,
+                          ),
+                        ),
+
+                        child: TextField(
+                          onChanged: (val) {
+                            setState(() {
+                              search =
+                                  val.toLowerCase();
+                            });
+                          },
+
+                          decoration:
+                              const InputDecoration(
+                            hintText:
+                                "Search customer, provider or service",
+
+                            border:
+                                InputBorder.none,
+
+                            prefixIcon: Icon(
+                              Icons
+                                  .search_rounded,
+                            ),
+
+                            contentPadding:
+                                EdgeInsets.symmetric(
+                              vertical: 17,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(
+                          height: 18),
+
+                      /// FILTERS
+                      SizedBox(
+                        height: 42,
+
+                        child: ListView(
+                          scrollDirection:
+                              Axis.horizontal,
 
                           children: [
+                            _chip("all"),
+                            _chip("pending"),
+                            _chip("accepted"),
+                            _chip("completed"),
+                            _chip("rejected"),
+                            _chip("cancelled"),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
 
-                            /// TOP
-                            Row(
-                              children: [
+                /// ================= LIST =================
+                Expanded(
+                  child: filtered.isEmpty
+                      ? _noMatch()
+                      : ListView.builder(
+                          padding:
+                              const EdgeInsets.all(
+                            16,
+                          ),
 
-                                Container(
-                                  height: 64,
-                                  width: 64,
+                          itemCount:
+                              filtered.length,
 
-                                  decoration:
-                                      BoxDecoration(
-                                    gradient:
-                                        const LinearGradient(
-                                      colors: [
-                                        Color(
-                                            0xff2563eb),
-                                        Color(
-                                            0xff7c3aed),
-                                      ],
-                                    ),
+                          itemBuilder:
+                              (_, index) {
+                            final doc =
+                                filtered[index];
 
-                                    borderRadius:
-                                        BorderRadius
-                                            .circular(
-                                      20,
-                                    ),
-                                  ),
+                            final data =
+                                doc.data()
+                                    as Map<
+                                        String,
+                                        dynamic>;
 
-                                  child:
-                                      const Icon(
-                                    Icons
-                                        .miscellaneous_services_rounded,
+                            final String
+                                status =
+                                data['status'] ??
+                                    "pending";
 
+                            final String
+                                service =
+                                data['serviceName'] ??
+                                    data['serviceType'] ??
+                                    "Service";
+
+                            final String
+                                customer =
+                                data['customerName'] ??
+                                    "Unknown";
+
+                            final String
+                                phone =
+                                data['customerPhone'] ??
+                                    "-";
+
+                            final String
+                                provider =
+                                data['providerName'] ??
+                                    "Not Assigned";
+
+                            final String
+                                address =
+                                data['address'] ??
+                                    "-";
+
+                            final Timestamp?
+                                createdAt =
+                                data['createdAt'];
+
+                            String date =
+                                "-";
+
+                            if (createdAt !=
+                                null) {
+                              date =
+                                  DateFormat(
+                                'dd MMM yyyy • hh:mm a',
+                              ).format(
+                                createdAt
+                                    .toDate(),
+                              );
+                            }
+
+                            return Container(
+                              margin:
+                                  const EdgeInsets.only(
+                                bottom: 18,
+                              ),
+
+                              padding:
+                                  const EdgeInsets.all(
+                                16,
+                              ),
+
+                              decoration:
+                                  BoxDecoration(
+                                color:
+                                    Colors.white,
+
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  24,
+                                ),
+
+                                boxShadow: [
+                                  BoxShadow(
                                     color: Colors
-                                        .white,
+                                        .black
+                                        .withOpacity(
+                                      .04,
+                                    ),
 
-                                    size: 32,
+                                    blurRadius:
+                                        14,
+
+                                    offset:
+                                        const Offset(
+                                      0,
+                                      6,
+                                    ),
                                   ),
-                                ),
+                                ],
+                              ),
 
-                                const SizedBox(
-                                  width: 16,
-                                ),
-
-                                Expanded(
-                                  child: Column(
+                              child: Column(
+                                children: [
+                                  /// TOP
+                                  Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment
                                             .start,
 
                                     children: [
+                                      Container(
+                                        width: 68,
+                                        height: 68,
 
-                                      Text(
-                                        service
-                                            .toUpperCase(),
-
-                                        style:
-                                            const TextStyle(
-                                          fontSize:
-                                              20,
-
-                                          fontWeight:
-                                              FontWeight
-                                                  .bold,
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                        height: 6,
-                                      ),
-
-                                      Text(
-                                        customer,
-
-                                        style:
-                                            TextStyle(
-                                          color: Colors
-                                              .grey
-                                              .shade700,
-
-                                          fontSize:
-                                              15,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                /// STATUS
-                                Container(
-                                  padding:
-                                      const EdgeInsets
-                                          .symmetric(
-                                    horizontal:
-                                        14,
-                                    vertical:
-                                        8,
-                                  ),
-
-                                  decoration:
-                                      BoxDecoration(
-                                    color:
-                                        getColor(
-                                      status,
-                                    ).withOpacity(
-                                      .12,
-                                    ),
-
-                                    borderRadius:
-                                        BorderRadius.circular(
-                                      30,
-                                    ),
-                                  ),
-
-                                  child: Row(
-                                    children: [
-
-                                      Icon(
-                                        getStatusIcon(
-                                          status,
-                                        ),
-
-                                        size: 18,
-
-                                        color:
-                                            getColor(
-                                          status,
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                        width: 6,
-                                      ),
-
-                                      Text(
-                                        status
-                                            .toUpperCase(),
-
-                                        style:
-                                            TextStyle(
-                                          color:
-                                              getColor(
-                                            status,
+                                        decoration:
+                                            BoxDecoration(
+                                          gradient:
+                                              const LinearGradient(
+                                            colors: [
+                                              Color(
+                                                0xFF2563EB,
+                                              ),
+                                              Color(
+                                                0xFF7C3AED,
+                                              ),
+                                            ],
                                           ),
 
-                                          fontWeight:
-                                              FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(
-                              height: 20,
-                            ),
-
-                            Divider(
-                              color: Colors
-                                  .grey
-                                  .shade200,
-                            ),
-
-                            const SizedBox(
-                              height: 16,
-                            ),
-
-                            /// DETAILS
-                            _infoTile(
-                              icon: Icons.person,
-
-                              title:
-                                  "Customer",
-
-                              value:
-                                  customer,
-                            ),
-
-                            const SizedBox(
-                              height: 14,
-                            ),
-
-                            _infoTile(
-                              icon:
-                                  Icons.phone,
-
-                              title: "Phone",
-
-                              value: phone,
-                            ),
-
-                            const SizedBox(
-                              height: 14,
-                            ),
-
-                            _infoTile(
-                              icon: Icons
-                                  .engineering,
-
-                              title:
-                                  "Provider",
-
-                              value:
-                                  provider,
-                            ),
-
-                            const SizedBox(
-                              height: 14,
-                            ),
-
-                            _infoTile(
-                              icon: Icons
-                                  .location_on,
-
-                              title:
-                                  "Address",
-
-                              value:
-                                  address,
-                            ),
-
-                            const SizedBox(
-                              height: 14,
-                            ),
-
-                            _infoTile(
-                              icon: Icons
-                                  .calendar_month,
-
-                              title:
-                                  "Ordered On",
-
-                              value: date,
-                            ),
-
-                            const SizedBox(
-                              height: 20,
-                            ),
-
-                            /// ACTION BUTTONS
-                            if (status !=
-                                "completed")
-
-                              Row(
-                                children: [
-
-                                  Expanded(
-                                    child:
-                                        OutlinedButton(
-                                      onPressed:
-                                          () {
-
-                                        updateStatus(
-                                          doc.id,
-                                          "rejected",
-                                        );
-                                      },
-
-                                      style:
-                                          OutlinedButton.styleFrom(
-                                        side:
-                                            const BorderSide(
-                                          color:
-                                              Colors.red,
-                                        ),
-
-                                        shape:
-                                            RoundedRectangleBorder(
                                           borderRadius:
                                               BorderRadius.circular(
-                                            14,
+                                            20,
                                           ),
                                         ),
 
-                                        padding:
-                                            const EdgeInsets.symmetric(
-                                          vertical:
-                                              14,
+                                        child: Icon(
+                                          getServiceIcon(
+                                            service,
+                                          ),
+
+                                          color: Colors
+                                              .white,
+
+                                          size: 32,
                                         ),
                                       ),
 
-                                      child:
-                                          const Text(
-                                        "Reject",
+                                      const SizedBox(
+                                          width:
+                                              14),
 
-                                        style:
-                                            TextStyle(
-                                          color:
-                                              Colors.red,
+                                      Expanded(
+                                        child:
+                                            Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment
+                                                  .start,
+
+                                          children: [
+                                            Text(
+                                              service,
+
+                                              maxLines:
+                                                  1,
+
+                                              overflow:
+                                                  TextOverflow
+                                                      .ellipsis,
+
+                                              style:
+                                                  const TextStyle(
+                                                fontSize:
+                                                    18,
+
+                                                fontWeight:
+                                                    FontWeight.bold,
+                                              ),
+                                            ),
+
+                                            const SizedBox(
+                                                height:
+                                                    5),
+
+                                            Text(
+                                              customer,
+
+                                              style:
+                                                  TextStyle(
+                                                color: Colors
+                                                    .grey
+                                                    .shade700,
+
+                                                fontSize:
+                                                    14,
+                                              ),
+                                            ),
+
+                                            const SizedBox(
+                                                height:
+                                                    10),
+
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal:
+                                                    12,
+
+                                                vertical:
+                                                    6,
+                                              ),
+
+                                              decoration:
+                                                  BoxDecoration(
+                                                color:
+                                                    getColor(
+                                                  status,
+                                                ).withOpacity(
+                                                  .10,
+                                                ),
+
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                  30,
+                                                ),
+                                              ),
+
+                                              child:
+                                                  Row(
+                                                mainAxisSize:
+                                                    MainAxisSize.min,
+
+                                                children: [
+                                                  Icon(
+                                                    getStatusIcon(
+                                                      status,
+                                                    ),
+
+                                                    size:
+                                                        15,
+
+                                                    color:
+                                                        getColor(
+                                                      status,
+                                                    ),
+                                                  ),
+
+                                                  const SizedBox(
+                                                      width:
+                                                          6),
+
+                                                  Text(
+                                                    status.toUpperCase(),
+
+                                                    style:
+                                                        TextStyle(
+                                                      color:
+                                                          getColor(
+                                                        status,
+                                                      ),
+
+                                                      fontWeight:
+                                                          FontWeight.bold,
+
+                                                      fontSize:
+                                                          11,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ),
 
                                   const SizedBox(
-                                    width: 12,
-                                  ),
+                                      height:
+                                          18),
 
-                                  Expanded(
-                                    child:
-                                        ElevatedButton(
-                                      onPressed:
-                                          () {
+                                  /// INFO BOX
+                                  Container(
+                                    padding:
+                                        const EdgeInsets.all(
+                                      14,
+                                    ),
 
-                                        final nextStatus =
-                                            status ==
-                                                    "pending"
-                                                ? "accepted"
-                                                : "completed";
-
-                                        updateStatus(
-                                          doc.id,
-                                          nextStatus,
-                                        );
-                                      },
-
-                                      style:
-                                          ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            Colors.green,
-
-                                        shape:
-                                            RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(
-                                            14,
-                                          ),
-                                        ),
-
-                                        padding:
-                                            const EdgeInsets.symmetric(
-                                          vertical:
-                                              14,
-                                        ),
+                                    decoration:
+                                        BoxDecoration(
+                                      color:
+                                          const Color(
+                                        0xFFF8FAFC,
                                       ),
 
-                                      child:
-                                          Text(
-                                        status ==
-                                                "pending"
-                                            ? "Accept"
-                                            : "Complete",
-
-                                        style:
-                                            const TextStyle(
-                                          color:
-                                              Colors.white,
-                                        ),
+                                      borderRadius:
+                                          BorderRadius.circular(
+                                        18,
                                       ),
+                                    ),
+
+                                    child: Column(
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child:
+                                                  _compactInfo(
+                                                Icons
+                                                    .phone_rounded,
+                                                phone,
+                                              ),
+                                            ),
+
+                                            const SizedBox(
+                                                width:
+                                                    12),
+
+                                            Expanded(
+                                              child:
+                                                  _compactInfo(
+                                                Icons
+                                                    .engineering_rounded,
+                                                provider,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+
+                                        const SizedBox(
+                                            height:
+                                                14),
+
+                                        _compactInfo(
+                                          Icons
+                                              .location_on_rounded,
+                                          address,
+                                        ),
+
+                                        const SizedBox(
+                                            height:
+                                                14),
+
+                                        _compactInfo(
+                                          Icons
+                                              .calendar_month_rounded,
+                                          date,
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
                               ),
-                          ],
+                            );
+                          },
                         ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
   /// ================= CHIP =================
   Widget _chip(String value) {
-
     final selected =
         filter == value;
 
     return Padding(
       padding:
-          const EdgeInsets.symmetric(
-        horizontal: 6,
+          const EdgeInsets.only(
+        right: 10,
       ),
 
       child: ChoiceChip(
@@ -918,19 +785,21 @@ class _AdminOrdersPageState
 
             fontWeight:
                 FontWeight.w600,
+
+            fontSize: 12,
           ),
         ),
 
         selected: selected,
 
         selectedColor:
-            const Color(0xff2563eb),
+            const Color(0xFF2563EB),
 
         backgroundColor:
             Colors.white,
 
         elevation:
-            selected ? 2 : 0,
+            selected ? 1 : 0,
 
         shape:
             RoundedRectangleBorder(
@@ -941,7 +810,6 @@ class _AdminOrdersPageState
         ),
 
         onSelected: (_) {
-
           setState(() {
             filter = value;
           });
@@ -950,82 +818,160 @@ class _AdminOrdersPageState
     );
   }
 
-  /// ================= INFO TILE =================
-  Widget _infoTile({
-
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-
+  /// ================= COMPACT INFO =================
+  Widget _compactInfo(
+    IconData icon,
+    String value,
+  ) {
     return Row(
       crossAxisAlignment:
           CrossAxisAlignment.start,
 
       children: [
-
         Container(
           padding:
-              const EdgeInsets.all(10),
+              const EdgeInsets.all(8),
 
           decoration: BoxDecoration(
-            color:
-                Colors.indigo.withOpacity(
-              .08,
-            ),
+            color: Colors.white,
 
             borderRadius:
                 BorderRadius.circular(
-              14,
+              12,
             ),
           ),
 
           child: Icon(
             icon,
-            color: Colors.indigo,
-            size: 20,
+
+            size: 16,
+
+            color: const Color(
+              0xFF4F46E5,
+            ),
           ),
         ),
 
-        const SizedBox(width: 14),
+        const SizedBox(width: 10),
 
         Expanded(
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+          child: Padding(
+            padding:
+                const EdgeInsets.only(
+              top: 2,
+            ),
 
-            children: [
+            child: Text(
+              value.isEmpty
+                  ? "-"
+                  : value,
 
-              Text(
-                title,
+              maxLines: 2,
 
-                style: TextStyle(
-                  color:
-                      Colors.grey.shade600,
+              overflow:
+                  TextOverflow.ellipsis,
 
-                  fontSize: 13,
-                ),
+              style:
+                  const TextStyle(
+                fontSize: 13,
+
+                fontWeight:
+                    FontWeight.w600,
+
+                height: 1.4,
               ),
-
-              const SizedBox(height: 4),
-
-              Text(
-                value.isEmpty
-                    ? "-"
-                    : value,
-
-                style:
-                    const TextStyle(
-                  fontWeight:
-                      FontWeight.w600,
-
-                  fontSize: 15,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  /// ================= EMPTY =================
+  Widget _emptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment:
+            MainAxisAlignment.center,
+
+        children: [
+          Container(
+            width: 92,
+            height: 92,
+
+            decoration:
+                BoxDecoration(
+              color: const Color(
+                0xFFEEF2FF,
+              ),
+
+              borderRadius:
+                  BorderRadius.circular(
+                28,
+              ),
+            ),
+
+            child: const Icon(
+              Icons.shopping_bag_outlined,
+
+              size: 42,
+
+              color: Color(
+                0xFF4F46E5,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          const Text(
+            "No Orders Found",
+
+            style: TextStyle(
+              fontSize: 18,
+
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ================= NO MATCH =================
+  Widget _noMatch() {
+    return Center(
+      child: Column(
+        mainAxisAlignment:
+            MainAxisAlignment.center,
+
+        children: [
+          Icon(
+            Icons.search_off_rounded,
+
+            size: 52,
+
+            color: Colors.grey.shade400,
+          ),
+
+          const SizedBox(height: 14),
+
+          Text(
+            "No Matching Orders",
+
+            style: TextStyle(
+              color:
+                  Colors.grey.shade700,
+
+              fontWeight:
+                  FontWeight.w600,
+
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

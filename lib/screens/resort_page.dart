@@ -1,145 +1,416 @@
 import 'package:flutter/material.dart';
+
 import '../data/resorts_data.dart';
 import '../widgets/resort_card.dart';
 
 class ResortPage extends StatefulWidget {
-  const ResortPage({super.key, required List<dynamic> resorts});
+
+  const ResortPage({
+    super.key, required List<dynamic> resorts,
+  });
 
   @override
-  State<ResortPage> createState() => _ResortPageState();
+  State<ResortPage> createState() =>
+      _ResortPageState();
 }
 
-class _ResortPageState extends State<ResortPage> {
-  String selectedCity = cities.first;
-  String searchText = "";
+class _ResortPageState
+    extends State<ResortPage> {
+
+  /// ================= SEARCH CONTROLLER =================
+  final TextEditingController
+      searchController =
+      TextEditingController();
+
+  /// ================= LOCATION FILTERS =================
+  final List<String> locations = [
+
+    "All",
+
+    "Arnala",
+    "Rajodi",
+    "Navapur",
+    "Agashi",
+    "Manvel Pada",
+    "Virar East",
+    "Virar West",
+  ];
+
+  String selectedLocation = "All";
+
+  @override
+  void dispose() {
+
+    searchController.dispose();
+
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
 
-    List<String> filteredCities = cities
-        .where((city) =>
-            city.toLowerCase().contains(searchText.toLowerCase()))
-        .toList();
+    /// ================= FILTERED RESORTS =================
+    final List<Resort> filteredResorts =
 
-    List<Resort> filteredResorts =
-        getResortsByCity(selectedCity);
+        resortList.where((resort) {
+
+      final searchText =
+          searchController.text
+              .trim()
+              .toLowerCase();
+
+      /// SEARCH FILTER
+      final matchesSearch =
+
+          resort.name
+              .toLowerCase()
+              .contains(searchText)
+
+          ||
+
+          resort.location
+              .toLowerCase()
+              .contains(searchText);
+
+      /// LOCATION FILTER
+      final matchesLocation =
+
+          selectedLocation == "All"
+
+              ? true
+
+              : resort.location
+                  .toLowerCase()
+                  .contains(
+                    selectedLocation
+                        .toLowerCase(),
+                  );
+
+      return matchesSearch &&
+          matchesLocation;
+
+    }).toList();
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+
+      backgroundColor:
+          Colors.grey.shade100,
+
       appBar: AppBar(
-        title: const Text("Resorts"),
+
+        elevation: 0,
+
         centerTitle: true,
+
         backgroundColor: Colors.blue,
+
+        title: const Text(
+          "Virar Resorts",
+
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
 
-      body: Column(
-        children: [
+      body: SafeArea(
 
-          /// SEARCH
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: "Search City...",
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+        child: Column(
+          children: [
+
+            /// ================= SEARCH BAR =================
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(
+                14,
+                14,
+                14,
+                12,
+              ),
+
+              child: Container(
+
+                height: 56,
+
+                decoration: BoxDecoration(
+
+                  color: Colors.white,
+
+                  borderRadius:
+                      BorderRadius.circular(
+                    18,
+                  ),
+
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black
+                          .withOpacity(0.05),
+
+                      blurRadius: 10,
+
+                      offset:
+                          const Offset(0, 4),
+                    ),
+                  ],
+                ),
+
+                child: TextField(
+
+                  controller:
+                      searchController,
+
+                  onChanged: (_) {
+                    setState(() {});
+                  },
+
+                  decoration:
+                      InputDecoration(
+
+                    hintText:
+                        "Search resorts or location",
+
+                    hintStyle: TextStyle(
+                      color:
+                          Colors.grey.shade500,
+                    ),
+
+                    prefixIcon: const Icon(
+                      Icons.search,
+                    ),
+
+                    border:
+                        InputBorder.none,
+
+                    contentPadding:
+                        const EdgeInsets.symmetric(
+                      vertical: 16,
+                    ),
+                  ),
                 ),
               ),
-              onChanged: (value) {
-                setState(() {
-                  searchText = value;
-                });
-              },
             ),
-          ),
 
-          Expanded(
-            child: Row(
-              children: [
+            /// ================= LOCATION CHIPS =================
+            SizedBox(
 
-                /// LEFT PANEL
-                Container(
-                  width: 110,
-                  color: Colors.white,
-                  child: ListView.builder(
-                    itemCount: filteredCities.length,
-                    itemBuilder: (context, index) {
-                      final city = filteredCities[index];
-                      bool isSelected = selectedCity == city;
+              height: 50,
 
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            selectedCity = city;
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(
-                              vertical: 10, horizontal: 8),
+              child: ListView.separated(
+
+                scrollDirection:
+                    Axis.horizontal,
+
+                padding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 14,
+                ),
+
+                itemCount:
+                    locations.length,
+
+                separatorBuilder:
+                    (context, index) {
+
+                  return const SizedBox(
+                    width: 10,
+                  );
+                },
+
+                itemBuilder:
+                    (context, index) {
+
+                  final location =
+                      locations[index];
+
+                  final isSelected =
+                      selectedLocation ==
+                          location;
+
+                  return GestureDetector(
+
+                    onTap: () {
+
+                      setState(() {
+
+                        selectedLocation =
+                            location;
+                      });
+                    },
+
+                    child:
+                        AnimatedContainer(
+
+                      duration:
+                          const Duration(
+                        milliseconds: 250,
+                      ),
+
+                      padding:
+                          const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+
+                      decoration:
+                          BoxDecoration(
+
+                        color: isSelected
+                            ? Colors.blue
+                            : Colors.white,
+
+                        borderRadius:
+                            BorderRadius.circular(
+                          30,
+                        ),
+
+                        border: Border.all(
+                          color: isSelected
+                              ? Colors.blue
+                              : Colors.grey
+                                  .shade300,
+                        ),
+
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors
+                                .black
+                                .withOpacity(
+                                    0.03),
+
+                            blurRadius: 6,
+
+                            offset:
+                                const Offset(
+                              0,
+                              3,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      child: Center(
+                        child: Text(
+                          location,
+
+                          style: TextStyle(
+
+                            color: isSelected
+                                ? Colors.white
+                                : Colors.black87,
+
+                            fontWeight:
+                                FontWeight.w600,
+
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            /// ================= RESORT LIST =================
+            Expanded(
+
+              child:
+                  filteredResorts.isEmpty
+
+                      ? Center(
                           child: Column(
+                            mainAxisAlignment:
+                                MainAxisAlignment
+                                    .center,
+
                             children: [
 
-                              Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: isSelected
-                                      ? Colors.blue
-                                      : Colors.grey.shade200,
-                                ),
-                                child: Icon(
-                                  Icons.location_on,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.black,
+                              Icon(
+                                Icons
+                                    .holiday_village,
+
+                                size: 75,
+
+                                color: Colors
+                                    .grey.shade400,
+                              ),
+
+                              const SizedBox(
+                                height: 14,
+                              ),
+
+                              Text(
+                                "No Resorts Found",
+
+                                style: TextStyle(
+                                  fontSize: 18,
+
+                                  fontWeight:
+                                      FontWeight
+                                          .bold,
+
+                                  color: Colors
+                                      .grey.shade700,
                                 ),
                               ),
 
-                              const SizedBox(height: 6),
+                              const SizedBox(
+                                height: 6,
+                              ),
 
                               Text(
-                                city,
-                                textAlign: TextAlign.center,
+                                "Try another search or location",
+
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isSelected
-                                      ? Colors.blue
-                                      : Colors.black,
+                                  color: Colors
+                                      .grey.shade600,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-                /// RIGHT PANEL
-                Expanded(
-                  child: filteredResorts.isEmpty
-                      ? const Center(
-                          child: Text("No Resorts Available"),
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(12),
-                          itemCount: filteredResorts.length,
-                          itemBuilder: (context, index) {
+
+                      : ListView.separated(
+
+                          physics:
+                              const BouncingScrollPhysics(),
+
+                          padding:
+                              const EdgeInsets.only(
+                            bottom: 20,
+                            top: 4,
+                          ),
+
+                          itemCount:
+                              filteredResorts
+                                  .length,
+
+                          separatorBuilder:
+                              (context, index) {
+
+                            return const SizedBox(
+                              height: 2,
+                            );
+                          },
+
+                          itemBuilder:
+                              (context, index) {
+
+                            final resort =
+                                filteredResorts[
+                                    index];
+
                             return ResortCard(
-                              resort: filteredResorts[index],
+                              resort: resort,
                             );
                           },
                         ),
-                ),
-              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

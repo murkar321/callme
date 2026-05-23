@@ -16,24 +16,30 @@ class ResortCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
 
+    final width =
+        MediaQuery.of(context).size.width;
+
     return Container(
 
       margin: const EdgeInsets.symmetric(
-        vertical: 8,
-        horizontal: 10,
+        horizontal: 14,
+        vertical: 10,
       ),
 
       decoration: BoxDecoration(
 
         color: Colors.white,
 
-        borderRadius: BorderRadius.circular(20),
+        borderRadius:
+            BorderRadius.circular(24),
 
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color:
+                Colors.black.withOpacity(0.06),
+
+            blurRadius: 14,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -49,7 +55,7 @@ class ResortCard extends StatelessWidget {
 
             borderRadius:
                 const BorderRadius.vertical(
-              top: Radius.circular(20),
+              top: Radius.circular(24),
             ),
 
             child: Stack(
@@ -57,7 +63,7 @@ class ResortCard extends StatelessWidget {
 
                 /// IMAGE
                 SizedBox(
-                  height: 190,
+                  height: 230,
                   width: double.infinity,
 
                   child: Image.asset(
@@ -69,19 +75,21 @@ class ResortCard extends StatelessWidget {
                         (_, __, ___) {
 
                       return Container(
-                        color: Colors.grey.shade200,
+                        color:
+                            Colors.grey.shade200,
 
                         child: Icon(
                           Icons.image,
-                          size: 50,
-                          color: Colors.grey.shade400,
+                          size: 60,
+                          color: Colors
+                              .grey.shade400,
                         ),
                       );
                     },
                   ),
                 ),
 
-                /// DARK OVERLAY
+                /// OVERLAY
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
@@ -89,11 +97,12 @@ class ResortCard extends StatelessWidget {
                         begin:
                             Alignment.bottomCenter,
 
-                        end: Alignment.topCenter,
+                        end:
+                            Alignment.topCenter,
 
                         colors: [
                           Colors.black
-                              .withOpacity(0.35),
+                              .withOpacity(0.55),
 
                           Colors.transparent,
                         ],
@@ -113,8 +122,8 @@ class ResortCard extends StatelessWidget {
 
                       padding:
                           const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
+                        horizontal: 12,
+                        vertical: 7,
                       ),
 
                       decoration: BoxDecoration(
@@ -131,20 +140,84 @@ class ResortCard extends StatelessWidget {
 
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 12,
                           fontWeight:
                               FontWeight.bold,
+                          fontSize: 12,
                         ),
                       ),
                     ),
                   ),
+
+                /// LOCATION BADGE
+                Positioned(
+                  top: 14,
+                  right: 14,
+
+                  child: Container(
+
+                    padding:
+                        const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 7,
+                    ),
+
+                    decoration: BoxDecoration(
+                      color: Colors.blue,
+
+                      borderRadius:
+                          BorderRadius.circular(
+                        30,
+                      ),
+                    ),
+
+                    child: Text(
+                      resort.city.toUpperCase(),
+
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight:
+                            FontWeight.bold,
+                        fontSize: 11,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                ),
+
+                /// RESORT NAME
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 18,
+
+                  child: Text(
+                    resort.name,
+
+                    maxLines: 2,
+
+                    overflow:
+                        TextOverflow.ellipsis,
+
+                    style: TextStyle(
+                      color: Colors.white,
+
+                      fontWeight:
+                          FontWeight.bold,
+
+                      fontSize:
+                          width < 360 ? 20 : 24,
+
+                      height: 1.2,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
 
-          /// ================= CONTENT =================
+          /// ================= DETAILS =================
           Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
 
             child: Column(
               crossAxisAlignment:
@@ -152,78 +225,203 @@ class ResortCard extends StatelessWidget {
 
               children: [
 
-                /// NAME
-                Text(
-                  resort.name,
-
-                  maxLines: 1,
-
-                  overflow:
-                      TextOverflow.ellipsis,
-
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
                 /// LOCATION
                 Row(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+
                   children: [
 
-                    const Icon(
-                      Icons.location_on,
-                      size: 16,
-                      color: Colors.red,
+                    const Padding(
+                      padding:
+                          EdgeInsets.only(
+                        top: 2,
+                      ),
+
+                      child: Icon(
+                        Icons.location_on,
+                        color: Colors.red,
+                        size: 18,
+                      ),
                     ),
 
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 8),
 
                     Expanded(
                       child: Text(
-                        resort.city,
+                        resort.location,
 
-                        maxLines: 1,
+                        maxLines: 3,
 
                         overflow:
                             TextOverflow.ellipsis,
 
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 13.5,
+                          height: 1.5,
+
                           color:
-                              Colors.grey.shade700,
+                              Colors.grey.shade800,
+
+                          fontWeight:
+                              FontWeight.w500,
                         ),
                       ),
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 10),
+                const SizedBox(height: 18),
 
-                /// PRICE
-                Text(
-                  "₹${resort.price} / night",
+                /// PRICE + RATING
+                Row(
+                  mainAxisAlignment:
+                      MainAxisAlignment
+                          .spaceBetween,
 
-                  style: const TextStyle(
-                    color: Colors.green,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 17,
-                  ),
+                  children: [
+
+                    /// PRICE
+                    Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment
+                              .start,
+
+                      children: [
+
+                        Text(
+                          "Price Per Person",
+
+                          style: TextStyle(
+                            color:
+                                Colors.grey.shade600,
+
+                            fontSize: 12,
+                          ),
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        Text(
+                          "₹${resort.price}",
+
+                          style:
+                              const TextStyle(
+                            color: Colors.green,
+
+                            fontWeight:
+                                FontWeight.bold,
+
+                            fontSize: 26,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    /// RATING
+                    Container(
+
+                      padding:
+                          const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+
+                      decoration: BoxDecoration(
+                        color:
+                            Colors.orange.shade50,
+
+                        borderRadius:
+                            BorderRadius.circular(
+                          12,
+                        ),
+                      ),
+
+                      child: Row(
+                        children: [
+
+                          const Icon(
+                            Icons.star_rounded,
+                            color: Colors.orange,
+                            size: 18,
+                          ),
+
+                          const SizedBox(width: 5),
+
+                          Text(
+                            resort.rating
+                                .toString(),
+
+                            style:
+                                const TextStyle(
+                              fontWeight:
+                                  FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 18),
+
+                /// FACILITIES
+                Wrap(
+
+                  spacing: 8,
+                  runSpacing: 8,
+
+                  children:
+                      resort.facilities.take(4).map(
+                    (facility) {
+
+                      return Container(
+
+                        padding:
+                            const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+
+                        decoration: BoxDecoration(
+                          color:
+                              Colors.grey.shade100,
+
+                          borderRadius:
+                              BorderRadius.circular(
+                            30,
+                          ),
+                        ),
+
+                        child: Text(
+                          facility,
+
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color:
+                                Colors.grey.shade800,
+
+                            fontWeight:
+                                FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    },
+                  ).toList(),
+                ),
+
+                const SizedBox(height: 22),
 
                 /// ================= BUTTONS =================
                 Row(
                   children: [
 
-                    /// VIEW BUTTON
+                    /// VIEW DETAILS
                     Expanded(
                       child: SizedBox(
-
-                        height: 45,
+                        height: 52,
 
                         child: OutlinedButton(
 
@@ -233,7 +431,8 @@ class ResortCard extends StatelessWidget {
                               context,
 
                               MaterialPageRoute(
-                                builder: (context) {
+                                builder:
+                                    (context) {
 
                                   return ResortDetailPage(
                                     resort: resort,
@@ -245,39 +444,38 @@ class ResortCard extends StatelessWidget {
 
                           style:
                               OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color:
+                                  Colors.grey.shade400,
+                            ),
+
                             shape:
                                 RoundedRectangleBorder(
                               borderRadius:
                                   BorderRadius
                                       .circular(14),
                             ),
-
-                            side: BorderSide(
-                              color:
-                                  Colors.grey.shade400,
-                            ),
                           ),
 
                           child: const Text(
-                            "View",
+                            "View Details",
 
                             style: TextStyle(
+                              color: Colors.black,
                               fontWeight:
                                   FontWeight.w600,
-                              color: Colors.black,
                             ),
                           ),
                         ),
                       ),
                     ),
 
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
 
-                    /// BOOK BUTTON
+                    /// BOOK NOW
                     Expanded(
                       child: SizedBox(
-
-                        height: 45,
+                        height: 52,
 
                         child: ElevatedButton(
 
@@ -287,7 +485,8 @@ class ResortCard extends StatelessWidget {
                               context,
 
                               MaterialPageRoute(
-                                builder: (context) {
+                                builder:
+                                    (context) {
 
                                   return ResortBookingPage(
                                     resort: resort,
@@ -299,10 +498,10 @@ class ResortCard extends StatelessWidget {
 
                           style:
                               ElevatedButton.styleFrom(
-                            elevation: 0,
-
                             backgroundColor:
                                 Colors.blue,
+
+                            elevation: 0,
 
                             shape:
                                 RoundedRectangleBorder(
@@ -313,12 +512,12 @@ class ResortCard extends StatelessWidget {
                           ),
 
                           child: const Text(
-                            "Book",
+                            "Book Now",
 
                             style: TextStyle(
-                              fontWeight:
-                                  FontWeight.w600,
                               color: Colors.white,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
                           ),
                         ),
