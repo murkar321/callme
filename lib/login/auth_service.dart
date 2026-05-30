@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
-
   /// =========================================================
   /// FIREBASE
   /// =========================================================
@@ -22,125 +21,73 @@ class AuthService {
       auth.currentUser;
 
   /// =========================================================
-  /// GENERATE USER ID
+  /// USER DOC ID
   /// =========================================================
 
-  String generateUserId(String value) {
+  /// USERS & PROVIDERS:
+  /// PHONE NUMBER ONLY
 
-    final clean = value
+  String getUserDocId(
+    User user,
+  ) {
+    final phone =
+        user.phoneNumber
+            ?.trim() ??
+        "";
 
-        .trim()
+    if (phone.isEmpty) {
+      throw Exception(
+        "Phone number not found",
+      );
+    }
 
-        .toLowerCase()
-
-        .replaceAll(
-          RegExp(r'[^a-z0-9]'),
-          '',
-        );
-
-    final unique =
-        DateTime.now()
-            .millisecondsSinceEpoch
-            .toString()
-            .substring(7);
-
-    return "${clean}_$unique";
+    return phone;
   }
 
   /// =========================================================
-  /// FIND EXISTING USER
+  /// ADMIN DOC ID
   /// =========================================================
 
-  Future<DocumentSnapshot?> findExistingUser({
+  String getAdminDocId(
+    User user,
+  ) {
+    final email =
+        user.email
+            ?.trim()
+            .toLowerCase() ??
+        "";
 
-    String? authUid,
+    if (email.isEmpty) {
+      throw Exception(
+        "Email not found",
+      );
+    }
 
-    String? email,
+    return email;
+  }
 
-    String? phone,
-  }) async {
+  /// =========================================================
+  /// CHECK USER EXISTS
+  /// =========================================================
 
+  Future<DocumentSnapshot?> findUserByPhone(
+    String phone,
+  ) async {
     try {
+      final doc =
+          await firestore
+              .collection(
+                "users",
+              )
+              .doc(phone)
+              .get();
 
-      /// AUTH UID
-
-      if (authUid != null &&
-          authUid.isNotEmpty) {
-
-        final result =
-            await firestore
-
-                .collection("users")
-
-                .where(
-                  "authUid",
-                  isEqualTo: authUid,
-                )
-
-                .limit(1)
-
-                .get();
-
-        if (result.docs.isNotEmpty) {
-
-          return result.docs.first;
-        }
-      }
-
-      /// EMAIL
-
-      if (email != null &&
-          email.isNotEmpty) {
-
-        final result =
-            await firestore
-
-                .collection("users")
-
-                .where(
-                  "email",
-                  isEqualTo: email,
-                )
-
-                .limit(1)
-
-                .get();
-
-        if (result.docs.isNotEmpty) {
-
-          return result.docs.first;
-        }
-      }
-
-      /// PHONE
-
-      if (phone != null &&
-          phone.isNotEmpty) {
-
-        final result =
-            await firestore
-
-                .collection("users")
-
-                .where(
-                  "phone",
-                  isEqualTo: phone,
-                )
-
-                .limit(1)
-
-                .get();
-
-        if (result.docs.isNotEmpty) {
-
-          return result.docs.first;
-        }
+      if (doc.exists) {
+        return doc;
       }
 
       return null;
-
     } catch (e) {
-
       rethrow;
     }
   }
@@ -149,403 +96,386 @@ class AuthService {
   /// SAVE USER
   /// =========================================================
 
-  Future<void> saveUser(
-
-      User user,
-
-      String provider,
-      ) async {
-
+  Future<void> savePhoneUser(
+    User user,
+  ) async {
     try {
-
-      /// FIND EXISTING USER
+      final docId =
+          getUserDocId(user);
 
       final existing =
-          await findExistingUser(
+          await firestore
+              .collection(
+                "users",
+              )
+              .doc(docId)
+              .get();
 
-        authUid: user.uid,
+      Map<String, dynamic>
+          oldData = {};
 
-        email: user.email,
-
-        phone: user.phoneNumber,
-      );
-
-      String userDocId;
-
-      Map<String, dynamic> oldData = {};
-
-      /// EXISTING USER
-
-      if (existing != null) {
-
-        userDocId =
-            existing.id;
-
+      if (existing.exists) {
         oldData =
-            existing.data()
-            as Map<String, dynamic>;
-
-      } else {
-
-        /// NEW USER
-
-        userDocId =
-            generateUserId(
-
-              user.displayName ??
-
-                  user.email ??
-
-                  user.phoneNumber ??
-
-                  "user",
-            );
+            existing.data() ?? {};
       }
 
       /// =====================================================
-      /// PROVIDERS
+      /// ROLES
       /// =====================================================
 
-      List providers =
-      List.from(
-        oldData['providers'] ?? [],
+      List roles = List.from(
+        oldData["roles"] ?? [
+          "user",
+        ],
       );
 
-      if (!providers.contains(provider)) {
-
-        providers.add(provider);
+      if (!roles.contains(
+        "user",
+      )) {
+        roles.add("user");
       }
-
-      /// =====================================================
-      /// SAFE DATA
-      /// PREVENTS PROFILE RESET
-      /// =====================================================
-
-      final data = {
-
-        /// IDS
-
-        'userId':
-        userDocId,
-
-        'authUid':
-        user.uid,
-
-        'uid':
-        user.uid,
-
-        /// PROFILE DATA
-
-        'email':
-
-        user.email != null &&
-            user.email!.trim().isNotEmpty
-
-            ? user.email
-
-            : oldData['email'] ?? "",
-
-        'phone':
-
-        user.phoneNumber != null &&
-            user.phoneNumber!
-                .trim()
-                .isNotEmpty
-
-            ? user.phoneNumber
-
-            : oldData['phone'] ?? "",
-
-        'name':
-
-        user.displayName != null &&
-            user.displayName!
-                .trim()
-                .isNotEmpty
-
-            ? user.displayName
-
-            : oldData['name'] ?? "",
-
-        'photo':
-
-        user.photoURL != null &&
-            user.photoURL!
-                .trim()
-                .isNotEmpty
-
-            ? user.photoURL
-
-            : oldData['photo'] ?? "",
-
-        /// IMPORTANT
-        /// PRESERVE CUSTOM PROFILE DATA
-
-        'firstName':
-        oldData['firstName'] ?? "",
-
-        'lastName':
-        oldData['lastName'] ?? "",
-
-        'address':
-        oldData['address'] ?? "",
-
-        /// LOGIN PROVIDERS
-
-        'provider':
-        provider,
-
-        'providers':
-        providers,
-
-        /// STATUS
-
-        'role':
-        oldData['role'] ?? "user",
-
-        'status':
-        oldData['status'] ?? "active",
-
-        /// TIMESTAMPS
-
-        'updatedAt':
-        FieldValue.serverTimestamp(),
-
-        'lastLogin':
-        FieldValue.serverTimestamp(),
-
-        'createdAt':
-
-        oldData['createdAt'] ??
-
-            FieldValue.serverTimestamp(),
-      };
 
       /// =====================================================
       /// SAVE
       /// =====================================================
 
       await firestore
-
           .collection("users")
-
-          .doc(userDocId)
-
+          .doc(docId)
           .set(
+        {
+          /// IDS
 
-        data,
+          "docId": docId,
 
+          "phone": docId,
+
+          "firebaseUid":
+              user.uid,
+
+          /// USER INFO
+
+          "name":
+              oldData["name"] ??
+                  user.displayName ??
+                  "",
+
+          "email":
+              oldData["email"] ??
+                  user.email ??
+                  "",
+
+          "photo":
+              oldData["photo"] ??
+                  user.photoURL ??
+                  "",
+
+          /// ROLES
+
+          "roles": roles,
+
+          "providerApproved":
+              oldData[
+                      "providerApproved"] ??
+                  false,
+
+          /// STATUS
+
+          "status":
+              oldData["status"] ??
+                  "active",
+
+          /// TIMESTAMP
+
+          "updatedAt":
+              FieldValue
+                  .serverTimestamp(),
+
+          "lastLogin":
+              FieldValue
+                  .serverTimestamp(),
+
+          "createdAt":
+              oldData[
+                      "createdAt"] ??
+                  FieldValue
+                      .serverTimestamp(),
+        },
         SetOptions(
           merge: true,
         ),
       );
-
     } catch (e) {
-
       rethrow;
     }
   }
 
   /// =========================================================
-  /// GOOGLE LOGIN
+  /// SAVE ADMIN
   /// =========================================================
 
-  Future<User?> signInWithGoogle() async {
-
+  Future<void> saveAdmin(
+    User user,
+  ) async {
     try {
+      final docId =
+          getAdminDocId(user);
 
-      final GoogleSignIn googleSignIn =
-      GoogleSignIn();
+      final existing =
+          await firestore
+              .collection(
+                "admins",
+              )
+              .doc(docId)
+              .get();
 
-      /// FORCE ACCOUNT PICKER
+      Map<String, dynamic>
+          oldData = {};
 
-      await googleSignIn.signOut();
+      if (existing.exists) {
+        oldData =
+            existing.data() ?? {};
+      }
+
+      await firestore
+          .collection("admins")
+          .doc(docId)
+          .set(
+        {
+          /// IDS
+
+          "docId": docId,
+
+          "email": docId,
+
+          "firebaseUid":
+              user.uid,
+
+          /// INFO
+
+          "name":
+              oldData["name"] ??
+                  user.displayName ??
+                  "",
+
+          "photo":
+              oldData["photo"] ??
+                  user.photoURL ??
+                  "",
+
+          /// ROLE
+
+          "role": "admin",
+
+          "status":
+              oldData["status"] ??
+                  "active",
+
+          /// TIME
+
+          "updatedAt":
+              FieldValue
+                  .serverTimestamp(),
+
+          "lastLogin":
+              FieldValue
+                  .serverTimestamp(),
+
+          "createdAt":
+              oldData[
+                      "createdAt"] ??
+                  FieldValue
+                      .serverTimestamp(),
+        },
+        SetOptions(
+          merge: true,
+        ),
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// =========================================================
+  /// CHECK PROVIDER
+  /// =========================================================
+
+  Future<bool> isProvider(
+    String phone,
+  ) async {
+    try {
+      final doc =
+          await firestore
+              .collection(
+                "users",
+              )
+              .doc(phone)
+              .get();
+
+      if (!doc.exists) {
+        return false;
+      }
+
+      final data =
+          doc.data() ?? {};
+
+      List roles = List.from(
+        data["roles"] ?? [],
+      );
+
+      return roles.contains(
+        "provider",
+      );
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// =========================================================
+  /// BECOME PROVIDER
+  /// =========================================================
+
+  Future<void> becomeProvider(
+    String phone,
+  ) async {
+    try {
+      final docRef =
+          firestore
+              .collection(
+                "users",
+              )
+              .doc(phone);
+
+      final doc =
+          await docRef.get();
+
+      if (!doc.exists) {
+        throw Exception(
+          "User not found",
+        );
+      }
+
+      final data =
+          doc.data() ?? {};
+
+      List roles = List.from(
+        data["roles"] ?? [],
+      );
+
+      if (!roles.contains(
+        "provider",
+      )) {
+        roles.add(
+          "provider",
+        );
+      }
+
+      await docRef.update(
+        {
+          "roles": roles,
+          "updatedAt":
+              FieldValue
+                  .serverTimestamp(),
+        },
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// =========================================================
+  /// ADMIN EMAIL LOGIN
+  /// =========================================================
+
+  Future<User?> adminLogin(
+    String email,
+    String password,
+  ) async {
+    try {
+      final result = await auth
+          .signInWithEmailAndPassword(
+        email:
+            email.trim(),
+        password:
+            password.trim(),
+      );
+
+      final user =
+          result.user;
+
+      if (user != null) {
+        await saveAdmin(
+          user,
+        );
+      }
+
+      return user;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// =========================================================
+  /// ADMIN GOOGLE LOGIN
+  /// =========================================================
+
+  Future<User?> adminGoogleLogin() async {
+    try {
+      final GoogleSignIn
+          googleSignIn =
+          GoogleSignIn();
 
       final GoogleSignInAccount?
-      googleUser =
-
-      await googleSignIn.signIn();
+          googleUser =
+          await googleSignIn
+              .signIn();
 
       if (googleUser == null) {
-
         return null;
       }
 
       final googleAuth =
-      await googleUser.authentication;
+          await googleUser
+              .authentication;
 
       final credential =
-      GoogleAuthProvider.credential(
-
+          GoogleAuthProvider
+              .credential(
         accessToken:
-        googleAuth.accessToken,
-
+            googleAuth
+                .accessToken,
         idToken:
-        googleAuth.idToken,
+            googleAuth.idToken,
       );
 
       final result =
-      await auth.signInWithCredential(
+          await auth
+              .signInWithCredential(
         credential,
       );
 
-      /// REFRESH USER
+      final user =
+          result.user;
 
-      await result.user?.reload();
-
-      final updatedUser =
-          auth.currentUser;
-
-      if (updatedUser != null) {
-
-        await saveUser(
-          updatedUser,
-          "google",
+      if (user != null) {
+        await saveAdmin(
+          user,
         );
       }
 
-      return updatedUser;
-
+      return user;
     } catch (e) {
-
       rethrow;
     }
   }
 
   /// =========================================================
-  /// EMAIL SIGNUP
+  /// AUTO LOGIN
   /// =========================================================
 
-  Future<User?> signUpEmail(
-
-      String email,
-
-      String password,
-
-      String name,
-      ) async {
-
-    try {
-
-      final result =
-
-      await auth
-
-          .createUserWithEmailAndPassword(
-
-        email:
-        email.trim(),
-
-        password:
-        password.trim(),
-      );
-
-      /// UPDATE NAME
-
-      await result.user
-          ?.updateDisplayName(
-        name.trim(),
-      );
-
-      /// REFRESH USER
-
-      await result.user?.reload();
-
-      final updatedUser =
-          auth.currentUser;
-
-      if (updatedUser != null) {
-
-        await saveUser(
-          updatedUser,
-          "email",
-        );
-      }
-
-      return updatedUser;
-
-    } catch (e) {
-
-      rethrow;
-    }
-  }
-
-  /// =========================================================
-  /// EMAIL LOGIN
-  /// =========================================================
-
-  Future<User?> loginEmail(
-
-      String email,
-
-      String password,
-      ) async {
-
-    try {
-
-      final result =
-
-      await auth
-
-          .signInWithEmailAndPassword(
-
-        email:
-        email.trim(),
-
-        password:
-        password.trim(),
-      );
-
-      /// REFRESH USER
-
-      await result.user?.reload();
-
-      final updatedUser =
-          auth.currentUser;
-
-      if (updatedUser != null) {
-
-        await saveUser(
-          updatedUser,
-          "email",
-        );
-      }
-
-      return updatedUser;
-
-    } catch (e) {
-
-      rethrow;
-    }
-  }
-
-  /// =========================================================
-  /// PHONE LOGIN
-  /// =========================================================
-
-  Future<void> savePhoneUser(
-      User user,
-      ) async {
-
-    try {
-
-      await user.reload();
-
-      final updatedUser =
-          auth.currentUser;
-
-      if (updatedUser != null) {
-
-        await saveUser(
-          updatedUser,
-          "phone",
-        );
-      }
-
-    } catch (e) {
-
-      rethrow;
-    }
+  bool isLoggedIn() {
+    return auth.currentUser !=
+        null;
   }
 
   /// =========================================================
@@ -553,24 +483,14 @@ class AuthService {
   /// =========================================================
 
   Future<void> logout() async {
-
     try {
-
-      /// GOOGLE
-
       try {
-
         await GoogleSignIn()
             .signOut();
-
       } catch (_) {}
 
-      /// FIREBASE AUTH
-
       await auth.signOut();
-
     } catch (e) {
-
       rethrow;
     }
   }

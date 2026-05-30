@@ -1,9 +1,7 @@
+import 'package:callme/login/otp_page.dart';
 import 'package:callme/screens/bottom_nav_page.dart';
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'otp_page.dart';
+import 'package:flutter/material.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -16,11 +14,19 @@ class SignupPage extends StatefulWidget {
 class _SignupPageState
     extends State<SignupPage> {
   /// =====================================================
-  /// CONTROLLER
+  /// CONTROLLERS
   /// =====================================================
 
   final TextEditingController
       phoneController =
+      TextEditingController();
+
+  final TextEditingController
+      emailController =
+      TextEditingController();
+
+  final TextEditingController
+      passwordController =
       TextEditingController();
 
   /// =====================================================
@@ -30,107 +36,130 @@ class _SignupPageState
   final FirebaseAuth auth =
       FirebaseAuth.instance;
 
-  final FirebaseFirestore firestore =
-      FirebaseFirestore.instance;
-
   /// =====================================================
   /// STATE
   /// =====================================================
 
   bool loading = false;
 
+  bool adminLoading = false;
+
+  bool obscurePassword = true;
+
   /// =====================================================
-  /// SAVE USER
+  /// INIT
   /// =====================================================
 
-  Future<void> saveUser(
-    User user,
-  ) async {
-    try {
-      await firestore
-          .collection("users")
-          .doc(user.uid)
-          .set(
-        {
-          "uid": user.uid,
-          "name":
-              user.displayName ?? "",
-          "email":
-              user.email ?? "",
-          "phone":
-              user.phoneNumber ?? "",
-          "photo":
-              user.photoURL ?? "",
-          "providers": user
-              .providerData
-              .map(
-                (e) => e.providerId,
-              )
-              .toList(),
-          "updatedAt":
-              FieldValue.serverTimestamp(),
-        },
-        SetOptions(
-          merge: true,
-        ),
-      );
-    } catch (e) {
-      debugPrint(
-        "Save User Error: $e",
-      );
-    }
+  @override
+  void initState() {
+    super.initState();
+
+    autoLogin();
   }
 
   /// =====================================================
-  /// GOOGLE LOGIN
+  /// AUTO LOGIN
   /// =====================================================
 
-  Future<void> signInWithGoogle() async {
+  Future<void> autoLogin() async {
+    final user = auth.currentUser;
+
+    if (user == null) return;
+
+    await Future.delayed(
+      const Duration(milliseconds: 500),
+    );
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BottomNavPage(
+          userPhone:
+              user.phoneNumber ?? "",
+          userEmail:
+              user.email ?? "",
+        ),
+      ),
+    );
+  }
+
+  /// =====================================================
+  /// PHONE LOGIN
+  /// =====================================================
+
+  void continueWithPhone() {
+    FocusScope.of(context).unfocus();
+
+    final phone =
+        phoneController.text
+            .trim();
+
+    if (phone.isEmpty) {
+      showError(
+        "Enter mobile number",
+      );
+      return;
+    }
+
+    if (phone.length != 10) {
+      showError(
+        "Enter valid 10 digit mobile number",
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OtpPage(
+          phone: "+91$phone",
+          isLogin: true,
+        ),
+      ),
+    );
+  }
+
+  /// =====================================================
+  /// ADMIN EMAIL LOGIN
+  /// =====================================================
+
+  Future<void> adminLogin() async {
+    FocusScope.of(context).unfocus();
+
+    final email =
+        emailController.text
+            .trim();
+
+    final password =
+        passwordController.text
+            .trim();
+
+    if (email.isEmpty) {
+      showError(
+        "Enter admin email",
+      );
+      return;
+    }
+
+    if (password.isEmpty) {
+      showError(
+        "Enter password",
+      );
+      return;
+    }
+
     try {
       setState(() {
-        loading = true;
+        adminLoading = true;
       });
 
-      final GoogleSignIn
-          googleSignIn =
-          GoogleSignIn();
-
-      await googleSignIn.signOut();
-
-      final googleUser =
-          await googleSignIn.signIn();
-
-      if (googleUser == null) {
-        setState(() {
-          loading = false;
-        });
-
-        return;
-      }
-
-      final googleAuth =
-          await googleUser
-              .authentication;
-
-      final credential =
-          GoogleAuthProvider
-              .credential(
-        accessToken:
-            googleAuth.accessToken,
-        idToken:
-            googleAuth.idToken,
+      await auth
+          .signInWithEmailAndPassword(
+        email: email,
+        password: password,
       );
-
-      final userCredential =
-          await auth
-              .signInWithCredential(
-        credential,
-      );
-
-      final user =
-          userCredential.user!;
-
-      await saveUser(user);
 
       if (!mounted) return;
 
@@ -140,24 +169,49 @@ class _SignupPageState
           builder: (_) =>
               BottomNavPage(
             userPhone:
-                user.phoneNumber ??
+                auth.currentUser
+                        ?.phoneNumber ??
                     "",
             userEmail:
-                user.email ?? "",
+                auth.currentUser
+                        ?.email ??
+                    "",
           ),
         ),
       );
+    } on FirebaseAuthException catch (e) {
+      showError(
+        e.message ??
+            "Admin login failed",
+      );
     } catch (e) {
       showError(
-        "Google Sign In Failed",
+        "Something went wrong",
       );
     } finally {
       if (mounted) {
         setState(() {
-          loading = false;
+          adminLoading = false;
         });
       }
     }
+  }
+
+  /// =====================================================
+  /// GUEST LOGIN
+  /// =====================================================
+
+  void continueAsGuest() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            const BottomNavPage(
+          userPhone: "",
+          userEmail: "",
+        ),
+      ),
+    );
   }
 
   /// =====================================================
@@ -169,10 +223,8 @@ class _SignupPageState
         .showSnackBar(
       SnackBar(
         content: Text(msg),
-
         behavior:
             SnackBarBehavior.floating,
-
         backgroundColor:
             Colors.red.shade400,
       ),
@@ -186,6 +238,11 @@ class _SignupPageState
   @override
   void dispose() {
     phoneController.dispose();
+
+    emailController.dispose();
+
+    passwordController.dispose();
+
     super.dispose();
   }
 
@@ -197,494 +254,748 @@ class _SignupPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
-          const Color(0xFFF5F7FB),
+          const Color(0xFFF4F7FC),
 
-      resizeToAvoidBottomInset:
-          true,
+      body: Stack(
+        children: [
+          /// BACKGROUND
 
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics:
-              const BouncingScrollPhysics(),
-
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal: 24,
+          Positioned(
+            top: -120,
+            right: -80,
+            child: Container(
+              width: 260,
+              height: 260,
+              decoration:
+                  BoxDecoration(
+                shape:
+                    BoxShape.circle,
+                color: Colors.blue
+                    .withOpacity(
+                  0.08,
+                ),
+              ),
+            ),
           ),
 
-          child: Column(
-            children: [
-              const SizedBox(
-                height: 40,
-              ),
-
-              /// =================================================
-              /// LOGO
-              /// =================================================
-
-              Container(
-                height: 120,
-                width: 120,
-
-                padding:
-                    const EdgeInsets.all(
-                  18,
-                ),
-
-                decoration:
-                    BoxDecoration(
-                  color: Colors.white,
-
-                  shape:
-                      BoxShape.circle,
-
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black
-                          .withOpacity(
-                        0.08,
-                      ),
-
-                      blurRadius: 25,
-
-                      offset:
-                          const Offset(
-                        0,
-                        12,
-                      ),
-                    ),
-                  ],
-                ),
-
-                child: ClipOval(
-                  child: Image.asset(
-                    "assets/logo.png",
-
-                    fit:
-                        BoxFit.contain,
-                  ),
+          Positioned(
+            top: 120,
+            left: -90,
+            child: Container(
+              width: 220,
+              height: 220,
+              decoration:
+                  BoxDecoration(
+                shape:
+                    BoxShape.circle,
+                color: Colors
+                    .deepPurple
+                    .withOpacity(
+                  0.06,
                 ),
               ),
+            ),
+          ),
 
-              const SizedBox(
-                height: 28,
+          SafeArea(
+            child:
+                SingleChildScrollView(
+              physics:
+                  const BouncingScrollPhysics(),
+
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 22,
+                vertical: 20,
               ),
 
-              /// =================================================
-              /// TITLE
-              /// =================================================
-
-              const Text(
-                "Get Started",
-
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight:
-                      FontWeight.bold,
-
-                  color:
-                      Color(0xFF111827),
-                ),
-              ),
-
-              const SizedBox(
-                height: 10,
-              ),
-
-              Text(
-                "Login using your mobile number or continue with Google",
-
-                textAlign:
-                    TextAlign.center,
-
-                style: TextStyle(
-                  fontSize: 15,
-
-                  height: 1.5,
-
-                  color: Colors
-                      .grey.shade600,
-                ),
-              ),
-
-              const SizedBox(
-                height: 40,
-              ),
-
-              /// =================================================
-              /// MAIN CARD
-              /// =================================================
-
-              Container(
-                width: double.infinity,
-
-                padding:
-                    const EdgeInsets.all(
-                  24,
-                ),
-
-                decoration:
-                    BoxDecoration(
-                  color: Colors.white,
-
-                  borderRadius:
-                      BorderRadius.circular(
-                    30,
+              child: Center(
+                child:
+                    ConstrainedBox(
+                  constraints:
+                      const BoxConstraints(
+                    maxWidth: 470,
                   ),
 
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black
-                          .withOpacity(
-                        0.04,
+                  child: Column(
+                    children: [
+                      const SizedBox(
+                        height: 10,
                       ),
 
-                      blurRadius: 20,
+                      /// LOGO
 
-                      offset:
-                          const Offset(
-                        0,
-                        8,
-                      ),
-                    ),
-                  ],
-                ),
+                      Hero(
+                        tag: "logo",
 
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+                        child: Container(
+                          width: 120,
+                          height: 120,
 
-                  children: [
-                    /// LABEL
+                          padding:
+                              const EdgeInsets.all(
+                            18,
+                          ),
 
-                    const Text(
-                      "Mobile Number",
+                          decoration:
+                              BoxDecoration(
+                            shape:
+                                BoxShape.circle,
 
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight:
-                            FontWeight.w700,
-                      ),
-                    ),
+                            gradient:
+                                const LinearGradient(
+                              colors: [
+                                Color(
+                                  0xFF4F46E5,
+                                ),
+                                Color(
+                                  0xFF2563EB,
+                                ),
+                              ],
+                            ),
 
-                    const SizedBox(
-                      height: 14,
-                    ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors
+                                    .blue
+                                    .withOpacity(
+                                  0.25,
+                                ),
+                                blurRadius: 30,
+                                offset:
+                                    const Offset(
+                                  0,
+                                  14,
+                                ),
+                              ),
+                            ],
+                          ),
 
-                    /// PHONE FIELD
+                          child: Container(
+                            padding:
+                                const EdgeInsets.all(
+                              18,
+                            ),
 
-                    Container(
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            const Color(
-                          0xFFF7F8FC,
+                            decoration:
+                                const BoxDecoration(
+                              color: Colors.white,
+                              shape:
+                                  BoxShape.circle,
+                            ),
+
+                            child: ClipOval(
+                              child:
+                                  Image.asset(
+                                "assets/logo.png",
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ),
                         ),
-
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                          18,
-                        ),
-
-                        border:
-                            Border.all(
-                          color: Colors
-                              .grey
-                              .shade200,
-                        ),
                       ),
 
-                      child: TextField(
-                        controller:
-                            phoneController,
+                      const SizedBox(
+                        height: 30,
+                      ),
 
-                        keyboardType:
-                            TextInputType
-                                .phone,
+                      /// TITLE
 
-                        style:
-                            const TextStyle(
-                          fontSize: 16,
+                      const Text(
+                        "Welcome to CallMe",
+
+                        textAlign:
+                            TextAlign.center,
+
+                        style: TextStyle(
+                          fontSize: 30,
                           fontWeight:
-                              FontWeight
-                                  .w600,
+                              FontWeight.w800,
+                          color:
+                              Color(0xFF111827),
+                        ),
+                      ),
+
+                      const SizedBox(
+                        height: 12,
+                      ),
+
+                      Text(
+                        "Login using mobile OTP or admin email login.",
+
+                        textAlign:
+                            TextAlign.center,
+
+                        style: TextStyle(
+                          fontSize: 15,
+                          height: 1.6,
+                          color: Colors
+                              .grey.shade600,
+                        ),
+                      ),
+
+                      const SizedBox(
+                        height: 36,
+                      ),
+
+                      /// PHONE LOGIN CARD
+
+                      Container(
+                        width:
+                            double.infinity,
+
+                        padding:
+                            const EdgeInsets.all(
+                          24,
                         ),
 
                         decoration:
-                            InputDecoration(
-                          border:
-                              InputBorder.none,
+                            BoxDecoration(
+                          color: Colors.white,
 
-                          hintText:
-                              "Enter mobile number",
+                          borderRadius:
+                              BorderRadius.circular(
+                            32,
+                          ),
 
-                          prefixIcon:
-                              const Icon(
-                            Icons.phone_rounded,
-
-                            color:
-                                Color(
-                              0xFF3D5AFE,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors
+                                  .black
+                                  .withOpacity(
+                                0.05,
+                              ),
+                              blurRadius: 30,
+                              offset:
+                                  const Offset(
+                                0,
+                                10,
+                              ),
                             ),
-                          ),
-
-                          prefixText:
-                              "+91 ",
-
-                          contentPadding:
-                              const EdgeInsets.symmetric(
-                            vertical: 20,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height: 28,
-                    ),
-
-                    /// OTP BUTTON
-
-                    SizedBox(
-                      width:
-                          double.infinity,
-
-                      height: 58,
-
-                      child:
-                          ElevatedButton(
-                        onPressed:
-                            loading
-                                ? null
-                                : () {
-                                    if (phoneController
-                                            .text
-                                            .trim()
-                                            .length !=
-                                        10) {
-                                      showError(
-                                        "Enter valid mobile number",
-                                      );
-
-                                      return;
-                                    }
-
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder:
-                                            (_) =>
-                                                OtpPage(
-                                          phone:
-                                              "+91${phoneController.text.trim()}",
-                                        ),
-                                      ),
-                                    );
-                                  },
-
-                        style:
-                            ElevatedButton
-                                .styleFrom(
-                          elevation: 0,
-
-                          backgroundColor:
-                              const Color(
-                            0xFF3D5AFE,
-                          ),
-
-                          shape:
-                              RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(
-                              18,
-                            ),
-                          ),
+                          ],
                         ),
 
-                        child:
-                            loading
-                                ? const CircularProgressIndicator(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment
+                                  .start,
+
+                          children: [
+                            const Text(
+                              "User Login",
+
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight:
+                                    FontWeight
+                                        .bold,
+                              ),
+                            ),
+
+                            const SizedBox(
+                              height: 6,
+                            ),
+
+                            Text(
+                              "Continue with mobile OTP verification.",
+
+                              style:
+                                  TextStyle(
+                                color: Colors
+                                    .grey
+                                    .shade600,
+                              ),
+                            ),
+
+                            const SizedBox(
+                              height: 22,
+                            ),
+
+                            /// PHONE FIELD
+
+                            Container(
+                              decoration:
+                                  BoxDecoration(
+                                color:
+                                    const Color(
+                                  0xFFF8FAFC,
+                                ),
+
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  20,
+                                ),
+
+                                border:
+                                    Border.all(
+                                  color: Colors
+                                      .grey
+                                      .shade200,
+                                ),
+                              ),
+
+                              child: TextField(
+                                controller:
+                                    phoneController,
+
+                                keyboardType:
+                                    TextInputType
+                                        .phone,
+
+                                maxLength: 10,
+
+                                decoration:
+                                    InputDecoration(
+                                  counterText: "",
+
+                                  border:
+                                      InputBorder
+                                          .none,
+
+                                  hintText:
+                                      "Enter mobile number",
+
+                                  prefixText:
+                                      "+91 ",
+
+                                  prefixStyle:
+                                      const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight:
+                                        FontWeight
+                                            .bold,
+                                    color:
+                                        Colors.black,
+                                  ),
+
+                                  prefixIcon:
+                                      const Icon(
+                                    Icons.phone,
+                                    color:
+                                        Color(
+                                      0xFF4F46E5,
+                                    ),
+                                  ),
+
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(
+                                    vertical: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(
+                              height: 22,
+                            ),
+
+                            /// OTP BUTTON
+
+                            SizedBox(
+                              width:
+                                  double.infinity,
+
+                              height: 58,
+
+                              child:
+                                  ElevatedButton(
+                                onPressed:
+                                    continueWithPhone,
+
+                                style:
+                                    ElevatedButton.styleFrom(
+                                  elevation: 0,
+
+                                  backgroundColor:
+                                      const Color(
+                                    0xFF4F46E5,
+                                  ),
+
+                                  shape:
+                                      RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      20,
+                                    ),
+                                  ),
+                                ),
+
+                                child: const Text(
+                                  "Continue with OTP",
+
+                                  style:
+                                      TextStyle(
                                     color:
                                         Colors.white,
-                                  )
-                                : const Text(
-                                    "Continue with OTP",
+                                    fontSize: 16,
+                                    fontWeight:
+                                        FontWeight
+                                            .bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(
+                              height: 18,
+                            ),
+
+                            Center(
+                              child: TextButton(
+                                onPressed:
+                                    continueAsGuest,
+
+                                child: Text(
+                                  "Continue as Guest",
+
+                                  style:
+                                      TextStyle(
+                                    color: Colors
+                                        .grey
+                                        .shade700,
+
+                                    fontWeight:
+                                        FontWeight
+                                            .w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(
+                        height: 24,
+                      ),
+
+                      /// ADMIN LOGIN CARD
+
+                      Container(
+                        width:
+                            double.infinity,
+
+                        padding:
+                            const EdgeInsets.all(
+                          24,
+                        ),
+
+                        decoration:
+                            BoxDecoration(
+                          color: Colors.white,
+
+                          borderRadius:
+                              BorderRadius.circular(
+                            32,
+                          ),
+
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors
+                                  .black
+                                  .withOpacity(
+                                0.04,
+                              ),
+                              blurRadius: 20,
+                              offset:
+                                  const Offset(
+                                0,
+                                8,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment
+                                  .start,
+
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding:
+                                      const EdgeInsets.all(
+                                    12,
+                                  ),
+
+                                  decoration:
+                                      BoxDecoration(
+                                    color: Colors
+                                        .orange
+                                        .withOpacity(
+                                      0.12,
+                                    ),
+
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      16,
+                                    ),
+                                  ),
+
+                                  child: const Icon(
+                                    Icons
+                                        .admin_panel_settings_rounded,
+                                    color:
+                                        Colors.orange,
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                  width: 14,
+                                ),
+
+                                const Expanded(
+                                  child: Text(
+                                    "Admin Login",
 
                                     style:
                                         TextStyle(
                                       fontSize:
-                                          16,
-
+                                          20,
                                       fontWeight:
-                                          FontWeight.bold,
-
-                                      color:
-                                          Colors.white,
+                                          FontWeight
+                                              .bold,
                                     ),
                                   ),
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height: 30,
-                    ),
-
-                    /// DIVIDER
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Divider(
-                            color: Colors
-                                .grey
-                                .shade300,
-                          ),
-                        ),
-
-                        Padding(
-                          padding:
-                              const EdgeInsets.symmetric(
-                            horizontal: 12,
-                          ),
-
-                          child: Text(
-                            "OR",
-
-                            style:
-                                TextStyle(
-                              fontSize: 12,
-                              fontWeight:
-                                  FontWeight
-                                      .w700,
-
-                              color: Colors
-                                  .grey
-                                  .shade600,
+                                ),
+                              ],
                             ),
-                          ),
-                        ),
 
-                        Expanded(
-                          child: Divider(
-                            color: Colors
-                                .grey
-                                .shade300,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(
-                      height: 30,
-                    ),
-
-                    /// GOOGLE BUTTON
-
-                    SizedBox(
-                      width:
-                          double.infinity,
-
-                      height: 58,
-
-                      child:
-                          OutlinedButton.icon(
-                        onPressed:
-                            loading
-                                ? null
-                                : signInWithGoogle,
-
-                        icon: Image.asset(
-                          "assets/google.png",
-
-                          height: 22,
-                        ),
-
-                        label: const Text(
-                          "Continue with Google",
-
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight:
-                                FontWeight
-                                    .w700,
-
-                            color:
-                                Colors.black,
-                          ),
-                        ),
-
-                        style:
-                            OutlinedButton
-                                .styleFrom(
-                          backgroundColor:
-                              Colors.white,
-
-                          side:
-                              BorderSide(
-                            color: Colors
-                                .grey
-                                .shade300,
-                          ),
-
-                          shape:
-                              RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(
-                              18,
+                            const SizedBox(
+                              height: 8,
                             ),
-                          ),
-                        ),
-                      ),
-                    ),
 
-                    const SizedBox(
-                      height: 14,
-                    ),
+                            Text(
+                              "Admins can login using email and password.",
 
-                    /// GUEST BUTTON
-
-                    Center(
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder:
-                                  (_) =>
-                                      const BottomNavPage(
-                                userPhone: "",
-                                userEmail: "",
+                              style:
+                                  TextStyle(
+                                color: Colors
+                                    .grey
+                                    .shade600,
+                                height: 1.5,
                               ),
                             ),
-                          );
-                        },
 
-                        child: Text(
-                          "Continue as Guest",
+                            const SizedBox(
+                              height: 24,
+                            ),
 
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight:
-                                FontWeight.w600,
+                            /// EMAIL FIELD
 
-                            color: Colors
-                                .grey.shade700,
-                          ),
+                            Container(
+                              decoration:
+                                  BoxDecoration(
+                                color:
+                                    const Color(
+                                  0xFFF8FAFC,
+                                ),
+
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  20,
+                                ),
+
+                                border:
+                                    Border.all(
+                                  color: Colors
+                                      .grey
+                                      .shade200,
+                                ),
+                              ),
+
+                              child: TextField(
+                                controller:
+                                    emailController,
+
+                                keyboardType:
+                                    TextInputType
+                                        .emailAddress,
+
+                                decoration:
+                                    const InputDecoration(
+                                  border:
+                                      InputBorder
+                                          .none,
+
+                                  hintText:
+                                      "Enter admin email",
+
+                                  prefixIcon:
+                                      Icon(
+                                    Icons.email,
+                                    color:
+                                        Color(
+                                      0xFF4F46E5,
+                                    ),
+                                  ),
+
+                                  contentPadding:
+                                      EdgeInsets.symmetric(
+                                    vertical: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(
+                              height: 18,
+                            ),
+
+                            /// PASSWORD FIELD
+
+                            Container(
+                              decoration:
+                                  BoxDecoration(
+                                color:
+                                    const Color(
+                                  0xFFF8FAFC,
+                                ),
+
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  20,
+                                ),
+
+                                border:
+                                    Border.all(
+                                  color: Colors
+                                      .grey
+                                      .shade200,
+                                ),
+                              ),
+
+                              child: TextField(
+                                controller:
+                                    passwordController,
+
+                                obscureText:
+                                    obscurePassword,
+
+                                decoration:
+                                    InputDecoration(
+                                  border:
+                                      InputBorder
+                                          .none,
+
+                                  hintText:
+                                      "Enter password",
+
+                                  prefixIcon:
+                                      const Icon(
+                                    Icons.lock,
+                                    color:
+                                        Color(
+                                      0xFF4F46E5,
+                                    ),
+                                  ),
+
+                                  suffixIcon:
+                                      IconButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        obscurePassword =
+                                            !obscurePassword;
+                                      });
+                                    },
+                                    icon: Icon(
+                                      obscurePassword
+                                          ? Icons
+                                              .visibility_off
+                                          : Icons
+                                              .visibility,
+                                    ),
+                                  ),
+
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(
+                                    vertical: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(
+                              height: 24,
+                            ),
+
+                            /// LOGIN BUTTON
+
+                            SizedBox(
+                              width:
+                                  double.infinity,
+
+                              height: 58,
+
+                              child:
+                                  ElevatedButton(
+                                onPressed:
+                                    adminLoading
+                                        ? null
+                                        : adminLogin,
+
+                                style:
+                                    ElevatedButton.styleFrom(
+                                  elevation: 0,
+
+                                  backgroundColor:
+                                      Colors.orange,
+
+                                  shape:
+                                      RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      20,
+                                    ),
+                                  ),
+                                ),
+
+                                child:
+                                    adminLoading
+                                        ? const SizedBox(
+                                            height:
+                                                24,
+                                            width:
+                                                24,
+                                            child:
+                                                CircularProgressIndicator(
+                                              color:
+                                                  Colors.white,
+                                              strokeWidth:
+                                                  2.5,
+                                            ),
+                                          )
+                                        : const Text(
+                                            "Admin Login",
+
+                                            style:
+                                                TextStyle(
+                                              color:
+                                                  Colors.white,
+                                              fontSize:
+                                                  16,
+                                              fontWeight:
+                                                  FontWeight.bold,
+                                            ),
+                                          ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+
+                      const SizedBox(
+                        height: 30,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-
-              const SizedBox(
-                height: 30,
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

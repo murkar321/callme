@@ -1,15 +1,13 @@
 import 'dart:io';
 
+import 'package:callme/screens/logo_page.dart';
+import 'package:callme/screens/map_picker_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'package:callme/screens/map_picker_page.dart';
-
 class ProfilePage extends StatefulWidget {
-
   final String phone;
 
   const ProfilePage({
@@ -24,7 +22,6 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState
     extends State<ProfilePage> {
-
   /// =====================================================
   /// FORM
   /// =====================================================
@@ -61,20 +58,18 @@ class _ProfilePageState
   final FirebaseFirestore firestore =
       FirebaseFirestore.instance;
 
-  User? get user =>
+  User? get currentUser =>
       auth.currentUser;
 
   /// =====================================================
   /// STATE
   /// =====================================================
 
-  bool isLoading = false;
+  bool isLoading = true;
 
   File? imageFile;
 
   String networkImage = "";
-
-  String? userDocId;
 
   /// =====================================================
   /// INIT
@@ -83,48 +78,8 @@ class _ProfilePageState
   @override
   void initState() {
     super.initState();
+
     loadUserData();
-  }
-
-  /// =====================================================
-  /// GET USER DOCUMENT
-  /// =====================================================
-
-  Future<DocumentSnapshot?> getUserDoc() async {
-
-    try {
-
-      if (user == null) {
-        return null;
-      }
-
-      final query =
-          await firestore
-              .collection("users")
-              .where(
-                "authUid",
-                isEqualTo: user!.uid,
-              )
-              .limit(1)
-              .get();
-
-      if (query.docs.isEmpty) {
-        return null;
-      }
-
-      userDocId =
-          query.docs.first.id;
-
-      return query.docs.first;
-
-    } catch (e) {
-
-      debugPrint(
-        "Get User Doc Error: $e",
-      );
-
-      return null;
-    }
   }
 
   /// =====================================================
@@ -132,8 +87,8 @@ class _ProfilePageState
   /// =====================================================
 
   Future<void> loadUserData() async {
-
     try {
+      final user = currentUser;
 
       if (user == null) return;
 
@@ -141,86 +96,88 @@ class _ProfilePageState
         isLoading = true;
       });
 
-      /// AUTH DATA
+      /// ===============================================
+      /// GET FIRESTORE USER
+      /// ===============================================
 
-      emailController.text =
-          user!.email ?? "";
+      final doc = await firestore
+          .collection("users")
+          .doc(user.uid)
+          .get();
+
+      /// ===============================================
+      /// AUTH DATA
+      /// ===============================================
 
       phoneController.text =
-          user!.phoneNumber ??
+          user.phoneNumber ??
               widget.phone;
 
-      if (user!.displayName != null &&
-          user!.displayName!
+      emailController.text =
+          user.email ?? "";
+
+      if (user.displayName != null &&
+          user.displayName!
               .trim()
               .isNotEmpty) {
-
-        final parts =
-            user!.displayName!
-                .trim()
-                .split(" ");
+        final names = user
+            .displayName!
+            .trim()
+            .split(" ");
 
         firstNameController.text =
-            parts.first;
+            names.first;
 
-        if (parts.length > 1) {
-
+        if (names.length > 1) {
           lastNameController.text =
-              parts
+              names
                   .sublist(1)
                   .join(" ");
         }
       }
 
+      /// ===============================================
       /// FIRESTORE DATA
+      /// ===============================================
 
-      final doc =
-          await getUserDoc();
-
-      if (doc != null &&
-          doc.exists) {
-
+      if (doc.exists) {
         final data =
-            doc.data()
-                as Map<String, dynamic>;
+            doc.data() ?? {};
 
         firstNameController.text =
-            data['firstName'] ?? "";
+            data["firstName"] ?? "";
 
         lastNameController.text =
-            data['lastName'] ?? "";
+            data["lastName"] ?? "";
 
         emailController.text =
-            data['email'] ?? "";
+            data["email"] ??
+                emailController.text;
 
         phoneController.text =
-            data['phone'] ?? "";
+            data["phone"] ??
+                phoneController.text;
 
         addressController.text =
-            data['address'] ?? "";
+            data["address"] ?? "";
 
         networkImage =
-            data['photo'] ?? "";
+            data["photo"] ?? "";
       }
 
       if (mounted) {
         setState(() {});
       }
-
     } catch (e) {
-
       debugPrint(
-        "Load User Error: $e",
+        "LOAD USER ERROR : $e",
       );
 
       showMsg(
         "Failed to load profile",
       );
-
     } finally {
-
       if (mounted) {
-
         setState(() {
           isLoading = false;
         });
@@ -233,32 +190,24 @@ class _ProfilePageState
   /// =====================================================
 
   Future<void> pickImage() async {
-
     try {
-
       final picked =
           await ImagePicker()
               .pickImage(
-
         source:
-        ImageSource.gallery,
-
+            ImageSource.gallery,
         imageQuality: 70,
       );
 
       if (picked != null) {
-
         setState(() {
-
           imageFile =
               File(picked.path);
         });
       }
-
     } catch (e) {
-
       debugPrint(
-        "Image Pick Error: $e",
+        "IMAGE PICK ERROR : $e",
       );
     }
   }
@@ -268,23 +217,18 @@ class _ProfilePageState
   /// =====================================================
 
   Future<void> openMap() async {
-
     final result =
         await Navigator.push(
-
       context,
-
       MaterialPageRoute(
         builder: (_) =>
-        const MapPickerPage(),
+            const MapPickerPage(),
       ),
     );
 
     if (result != null &&
         result is String) {
-
       setState(() {
-
         addressController.text =
             result;
       });
@@ -296,118 +240,101 @@ class _ProfilePageState
   /// =====================================================
 
   Future<void> saveProfile() async {
-
     if (!_formKey.currentState!
         .validate()) {
       return;
     }
 
     try {
+      final user = currentUser;
+
+      if (user == null) {
+        showMsg(
+          "User not found",
+        );
+        return;
+      }
 
       setState(() {
         isLoading = true;
       });
 
-      if (user == null) {
-
-        throw Exception(
-          "User not logged in",
-        );
-      }
-
-      final doc =
-          await getUserDoc();
-
-      if (doc == null) {
-
-        throw Exception(
-          "User document not found",
-        );
-      }
-
-      final docId =
-          doc.id;
-
       final fullName =
           "${firstNameController.text.trim()} ${lastNameController.text.trim()}";
 
-      /// UPDATE FIREBASE AUTH
+      /// ===============================================
+      /// UPDATE AUTH
+      /// ===============================================
 
-      await user!
-          .updateDisplayName(
+      await user.updateDisplayName(
         fullName,
       );
 
-      /// IMPORTANT
-      /// FORCE REFRESH USER
+      await user.reload();
 
-      await user!.reload();
-
-      /// UPDATE FIRESTORE
+      /// ===============================================
+      /// SAVE FIRESTORE
+      /// ===============================================
 
       await firestore
           .collection("users")
-          .doc(docId)
-          .set({
+          .doc(user.uid)
+          .set(
+        {
+          "uid": user.uid,
 
-        "authUid":
-        user!.uid,
+          "firstName":
+              firstNameController.text
+                  .trim(),
 
-        "firstName":
-        firstNameController.text
-            .trim(),
+          "lastName":
+              lastNameController.text
+                  .trim(),
 
-        "lastName":
-        lastNameController.text
-            .trim(),
+          "name": fullName,
 
-        "name":
-        fullName,
+          "email":
+              emailController.text
+                  .trim(),
 
-        "email":
-        emailController.text
-            .trim(),
+          "phone":
+              phoneController.text
+                  .trim(),
 
-        "phone":
-        phoneController.text
-            .trim(),
+          "address":
+              addressController.text
+                  .trim(),
 
-        "address":
-        addressController.text
-            .trim(),
+          "photo": networkImage,
 
-        "photo":
-        networkImage,
+          "role": "user",
 
-        "updatedAt":
-        FieldValue.serverTimestamp(),
+          "updatedAt":
+              FieldValue.serverTimestamp(),
 
-      }, SetOptions(
-        merge: true,
-      ));
-
-      /// REFRESH LOCAL DATA
+          "createdAt":
+              FieldValue.serverTimestamp(),
+        },
+        SetOptions(
+          merge: true,
+        ),
+      );
 
       await loadUserData();
 
       showMsg(
         "Profile Updated Successfully",
       );
-
     } catch (e) {
-
       debugPrint(
-        "Save Profile Error: $e",
+        "SAVE PROFILE ERROR : $e",
       );
 
       showMsg(
         "Failed to update profile",
       );
-
     } finally {
-
       if (mounted) {
-
         setState(() {
           isLoading = false;
         });
@@ -420,44 +347,23 @@ class _ProfilePageState
   /// =====================================================
 
   Future<void> logout() async {
-
     try {
-
-      setState(() {
-        isLoading = true;
-      });
-
-      await GoogleSignIn()
-          .signOut();
-
-      await FirebaseAuth.instance
-          .signOut();
+      await auth.signOut();
 
       if (!mounted) return;
 
-      Navigator.pushNamedAndRemoveUntil(
-
+      Navigator.pushAndRemoveUntil(
         context,
-
-        '/',
-
-            (route) => false,
+        MaterialPageRoute(
+          builder: (_) =>
+              const LogoPage(),
+        ),
+        (route) => false,
       );
-
     } catch (e) {
-
       debugPrint(
-        "Logout Error: $e",
+        "LOGOUT ERROR : $e",
       );
-
-    } finally {
-
-      if (mounted) {
-
-        setState(() {
-          isLoading = false;
-        });
-      }
     }
   }
 
@@ -466,34 +372,31 @@ class _ProfilePageState
   /// =====================================================
 
   void showMsg(String msg) {
-
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
         .showSnackBar(
-
       SnackBar(
-
         behavior:
-        SnackBarBehavior.floating,
-
+            SnackBarBehavior.floating,
         content: Text(msg),
       ),
     );
   }
 
   /// =====================================================
-  /// IMAGE PROVIDER
+  /// IMAGE
   /// =====================================================
 
   ImageProvider buildImage() {
-
     if (imageFile != null) {
       return FileImage(imageFile!);
     }
 
     if (networkImage.isNotEmpty) {
-      return NetworkImage(networkImage);
+      return NetworkImage(
+        networkImage,
+      );
     }
 
     return const AssetImage(
@@ -507,7 +410,6 @@ class _ProfilePageState
 
   @override
   Widget build(BuildContext context) {
-
     final width =
         MediaQuery.of(context)
             .size
@@ -517,187 +419,160 @@ class _ProfilePageState
         width > 700;
 
     return Scaffold(
-
       backgroundColor:
-      const Color(0xFFF4F6FB),
+          const Color(0xFFF4F6FB),
 
       appBar: AppBar(
-
         elevation: 0,
-
         backgroundColor:
-        Colors.transparent,
-
-        surfaceTintColor:
-        Colors.transparent,
-
+            Colors.transparent,
         centerTitle: true,
-
         title: const Text(
-
           "My Profile",
-
           style: TextStyle(
-
             color: Colors.black87,
-
             fontWeight:
-            FontWeight.bold,
+                FontWeight.bold,
           ),
         ),
       ),
 
       body: Stack(
-
         children: [
-
           SafeArea(
-
-            child: SingleChildScrollView(
-
+            child:
+                SingleChildScrollView(
               padding:
-              EdgeInsets.symmetric(
-
+                  EdgeInsets.symmetric(
                 horizontal:
-                isTablet ? 28 : 16,
-
+                    isTablet ? 28 : 16,
                 vertical: 16,
               ),
 
               child: Center(
-
                 child: ConstrainedBox(
-
                   constraints:
-                  const BoxConstraints(
+                      const BoxConstraints(
                     maxWidth: 850,
                   ),
 
                   child: Form(
-
                     key: _formKey,
 
                     child: Column(
-
                       children: [
-
                         /// PROFILE CARD
 
                         Container(
-
-                          width: double.infinity,
+                          width:
+                              double.infinity,
 
                           padding:
-                          const EdgeInsets.all(24),
+                              const EdgeInsets
+                                  .all(24),
 
                           decoration:
-                          BoxDecoration(
-
+                              BoxDecoration(
                             gradient:
-                            const LinearGradient(
-
+                                const LinearGradient(
                               colors: [
-
-                                Color(0xFF5B67F1),
-
-                                Color(0xFF7D89FF),
+                                Color(
+                                    0xFF5B67F1),
+                                Color(
+                                    0xFF7D89FF),
                               ],
                             ),
 
                             borderRadius:
-                            BorderRadius.circular(30),
+                                BorderRadius
+                                    .circular(
+                              30,
+                            ),
 
                             boxShadow: [
-
                               BoxShadow(
-
-                                color:
-                                Colors.indigo
-                                    .withOpacity(0.2),
+                                color: Colors
+                                    .indigo
+                                    .withOpacity(
+                                        0.2),
 
                                 blurRadius: 18,
 
                                 offset:
-                                const Offset(0, 8),
+                                    const Offset(
+                                        0, 8),
                               ),
                             ],
                           ),
 
                           child: Column(
-
                             children: [
-
                               Stack(
-
                                 children: [
-
                                   Container(
-
                                     padding:
-                                    const EdgeInsets.all(4),
+                                        const EdgeInsets
+                                            .all(4),
 
                                     decoration:
-                                    BoxDecoration(
-
+                                        BoxDecoration(
                                       shape:
-                                      BoxShape.circle,
+                                          BoxShape
+                                              .circle,
 
-                                      border: Border.all(
-
-                                        color:
-                                        Colors.white,
+                                      border:
+                                          Border.all(
+                                        color: Colors
+                                            .white,
 
                                         width: 3,
                                       ),
                                     ),
 
-                                    child: CircleAvatar(
-
+                                    child:
+                                        CircleAvatar(
                                       radius:
-                                      isTablet
-                                          ? 62
-                                          : 55,
+                                          isTablet
+                                              ? 62
+                                              : 55,
 
                                       backgroundImage:
-                                      buildImage(),
+                                          buildImage(),
                                     ),
                                   ),
 
                                   Positioned(
-
                                     bottom: 0,
-
                                     right: 0,
 
-                                    child: InkWell(
-
+                                    child:
+                                        InkWell(
                                       onTap:
-                                      pickImage,
+                                          pickImage,
 
                                       child:
-                                      Container(
-
+                                          Container(
                                         padding:
-                                        const EdgeInsets.all(10),
-
-                                        decoration:
-                                        const BoxDecoration(
-
-                                          color:
-                                          Colors.white,
-
-                                          shape:
-                                          BoxShape.circle,
+                                            const EdgeInsets
+                                                .all(
+                                          10,
                                         ),
 
-                                        child: const Icon(
-
-                                          Icons.edit,
-
-                                          size: 18,
-
+                                        decoration:
+                                            const BoxDecoration(
                                           color:
-                                          Colors.indigo,
+                                              Colors.white,
+
+                                          shape:
+                                              BoxShape.circle,
+                                        ),
+
+                                        child:
+                                            const Icon(
+                                          Icons.edit,
+                                          size: 18,
+                                          color:
+                                              Colors.indigo,
                                         ),
                                       ),
                                     ),
@@ -705,108 +580,109 @@ class _ProfilePageState
                                 ],
                               ),
 
-                              const SizedBox(height: 18),
+                              const SizedBox(
+                                  height: 18),
 
                               Text(
-
                                 "${firstNameController.text} ${lastNameController.text}",
 
                                 textAlign:
-                                TextAlign.center,
+                                    TextAlign
+                                        .center,
 
                                 style:
-                                const TextStyle(
-
+                                    const TextStyle(
                                   color:
-                                  Colors.white,
+                                      Colors.white,
 
                                   fontSize: 24,
 
                                   fontWeight:
-                                  FontWeight.bold,
+                                      FontWeight.bold,
                                 ),
                               ),
 
-                              const SizedBox(height: 8),
+                              const SizedBox(
+                                  height: 8),
 
                               Text(
-
-                                phoneController.text,
+                                phoneController
+                                    .text,
 
                                 style:
-                                const TextStyle(
-
+                                    const TextStyle(
                                   color:
-                                  Colors.white70,
+                                      Colors.white70,
                                 ),
                               ),
                             ],
                           ),
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(
+                            height: 24),
 
-                        /// FORM SECTION
+                        /// FORM
 
                         _section(
-
                           title:
-                          "Personal Information",
+                              "Personal Information",
 
                           child: Column(
-
                             children: [
-
                               isTablet
-
                                   ? Row(
+                                      children: [
+                                        Expanded(
+                                          child:
+                                              _field(
+                                            firstNameController,
+                                            "First Name",
+                                            Icons
+                                                .person,
+                                          ),
+                                        ),
 
-                                children: [
+                                        const SizedBox(
+                                            width:
+                                                16),
 
-                                  Expanded(
-                                    child: _field(
-                                      firstNameController,
-                                      "First Name",
-                                      Icons.person,
-                                    ),
-                                  ),
-
-                                  const SizedBox(width: 16),
-
-                                  Expanded(
-                                    child: _field(
-                                      lastNameController,
-                                      "Last Name",
-                                      Icons.person_outline,
-                                    ),
-                                  ),
-                                ],
-                              )
-
+                                        Expanded(
+                                          child:
+                                              _field(
+                                            lastNameController,
+                                            "Last Name",
+                                            Icons
+                                                .person_outline,
+                                          ),
+                                        ),
+                                      ],
+                                    )
                                   : Column(
+                                      children: [
+                                        _field(
+                                          firstNameController,
+                                          "First Name",
+                                          Icons
+                                              .person,
+                                        ),
 
-                                children: [
-
-                                  _field(
-                                    firstNameController,
-                                    "First Name",
-                                    Icons.person,
-                                  ),
-
-                                  _field(
-                                    lastNameController,
-                                    "Last Name",
-                                    Icons.person_outline,
-                                  ),
-                                ],
-                              ),
+                                        _field(
+                                          lastNameController,
+                                          "Last Name",
+                                          Icons
+                                              .person_outline,
+                                        ),
+                                      ],
+                                    ),
 
                               _field(
                                 emailController,
                                 "Email Address",
                                 Icons.email,
                                 keyboard:
-                                TextInputType.emailAddress,
+                                    TextInputType
+                                        .emailAddress,
                               ),
 
                               _field(
@@ -814,34 +690,35 @@ class _ProfilePageState
                                 "Mobile Number",
                                 Icons.phone,
                                 keyboard:
-                                TextInputType.phone,
+                                    TextInputType
+                                        .phone,
                               ),
 
                               _field(
                                 addressController,
                                 "Address",
-                                Icons.location_on,
+                                Icons
+                                    .location_on,
                                 maxLines: 3,
                               ),
 
                               Align(
-
                                 alignment:
-                                Alignment.centerRight,
+                                    Alignment
+                                        .centerRight,
 
                                 child:
-                                TextButton.icon(
-
+                                    TextButton.icon(
                                   onPressed:
-                                  openMap,
+                                      openMap,
 
                                   icon:
-                                  const Icon(
+                                      const Icon(
                                     Icons.map,
                                   ),
 
                                   label:
-                                  const Text(
+                                      const Text(
                                     "Pick From Map",
                                   ),
                                 ),
@@ -850,111 +727,120 @@ class _ProfilePageState
                           ),
                         ),
 
-                        const SizedBox(height: 28),
+                        const SizedBox(
+                            height: 28),
 
-                        /// BUTTONS
+                        /// SAVE BUTTON
 
                         SizedBox(
-
-                          width: double.infinity,
-
+                          width:
+                              double.infinity,
                           height: 56,
 
-                          child: ElevatedButton.icon(
-
+                          child:
+                              ElevatedButton.icon(
                             onPressed:
-                            saveProfile,
+                                saveProfile,
 
                             icon:
-                            const Icon(Icons.save),
+                                const Icon(
+                              Icons.save,
+                            ),
 
                             label:
-                            const Text(
-
+                                const Text(
                               "Save Profile",
-
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight:
-                                FontWeight.w600,
+                                    FontWeight
+                                        .w600,
                               ),
                             ),
 
                             style:
-                            ElevatedButton.styleFrom(
-
+                                ElevatedButton
+                                    .styleFrom(
                               elevation: 0,
 
                               backgroundColor:
-                              Colors.indigo,
+                                  Colors
+                                      .indigo,
 
                               foregroundColor:
-                              Colors.white,
+                                  Colors
+                                      .white,
 
                               shape:
-                              RoundedRectangleBorder(
-
+                                  RoundedRectangleBorder(
                                 borderRadius:
-                                BorderRadius.circular(18),
+                                    BorderRadius
+                                        .circular(
+                                  18,
+                                ),
                               ),
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 16),
+                        const SizedBox(
+                            height: 16),
+
+                        /// LOGOUT
 
                         SizedBox(
-
-                          width: double.infinity,
-
+                          width:
+                              double.infinity,
                           height: 56,
 
                           child:
-                          OutlinedButton.icon(
-
+                              OutlinedButton.icon(
                             onPressed:
-                            logout,
+                                logout,
 
                             icon:
-                            const Icon(
+                                const Icon(
                               Icons.logout,
                             ),
 
                             label:
-                            const Text(
-
+                                const Text(
                               "Logout",
-
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight:
-                                FontWeight.w600,
+                                    FontWeight
+                                        .w600,
                               ),
                             ),
 
                             style:
-                            OutlinedButton.styleFrom(
-
+                                OutlinedButton
+                                    .styleFrom(
                               foregroundColor:
-                              Colors.red,
+                                  Colors.red,
 
                               side:
-                              BorderSide(
-                                color:
-                                Colors.red.shade200,
+                                  BorderSide(
+                                color: Colors
+                                    .red
+                                    .shade200,
                               ),
 
                               shape:
-                              RoundedRectangleBorder(
-
+                                  RoundedRectangleBorder(
                                 borderRadius:
-                                BorderRadius.circular(18),
+                                    BorderRadius
+                                        .circular(
+                                  18,
+                                ),
                               ),
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 40),
+                        const SizedBox(
+                            height: 40),
                       ],
                     ),
                   ),
@@ -964,17 +850,13 @@ class _ProfilePageState
           ),
 
           if (isLoading)
-
             Container(
+              color: Colors.black
+                  .withOpacity(0.2),
 
-              color:
-              Colors.black.withOpacity(0.2),
-
-              child:
-              const Center(
-
+              child: const Center(
                 child:
-                CircularProgressIndicator(),
+                    CircularProgressIndicator(),
               ),
             ),
         ],
@@ -987,59 +869,46 @@ class _ProfilePageState
   /// =====================================================
 
   Widget _section({
-
     required String title,
-
     required Widget child,
   }) {
-
     return Container(
-
       width: double.infinity,
 
       padding:
-      const EdgeInsets.all(22),
+          const EdgeInsets.all(22),
 
-      decoration:
-      BoxDecoration(
-
+      decoration: BoxDecoration(
         color: Colors.white,
 
         borderRadius:
-        BorderRadius.circular(28),
+            BorderRadius.circular(28),
 
         boxShadow: [
-
           BoxShadow(
-
-            color:
-            Colors.black.withOpacity(0.05),
+            color: Colors.black
+                .withOpacity(0.05),
 
             blurRadius: 14,
 
             offset:
-            const Offset(0, 6),
+                const Offset(0, 6),
           ),
         ],
       ),
 
       child: Column(
-
         crossAxisAlignment:
-        CrossAxisAlignment.start,
+            CrossAxisAlignment.start,
 
         children: [
-
           Text(
-
             title,
 
             style: const TextStyle(
-
               fontSize: 20,
-
               fontWeight:
-              FontWeight.bold,
+                  FontWeight.bold,
             ),
           ),
 
@@ -1056,90 +925,76 @@ class _ProfilePageState
   /// =====================================================
 
   Widget _field(
-
-      TextEditingController c,
-      String hint,
-      IconData icon, {
-
-        TextInputType keyboard =
-            TextInputType.text,
-
-        int maxLines = 1,
-      }) {
-
+    TextEditingController c,
+    String hint,
+    IconData icon, {
+    TextInputType keyboard =
+        TextInputType.text,
+    int maxLines = 1,
+  }) {
     return Padding(
-
       padding:
-      const EdgeInsets.only(
+          const EdgeInsets.only(
         bottom: 16,
       ),
 
       child: TextFormField(
-
         controller: c,
 
-        keyboardType:
-        keyboard,
+        keyboardType: keyboard,
 
-        maxLines:
-        maxLines,
+        maxLines: maxLines,
 
         validator: (v) {
-
           if (v == null ||
               v.trim().isEmpty) {
-
             return "Required";
           }
 
           return null;
         },
 
-        decoration:
-        InputDecoration(
-
+        decoration: InputDecoration(
           hintText: hint,
 
-          prefixIcon:
-          Icon(
+          prefixIcon: Icon(
             icon,
-            color:
-            Colors.indigo,
+            color: Colors.indigo,
           ),
 
           filled: true,
 
           fillColor:
-          const Color(0xFFF7F8FC),
+              const Color(0xFFF7F8FC),
 
           contentPadding:
-          const EdgeInsets.symmetric(
-
+              const EdgeInsets.symmetric(
             horizontal: 18,
             vertical: 18,
           ),
 
           enabledBorder:
-          OutlineInputBorder(
-
+              OutlineInputBorder(
             borderRadius:
-            BorderRadius.circular(18),
+                BorderRadius.circular(
+              18,
+            ),
 
-            borderSide:
-            BorderSide(
+            borderSide: BorderSide(
               color:
-              Colors.grey.shade200,
+                  Colors.grey.shade200,
             ),
           ),
 
           focusedBorder:
-          OutlineInputBorder(
-
+              OutlineInputBorder(
             borderRadius:
-            BorderRadius.circular(18),
+                BorderRadius.circular(
+              18,
+            ),
 
             borderSide:
-            const BorderSide(
+                const BorderSide(
               color: Colors.indigo,
               width: 1.3,
             ),
@@ -1155,7 +1010,6 @@ class _ProfilePageState
 
   @override
   void dispose() {
-
     firstNameController.dispose();
     lastNameController.dispose();
     emailController.dispose();

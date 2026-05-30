@@ -19,148 +19,370 @@ class ResortBookingPage extends StatefulWidget {
 }
 
 class _ResortBookingPageState extends State<ResortBookingPage> {
-  final name = TextEditingController();
-  final phone = TextEditingController();
-  final email = TextEditingController();
-  final address = TextEditingController();
+  final TextEditingController nameController =
+      TextEditingController();
+
+  final TextEditingController phoneController =
+      TextEditingController();
+
+  final TextEditingController addressController =
+      TextEditingController();
+
+  DateTime? selectedDate;
+  TimeOfDay? selectedTime;
 
   int adults = 1;
   int children = 0;
 
-  DateTime? date;
-  TimeOfDay? time;
-
   bool isLoading = false;
 
-  double get total =>
-      (widget.resort.price * adults) +
-      ((widget.resort.price / 2) * children);
+  double get totalAmount {
+    return (widget.resort.price * adults) +
+        ((widget.resort.price / 2) * children);
+  }
 
   @override
   void dispose() {
-    name.dispose();
-    phone.dispose();
-    email.dispose();
-    address.dispose();
+    nameController.dispose();
+    phoneController.dispose();
+    addressController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
-      appBar: AppBar(
-        title: Text(widget.resort.name),
-        centerTitle: true,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.resort.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(widget.resort.location),
-              ],
-            ),
-          ),
+      backgroundColor: const Color(0xFFF7F8FC),
 
-          const SizedBox(height: 16),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 260,
+            pinned: true,
+            backgroundColor: Colors.white,
+            elevation: 0,
 
-          _card(
-            child: Column(
-              children: [
-                _counter("Adults", adults, (v) {
-                  if (v >= 1) setState(() => adults = v);
-                }),
-                _counter("Children", children, (v) {
-                  if (v >= 0) setState(() => children = v);
-                }),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          _card(
-            child: Column(
-              children: [
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.calendar_today),
-                  title: Text(
-                    date == null
-                        ? "Select Date"
-                        : "${date!.day}/${date!.month}/${date!.year}",
-                  ),
-                  onTap: _pickDate,
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.access_time),
-                  title: Text(
-                    time == null ? "Select Time" : time!.format(context),
-                  ),
-                  onTap: _pickTime,
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          _card(
-            child: Column(
-              children: [
-                _field(name, "Full Name"),
-                _field(phone, "Phone"),
-                _field(email, "Email"),
-                _field(address, "Address"),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          _card(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Total Amount",
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  "₹${total.toStringAsFixed(0)}",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          SizedBox(
-            height: 52,
-            child: ElevatedButton(
-              onPressed: isLoading ? null : _pay,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFAE91BA),
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_ios_new,
+                color: Colors.white,
               ),
-              child: isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("Pay & Book"),
+              onPressed: () => Navigator.pop(context),
+            ),
+
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    widget.resort.image,
+                    fit: BoxFit.cover,
+                  ),
+
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(.15),
+                          Colors.black.withOpacity(.65),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  Positioned(
+                    left: 20,
+                    right: 20,
+                    bottom: 25,
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.resort.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 6),
+
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                widget.resort.location,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _sectionCard(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Booking Summary",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        _infoRow(
+                          "Resort",
+                          widget.resort.name,
+                        ),
+
+                        _infoRow(
+                          "City",
+                          widget.resort.city,
+                        ),
+
+                        _infoRow(
+                          "Price Per Adult",
+                          "₹${widget.resort.price}",
+                        ),
+
+                        _infoRow(
+                          "Rating",
+                          "⭐ ${widget.resort.rating}",
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  _sectionCard(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Guests",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        _counterTile(
+                          title: "Adults",
+                          value: adults,
+                          onMinus: () {
+                            if (adults > 1) {
+                              setState(() {
+                                adults--;
+                              });
+                            }
+                          },
+                          onPlus: () {
+                            setState(() {
+                              adults++;
+                            });
+                          },
+                        ),
+
+                        const Divider(),
+
+                        _counterTile(
+                          title: "Children",
+                          value: children,
+                          onMinus: () {
+                            if (children > 0) {
+                              setState(() {
+                                children--;
+                              });
+                            }
+                          },
+                          onPlus: () {
+                            setState(() {
+                              children++;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  _sectionCard(
+                    child: Column(
+                      children: [
+                        ListTile(
+                          contentPadding:
+                              EdgeInsets.zero,
+                          leading: const Icon(
+                            Icons.calendar_month,
+                            color: Colors.deepPurple,
+                          ),
+                          title: Text(
+                            selectedDate == null
+                                ? "Select Check-In Date"
+                                : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
+                          ),
+                          trailing:
+                              const Icon(Icons.chevron_right),
+                          onTap: _pickDate,
+                        ),
+
+                        const Divider(),
+
+                        ListTile(
+                          contentPadding:
+                              EdgeInsets.zero,
+                          leading: const Icon(
+                            Icons.access_time,
+                            color: Colors.deepPurple,
+                          ),
+                          title: Text(
+                            selectedTime == null
+                                ? "Select Check-In Time"
+                                : selectedTime!
+                                    .format(context),
+                          ),
+                          trailing:
+                              const Icon(Icons.chevron_right),
+                          onTap: _pickTime,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  _sectionCard(
+                    child: Column(
+                      children: [
+                        _field(
+                          controller: nameController,
+                          hint: "Full Name",
+                          icon: Icons.person_outline,
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        _field(
+                          controller: phoneController,
+                          hint: "Mobile Number",
+                          icon: Icons.phone_outlined,
+                          keyboard:
+                              TextInputType.phone,
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        _field(
+                          controller:
+                              addressController,
+                          hint: "Address",
+                          icon:
+                              Icons.location_city_outlined,
+                          maxLines: 3,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  _sectionCard(
+                    child: Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Total Amount",
+                          style: TextStyle(
+                            fontWeight:
+                                FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                        Text(
+                          "₹${totalAmount.toStringAsFixed(0)}",
+                          style: const TextStyle(
+                            fontWeight:
+                                FontWeight.bold,
+                            fontSize: 24,
+                            color: Colors.green,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 58,
+                    child: ElevatedButton(
+                      onPressed:
+                          isLoading ? null : _payNow,
+                      style:
+                          ElevatedButton.styleFrom(
+                        backgroundColor:
+                            Colors.deepPurple,
+                        shape:
+                            RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(
+                            16,
+                          ),
+                        ),
+                      ),
+                      child: isLoading
+                          ? const CircularProgressIndicator(
+                              color: Colors.white,
+                            )
+                          : const Text(
+                              "Proceed To Payment",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight:
+                                    FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+                ],
+              ),
             ),
           ),
         ],
@@ -168,56 +390,74 @@ class _ResortBookingPageState extends State<ResortBookingPage> {
     );
   }
 
-  Future<void> _pay() async {
-    if (name.text.isEmpty ||
-        phone.text.isEmpty ||
-        address.text.isEmpty ||
-        date == null ||
-        time == null) {
-      _show("Fill required details");
+  Future<void> _payNow() async {
+    if (nameController.text.trim().isEmpty ||
+        phoneController.text.trim().isEmpty ||
+        addressController.text.trim().isEmpty) {
+      _show("Please fill all details");
       return;
     }
 
-    final success = await Navigator.push(
+    if (selectedDate == null ||
+        selectedTime == null) {
+      _show("Please select date and time");
+      return;
+    }
+
+    final paymentSuccess =
+        await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => UpiPaymentScreen(amount: total),
+        builder: (_) => UpiPaymentScreen(
+          amount: totalAmount,
+        ),
       ),
     );
 
-    if (success == true) {
-      _save();
+    if (paymentSuccess == true) {
+      await _saveBooking();
     }
   }
 
-  Future<void> _save() async {
-    final user = FirebaseAuth.instance.currentUser;
+  Future<void> _saveBooking() async {
+    final user =
+        FirebaseAuth.instance.currentUser;
 
     if (user == null) {
       _show("User not logged in");
       return;
     }
 
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+    });
 
     try {
       await OrderService.placeOrder(
         serviceType: "resort",
-        services: [widget.resort.name],
+        services: [
+          widget.resort.name,
+        ],
         userId: user.uid,
-        userName: name.text.trim(),
-        phone: phone.text.trim(),
-        email: email.text.trim(),
+        userName:
+            nameController.text.trim(),
+        phone:
+            phoneController.text.trim(),
         createdBy: user.uid,
         createdByRole: "user",
-        address: address.text.trim(),
-        date: date!,
-        time: time!.format(context),
-        totalAmount: total,
+        address:
+            addressController.text.trim(),
+        date: selectedDate!,
+        time:
+            selectedTime!.format(context),
+        totalAmount: totalAmount,
         adults: adults,
         children: children,
         visitType: "resort",
-        providerId: widget.resort.providerId,
+        providerId:
+            widget.resort.providerId,
+        providerName:
+            widget.resort.name,
         isEnquiry: false,
       );
 
@@ -229,62 +469,142 @@ class _ResortBookingPageState extends State<ResortBookingPage> {
         context,
         MaterialPageRoute(
           builder: (_) => BottomNavPage(
-            userPhone: phone.text.trim(),
-            userEmail: email.text.trim(),
+            userPhone:
+                phoneController.text.trim(),
+            userEmail: "",
           ),
         ),
-        (_) => false,
+        (route) => false,
       );
     } catch (e) {
       _show("Error: $e");
     }
 
     if (mounted) {
-      setState(() => isLoading = false);
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
-  Widget _card({required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: child,
-    );
-  }
-
-  Widget _field(TextEditingController c, String hint) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextField(
-        controller: c,
-        decoration: InputDecoration(
-          labelText: hint,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+  Widget _field({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    int maxLines = 1,
+    TextInputType keyboard =
+        TextInputType.text,
+  }) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboard,
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon),
+        hintText: hint,
+        filled: true,
+        fillColor:
+            const Color(0xFFF5F5F5),
+        border: OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(14),
+          borderSide: BorderSide.none,
         ),
       ),
     );
   }
 
-  Widget _counter(String title, int value, Function(int) onChange) {
+  Widget _sectionCard({
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color:
+                Colors.black.withOpacity(.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _infoRow(
+    String title,
+    String value,
+  ) {
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(
+        vertical: 5,
+      ),
+      child: Row(
+        mainAxisAlignment:
+            MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                fontWeight:
+                    FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _counterTile({
+    required String title,
+    required int value,
+    required VoidCallback onMinus,
+    required VoidCallback onPlus,
+  }) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisAlignment:
+          MainAxisAlignment.spaceBetween,
       children: [
-        Text(title),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight:
+                FontWeight.w600,
+          ),
+        ),
         Row(
           children: [
             IconButton(
-              onPressed: () => onChange(value - 1),
-              icon: const Icon(Icons.remove_circle_outline),
+              onPressed: onMinus,
+              icon: const Icon(
+                Icons.remove_circle_outline,
+              ),
             ),
-            Text("$value"),
+            Text(
+              "$value",
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
             IconButton(
-              onPressed: () => onChange(value + 1),
-              icon: const Icon(Icons.add_circle_outline),
+              onPressed: onPlus,
+              icon: const Icon(
+                Icons.add_circle_outline,
+              ),
             ),
           ],
         ),
@@ -292,26 +612,42 @@ class _ResortBookingPageState extends State<ResortBookingPage> {
     );
   }
 
-  void _pickDate() async {
-    final d = await showDatePicker(
+  Future<void> _pickDate() async {
+    final picked =
+        await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
     );
-    if (d != null) setState(() => date = d);
+
+    if (picked != null) {
+      setState(() {
+        selectedDate = picked;
+      });
+    }
   }
 
-  void _pickTime() async {
-    final t = await showTimePicker(
+  Future<void> _pickTime() async {
+    final picked =
+        await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
     );
-    if (t != null) setState(() => time = t);
+
+    if (picked != null) {
+      setState(() {
+        selectedTime = picked;
+      });
+    }
   }
 
-  void _show(String msg) {
+  void _show(String message) {
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+        .showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
   }
 }

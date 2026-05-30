@@ -17,167 +17,201 @@ class HotelBookingPage extends StatefulWidget {
   });
 
   @override
-  State<HotelBookingPage> createState() => _HotelBookingPageState();
+  State<HotelBookingPage> createState() =>
+      _HotelBookingPageState();
 }
 
-class _HotelBookingPageState extends State<HotelBookingPage> {
-  final name = TextEditingController();
-  final phone = TextEditingController();
-  final email = TextEditingController();
-  final address = TextEditingController();
+class _HotelBookingPageState
+    extends State<HotelBookingPage> {
+  final nameController =
+      TextEditingController();
 
-  DateTime? date;
-  TimeOfDay? time;
+  final phoneController =
+      TextEditingController();
+
+  final addressController =
+      TextEditingController();
+
+  final noteController =
+      TextEditingController();
+
+  DateTime? selectedDate;
+  TimeOfDay? selectedTime;
 
   bool isLoading = false;
 
-  List<CartItem> get cartItems => Cart.getItems("Hotel");
+  List<CartItem> get cartItems =>
+      Cart.getItems("Hotel");
 
-  double get total => Cart.getTotal("Hotel").toDouble();
+  double get totalAmount {
+    if (cartItems.isNotEmpty) {
+      return Cart.getTotal("Hotel")
+          .toDouble();
+    }
+
+    return (widget.hotel.price -
+            (widget.hotel.price *
+                widget.hotel.discount /
+                100))
+        .toDouble();
+  }
 
   @override
   void dispose() {
-    name.dispose();
-    phone.dispose();
-    email.dispose();
-    address.dispose();
+    nameController.dispose();
+    phoneController.dispose();
+    addressController.dispose();
+    noteController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final cart = cartItems;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
-      appBar: AppBar(
-        elevation: 0,
-        centerTitle: true,
-        title: const Text("Hotel Booking"),
+      backgroundColor:
+          const Color(0xffF6F7FB),
+
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding:
+                    EdgeInsets.zero,
+
+                children: [
+                  _hotelHeader(),
+
+                  Padding(
+                    padding:
+                        const EdgeInsets.all(
+                      16,
+                    ),
+                    child: Column(
+                      children: [
+                        _hotelInfoCard(),
+
+                        const SizedBox(
+                            height: 16),
+
+                        _bookingSummary(),
+
+                        const SizedBox(
+                            height: 16),
+
+                        _scheduleCard(),
+
+                        const SizedBox(
+                            height: 16),
+
+                        _guestCard(),
+
+                        const SizedBox(
+                            height: 120),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            _bottomBar(),
+          ],
+        ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    );
+  }
+
+  Widget _hotelHeader() {
+    return Stack(
+      children: [
+        SizedBox(
+          height: 250,
+          width: double.infinity,
+          child: Image.asset(
+            widget.hotel.image,
+            fit: BoxFit.cover,
+          ),
+        ),
+
+        Positioned(
+          top: 12,
+          left: 12,
+          child: CircleAvatar(
+            backgroundColor:
+                Colors.white,
+            child: IconButton(
+              icon: const Icon(
+                Icons.arrow_back,
+              ),
+              onPressed: () =>
+                  Navigator.pop(
+                context,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _hotelInfoCard() {
+    return Container(
+      padding:
+          const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(
+          24,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
-          _card(
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(
-                child: Icon(Icons.hotel),
-              ),
-              title: Text(
-                widget.hotel.name,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(widget.hotel.location),
+          Text(
+            widget.hotel.hotelName,
+            style:
+                const TextStyle(
+              fontSize: 22,
+              fontWeight:
+                  FontWeight.bold,
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
 
-          _title("Selected Rooms"),
-
-          _card(
-            child: cart.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text("No items selected"),
-                  )
-                : Column(
-                    children: cart
-                        .map(
-                          (e) => ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(e.name),
-                            subtitle: Text("Qty: ${e.quantity}"),
-                            trailing: Text(
-                              "₹${e.price * e.quantity}",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-          ),
-
-          const SizedBox(height: 16),
-
-          _card(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Total Amount",
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  "₹${total.toStringAsFixed(0)}",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
+          Text(
+            widget.hotel.city,
+            style: TextStyle(
+              color:
+                  Colors.grey.shade700,
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
 
-          _title("Schedule"),
-
-          _card(
-            child: Column(
-              children: [
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.calendar_today),
-                  title: Text(
-                    date == null
-                        ? "Select Date"
-                        : "${date!.day}/${date!.month}/${date!.year}",
-                  ),
-                  onTap: _pickDate,
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.access_time),
-                  title: Text(
-                    time == null ? "Select Time" : time!.format(context),
-                  ),
-                  onTap: _pickTime,
-                ),
-              ],
+          Text(
+            widget.hotel.category,
+            style:
+                const TextStyle(
+              fontWeight:
+                  FontWeight.w600,
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          _title("Guest Details"),
-
-          _card(
-            child: Column(
-              children: [
-                _field(name, "Full Name"),
-                _field(phone, "Phone"),
-                _field(email, "Email"),
-                _field(address, "Address"),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          SizedBox(
-            height: 52,
-            child: ElevatedButton(
-              onPressed: isLoading ? null : _submit,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFAE91BA),
-              ),
-              child: isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("Confirm Booking"),
+          Text(
+            "₹${totalAmount.toStringAsFixed(0)}",
+            style:
+                const TextStyle(
+              color:
+                  Colors.deepPurple,
+              fontSize: 24,
+              fontWeight:
+                  FontWeight.bold,
             ),
           ),
         ],
@@ -185,131 +219,371 @@ class _HotelBookingPageState extends State<HotelBookingPage> {
     );
   }
 
-  Future<void> _submit() async {
-    if (name.text.isEmpty ||
-        phone.text.isEmpty ||
-        email.text.isEmpty ||
-        address.text.isEmpty) {
-      _show("Fill all details");
-      return;
-    }
-
-    if (date == null || time == null) {
-      _show("Select date & time");
-      return;
-    }
-
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      _show("User not logged in");
-      return;
-    }
-
-    setState(() => isLoading = true);
-
-    try {
-      await OrderService.placeOrder(
-        serviceType: "hotel",
-        services: cartItems.map((e) => "${e.name} x${e.quantity}").toList(),
-        userId: user.uid,
-        userName: name.text.trim(),
-        phone: phone.text.trim(),
-        email: email.text.trim(),
-        createdBy: user.uid,
-        createdByRole: "user",
-        address: address.text.trim(),
-        date: date!,
-        time: time!.format(context),
-        totalAmount: total,
-        isEnquiry: false,
-      );
-
-      /// IMPORTANT FIX
-      Cart.clear("Hotel");
-
-      if (!mounted) return;
-
-      _show("Booking Confirmed ✅");
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BottomNavPage(
-            userPhone: phone.text.trim(),
-            userEmail: email.text.trim(),
+  Widget _bookingSummary() {
+    return _card(
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Booking Summary",
+            style: TextStyle(
+              fontWeight:
+                  FontWeight.bold,
+              fontSize: 18,
+            ),
           ),
-        ),
-        (_) => false,
-      );
-    } catch (e) {
-      _show("Error: $e");
-    }
 
-    if (mounted) {
-      setState(() => isLoading = false);
-    }
+          const SizedBox(height: 12),
+
+          if (cartItems.isEmpty)
+            ListTile(
+              contentPadding:
+                  EdgeInsets.zero,
+              title: Text(
+                widget.hotel.category,
+              ),
+              trailing: Text(
+                "₹${totalAmount.toStringAsFixed(0)}",
+              ),
+            ),
+
+          ...cartItems.map(
+            (e) => ListTile(
+              contentPadding:
+                  EdgeInsets.zero,
+              title: Text(e.name),
+              subtitle: Text(
+                "Qty ${e.quantity}",
+              ),
+              trailing: Text(
+                "₹${e.price * e.quantity}",
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _title(String t) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        t,
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 16,
+  Widget _scheduleCard() {
+    return _card(
+      child: Column(
+        children: [
+          ListTile(
+            leading: const Icon(
+              Icons.calendar_month,
+            ),
+            title: Text(
+              selectedDate == null
+                  ? "Select Check-In Date"
+                  : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
+            ),
+            onTap: pickDate,
+          ),
+
+          const Divider(),
+
+          ListTile(
+            leading: const Icon(
+              Icons.access_time,
+            ),
+            title: Text(
+              selectedTime == null
+                  ? "Select Time"
+                  : selectedTime!
+                      .format(
+                    context,
+                  ),
+            ),
+            onTap: pickTime,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _guestCard() {
+    return _card(
+      child: Column(
+        children: [
+          _field(
+            nameController,
+            "Guest Name",
+          ),
+          _field(
+            phoneController,
+            "Phone Number",
+          ),
+          _field(
+            addressController,
+            "Address",
+            maxLines: 3,
+          ),
+          _field(
+            noteController,
+            "Special Request",
+            maxLines: 3,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bottomBar() {
+    return Container(
+      padding:
+          const EdgeInsets.all(16),
+      decoration:
+          const BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 10,
+            color: Colors.black12,
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                "₹${totalAmount.toStringAsFixed(0)}",
+                style:
+                    const TextStyle(
+                  fontSize: 24,
+                  fontWeight:
+                      FontWeight.bold,
+                ),
+              ),
+            ),
+            Expanded(
+              child: ElevatedButton(
+                onPressed:
+                    isLoading
+                        ? null
+                        : submitBooking,
+                child: isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text(
+                        "Book Now",
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _card({required Widget child}) {
+  Widget _card({
+    required Widget child,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding:
+          const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius:
+            BorderRadius.circular(
+          22,
+        ),
       ),
       child: child,
     );
   }
 
-  Widget _field(TextEditingController c, String hint) {
+  Widget _field(
+    TextEditingController c,
+    String hint, {
+    int maxLines = 1,
+  }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding:
+          const EdgeInsets.only(
+        bottom: 12,
+      ),
       child: TextField(
         controller: c,
-        decoration: InputDecoration(
-          labelText: hint,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+        maxLines: maxLines,
+        decoration:
+            InputDecoration(
+          hintText: hint,
+          border:
+              OutlineInputBorder(
+            borderRadius:
+                BorderRadius.circular(
+              14,
+            ),
           ),
         ),
       ),
     );
   }
 
-  void _pickDate() async {
-    final d = await showDatePicker(
+  Future<void> pickDate() async {
+    final d =
+        await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2100),
+      firstDate:
+          DateTime.now(),
+      lastDate:
+          DateTime(2100),
+      initialDate:
+          DateTime.now(),
     );
-    if (d != null) setState(() => date = d);
+
+    if (d != null) {
+      setState(() {
+        selectedDate = d;
+      });
+    }
   }
 
-  void _pickTime() async {
-    final t = await showTimePicker(
+  Future<void> pickTime() async {
+    final t =
+        await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
+      initialTime:
+          TimeOfDay.now(),
     );
-    if (t != null) setState(() => time = t);
+
+    if (t != null) {
+      setState(() {
+        selectedTime = t;
+      });
+    }
+  }
+
+  Future<void> submitBooking()
+      async {
+    if (nameController.text
+            .trim()
+            .isEmpty ||
+        phoneController.text
+            .trim()
+            .isEmpty ||
+        addressController.text
+            .trim()
+            .isEmpty) {
+      _show(
+        "Please fill all details",
+      );
+      return;
+    }
+
+    if (selectedDate == null ||
+        selectedTime == null) {
+      _show(
+        "Select date & time",
+      );
+      return;
+    }
+
+    final user =
+        FirebaseAuth
+            .instance
+            .currentUser;
+
+    if (user == null) {
+      _show("Login required");
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      await OrderService.placeOrder(
+        serviceType: "hotel",
+        services: [
+          widget.hotel.category,
+        ],
+        userId: user.uid,
+        userName:
+            nameController.text,
+        phone:
+            phoneController.text,
+        createdBy: user.uid,
+        createdByRole: "user",
+        address:
+            addressController.text,
+        note: noteController.text,
+        date: selectedDate!,
+        time: selectedTime!
+            .format(context),
+        totalAmount:
+            totalAmount,
+      );
+
+      Cart.clear("Hotel");
+
+      if (!mounted) return;
+
+      await showDialog(
+        context: context,
+        barrierDismissible:
+            false,
+        builder: (_) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(
+              20,
+            ),
+          ),
+          content: const Column(
+            mainAxisSize:
+                MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 70,
+              ),
+              SizedBox(height: 12),
+              Text(
+                "Booking Confirmed",
+              ),
+            ],
+          ),
+        ),
+      );
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              BottomNavPage(
+            userPhone:
+                phoneController
+                    .text,
+            userEmail: "",
+          ),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      _show(e.toString());
+    }
+
+    if (mounted) {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   void _show(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+      ),
+    );
   }
 }
+

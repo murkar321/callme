@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 import '../models/cart.dart';
 import '../provider/order_service.dart';
@@ -15,286 +17,723 @@ class SalonBookingPage extends StatefulWidget {
   });
 
   @override
-  State<SalonBookingPage> createState() => _SalonBookingPageState();
+  State<SalonBookingPage> createState() =>
+      _SalonBookingPageState();
 }
 
-class _SalonBookingPageState extends State<SalonBookingPage> {
+class _SalonBookingPageState
+    extends State<SalonBookingPage> {
 
-  final phone = TextEditingController();
-  final email = TextEditingController();
-  final address = TextEditingController();
+  /// =========================================================
+  /// CONTROLLERS
+  /// =========================================================
+
+  final phoneController =
+      TextEditingController();
+
+  final emailController =
+      TextEditingController();
+
+  final addressController =
+      TextEditingController();
+
+  final noteController =
+      TextEditingController();
 
   bool isLoading = false;
 
-  /// ================= VISIT TYPE =================
+  bool isGettingLocation = false;
+
+  /// =========================================================
+  /// VISIT TYPE
+  /// =========================================================
+
   bool get hasHome =>
       widget.cartItems.any(
-            (e) => e.id.toString().contains("Home"),
+            (e) => e.id
+                .toString()
+                .contains("Home"),
       );
 
   bool get hasSalon =>
       widget.cartItems.any(
-            (e) => e.id.toString().contains("Salon"),
+            (e) => e.id
+                .toString()
+                .contains("Salon"),
       );
 
-  /// ================= TOTAL =================
+  /// =========================================================
+  /// TOTAL
+  /// =========================================================
+
   double get totalAmount {
+
     double total = 0;
 
     for (var item in widget.cartItems) {
-      total += item.price * item.quantity;
+      total +=
+          item.price *
+          item.quantity;
     }
 
     return total;
   }
 
+  /// =========================================================
+  /// DISPOSE
+  /// =========================================================
+
   @override
   void dispose() {
-    phone.dispose();
-    email.dispose();
-    address.dispose();
+
+    phoneController.dispose();
+
+    emailController.dispose();
+
+    addressController.dispose();
+
+    noteController.dispose();
+
     super.dispose();
   }
+
+  /// =========================================================
+  /// BUILD
+  /// =========================================================
 
   @override
   Widget build(BuildContext context) {
 
     return Scaffold(
 
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor:
+          const Color(0xFFF6F7FB),
 
-      appBar: AppBar(
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          "Confirm Booking",
-        ),
-      ),
+      body: SafeArea(
 
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-
-        children: [
-
-          /// ================= SERVICES =================
-          _sectionTitle("Selected Services"),
-
-          _card(
-            child: Column(
-
-              children: widget.cartItems.map((item) {
-
-                final isHome =
-                item.id.toString().contains("Home");
-
-                return ListTile(
-
-                  contentPadding: EdgeInsets.zero,
-
-                  title: Text(item.name),
-
-                  subtitle: Text(
-                    "${isHome ? "Home Visit" : "Salon Visit"} • Qty ${item.quantity}",
-                  ),
-
-                  trailing: Text(
-                    "₹${item.price * item.quantity}",
-
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                );
-
-              }).toList(),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          /// ================= APPOINTMENT TYPE =================
-          _sectionTitle("Appointment Type"),
-
-          _card(
-            child: Row(
-
-              children: [
-
-                _chip(
-                  Icons.home,
-                  "Home",
-                  hasHome,
-                ),
-
-                const SizedBox(width: 10),
-
-                _chip(
-                  Icons.store,
-                  "Salon",
-                  hasSalon,
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          /// ================= USER DETAILS =================
-          _sectionTitle("Your Details"),
-
-          _card(
-            child: Column(
-              children: [
-
-                _input(
-                  phone,
-                  "Phone Number",
-                ),
-
-                _input(
-                  email,
-                  "Email Address",
-                ),
-
-                if (hasHome)
-                  _input(
-                    address,
-                    "Home Address",
-                  ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 120),
-        ],
-      ),
-
-      /// ================= BOTTOM BAR =================
-      bottomNavigationBar: Container(
-
-        padding: const EdgeInsets.all(16),
-
-        decoration: const BoxDecoration(
-          color: Colors.white,
-
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-            ),
-          ],
-        ),
-
-        child: Row(
+        child: Column(
           children: [
 
+            /// =================================================
+            /// HEADER
+            /// =================================================
+
+            _header(),
+
+            /// =================================================
+            /// BODY
+            /// =================================================
+
             Expanded(
-              child: Column(
+              child: ListView(
 
-                crossAxisAlignment: CrossAxisAlignment.start,
-
-                mainAxisSize: MainAxisSize.min,
+                padding:
+                    const EdgeInsets.all(
+                  20,
+                ),
 
                 children: [
 
-                  const Text(
-                    "Total Amount",
-                    style: TextStyle(
-                      color: Colors.grey,
+                  /// SERVICES
+                  _sectionTitle(
+                    "Selected Services",
+                  ),
+
+                  _card(
+                    child: Column(
+                      children:
+                          widget.cartItems
+                              .map((item) {
+
+                        final isHome =
+                            item.id
+                                .toString()
+                                .contains(
+                                  "Home",
+                                );
+
+                        return Container(
+
+                          margin:
+                              const EdgeInsets.only(
+                            bottom: 14,
+                          ),
+
+                          padding:
+                              const EdgeInsets.all(
+                            14,
+                          ),
+
+                          decoration:
+                              BoxDecoration(
+                            color:
+                                const Color(
+                              0xFFF8F9FD,
+                            ),
+
+                            borderRadius:
+                                BorderRadius.circular(
+                              20,
+                            ),
+                          ),
+
+                          child: Row(
+                            children: [
+
+                              Container(
+                                height: 54,
+                                width: 54,
+
+                                decoration:
+                                    BoxDecoration(
+
+                                  gradient:
+                                      const LinearGradient(
+                                    colors: [
+                                      Color(
+                                        0xFFB38BFA,
+                                      ),
+                                      Color(
+                                        0xFFE8A0BF,
+                                      ),
+                                    ],
+                                  ),
+
+                                  borderRadius:
+                                      BorderRadius.circular(
+                                    16,
+                                  ),
+                                ),
+
+                                child: const Icon(
+                                  Icons.content_cut,
+                                  color:
+                                      Colors
+                                          .white,
+                                ),
+                              ),
+
+                              const SizedBox(
+                                  width:
+                                      14),
+
+                              Expanded(
+                                child:
+                                    Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment
+                                          .start,
+
+                                  children: [
+
+                                    Text(
+                                      item.name,
+
+                                      style:
+                                          const TextStyle(
+                                        fontWeight:
+                                            FontWeight
+                                                .bold,
+
+                                        fontSize:
+                                            16,
+                                      ),
+                                    ),
+
+                                    const SizedBox(
+                                        height:
+                                            4),
+
+                                    Text(
+                                      "${isHome ? "Home Visit" : "Salon Visit"} • Qty ${item.quantity}",
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              Text(
+                                "₹${item.price * item.quantity}",
+
+                                style:
+                                    const TextStyle(
+                                  fontWeight:
+                                      FontWeight
+                                          .bold,
+
+                                  fontSize:
+                                      17,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+
+                      }).toList(),
                     ),
                   ),
 
-                  Text(
-                    "₹${totalAmount.toStringAsFixed(0)}",
+                  const SizedBox(height: 20),
 
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                  /// APPOINTMENT TYPE
+                  _sectionTitle(
+                    "Appointment Type",
+                  ),
+
+                  _card(
+                    child: Row(
+                      children: [
+
+                        _chip(
+                          Icons.home,
+                          "Home",
+                          hasHome,
+                        ),
+
+                        const SizedBox(
+                            width: 12),
+
+                        _chip(
+                          Icons.store,
+                          "Salon",
+                          hasSalon,
+                        ),
+                      ],
                     ),
                   ),
+
+                  const SizedBox(height: 20),
+
+                  /// DETAILS
+                  _sectionTitle(
+                    "Your Details",
+                  ),
+
+                  _card(
+                    child: Column(
+                      children: [
+
+                        _input(
+                          phoneController,
+                          "Phone Number",
+                          Icons.phone,
+                        ),
+
+                        const SizedBox(
+                            height: 16),
+
+                        _input(
+                          emailController,
+                          "Email Address",
+                          Icons.email,
+                        ),
+
+                        const SizedBox(
+                            height: 16),
+
+                        if (hasHome) ...[
+
+                          _input(
+                            addressController,
+                            "Home Address",
+                            Icons.location_on,
+                            maxLines: 3,
+                          ),
+
+                          const SizedBox(
+                              height:
+                                  12),
+
+                          SizedBox(
+                            width:
+                                double.infinity,
+
+                            child:
+                                ElevatedButton.icon(
+
+                              onPressed:
+                                  isGettingLocation
+                                      ? null
+                                      : _getCurrentLocation,
+
+                              style:
+                                  ElevatedButton.styleFrom(
+
+                                backgroundColor:
+                                    const Color(
+                                  0xFFB38BFA,
+                                ),
+
+                                foregroundColor:
+                                    Colors.white,
+
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                  vertical:
+                                      16,
+                                ),
+
+                                shape:
+                                    RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(
+                                    18,
+                                  ),
+                                ),
+                              ),
+
+                              icon:
+                                  isGettingLocation
+                                      ? const SizedBox(
+                                          height:
+                                              18,
+                                          width:
+                                              18,
+
+                                          child:
+                                              CircularProgressIndicator(
+                                            color:
+                                                Colors.white,
+
+                                            strokeWidth:
+                                                2,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons
+                                              .my_location,
+                                        ),
+
+                              label: Text(
+                                isGettingLocation
+                                    ? "Getting Location..."
+                                    : "Use Current Location",
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(
+                              height:
+                                  16),
+                        ],
+
+                        _input(
+                          noteController,
+                          "Additional Note",
+                          Icons.notes,
+                          maxLines: 3,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 120),
                 ],
               ),
             ),
+          ],
+        ),
+      ),
 
-            Expanded(
-              child: ElevatedButton(
+      /// =======================================================
+      /// BOTTOM BAR
+      /// =======================================================
 
-                onPressed: isLoading
-                    ? null
-                    : _continueToPayment,
+      bottomNavigationBar:
+          Container(
 
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFAE91BA),
+        padding:
+            const EdgeInsets.all(
+          18,
+        ),
 
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 15,
-                  ),
+        decoration:
+            const BoxDecoration(
+          color: Colors.white,
 
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+          borderRadius:
+              BorderRadius.vertical(
+            top:
+                Radius.circular(
+              28,
+            ),
+          ),
+        ),
 
-                child: isLoading
-                    ? const SizedBox(
-                  height: 22,
-                  width: 22,
+        child: SafeArea(
 
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-                    : const Text(
-                  "Proceed To Pay",
-                  style: TextStyle(
-                    fontSize: 16,
-                  ),
+          child: Row(
+            children: [
+
+              Expanded(
+                child: Column(
+
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
+
+                  mainAxisSize:
+                      MainAxisSize.min,
+
+                  children: [
+
+                    const Text(
+                      "Total Amount",
+
+                      style: TextStyle(
+                        color:
+                            Colors.grey,
+                      ),
+                    ),
+
+                    Text(
+                      "₹${totalAmount.toStringAsFixed(0)}",
+
+                      style:
+                          const TextStyle(
+                        fontSize: 24,
+                        fontWeight:
+                            FontWeight
+                                .bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+
+              Expanded(
+                child:
+                    ElevatedButton(
+
+                  onPressed:
+                      isLoading
+                          ? null
+                          : _continueToPayment,
+
+                  style:
+                      ElevatedButton.styleFrom(
+
+                    backgroundColor:
+                        const Color(
+                      0xFFB38BFA,
+                    ),
+
+                    foregroundColor:
+                        Colors.white,
+
+                    padding:
+                        const EdgeInsets.symmetric(
+                      vertical: 16,
+                    ),
+
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(
+                        18,
+                      ),
+                    ),
+                  ),
+
+                  child: isLoading
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+
+                          child:
+                              CircularProgressIndicator(
+                            color:
+                                Colors.white,
+
+                            strokeWidth:
+                                2,
+                          ),
+                        )
+                      : const Text(
+                          "Proceed To Pay",
+
+                          style:
+                              TextStyle(
+                            fontSize:
+                                16,
+
+                            fontWeight:
+                                FontWeight
+                                    .bold,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// ================= PAYMENT FLOW =================
-  Future<void> _continueToPayment() async {
+  /// =========================================================
+  /// HEADER
+  /// =========================================================
 
-    final user = FirebaseAuth.instance.currentUser;
+  Widget _header() {
 
-    if (phone.text.isEmpty || email.text.isEmpty) {
-      _show("Please fill all details");
+    return Container(
+
+      width: double.infinity,
+
+      padding:
+          const EdgeInsets.all(24),
+
+      decoration:
+          const BoxDecoration(
+
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFFB38BFA),
+            Color(0xFFE8A0BF),
+          ],
+        ),
+
+        borderRadius:
+            BorderRadius.vertical(
+          bottom:
+              Radius.circular(34),
+        ),
+      ),
+
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+
+        children: [
+
+          GestureDetector(
+            onTap: () {
+              Navigator.pop(context);
+            },
+
+            child: Container(
+
+              padding:
+                  const EdgeInsets.all(
+                10,
+              ),
+
+              decoration:
+                  BoxDecoration(
+                color: Colors.white
+                    .withOpacity(0.2),
+
+                borderRadius:
+                    BorderRadius.circular(
+                  14,
+                ),
+              ),
+
+              child: const Icon(
+                Icons.arrow_back,
+                color:
+                    Colors.white,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 30),
+
+          const Text(
+            "Salon Booking",
+
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            "${widget.cartItems.length} services selected",
+
+            style: TextStyle(
+              color: Colors.white
+                  .withOpacity(0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// =========================================================
+  /// PAYMENT FLOW
+  /// =========================================================
+
+  Future<void>
+      _continueToPayment() async {
+
+    final user =
+        FirebaseAuth
+            .instance
+            .currentUser;
+
+    if (phoneController.text
+            .trim()
+            .isEmpty ||
+        emailController.text
+            .trim()
+            .isEmpty) {
+
+      _showCenterPopup(
+        "Please fill all details",
+        false,
+      );
+
       return;
     }
 
-    if (hasHome && address.text.isEmpty) {
-      _show("Address required");
+    if (hasHome &&
+        addressController.text
+            .trim()
+            .isEmpty) {
+
+      _showCenterPopup(
+        "Address required",
+        false,
+      );
+
       return;
     }
 
     if (user == null) {
-      _show("Please login first");
+
+      _showCenterPopup(
+        "Please login first",
+        false,
+      );
+
       return;
     }
 
-    final result = await Navigator.push(
+    final result =
+        await Navigator.push(
 
       context,
 
       MaterialPageRoute(
         builder: (_) => PaymentPage(
 
-          serviceName: "Salon Booking",
+          serviceName:
+              "Salon Booking",
 
-          amount: totalAmount.toInt(),
+          amount:
+              totalAmount.toInt(),
         ),
       ),
     );
 
-    /// ================= PAYMENT SUCCESS =================
-    if (result == true || result == 'offline') {
+    if (result == true ||
+        result == 'offline') {
 
       setState(() {
         isLoading = true;
@@ -304,73 +743,118 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
 
         await OrderService.placeOrder(
 
-          serviceType: "salon",
+          serviceType:
+              "salon",
 
-          services: widget.cartItems.map((e) =>
-          "${e.name} (${e.id.toString().contains("Home") ? "Home" : "Salon"}) x${e.quantity}"
-          ).toList(),
+          services:
+              widget.cartItems
+                  .map(
+                    (e) =>
+                        "${e.name} (${e.id.toString().contains("Home") ? "Home" : "Salon"}) x${e.quantity}",
+                  )
+                  .toList(),
 
           userId: user.uid,
 
-          userName: "Salon User",
+          userName:
+              "Salon User",
 
-          phone: phone.text.trim(),
+          phone:
+              phoneController.text
+                  .trim(),
 
-          email: email.text.trim(),
+          email:
+              emailController.text
+                  .trim(),
 
-          createdBy: user.uid,
+          createdBy:
+              user.uid,
 
-          createdByRole: "user",
+          createdByRole:
+              "user",
 
           address: hasHome
-              ? address.text.trim()
+              ? addressController.text
+                    .trim()
               : "Salon Visit",
 
-          date: DateTime.now(),
+          date:
+              DateTime.now(),
 
-          time: TimeOfDay.now().format(context),
+          time:
+              TimeOfDay.now()
+                  .format(
+                context,
+              ),
 
-          totalAmount: totalAmount,
+          totalAmount:
+              totalAmount,
 
-          visitType: hasHome && hasSalon
-              ? "Mixed"
-              : hasHome
-              ? "Home"
-              : "Salon",
+          visitType:
+              hasHome &&
+                      hasSalon
+                  ? "Mixed"
+                  : hasHome
+                      ? "Home"
+                      : "Salon",
 
-          providerId: null,
-          providerUserId: null,
-          providerName: null,
+          providerId:
+              null,
 
-          isEnquiry: false,
+          providerUserId:
+              null,
+
+          providerName:
+              null,
+
+          isEnquiry:
+              false,
         );
 
         /// CLEAR CART
         Cart.clear("Salon");
 
-        _show(
+        _showCenterPopup(
           result == 'offline'
-              ? "Booking Placed Successfully ✅"
-              : "Payment Successful ✅",
+              ? "Booking Placed Successfully"
+              : "Payment Successful",
+          true,
         );
+
+        await Future.delayed(
+          const Duration(
+            seconds: 2,
+          ),
+        );
+
+        if (!mounted) return;
 
         Navigator.pushAndRemoveUntil(
 
           context,
 
           MaterialPageRoute(
-            builder: (_) => BottomNavPage(
-              userPhone: phone.text,
-              userEmail: email.text,
+            builder: (_) =>
+                BottomNavPage(
+              userPhone:
+                  phoneController
+                      .text,
+
+              userEmail:
+                  emailController
+                      .text,
             ),
           ),
 
-              (route) => false,
+          (route) => false,
         );
 
       } catch (e) {
 
-        _show("Error: $e");
+        _showCenterPopup(
+          "Error: $e",
+          false,
+        );
       }
 
       setState(() {
@@ -379,33 +863,250 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
     }
   }
 
-  /// ================= UI HELPERS =================
-  Widget _sectionTitle(String title) {
+  /// =========================================================
+  /// LOCATION
+  /// =========================================================
+
+  Future<void>
+      _getCurrentLocation() async {
+
+    try {
+
+      setState(() {
+        isGettingLocation =
+            true;
+      });
+
+      bool serviceEnabled =
+          await Geolocator
+              .isLocationServiceEnabled();
+
+      if (!serviceEnabled) {
+        throw Exception(
+          "Location service disabled",
+        );
+      }
+
+      LocationPermission permission =
+          await Geolocator
+              .checkPermission();
+
+      if (permission ==
+          LocationPermission.denied) {
+
+        permission =
+            await Geolocator
+                .requestPermission();
+      }
+
+      Position position =
+          await Geolocator
+              .getCurrentPosition();
+
+      List<Placemark> placemarks =
+          await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      Placemark place =
+          placemarks.first;
+
+      addressController.text =
+          "${place.street}, ${place.locality}, ${place.administrativeArea}, ${place.postalCode}";
+
+    } catch (e) {
+
+      _showCenterPopup(
+        "$e",
+        false,
+      );
+    }
+
+    setState(() {
+      isGettingLocation =
+          false;
+    });
+  }
+
+  /// =========================================================
+  /// CENTER POPUP
+  /// =========================================================
+
+  void _showCenterPopup(
+    String message,
+    bool success,
+  ) {
+
+    showDialog(
+
+      context: context,
+
+      barrierDismissible: true,
+
+      builder: (_) {
+
+        return Dialog(
+
+          backgroundColor:
+              Colors.transparent,
+
+          child: Container(
+
+            padding:
+                const EdgeInsets.all(
+              24,
+            ),
+
+            decoration:
+                BoxDecoration(
+              color:
+                  Colors.white,
+
+              borderRadius:
+                  BorderRadius.circular(
+                28,
+              ),
+            ),
+
+            child: Column(
+
+              mainAxisSize:
+                  MainAxisSize.min,
+
+              children: [
+
+                Container(
+                  height: 80,
+                  width: 80,
+
+                  decoration:
+                      BoxDecoration(
+                    color: success
+                        ? Colors.green
+                            .withOpacity(
+                            0.1,
+                          )
+                        : Colors.red
+                            .withOpacity(
+                            0.1,
+                          ),
+
+                    shape:
+                        BoxShape.circle,
+                  ),
+
+                  child: Icon(
+                    success
+                        ? Icons
+                            .check_circle
+                        : Icons.error,
+
+                    color: success
+                        ? Colors.green
+                        : Colors.red,
+
+                    size: 50,
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 20),
+
+                Text(
+                  message,
+
+                  textAlign:
+                      TextAlign.center,
+
+                  style:
+                      const TextStyle(
+                    fontSize: 18,
+                    fontWeight:
+                        FontWeight
+                            .bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    Future.delayed(
+      const Duration(
+        seconds: 2,
+      ),
+      () {
+
+        if (mounted &&
+            Navigator.canPop(
+              context,
+            )) {
+
+          Navigator.pop(context);
+        }
+      },
+    );
+  }
+
+  /// =========================================================
+  /// UI HELPERS
+  /// =========================================================
+
+  Widget _sectionTitle(
+    String title,
+  ) {
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+
+      padding:
+          const EdgeInsets.only(
+        bottom: 10,
+      ),
 
       child: Text(
         title,
 
         style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
+          fontSize: 18,
+          fontWeight:
+              FontWeight.bold,
         ),
       ),
     );
   }
 
-  Widget _card({required Widget child}) {
+  Widget _card({
+    required Widget child,
+  }) {
 
     return Container(
 
-      padding: const EdgeInsets.all(14),
+      padding:
+          const EdgeInsets.all(
+        18,
+      ),
 
       decoration: BoxDecoration(
         color: Colors.white,
 
-        borderRadius: BorderRadius.circular(14),
+        borderRadius:
+            BorderRadius.circular(
+          26,
+        ),
+
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 20,
+            offset:
+                const Offset(0, 8),
+
+            color: Colors.black
+                .withOpacity(0.05),
+          ),
+        ],
       ),
 
       child: child,
@@ -413,37 +1114,58 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
   }
 
   Widget _chip(
-      IconData icon,
-      String label,
-      bool active,
-      ) {
+    IconData icon,
+    String label,
+    bool active,
+  ) {
 
     return Expanded(
       child: Container(
 
-        padding: const EdgeInsets.symmetric(
-          vertical: 10,
+        padding:
+            const EdgeInsets.symmetric(
+          vertical: 14,
         ),
 
-        decoration: BoxDecoration(
+        decoration:
+            BoxDecoration(
+
+          gradient: active
+              ? const LinearGradient(
+                  colors: [
+                    Color(
+                      0xFFB38BFA,
+                    ),
+                    Color(
+                      0xFFE8A0BF,
+                    ),
+                  ],
+                )
+              : null,
 
           color: active
-              ? const Color(0xFFAE91BA)
-              : Colors.grey.shade200,
+              ? null
+              : Colors.grey
+                    .shade200,
 
-          borderRadius: BorderRadius.circular(20),
+          borderRadius:
+              BorderRadius.circular(
+            20,
+          ),
         ),
 
         child: Row(
 
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment:
+              MainAxisAlignment
+                  .center,
 
           children: [
 
             Icon(
               icon,
 
-              size: 16,
+              size: 18,
 
               color: active
                   ? Colors.white
@@ -459,6 +1181,9 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
                 color: active
                     ? Colors.white
                     : Colors.black54,
+
+                fontWeight:
+                    FontWeight.w600,
               ),
             ),
           ],
@@ -468,35 +1193,53 @@ class _SalonBookingPageState extends State<SalonBookingPage> {
   }
 
   Widget _input(
-      TextEditingController controller,
-      String hint,
-      ) {
+    TextEditingController
+        controller,
+    String hint,
+    IconData icon, {
+    int maxLines = 1,
+  }) {
 
-    return Padding(
+    return Container(
 
-      padding: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color:
+            const Color(
+          0xFFF8F9FD,
+        ),
+
+        borderRadius:
+            BorderRadius.circular(
+          20,
+        ),
+      ),
 
       child: TextField(
 
         controller: controller,
 
+        maxLines: maxLines,
+
         decoration: InputDecoration(
 
-          labelText: hint,
+          border: InputBorder.none,
 
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+          contentPadding:
+              const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 20,
+          ),
+
+          hintText: hint,
+
+          prefixIcon: Icon(
+            icon,
+            color:
+                const Color(
+              0xFFB38BFA,
+            ),
           ),
         ),
-      ),
-    );
-  }
-
-  void _show(String msg) {
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
       ),
     );
   }

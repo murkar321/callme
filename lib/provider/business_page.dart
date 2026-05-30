@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
@@ -100,8 +101,115 @@ class _BusinessPageState
 
   @override
   void initState() {
+
     super.initState();
+
     _getLocation();
+
+    _setupFCM();
+  }
+
+  /// =====================================================
+  /// FCM SETUP
+  /// =====================================================
+
+  Future<void> _setupFCM() async {
+
+    try {
+
+      /// REQUEST PERMISSION
+
+      await FirebaseMessaging.instance
+          .requestPermission(
+
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      /// GET TOKEN
+
+      String? token =
+
+      await FirebaseMessaging.instance
+          .getToken();
+
+      debugPrint(
+        "FCM TOKEN: $token",
+      );
+
+      if (token != null &&
+          user != null) {
+
+        /// SAVE TOKEN TO PROVIDER
+
+        await firestore
+            .collection("users")
+            .doc(user!.uid)
+            .set({
+
+          "fcmToken": token,
+
+        }, SetOptions(
+          merge: true,
+        ));
+      }
+
+      /// TOKEN REFRESH
+
+      FirebaseMessaging.instance
+          .onTokenRefresh
+          .listen((newToken) async {
+
+        if (user != null) {
+
+          await firestore
+              .collection("users")
+              .doc(user!.uid)
+              .set({
+
+            "fcmToken": newToken,
+
+          }, SetOptions(
+            merge: true,
+          ));
+        }
+      });
+
+      /// FOREGROUND MESSAGE
+
+      FirebaseMessaging.onMessage
+          .listen((RemoteMessage message) {
+
+        if (message.notification !=
+            null) {
+
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(
+
+            SnackBar(
+
+              content: Text(
+
+                message.notification
+                    ?.title ??
+                    "New Notification",
+              ),
+
+              backgroundColor:
+              Colors.green,
+            ),
+          );
+        }
+      });
+
+    } catch (e) {
+
+      debugPrint(
+        "FCM ERROR: $e",
+      );
+    }
   }
 
   /// =====================================================
@@ -128,6 +236,7 @@ class _BusinessPageState
       List<Placemark>
       placemarks =
       await placemarkFromCoordinates(
+
         pos.latitude,
         pos.longitude,
       );
@@ -149,6 +258,7 @@ class _BusinessPageState
       if (!mounted) return;
 
       setState(() {
+
         loadingLocation = false;
       });
     }
@@ -159,6 +269,7 @@ class _BusinessPageState
   /// =====================================================
 
   String normalize(String s) {
+
     return s
         .trim()
         .toLowerCase();
@@ -169,6 +280,7 @@ class _BusinessPageState
 
     if (name ==
         "Educational Services") {
+
       return "education";
     }
 
@@ -179,6 +291,7 @@ class _BusinessPageState
 
     ScaffoldMessenger.of(context)
         .showSnackBar(
+
       SnackBar(
         content: Text(msg),
       ),
@@ -190,7 +303,9 @@ class _BusinessPageState
   /// =====================================================
 
   void _handleTap(
+
       ServiceCategory service,
+
       Map<String, dynamic>? provider,
       ) {
 
@@ -209,6 +324,7 @@ class _BusinessPageState
     }
 
     /// NO PROVIDER
+
     if (provider == null) {
 
       _showProviderTypeSelector(
@@ -223,6 +339,7 @@ class _BusinessPageState
         ?? "pending";
 
     /// PENDING
+
     if (status == "pending") {
 
       _showMessage(
@@ -233,10 +350,13 @@ class _BusinessPageState
     }
 
     /// REJECTED
+
     if (status == "rejected") {
 
       _showRejectedDialog(
+
         service,
+
         provider['rejectReason']
         ??
             "No reason provided",
@@ -246,6 +366,7 @@ class _BusinessPageState
     }
 
     /// APPROVED
+
     if (status == "approved") {
 
       Navigator.push(
@@ -279,7 +400,9 @@ class _BusinessPageState
   /// =====================================================
 
   void _showRejectedDialog(
+
       ServiceCategory service,
+
       String reason,
       ) {
 
@@ -391,8 +514,11 @@ class _BusinessPageState
   }
 
   Widget _typeTile(
+
       ServiceCategory service,
+
       String type,
+
       IconData icon,
       ) {
 
@@ -465,6 +591,7 @@ class _BusinessPageState
         children: [
 
           /// HEADER
+
           Container(
 
             width: double.infinity,
@@ -676,8 +803,11 @@ class _BusinessPageState
                     }
 
                     return _buildGrid(
+
                       providerMap,
+
                       orderCountMap,
+
                       size,
                     );
                   },
@@ -773,6 +903,7 @@ class _BusinessPageState
               ),
 
               /// ORDER BADGE
+
               if (count > 0)
 
                 Positioned(

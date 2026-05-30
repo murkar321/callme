@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'home_page.dart';
 import 'myorders_page.dart';
-import 'package:callme/profile/profile_page.dart';
+import 'package:callme/profile/account_page.dart';
 import 'package:callme/provider/business_page.dart';
 import 'package:callme/Admin/admin_dashboard.dart';
 
@@ -55,7 +55,7 @@ class _BottomNavPageState extends State<BottomNavPage> {
       const HomePage(),
       const BusinessPage(),
       MyOrdersPage(phone: widget.userPhone),
-      ProfilePage(phone: widget.userPhone),
+      AccountPage(),
     ];
 
     /// ✅ BASE NAV ITEMS (REMOVE const HERE)

@@ -3,13 +3,22 @@ import 'package:callme/models/cart.dart';
 import 'package:callme/payment/payment_page.dart';
 import 'package:callme/provider/order_service.dart';
 import 'package:callme/screens/bottom_nav_page.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:flutter/material.dart';
+
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+
 import 'package:intl/intl.dart';
 
 class BookingPage extends StatefulWidget {
+
   final String serviceName;
+
   final ServiceProduct? product;
+
   final List<CartItem>? cart;
 
   const BookingPage({
@@ -27,31 +36,38 @@ class BookingPage extends StatefulWidget {
 
 class _BookingPageState
     extends State<BookingPage> {
-  final name = TextEditingController();
 
-  final email =
+  /// =========================================================
+  /// CONTROLLERS
+  /// =========================================================
+
+  final nameController =
       TextEditingController();
 
-  final phone =
+  final phoneController =
       TextEditingController();
 
-  final address =
+  final addressController =
       TextEditingController();
 
-  final note =
+  final noteController =
       TextEditingController();
 
-  DateTime? date;
+  DateTime? selectedDate;
 
-  TimeOfDay? time;
-
-  bool isSuccess = false;
+  TimeOfDay? selectedTime;
 
   bool isLoading = false;
 
+  bool isSuccess = false;
+
+  bool isGettingLocation = false;
+
   String bookingId = "";
 
-  /// ================= CART =================
+  /// =========================================================
+  /// CART
+  /// =========================================================
 
   List<CartItem> get cartItems =>
       widget.cart ??
@@ -66,10 +82,14 @@ class _BookingPageState
       widget.product != null &&
       cartItems.isEmpty;
 
-  /// ================= TOTAL =================
+  /// =========================================================
+  /// TOTAL
+  /// =========================================================
 
   double get total {
+
     if (isCart) {
+
       double sum = 0;
 
       for (var item in cartItems) {
@@ -90,149 +110,259 @@ class _BookingPageState
     return 0;
   }
 
-  /// ================= NORMALIZE =================
-
-  String normalize(String s) {
-    return s.trim().toLowerCase();
-  }
+  /// =========================================================
+  /// DISPOSE
+  /// =========================================================
 
   @override
   void dispose() {
-    name.dispose();
-    email.dispose();
-    phone.dispose();
-    address.dispose();
-    note.dispose();
+
+    nameController.dispose();
+
+    phoneController.dispose();
+
+    addressController.dispose();
+
+    noteController.dispose();
 
     super.dispose();
   }
 
+  /// =========================================================
+  /// BUILD
+  /// =========================================================
+
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
+
       backgroundColor:
-          const Color(0xFFF5F7FB),
+          const Color(0xFFF5F7FC),
 
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor:
-            Colors.white,
-        foregroundColor:
-            Colors.black,
-
-        title: Text(
-          widget.serviceName,
-          style: const TextStyle(
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
-      ),
-
+      /// BODY
       body: isSuccess
           ? _successView()
-          : _bookingForm(),
+          : _mainView(),
+
+      /// THIS MUST STAY INSIDE SCAFFOLD
+      bottomNavigationBar:
+          isSuccess
+              ? null
+              : _bottomBar(),
     );
   }
 
   /// =========================================================
-  /// BOOKING FORM
+  /// MAIN VIEW
   /// =========================================================
 
-  Widget _bookingForm() {
+  Widget _mainView() {
+
     return SafeArea(
-      child: ListView(
-        padding:
-            const EdgeInsets.all(16),
+
+      child: Column(
+        children: [
+
+          _header(),
+
+          Expanded(
+
+            child: ListView(
+
+              padding:
+                  const EdgeInsets.all(
+                20,
+              ),
+
+              children: [
+
+                /// ── SUMMARY MOVED TO TOP ──
+                _summaryCard(),
+
+                const SizedBox(height: 20),
+
+                _detailsCard(),
+
+                const SizedBox(height: 20),
+
+                _dateTimeSection(),
+
+                const SizedBox(height: 120),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// =========================================================
+  /// HEADER
+  /// =========================================================
+
+  Widget _header() {
+
+    return Container(
+
+      width: double.infinity,
+
+      padding:
+          const EdgeInsets.all(24),
+
+      decoration:
+          const BoxDecoration(
+
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF6A5AE0),
+            Color(0xFF8F7CFF),
+          ],
+        ),
+
+        borderRadius:
+            BorderRadius.vertical(
+          bottom:
+              Radius.circular(34),
+        ),
+      ),
+
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
 
         children: [
-          _sectionCard(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment
-                      .start,
 
-              children: [
-                const Text(
-                  "Customer Details",
+          GestureDetector(
+            onTap: () {
+              Navigator.pop(context);
+            },
 
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight:
-                        FontWeight.bold,
-                  ),
+            child: Container(
+
+              padding:
+                  const EdgeInsets.all(
+                10,
+              ),
+
+              decoration:
+                  BoxDecoration(
+                color: Colors.white
+                    .withOpacity(0.15),
+
+                borderRadius:
+                    BorderRadius.circular(
+                  14,
                 ),
+              ),
 
-                const SizedBox(
-                    height: 20),
-
-                _field(
-                  name,
-                  "Full Name *",
-                  Icons.person_outline,
-                ),
-
-                _field(
-                  phone,
-                  "Phone Number *",
-                  Icons.phone_outlined,
-                  keyboard:
-                      TextInputType.phone,
-                ),
-
-                _field(
-                  email,
-                  "Email Address",
-                  Icons.email_outlined,
-                  keyboard:
-                      TextInputType
-                          .emailAddress,
-                ),
-
-                _field(
-                  address,
-                  "Full Address *",
-                  Icons.location_on_outlined,
-                  maxLines: 3,
-                ),
-
-                _field(
-                  note,
-                  "Additional Note",
-                  Icons.note_alt_outlined,
-                  maxLines: 3,
-                ),
-              ],
+              child: const Icon(
+                Icons.arrow_back,
+                color:
+                    Colors.white,
+              ),
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 30),
 
-          _sectionCard(
-            child: Column(
-              children: [
-                _dateTile(),
+          const Text(
+            "Book Service",
 
-                const Divider(),
-
-                _timeTile(),
-              ],
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight:
+                  FontWeight.bold,
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
 
-          _serviceSummary(),
+          Text(
+            widget.serviceName,
+
+            style: TextStyle(
+              color: Colors.white
+                  .withOpacity(0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// =========================================================
+  /// DETAILS CARD
+  /// =========================================================
+
+  Widget _detailsCard() {
+
+    return _card(
+
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+
+        children: [
+
+          const Text(
+            "Customer Details",
+
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
 
           const SizedBox(height: 24),
 
-          SizedBox(
-            height: 56,
+          _field(
+            controller:
+                nameController,
+            hint:
+                "Full Name",
+            icon:
+                Icons.person,
+          ),
 
-            child: ElevatedButton(
-              onPressed: isLoading
-                  ? null
-                  : _validateAndPay,
+          const SizedBox(height: 16),
+
+          _field(
+            controller:
+                phoneController,
+            hint:
+                "Mobile Number",
+            icon:
+                Icons.phone,
+            keyboard:
+                TextInputType.phone,
+          ),
+
+          const SizedBox(height: 16),
+
+          _field(
+            controller:
+                addressController,
+            hint:
+                "Enter Full Address",
+            icon:
+                Icons.location_on,
+            maxLines: 3,
+          ),
+
+          const SizedBox(height: 12),
+
+          SizedBox(
+            width: double.infinity,
+
+            child: ElevatedButton.icon(
+
+              onPressed:
+                  isGettingLocation
+                      ? null
+                      : _getCurrentLocation,
 
               style:
                   ElevatedButton.styleFrom(
@@ -241,6 +371,11 @@ class _BookingPageState
 
                 foregroundColor:
                     Colors.white,
+
+                padding:
+                    const EdgeInsets.symmetric(
+                  vertical: 16,
+                ),
 
                 shape:
                     RoundedRectangleBorder(
@@ -251,10 +386,10 @@ class _BookingPageState
                 ),
               ),
 
-              child: isLoading
+              icon: isGettingLocation
                   ? const SizedBox(
-                      height: 24,
-                      width: 24,
+                      height: 18,
+                      width: 18,
 
                       child:
                           CircularProgressIndicator(
@@ -264,216 +399,120 @@ class _BookingPageState
                             2,
                       ),
                     )
-                  : Text(
-                      "Proceed to Payment • ₹${total.toStringAsFixed(0)}",
-
-                      style:
-                          const TextStyle(
-                        fontSize: 16,
-                        fontWeight:
-                            FontWeight.bold,
-                      ),
+                  : const Icon(
+                      Icons.my_location,
                     ),
+
+              label: Text(
+                isGettingLocation
+                    ? "Getting Location..."
+                    : "Use Current Location",
+              ),
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          _field(
+            controller:
+                noteController,
+            hint:
+                "Additional Note",
+            icon:
+                Icons.notes,
+            maxLines: 3,
+          ),
         ],
       ),
     );
   }
 
   /// =========================================================
-  /// SUCCESS VIEW
+  /// DATE TIME
   /// =========================================================
 
-  Widget _successView() {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding:
-            const EdgeInsets.all(20),
+  Widget _dateTimeSection() {
 
-        child: Column(
-          children: [
-            const SizedBox(height: 30),
+    return Row(
+      children: [
 
-            Container(
-              padding:
-                  const EdgeInsets.all(
-                24,
-              ),
-
-              decoration:
-                  BoxDecoration(
-                color:
-                    Colors.green.shade50,
-
-                shape: BoxShape.circle,
-              ),
-
-              child: const Icon(
-                Icons.check_circle,
-                color: Colors.green,
-                size: 90,
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            const Text(
-              "Booking Confirmed!",
-
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight:
-                    FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              "Booking ID: $bookingId",
-
-              style: TextStyle(
-                color:
-                    Colors.grey.shade700,
-                fontWeight:
-                    FontWeight.w500,
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            _sectionCard(
-              child: Column(
-                children: [
-                  _row(
-                    "Name",
-                    name.text,
-                  ),
-
-                  _row(
-                    "Phone",
-                    phone.text,
-                  ),
-
-                  _row(
-                    "Date",
-                    DateFormat(
-                      'dd MMM yyyy',
-                    ).format(date!),
-                  ),
-
-                  _row(
-                    "Time",
-                    time!.format(context),
-                  ),
-
-                  _row(
-                    "Address",
-                    address.text,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            _sectionCard(
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-
-                children: [
-                  const Text(
-                    "Booked Services",
-
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(
-                      height: 12),
-
-                  ..._servicesList(),
-
-                  const Divider(
-                    height: 26,
-                  ),
-
-                  Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment
-                            .spaceBetween,
-
-                    children: [
-                      const Text(
-                        "Total Amount",
-
-                        style: TextStyle(
-                          fontWeight:
-                              FontWeight
-                                  .bold,
-                        ),
+        Expanded(
+          child: _dateCard(
+            title: "Date",
+            value:
+                selectedDate == null
+                    ? "Select"
+                    : DateFormat(
+                        'dd MMM yyyy',
+                      ).format(
+                        selectedDate!,
                       ),
-
-                      Text(
-                        "₹${total.toStringAsFixed(0)}",
-
-                        style:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight
-                                  .bold,
-
-                          color: Colors
-                              .deepPurple,
-
-                          fontSize: 18,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+            icon:
+                Icons.calendar_today,
+            color:
+                Colors.deepPurple,
+            onTap:
+                _pickDate,
+          ),
         ),
-      ),
+
+        const SizedBox(width: 16),
+
+        Expanded(
+          child: _dateCard(
+            title: "Time",
+            value:
+                selectedTime == null
+                    ? "Select"
+                    : selectedTime!
+                        .format(context),
+            icon:
+                Icons.access_time,
+            color:
+                Colors.orange,
+            onTap:
+                _pickTime,
+          ),
+        ),
+      ],
     );
   }
 
   /// =========================================================
-  /// SERVICE SUMMARY
+  /// SUMMARY
   /// =========================================================
 
-  Widget _serviceSummary() {
-    return _sectionCard(
+  Widget _summaryCard() {
+
+    return _card(
+
       child: Column(
         crossAxisAlignment:
             CrossAxisAlignment.start,
 
         children: [
+
           const Text(
             "Booking Summary",
 
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 22,
               fontWeight:
                   FontWeight.bold,
             ),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 24),
 
-          ..._servicesList(),
+          ..._serviceItems(),
 
-          const Divider(height: 28),
+          const Padding(
+            padding:
+                EdgeInsets.symmetric(
+              vertical: 18,
+            ),
+            child: Divider(),
+          ),
 
           Row(
             mainAxisAlignment:
@@ -481,13 +520,14 @@ class _BookingPageState
                     .spaceBetween,
 
             children: [
+
               const Text(
-                "Total",
+                "Total Amount",
 
                 style: TextStyle(
                   fontWeight:
                       FontWeight.bold,
-                  fontSize: 16,
+                  fontSize: 18,
                 ),
               ),
 
@@ -497,7 +537,7 @@ class _BookingPageState
                 style: const TextStyle(
                   fontWeight:
                       FontWeight.bold,
-                  fontSize: 20,
+                  fontSize: 28,
                   color:
                       Colors.deepPurple,
                 ),
@@ -510,205 +550,138 @@ class _BookingPageState
   }
 
   /// =========================================================
-  /// SERVICES LIST
+  /// ITEMS
   /// =========================================================
 
-  List<Widget> _servicesList() {
+  List<Widget> _serviceItems() {
+
     if (isCart) {
-      return cartItems.map((e) {
-        return Padding(
-          padding:
-              const EdgeInsets.only(
-            bottom: 10,
-          ),
 
-          child: Container(
-            padding:
-                const EdgeInsets.all(
-              14,
-            ),
+      return cartItems.map((item) {
 
-            decoration:
-                BoxDecoration(
-              color:
-                  Colors.grey.shade100,
+        final itemTotal =
+            item.price *
+            item.quantity;
 
-              borderRadius:
-                  BorderRadius.circular(
-                14,
-              ),
-            ),
-
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    e.name,
-
-                    style:
-                        const TextStyle(
-                      fontWeight:
-                          FontWeight.w600,
-                    ),
-                  ),
-                ),
-
-                Text(
-                  "x${e.quantity}",
-                ),
-              ],
-            ),
-          ),
+        return _itemTile(
+          title: item.name,
+          qty:
+              "Qty: ${item.quantity}",
+          price:
+              "₹${itemTotal.toStringAsFixed(0)}",
         );
       }).toList();
     }
 
     return [
-      Container(
-        padding:
-            const EdgeInsets.all(14),
 
-        decoration: BoxDecoration(
-          color:
-              Colors.grey.shade100,
-
-          borderRadius:
-              BorderRadius.circular(
-            14,
-          ),
-        ),
-
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                widget.product?.name ??
-                    "",
-
-                style:
-                    const TextStyle(
-                  fontWeight:
-                      FontWeight.w600,
-                ),
-              ),
-            ),
-
-            Text(
-              "₹${total.toStringAsFixed(0)}",
-            ),
-          ],
-        ),
+      _itemTile(
+        title:
+            widget.product?.name ??
+                widget.serviceName,
+        qty: "1 Service",
+        price:
+            "₹${total.toStringAsFixed(0)}",
       ),
     ];
   }
 
-  /// =========================================================
-  /// DATE TILE
-  /// =========================================================
+  Widget _itemTile({
+    required String title,
+    required String qty,
+    required String price,
+  }) {
 
-  Widget _dateTile() {
-    return ListTile(
-      contentPadding:
-          EdgeInsets.zero,
+    return Container(
 
-      leading: Container(
-        padding:
-            const EdgeInsets.all(10),
+      margin:
+          const EdgeInsets.only(
+        bottom: 14,
+      ),
 
-        decoration: BoxDecoration(
-          color:
-              Colors.deepPurple
-                  .withOpacity(0.1),
+      padding:
+          const EdgeInsets.all(16),
 
-          borderRadius:
-              BorderRadius.circular(
-            12,
+      decoration: BoxDecoration(
+        color:
+            const Color(0xFFF8F9FD),
+
+        borderRadius:
+            BorderRadius.circular(
+          20,
+        ),
+      ),
+
+      child: Row(
+        children: [
+
+          Container(
+            height: 54,
+            width: 54,
+
+            decoration:
+                BoxDecoration(
+
+              gradient:
+                  const LinearGradient(
+                colors: [
+                  Color(0xFF6A5AE0),
+                  Color(0xFF8F7CFF),
+                ],
+              ),
+
+              borderRadius:
+                  BorderRadius.circular(
+                16,
+              ),
+            ),
+
+            child: const Icon(
+              Icons.miscellaneous_services,
+              color:
+                  Colors.white,
+            ),
           ),
-        ),
 
-        child: const Icon(
-          Icons.calendar_today,
-          color: Colors.deepPurple,
-        ),
-      ),
+          const SizedBox(width: 16),
 
-      title: const Text(
-        "Booking Date",
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
 
-        style: TextStyle(
-          fontWeight:
-              FontWeight.bold,
-        ),
-      ),
+              children: [
 
-      subtitle: Text(
-        date == null
-            ? "Select preferred date"
-            : DateFormat(
-                'dd MMM yyyy',
-              ).format(date!),
-      ),
+                Text(
+                  title,
 
-      trailing: const Icon(
-        Icons.arrow_forward_ios,
-        size: 16,
-      ),
+                  style:
+                      const TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
 
-      onTap: _pickDate,
-    );
-  }
+                const SizedBox(height: 4),
 
-  /// =========================================================
-  /// TIME TILE
-  /// =========================================================
-
-  Widget _timeTile() {
-    return ListTile(
-      contentPadding:
-          EdgeInsets.zero,
-
-      leading: Container(
-        padding:
-            const EdgeInsets.all(10),
-
-        decoration: BoxDecoration(
-          color:
-              Colors.orange
-                  .withOpacity(0.1),
-
-          borderRadius:
-              BorderRadius.circular(
-            12,
+                Text(qty),
+              ],
+            ),
           ),
-        ),
 
-        child: const Icon(
-          Icons.access_time,
-          color: Colors.orange,
-        ),
+          Text(
+            price,
+
+            style: const TextStyle(
+              fontWeight:
+                  FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+        ],
       ),
-
-      title: const Text(
-        "Booking Time",
-
-        style: TextStyle(
-          fontWeight:
-              FontWeight.bold,
-        ),
-      ),
-
-      subtitle: Text(
-        time == null
-            ? "Select preferred time"
-            : time!.format(context),
-      ),
-
-      trailing: const Icon(
-        Icons.arrow_forward_ios,
-        size: 16,
-      ),
-
-      onTap: _pickTime,
     );
   }
 
@@ -716,32 +689,31 @@ class _BookingPageState
   /// COMMON CARD
   /// =========================================================
 
-  Widget _sectionCard({
+  Widget _card({
     required Widget child,
   }) {
+
     return Container(
-      width: double.infinity,
 
       padding:
-          const EdgeInsets.all(18),
+          const EdgeInsets.all(22),
 
       decoration: BoxDecoration(
         color: Colors.white,
 
         borderRadius:
             BorderRadius.circular(
-          22,
+          28,
         ),
 
         boxShadow: [
           BoxShadow(
-            blurRadius: 14,
-            offset: const Offset(
-              0,
-              6,
-            ),
-            color: Colors.black
-                .withOpacity(0.05),
+            blurRadius: 20,
+            offset:
+                const Offset(0, 8),
+            color:
+                Colors.black
+                    .withOpacity(0.05),
           ),
         ],
       ),
@@ -754,26 +726,46 @@ class _BookingPageState
   /// FIELD
   /// =========================================================
 
-  Widget _field(
-    TextEditingController c,
-    String hint,
-    IconData icon, {
+  Widget _field({
+    required TextEditingController
+        controller,
+    required String hint,
+    required IconData icon,
     TextInputType keyboard =
         TextInputType.text,
     int maxLines = 1,
   }) {
-    return Padding(
-      padding:
-          const EdgeInsets.only(
-        bottom: 16,
+
+    return Container(
+
+      decoration: BoxDecoration(
+        color:
+            const Color(0xFFF8F9FD),
+
+        borderRadius:
+            BorderRadius.circular(
+          20,
+        ),
       ),
 
       child: TextField(
-        controller: c,
+
+        controller: controller,
+
         keyboardType: keyboard,
+
         maxLines: maxLines,
 
         decoration: InputDecoration(
+
+          border: InputBorder.none,
+
+          contentPadding:
+              const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 20,
+          ),
+
           hintText: hint,
 
           prefixIcon: Icon(
@@ -781,48 +773,139 @@ class _BookingPageState
             color:
                 Colors.deepPurple,
           ),
+        ),
+      ),
+    );
+  }
 
-          filled: true,
+  /// =========================================================
+  /// DATE CARD
+  /// =========================================================
 
-          fillColor:
-              const Color(
-            0xFFF7F8FC,
+  Widget _dateCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+
+    return GestureDetector(
+
+      onTap: onTap,
+
+      child: Container(
+
+        padding:
+            const EdgeInsets.all(
+          18,
+        ),
+
+        decoration: BoxDecoration(
+          color: Colors.white,
+
+          borderRadius:
+              BorderRadius.circular(
+            24,
           ),
 
-          border:
-              OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(
-              16,
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 20,
+              offset:
+                  const Offset(0, 8),
+
+              color: Colors.black
+                  .withOpacity(0.05),
+            ),
+          ],
+        ),
+
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment
+                  .start,
+
+          children: [
+
+            Icon(
+              icon,
+              color: color,
             ),
 
-            borderSide:
-                BorderSide.none,
-          ),
+            const SizedBox(height: 16),
 
-          enabledBorder:
-              OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(
-              16,
+            Text(title),
+
+            const SizedBox(height: 6),
+
+            Text(
+              value,
+
+              style: const TextStyle(
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// =========================================================
+  /// BOTTOM BAR
+  /// =========================================================
+
+  Widget _bottomBar() {
+
+    return Container(
+
+      padding:
+          const EdgeInsets.all(18),
+
+      child: SafeArea(
+
+        child: SizedBox(
+
+          height: 60,
+
+          child: ElevatedButton(
+
+            onPressed:
+                isLoading
+                    ? null
+                    : _validateAndPay,
+
+            style:
+                ElevatedButton.styleFrom(
+
+              backgroundColor:
+                  Colors.black,
+
+              shape:
+                  RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(
+                  22,
+                ),
+              ),
             ),
 
-            borderSide:
-                BorderSide.none,
-          ),
+            child: isLoading
+                ? const CircularProgressIndicator(
+                    color: Colors.white,
+                  )
+                : Text(
+                    "Proceed to Payment  •  ₹${total.toStringAsFixed(0)}",
 
-          focusedBorder:
-              OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(
-              16,
-            ),
-
-            borderSide:
-                const BorderSide(
-              color:
-                  Colors.deepPurple,
-            ),
+                    style:
+                        const TextStyle(
+                      fontSize: 18,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
           ),
         ),
       ),
@@ -830,54 +913,58 @@ class _BookingPageState
   }
 
   /// =========================================================
-  /// INFO ROW
+  /// SUCCESS
   /// =========================================================
 
-  Widget _row(
-    String key,
-    String value,
-  ) {
-    return Padding(
-      padding:
-          const EdgeInsets.symmetric(
-        vertical: 8,
-      ),
+  Widget _successView() {
 
-      child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+    return SafeArea(
 
-        children: [
-          SizedBox(
-            width: 90,
+      child: Center(
 
-            child: Text(
-              key,
+        child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment
+                  .center,
 
-              style:
-                  const TextStyle(
+          children: [
+
+            const Icon(
+              Icons.check_circle,
+              color: Colors.green,
+              size: 120,
+            ),
+
+            const SizedBox(height: 20),
+
+            const Text(
+              "Booking Confirmed",
+
+              style: TextStyle(
+                fontSize: 30,
                 fontWeight:
                     FontWeight.bold,
               ),
             ),
-          ),
 
-          const Text(":  "),
+            const SizedBox(height: 10),
 
-          Expanded(
-            child: Text(value),
-          ),
-        ],
+            Text(
+              "Booking ID: $bookingId",
+            ),
+          ],
+        ),
       ),
     );
   }
 
   /// =========================================================
-  /// DATE PICKER
+  /// DATE
   /// =========================================================
 
   void _pickDate() async {
-    final d =
+
+    final picked =
         await showDatePicker(
       context: context,
       firstDate: DateTime.now(),
@@ -885,30 +972,99 @@ class _BookingPageState
       initialDate: DateTime.now(),
     );
 
-    if (d != null && mounted) {
+    if (picked != null) {
+
       setState(() {
-        date = d;
+        selectedDate = picked;
       });
     }
   }
 
   /// =========================================================
-  /// TIME PICKER
+  /// TIME
   /// =========================================================
 
   void _pickTime() async {
-    final t =
+
+    final picked =
         await showTimePicker(
       context: context,
       initialTime:
           TimeOfDay.now(),
     );
 
-    if (t != null && mounted) {
+    if (picked != null) {
+
       setState(() {
-        time = t;
+        selectedTime = picked;
       });
     }
+  }
+
+  /// =========================================================
+  /// LOCATION
+  /// =========================================================
+
+  Future<void>
+      _getCurrentLocation() async {
+
+    try {
+
+      setState(() {
+        isGettingLocation = true;
+      });
+
+      bool serviceEnabled =
+          await Geolocator
+              .isLocationServiceEnabled();
+
+      if (!serviceEnabled) {
+        throw Exception(
+          "Location service disabled",
+        );
+      }
+
+      LocationPermission permission =
+          await Geolocator
+              .checkPermission();
+
+      if (permission ==
+          LocationPermission.denied) {
+
+        permission =
+            await Geolocator
+                .requestPermission();
+      }
+
+      Position position =
+          await Geolocator
+              .getCurrentPosition();
+
+      List<Placemark> placemarks =
+          await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      Placemark place =
+          placemarks.first;
+
+      addressController.text =
+          "${place.street}, ${place.locality}, ${place.administrativeArea}, ${place.postalCode}";
+    } catch (e) {
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content:
+              Text("$e"),
+        ),
+      );
+    }
+
+    setState(() {
+      isGettingLocation = false;
+    });
   }
 
   /// =========================================================
@@ -916,16 +1072,24 @@ class _BookingPageState
   /// =========================================================
 
   void _validateAndPay() {
-    if (name.text.trim().isEmpty ||
-        phone.text.trim().isEmpty ||
-        address.text.trim().isEmpty ||
-        date == null ||
-        time == null) {
+
+    if (nameController.text
+            .trim()
+            .isEmpty ||
+        phoneController.text
+            .trim()
+            .isEmpty ||
+        addressController.text
+            .trim()
+            .isEmpty ||
+        selectedDate == null ||
+        selectedTime == null) {
+
       ScaffoldMessenger.of(context)
           .showSnackBar(
         const SnackBar(
           content: Text(
-            "Fill all required fields",
+            "Please fill all details",
           ),
         ),
       );
@@ -941,6 +1105,7 @@ class _BookingPageState
   /// =========================================================
 
   void _pay() async {
+
     final result =
         await Navigator.push(
       context,
@@ -949,7 +1114,6 @@ class _BookingPageState
         builder: (_) => PaymentPage(
           serviceName:
               widget.serviceName,
-
           amount: total.toInt(),
         ),
       ),
@@ -959,17 +1123,18 @@ class _BookingPageState
 
     if (result == true ||
         result == 'offline') {
+
       await _save();
     }
   }
 
   /// =========================================================
-  /// SAVE ORDER
+  /// SAVE
   /// =========================================================
 
   Future<void> _save() async {
+
     try {
-      if (!mounted) return;
 
       setState(() {
         isLoading = true;
@@ -998,31 +1163,38 @@ class _BookingPageState
 
       final docRef =
           await OrderService.placeOrder(
+
         serviceType:
-            normalize(
-          widget.serviceName,
-        ),
+            widget.serviceName
+                .trim()
+                .toLowerCase(),
 
         services: services,
 
         userId: user.uid,
 
-        userName: name.text.trim(),
+        userName:
+            nameController.text
+                .trim(),
 
         phone:
-            phone.text.trim(),
+            phoneController.text
+                .trim(),
 
-        email:
-            email.text.trim(),
+        email: "",
 
         address:
-            address.text.trim(),
+            addressController.text
+                .trim(),
 
-        note: note.text.trim(),
+        note:
+            noteController.text
+                .trim(),
 
-        date: date!,
+        date: selectedDate!,
 
-        time: time!.format(
+        time:
+            selectedTime!.format(
           context,
         ),
 
@@ -1041,16 +1213,8 @@ class _BookingPageState
         isEnquiry: false,
       );
 
-      /// CLEAR CART
-      if (isCart) {
-        Cart.clear(
-          widget.serviceName,
-        );
-      }
-
-      if (!mounted) return;
-
       setState(() {
+
         bookingId = docRef.id;
 
         isSuccess = true;
@@ -1059,14 +1223,13 @@ class _BookingPageState
       });
 
       await Future.delayed(
-        const Duration(
-          seconds: 2,
-        ),
+        const Duration(seconds: 2),
       );
 
       if (!mounted) return;
 
       Navigator.pushAndRemoveUntil(
+
         context,
 
         MaterialPageRoute(
@@ -1083,8 +1246,8 @@ class _BookingPageState
 
         (route) => false,
       );
+
     } catch (e) {
-      if (!mounted) return;
 
       setState(() {
         isLoading = false;

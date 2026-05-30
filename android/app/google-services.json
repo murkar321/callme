@@ -22,14 +22,6 @@
           }
         },
         {
-          "client_id": "240198181802-mda6g64rdb59ug6hlkvn4uahcc6auv95.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.callme",
-            "certificate_hash": "a04c9351576cf620053d7e9c2baba5183e17fb1c"
-          }
-        },
-        {
           "client_id": "240198181802-9tj0u2c598el4c8b6f85qv2t092t9tbp.apps.googleusercontent.com",
           "client_type": 3
         }

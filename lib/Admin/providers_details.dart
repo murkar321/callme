@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../provider/provider_profile_page.dart';
+
 class ProvidersPage extends StatefulWidget {
   const ProvidersPage({super.key});
 
@@ -16,7 +18,12 @@ class _ProvidersPageState
       FirebaseFirestore.instance
           .collection("providers");
 
-  /// ================= STATUS COLOR =================
+  String searchQuery = "";
+
+  /// ======================================================
+  /// STATUS COLOR
+  /// ======================================================
+
   Color getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case "approved":
@@ -33,7 +40,30 @@ class _ProvidersPageState
     }
   }
 
-  /// ================= SERVICE ICON =================
+  /// ======================================================
+  /// STATUS BG
+  /// ======================================================
+
+  Color getStatusBg(String status) {
+    switch (status.toLowerCase()) {
+      case "approved":
+        return const Color(0xFFE9FCEF);
+
+      case "rejected":
+        return const Color(0xFFFEECEC);
+
+      case "pending":
+        return const Color(0xFFFFF5E5);
+
+      default:
+        return const Color(0xFFEEF2FF);
+    }
+  }
+
+  /// ======================================================
+  /// SERVICE ICON
+  /// ======================================================
+
   IconData getServiceIcon(
     String service,
   ) {
@@ -62,25 +92,39 @@ class _ProvidersPageState
       return Icons.content_cut_rounded;
     }
 
+    if (value.contains("ac")) {
+      return Icons.ac_unit_rounded;
+    }
+
     return Icons
         .miscellaneous_services_rounded;
   }
 
+  /// ======================================================
+  /// UI
+  /// ======================================================
+
   @override
   Widget build(BuildContext context) {
+    final size =
+        MediaQuery.of(context).size;
+
+    final isTablet =
+        size.width >= 700;
+
     return Scaffold(
       backgroundColor:
-          const Color(0xFFF5F7FB),
+          const Color(0xFFF4F7FC),
 
       body: SafeArea(
         child:
             StreamBuilder<QuerySnapshot>(
           stream:
               providersRef.snapshots(),
-
           builder:
               (context, snapshot) {
-            /// LOADING
+            /// ================= LOADING =================
+
             if (snapshot
                     .connectionState ==
                 ConnectionState
@@ -91,7 +135,8 @@ class _ProvidersPageState
               );
             }
 
-            /// EMPTY
+            /// ================= EMPTY =================
+
             if (!snapshot.hasData ||
                 snapshot
                     .data!
@@ -100,10 +145,12 @@ class _ProvidersPageState
               return _emptyState();
             }
 
-            final docs =
+            List<QueryDocumentSnapshot>
+                docs =
                 snapshot.data!.docs;
 
-            /// SORT BY DATE
+            /// ================= SORT =================
+
             docs.sort((a, b) {
               final aTime =
                   (a['createdAt']
@@ -122,24 +169,58 @@ class _ProvidersPageState
               );
             });
 
-            /// COUNTS
+            /// ================= SEARCH =================
+
+            if (searchQuery.isNotEmpty) {
+              docs =
+                  docs.where((doc) {
+                final data =
+                    doc.data()
+                        as Map<String,
+                            dynamic>;
+
+                final business =
+                    data['business'] ??
+                        {};
+
+                final name =
+                    (business[
+                                    'businessName'] ??
+                                "")
+                            .toString()
+                            .toLowerCase();
+
+                final phone =
+                    (business[
+                                    'phone'] ??
+                                "")
+                            .toString()
+                            .toLowerCase();
+
+                return name.contains(
+                      searchQuery
+                          .toLowerCase(),
+                    ) ||
+                    phone.contains(
+                      searchQuery
+                          .toLowerCase(),
+                    );
+              }).toList();
+            }
+
+            /// ================= COUNTS =================
+
             final approved =
                 docs.where((e) {
               final data =
                   e.data()
-                      as Map<String, dynamic>;
+                      as Map<String,
+                          dynamic>;
 
               return ((data['status'] ??
                               "")
                           .toString()
                           .toLowerCase() ==
-                      "approved") ||
-                  (((data['profile']
-                                  as Map?)?[
-                              'status'] ??
-                          "")
-                      .toString()
-                      .toLowerCase() ==
                       "approved");
             }).length;
 
@@ -147,34 +228,45 @@ class _ProvidersPageState
                 docs.where((e) {
               final data =
                   e.data()
-                      as Map<String, dynamic>;
+                      as Map<String,
+                          dynamic>;
 
               return ((data['status'] ??
                               "")
                           .toString()
                           .toLowerCase() ==
-                      "pending") ||
-                  (((data['profile']
-                                  as Map?)?[
-                              'status'] ??
-                          "")
-                      .toString()
-                      .toLowerCase() ==
                       "pending");
+            }).length;
+
+            final rejected =
+                docs.where((e) {
+              final data =
+                  e.data()
+                      as Map<String,
+                          dynamic>;
+
+              return ((data['status'] ??
+                              "")
+                          .toString()
+                          .toLowerCase() ==
+                      "rejected");
             }).length;
 
             return Column(
               children: [
-                /// ================= HEADER =================
-                Container(
-                  padding:
-                      const EdgeInsets.fromLTRB(
-                    18,
-                    18,
-                    18,
-                    24,
-                  ),
+                /// ======================================================
+                /// HEADER
+                /// ======================================================
 
+                Container(
+                  width: double.infinity,
+                  padding:
+                      EdgeInsets.fromLTRB(
+                    isTablet ? 28 : 18,
+                    18,
+                    isTablet ? 28 : 18,
+                    26,
+                  ),
                   decoration:
                       const BoxDecoration(
                     gradient:
@@ -187,38 +279,34 @@ class _ProvidersPageState
                           0xFF7C3AED,
                         ),
                       ],
-
                       begin:
                           Alignment
                               .topLeft,
-
                       end:
                           Alignment
                               .bottomRight,
                     ),
-
                     borderRadius:
                         BorderRadius.only(
                       bottomLeft:
                           Radius.circular(
-                        30,
+                        34,
                       ),
                       bottomRight:
                           Radius.circular(
-                        30,
+                        34,
                       ),
                     ),
                   ),
-
                   child: Column(
                     children: [
                       /// TOP BAR
+
                       Row(
                         children: [
                           Container(
-                            width: 54,
-                            height: 54,
-
+                            width: 62,
+                            height: 62,
                             decoration:
                                 BoxDecoration(
                               color: Colors
@@ -226,28 +314,24 @@ class _ProvidersPageState
                                   .withOpacity(
                                 .14,
                               ),
-
                               borderRadius:
                                   BorderRadius.circular(
-                                18,
+                                20,
                               ),
                             ),
-
                             child:
                                 const Icon(
                               Icons
                                   .storefront_rounded,
-
                               color:
                                   Colors
                                       .white,
-
-                              size: 28,
+                              size: 30,
                             ),
                           ),
 
                           const SizedBox(
-                              width: 14),
+                              width: 16),
 
                           Expanded(
                             child:
@@ -255,19 +339,19 @@ class _ProvidersPageState
                               crossAxisAlignment:
                                   CrossAxisAlignment
                                       .start,
-
                               children: [
                                 const Text(
-                                  "Service Providers",
-
+                                  "Providers",
                                   style:
                                       TextStyle(
                                     color:
-                                        Colors.white,
+                                        Colors
+                                            .white,
                                     fontWeight:
-                                        FontWeight.bold,
+                                        FontWeight
+                                            .bold,
                                     fontSize:
-                                        22,
+                                        25,
                                   ),
                                 ),
 
@@ -276,12 +360,12 @@ class _ProvidersPageState
                                         4),
 
                                 Text(
-                                  "${docs.length} registered providers",
-
+                                  "${docs.length} service providers registered",
                                   style:
                                       const TextStyle(
                                     color:
-                                        Colors.white70,
+                                        Colors
+                                            .white70,
                                     fontSize:
                                         13,
                                   ),
@@ -293,19 +377,78 @@ class _ProvidersPageState
                       ),
 
                       const SizedBox(
-                          height: 22),
+                          height: 24),
+
+                      /// SEARCH
+
+                      Container(
+                        decoration:
+                            BoxDecoration(
+                          color: Colors
+                              .white
+                              .withOpacity(
+                            .15,
+                          ),
+                          borderRadius:
+                              BorderRadius.circular(
+                            20,
+                          ),
+                        ),
+                        child: TextField(
+                          onChanged: (v) {
+                            setState(() {
+                              searchQuery =
+                                  v;
+                            });
+                          },
+                          style:
+                              const TextStyle(
+                            color:
+                                Colors.white,
+                          ),
+                          decoration:
+                              InputDecoration(
+                            hintText:
+                                "Search providers...",
+                            hintStyle:
+                                const TextStyle(
+                              color:
+                                  Colors
+                                      .white70,
+                            ),
+                            prefixIcon:
+                                const Icon(
+                              Icons.search,
+                              color:
+                                  Colors.white,
+                            ),
+                            border:
+                                InputBorder
+                                    .none,
+                            contentPadding:
+                                const EdgeInsets.symmetric(
+                              vertical:
+                                  18,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(
+                          height: 24),
 
                       /// STATS
+
                       Row(
                         children: [
                           Expanded(
                             child:
                                 _topCard(
-                              title:
-                                  "Approved",
-                              count:
-                                  approved
-                                      .toString(),
+                              "Approved",
+                              approved
+                                  .toString(),
+                              Icons
+                                  .verified_rounded,
                             ),
                           ),
 
@@ -316,11 +459,26 @@ class _ProvidersPageState
                           Expanded(
                             child:
                                 _topCard(
-                              title:
-                                  "Pending",
-                              count:
-                                  pending
-                                      .toString(),
+                              "Pending",
+                              pending
+                                  .toString(),
+                              Icons
+                                  .schedule_rounded,
+                            ),
+                          ),
+
+                          const SizedBox(
+                              width:
+                                  12),
+
+                          Expanded(
+                            child:
+                                _topCard(
+                              "Rejected",
+                              rejected
+                                  .toString(),
+                              Icons
+                                  .cancel_rounded,
                             ),
                           ),
                         ],
@@ -329,18 +487,21 @@ class _ProvidersPageState
                   ),
                 ),
 
-                /// ================= LIST =================
+                /// ======================================================
+                /// LIST
+                /// ======================================================
+
                 Expanded(
                   child:
                       ListView.builder(
                     padding:
-                        const EdgeInsets.all(
-                      16,
+                        EdgeInsets.all(
+                      isTablet
+                          ? 24
+                          : 16,
                     ),
-
                     itemCount:
                         docs.length,
-
                     itemBuilder:
                         (_, index) {
                       final doc =
@@ -353,6 +514,7 @@ class _ProvidersPageState
                                   dynamic>;
 
                       /// MAPS
+
                       final business =
                           (data['business']
                                   as Map<
@@ -374,14 +536,20 @@ class _ProvidersPageState
                                       dynamic>?) ??
                               {};
 
-                      final profile =
-                          (data['profile']
+                      final documents =
+                          (data['documents']
                                   as Map<
                                       String,
                                       dynamic>?) ??
                               {};
 
                       /// VALUES
+
+                      final String
+                          providerId =
+                          data['providerId'] ??
+                              "";
+
                       final String
                           businessName =
                           business[
@@ -401,6 +569,12 @@ class _ProvidersPageState
                               "";
 
                       final String
+                          email =
+                          business[
+                                  'email'] ??
+                              "";
+
+                      final String
                           city =
                           business[
                                   'city'] ??
@@ -413,6 +587,18 @@ class _ProvidersPageState
                               "";
 
                       final String
+                          address =
+                          business[
+                                  'address'] ??
+                              "";
+
+                      final String
+                          pincode =
+                          business[
+                                  'pincode'] ??
+                              "";
+
+                      final String
                           image =
                           business[
                                   'image'] ??
@@ -420,23 +606,18 @@ class _ProvidersPageState
 
                       final String
                           providerType =
-                          profile[
-                                  'providerType'] ??
-                              data[
+                          data[
                                   'providerType'] ??
                               "Provider";
 
                       final String
                           status =
-                          profile[
-                                  'status'] ??
-                              data[
-                                  'status'] ??
+                          data['status'] ??
                               "pending";
 
                       final String
                           serviceType =
-                          service[
+                          data[
                                   'serviceType'] ??
                               "";
 
@@ -444,6 +625,11 @@ class _ProvidersPageState
                           ownTools =
                           service[
                                   'ownTools'] ??
+                              false;
+
+                      final bool
+                          isActive =
+                          data['isActive'] ??
                               false;
 
                       final List
@@ -472,508 +658,706 @@ class _ProvidersPageState
                         );
                       }
 
-                      return Container(
-                        margin:
-                            const EdgeInsets.only(
-                          bottom: 18,
-                        ),
-
-                        padding:
-                            const EdgeInsets.all(
-                          16,
-                        ),
-
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              Colors.white,
-
-                          borderRadius:
-                              BorderRadius.circular(
-                            26,
-                          ),
-
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors
-                                  .black
-                                  .withOpacity(
-                                .04,
-                              ),
-
-                              blurRadius:
-                                  14,
-
-                              offset:
-                                  const Offset(
-                                0,
-                                5,
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ProviderProfilePage(
+                                providerId:
+                                    providerId,
                               ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
+                        child: Container(
+                          margin:
+                              const EdgeInsets.only(
+                            bottom: 18,
+                          ),
+                          padding:
+                              const EdgeInsets.all(
+                            18,
+                          ),
+                          decoration:
+                              BoxDecoration(
+                            color:
+                                Colors.white,
+                            borderRadius:
+                                BorderRadius.circular(
+                              30,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors
+                                    .black
+                                    .withOpacity(
+                                  .05,
+                                ),
+                                blurRadius:
+                                    16,
+                                offset:
+                                    const Offset(
+                                  0,
+                                  8,
+                                ),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              /// ======================================================
+                              /// TOP
+                              /// ======================================================
 
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
-
-                          children: [
-                            /// ================= TOP =================
-                            Row(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment
-                                      .start,
-
-                              children: [
-                                Container(
-                                  width:
-                                      74,
-                                  height:
-                                      74,
-
-                                  decoration:
-                                      BoxDecoration(
-                                    borderRadius:
-                                        BorderRadius.circular(
-                                      24,
+                              Row(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment
+                                        .start,
+                                children: [
+                                  Container(
+                                    width:
+                                        82,
+                                    height:
+                                        82,
+                                    decoration:
+                                        BoxDecoration(
+                                      borderRadius:
+                                          BorderRadius.circular(
+                                        26,
+                                      ),
+                                      image: image
+                                              .isNotEmpty
+                                          ? DecorationImage(
+                                              image:
+                                                  NetworkImage(
+                                                image,
+                                              ),
+                                              fit:
+                                                  BoxFit.cover,
+                                            )
+                                          : null,
+                                      gradient:
+                                          image.isEmpty
+                                              ? const LinearGradient(
+                                                  colors: [
+                                                    Color(
+                                                      0xFF2563EB,
+                                                    ),
+                                                    Color(
+                                                      0xFF7C3AED,
+                                                    ),
+                                                  ],
+                                                )
+                                              : null,
                                     ),
-
-                                    image: image
-                                            .isNotEmpty
-                                        ? DecorationImage(
-                                            image:
-                                                NetworkImage(
-                                              image,
-                                            ),
-
-                                            fit:
-                                                BoxFit.cover,
-                                          )
-                                        : null,
-
-                                    gradient:
+                                    child:
                                         image.isEmpty
-                                            ? const LinearGradient(
-                                                colors: [
-                                                  Color(
-                                                    0xFF2563EB,
-                                                  ),
-                                                  Color(
-                                                    0xFF7C3AED,
-                                                  ),
-                                                ],
+                                            ? Icon(
+                                                getServiceIcon(
+                                                  serviceType,
+                                                ),
+                                                color:
+                                                    Colors.white,
+                                                size:
+                                                    36,
                                               )
                                             : null,
                                   ),
 
-                                  child:
-                                      image.isEmpty
-                                          ? Icon(
-                                              getServiceIcon(
-                                                serviceType,
+                                  const SizedBox(
+                                      width:
+                                          16),
+
+                                  Expanded(
+                                    child:
+                                        Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment
+                                              .start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child:
+                                                  Text(
+                                                businessName,
+                                                maxLines:
+                                                    1,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                                style:
+                                                    const TextStyle(
+                                                  fontSize:
+                                                      20,
+                                                  fontWeight:
+                                                      FontWeight.bold,
+                                                ),
                                               ),
-
-                                              color:
-                                                  Colors.white,
-
-                                              size:
-                                                  34,
-                                            )
-                                          : null,
-                                ),
-
-                                const SizedBox(
-                                    width:
-                                        14),
-
-                                Expanded(
-                                  child:
-                                      Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment
-                                            .start,
-
-                                    children: [
-                                      Text(
-                                        businessName,
-
-                                        maxLines:
-                                            1,
-
-                                        overflow:
-                                            TextOverflow.ellipsis,
-
-                                        style:
-                                            const TextStyle(
-                                          fontSize:
-                                              18,
-
-                                          fontWeight:
-                                              FontWeight.bold,
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                          height:
-                                              5),
-
-                                      Text(
-                                        ownerName,
-
-                                        maxLines:
-                                            1,
-
-                                        overflow:
-                                            TextOverflow.ellipsis,
-
-                                        style:
-                                            TextStyle(
-                                          color: Colors
-                                              .grey
-                                              .shade700,
-
-                                          fontSize:
-                                              14,
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                          height:
-                                              10),
-
-                                      Wrap(
-                                        spacing:
-                                            8,
-                                        runSpacing:
-                                            8,
-
-                                        children: [
-                                          _tag(
-                                            status
-                                                .toUpperCase(),
-
-                                            getStatusColor(
-                                              status,
-                                            ).withOpacity(
-                                                .10),
-
-                                            getStatusColor(
-                                              status,
                                             ),
+
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal:
+                                                    12,
+                                                vertical:
+                                                    7,
+                                              ),
+                                              decoration:
+                                                  BoxDecoration(
+                                                color:
+                                                    isActive
+                                                        ? const Color(
+                                                            0xFFE9FCEF,
+                                                          )
+                                                        : const Color(
+                                                            0xFFF3F4F6,
+                                                          ),
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                  30,
+                                                ),
+                                              ),
+                                              child:
+                                                  Text(
+                                                isActive
+                                                    ? "ACTIVE"
+                                                    : "INACTIVE",
+                                                style:
+                                                    TextStyle(
+                                                  color:
+                                                      isActive
+                                                          ? const Color(
+                                                              0xFF16A34A,
+                                                            )
+                                                          : Colors.grey,
+                                                  fontSize:
+                                                      11,
+                                                  fontWeight:
+                                                      FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+
+                                        const SizedBox(
+                                            height:
+                                                6),
+
+                                        Text(
+                                          ownerName,
+                                          style:
+                                              TextStyle(
+                                            color: Colors
+                                                .grey
+                                                .shade700,
+                                            fontSize:
+                                                14,
                                           ),
+                                        ),
 
-                                          _tag(
-                                            providerType,
+                                        const SizedBox(
+                                            height:
+                                                12),
 
-                                            const Color(
-                                              0xFFEEF2FF,
+                                        Wrap(
+                                          spacing:
+                                              8,
+                                          runSpacing:
+                                              8,
+                                          children: [
+                                            _tag(
+                                              status
+                                                  .toUpperCase(),
+                                              getStatusBg(
+                                                status,
+                                              ),
+                                              getStatusColor(
+                                                status,
+                                              ),
                                             ),
 
-                                            const Color(
-                                              0xFF4F46E5,
+                                            _tag(
+                                              providerType,
+                                              const Color(
+                                                0xFFEEF2FF,
+                                              ),
+                                              const Color(
+                                                0xFF4F46E5,
+                                              ),
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(
-                                height:
-                                    18),
-
-                            /// ================= INFO BOX =================
-                            Container(
-                              padding:
-                                  const EdgeInsets.all(
-                                14,
-                              ),
-
-                              decoration:
-                                  BoxDecoration(
-                                color:
-                                    const Color(
-                                  0xFFF7F8FD,
-                                ),
-
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  20,
-                                ),
-                              ),
-
-                              child: Column(
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child:
-                                            _compactInfo(
-                                          Icons
-                                              .phone_rounded,
-
-                                          phone,
+                                          ],
                                         ),
-                                      ),
-
-                                      const SizedBox(
-                                          width:
-                                              12),
-
-                                      Expanded(
-                                        child:
-                                            _compactInfo(
-                                          Icons
-                                              .calendar_today_rounded,
-
-                                          joined,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  const SizedBox(
-                                      height:
-                                          14),
-
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child:
-                                            _compactInfo(
-                                          Icons
-                                              .location_on_rounded,
-
-                                          "$city, $state",
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                          width:
-                                              12),
-
-                                      Expanded(
-                                        child:
-                                            _compactInfo(
-                                          Icons
-                                              .build_circle_rounded,
-
-                                          ownTools
-                                              ? "Own Tools"
-                                              : "No Tools",
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  const SizedBox(
-                                      height:
-                                          14),
-
-                                  _compactInfo(
-                                    Icons
-                                        .miscellaneous_services_rounded,
-
-                                    serviceType,
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
 
-                            /// ================= CATEGORIES =================
-                            if (categories
-                                .isNotEmpty) ...[
                               const SizedBox(
                                   height:
                                       18),
 
-                              Text(
-                                "Categories",
+                              /// ======================================================
+                              /// QUICK INFO
+                              /// ======================================================
 
-                                style:
-                                    TextStyle(
-                                  color: Colors
-                                      .grey
-                                      .shade700,
-
-                                  fontWeight:
-                                      FontWeight
-                                          .w600,
-
-                                  fontSize:
-                                      14,
+                              Container(
+                                padding:
+                                    const EdgeInsets.all(
+                                  16,
                                 ),
+                                decoration:
+                                    BoxDecoration(
+                                  color:
+                                      const Color(
+                                    0xFFF8FAFF,
+                                  ),
+                                  borderRadius:
+                                      BorderRadius.circular(
+                                    24,
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child:
+                                              _infoTile(
+                                            Icons
+                                                .phone_rounded,
+                                            "Phone",
+                                            phone,
+                                          ),
+                                        ),
+
+                                        const SizedBox(
+                                            width:
+                                                12),
+
+                                        Expanded(
+                                          child:
+                                              _infoTile(
+                                            Icons
+                                                .email_rounded,
+                                            "Email",
+                                            email,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(
+                                        height:
+                                            14),
+
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child:
+                                              _infoTile(
+                                            Icons
+                                                .location_city_rounded,
+                                            "Location",
+                                            "$city, $state",
+                                          ),
+                                        ),
+
+                                        const SizedBox(
+                                            width:
+                                                12),
+
+                                        Expanded(
+                                          child:
+                                              _infoTile(
+                                            Icons
+                                                .calendar_today_rounded,
+                                            "Joined",
+                                            joined,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(
+                                        height:
+                                            14),
+
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child:
+                                              _infoTile(
+                                            Icons
+                                                .build_circle_rounded,
+                                            "Tools",
+                                            ownTools
+                                                ? "Available"
+                                                : "Not Available",
+                                          ),
+                                        ),
+
+                                        const SizedBox(
+                                            width:
+                                                12),
+
+                                        Expanded(
+                                          child:
+                                              _infoTile(
+                                            Icons
+                                                .miscellaneous_services_rounded,
+                                            "Service",
+                                            serviceType
+                                                    .isEmpty
+                                                ? "-"
+                                                : serviceType,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              /// ======================================================
+                              /// ADDRESS
+                              /// ======================================================
+
+                              if (address
+                                  .isNotEmpty) ...[
+                                const SizedBox(
+                                    height:
+                                        18),
+
+                                _sectionTitle(
+                                  "Address",
+                                ),
+
+                                const SizedBox(
+                                    height:
+                                        12),
+
+                                Container(
+                                  width: double
+                                      .infinity,
+                                  padding:
+                                      const EdgeInsets.all(
+                                    16,
+                                  ),
+                                  decoration:
+                                      BoxDecoration(
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      22,
+                                    ),
+                                    border:
+                                        Border.all(
+                                      color: Colors
+                                          .grey
+                                          .shade200,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "$address, $city, $state - $pincode",
+                                    style:
+                                        const TextStyle(
+                                      fontWeight:
+                                          FontWeight
+                                              .w600,
+                                      height:
+                                          1.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+
+                              /// ======================================================
+                              /// CATEGORIES
+                              /// ======================================================
+
+                              if (categories
+                                  .isNotEmpty) ...[
+                                const SizedBox(
+                                    height:
+                                        18),
+
+                                _sectionTitle(
+                                  "Categories",
+                                ),
+
+                                const SizedBox(
+                                    height:
+                                        12),
+
+                                Wrap(
+                                  spacing:
+                                      10,
+                                  runSpacing:
+                                      10,
+                                  children:
+                                      List.generate(
+                                    categories
+                                        .length,
+                                    (i) {
+                                      return Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal:
+                                              14,
+                                          vertical:
+                                              9,
+                                        ),
+                                        decoration:
+                                            BoxDecoration(
+                                          color:
+                                              const Color(
+                                            0xFFEEF2FF,
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                            30,
+                                          ),
+                                        ),
+                                        child:
+                                            Text(
+                                          categories[
+                                                  i]
+                                              .toString(),
+                                          style:
+                                              const TextStyle(
+                                            color:
+                                                Color(
+                                              0xFF4F46E5,
+                                            ),
+                                            fontWeight:
+                                                FontWeight
+                                                    .bold,
+                                            fontSize:
+                                                12,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+
+                              /// ======================================================
+                              /// DOCUMENTS
+                              /// ======================================================
+
+                              if (documents
+                                  .isNotEmpty) ...[
+                                const SizedBox(
+                                    height:
+                                        20),
+
+                                _sectionTitle(
+                                  "Uploaded Documents",
+                                ),
+
+                                const SizedBox(
+                                    height:
+                                        12),
+
+                                Wrap(
+                                  spacing:
+                                      10,
+                                  runSpacing:
+                                      10,
+                                  children:
+                                      documents.keys
+                                          .map(
+                                            (
+                                              doc,
+                                            ) {
+                                              return Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal:
+                                                      14,
+                                                  vertical:
+                                                      10,
+                                                ),
+                                                decoration:
+                                                    BoxDecoration(
+                                                  color:
+                                                      const Color(
+                                                    0xFFE9FCEF,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                    18,
+                                                  ),
+                                                ),
+                                                child:
+                                                    Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(
+                                                      Icons
+                                                          .verified_rounded,
+                                                      color:
+                                                          Color(
+                                                        0xFF16A34A,
+                                                      ),
+                                                      size:
+                                                          18,
+                                                    ),
+
+                                                    const SizedBox(
+                                                        width:
+                                                            8),
+
+                                                    Text(
+                                                      doc,
+                                                      style:
+                                                          const TextStyle(
+                                                        color:
+                                                            Color(
+                                                          0xFF16A34A,
+                                                        ),
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
+                                          )
+                                          .toList(),
+                                ),
+                              ],
+
+                              /// ======================================================
+                              /// BANK
+                              /// ======================================================
+
+                              const SizedBox(
+                                  height:
+                                      20),
+
+                              _sectionTitle(
+                                "Bank Details",
                               ),
 
                               const SizedBox(
                                   height:
                                       12),
 
-                              Wrap(
-                                spacing:
-                                    8,
-                                runSpacing:
-                                    8,
+                              Container(
+                                width: double
+                                    .infinity,
+                                padding:
+                                    const EdgeInsets.all(
+                                  18,
+                                ),
+                                decoration:
+                                    BoxDecoration(
+                                  borderRadius:
+                                      BorderRadius.circular(
+                                    24,
+                                  ),
+                                  border:
+                                      Border.all(
+                                    color: Colors
+                                        .grey
+                                        .shade200,
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    _bankRow(
+                                      "Holder",
+                                      bank['accountHolder'] ??
+                                          "-",
+                                    ),
 
-                                children:
-                                    List.generate(
-                                  categories
-                                      .length,
+                                    _bankRow(
+                                      "Account",
+                                      bank['accountNumber'] ??
+                                          "-",
+                                    ),
 
-                                  (i) {
-                                    return Container(
-                                      padding:
-                                          const EdgeInsets.symmetric(
-                                        horizontal:
-                                            12,
-                                        vertical:
-                                            7,
-                                      ),
+                                    _bankRow(
+                                      "IFSC",
+                                      bank['ifsc'] ??
+                                          "-",
+                                    ),
 
-                                      decoration:
-                                          BoxDecoration(
-                                        color:
-                                            const Color(
-                                          0xFFEEF2FF,
-                                        ),
+                                    _bankRow(
+                                      "UPI",
+                                      bank['upi'] ??
+                                          "-",
+                                    ),
+                                  ],
+                                ),
+                              ),
 
-                                        borderRadius:
-                                            BorderRadius.circular(
-                                          30,
-                                        ),
-                                      ),
+                              const SizedBox(
+                                  height:
+                                      18),
 
-                                      child:
-                                          Text(
-                                        categories[
-                                                i]
-                                            .toString(),
+                              /// ======================================================
+                              /// BUTTON
+                              /// ======================================================
 
-                                        style:
-                                            const TextStyle(
-                                          color:
-                                              Color(
-                                            0xFF4F46E5,
-                                          ),
-
-                                          fontSize:
-                                              12,
-
-                                          fontWeight:
-                                              FontWeight.w600,
+                              SizedBox(
+                                width: double
+                                    .infinity,
+                                height: 56,
+                                child:
+                                    ElevatedButton
+                                        .icon(
+                                  onPressed:
+                                      () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            ProviderProfilePage(
+                                          providerId:
+                                              providerId,
                                         ),
                                       ),
                                     );
                                   },
+                                  icon: const Icon(
+                                    Icons
+                                        .edit_rounded,
+                                  ),
+                                  label: const Text(
+                                    "Open Provider Profile",
+                                  ),
+                                  style:
+                                      ElevatedButton.styleFrom(
+                                    elevation:
+                                        0,
+                                    backgroundColor:
+                                        const Color(
+                                      0xFF4F46E5,
+                                    ),
+                                    foregroundColor:
+                                        Colors
+                                            .white,
+                                    shape:
+                                        RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(
+                                        18,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
-
-                            const SizedBox(
-                                height:
-                                    18),
-
-                            /// ================= BANK =================
-                            Container(
-                              width: double
-                                  .infinity,
-
-                              padding:
-                                  const EdgeInsets.all(
-                                16,
-                              ),
-
-                              decoration:
-                                  BoxDecoration(
-                                border:
-                                    Border.all(
-                                  color:
-                                      Colors
-                                          .grey
-                                          .shade200,
-                                ),
-
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  20,
-                                ),
-                              ),
-
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment
-                                        .start,
-
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(
-                                        Icons
-                                            .account_balance_rounded,
-
-                                        size:
-                                            18,
-
-                                        color:
-                                            Color(
-                                          0xFF4F46E5,
-                                        ),
-                                      ),
-
-                                      SizedBox(
-                                          width:
-                                              8),
-
-                                      Text(
-                                        "Bank Details",
-
-                                        style:
-                                            TextStyle(
-                                          fontWeight:
-                                              FontWeight.bold,
-
-                                          fontSize:
-                                              15,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  const SizedBox(
-                                      height:
-                                          16),
-
-                                  _bankRow(
-                                    "Holder",
-                                    bank['accountHolder'] ??
-                                        "-",
-                                  ),
-
-                                  _bankRow(
-                                    "Account",
-                                    bank['accountNumber'] ??
-                                        "-",
-                                  ),
-
-                                  _bankRow(
-                                    "IFSC",
-                                    bank['ifsc'] ??
-                                        "-",
-                                  ),
-
-                                  _bankRow(
-                                    "UPI",
-                                    bank['upi'] ??
-                                        "-",
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       );
                     },
@@ -987,76 +1371,47 @@ class _ProvidersPageState
     );
   }
 
-  /// ================= TAG =================
-  Widget _tag(
-    String text,
-    Color bg,
-    Color textColor,
+  /// ======================================================
+  /// TOP CARD
+  /// ======================================================
+
+  Widget _topCard(
+    String title,
+    String count,
+    IconData icon,
   ) {
     return Container(
       padding:
           const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 6,
+        vertical: 18,
       ),
-
-      decoration: BoxDecoration(
-        color: bg,
-
-        borderRadius:
-            BorderRadius.circular(30),
-      ),
-
-      child: Text(
-        text,
-
-        style: TextStyle(
-          color: textColor,
-
-          fontWeight:
-              FontWeight.bold,
-
-          fontSize: 11,
-        ),
-      ),
-    );
-  }
-
-  /// ================= TOP CARD =================
-  Widget _topCard({
-    required String title,
-    required String count,
-  }) {
-    return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        vertical: 16,
-      ),
-
       decoration: BoxDecoration(
         color:
             Colors.white.withOpacity(
           .14,
         ),
-
         borderRadius:
             BorderRadius.circular(
-          20,
+          22,
         ),
       ),
-
       child: Column(
         children: [
+          Icon(
+            icon,
+            color: Colors.white,
+            size: 24,
+          ),
+
+          const SizedBox(height: 10),
+
           Text(
             count,
-
             style:
                 const TextStyle(
               color:
                   Colors.white,
-
-              fontSize: 24,
-
+              fontSize: 26,
               fontWeight:
                   FontWeight.bold,
             ),
@@ -1066,13 +1421,11 @@ class _ProvidersPageState
 
           Text(
             title,
-
             style:
                 const TextStyle(
               color:
                   Colors.white70,
-
-              fontSize: 13,
+              fontSize: 12,
             ),
           ),
         ],
@@ -1080,78 +1433,143 @@ class _ProvidersPageState
     );
   }
 
-  /// ================= COMPACT INFO =================
-  Widget _compactInfo(
-    IconData icon,
-    String value,
+  /// ======================================================
+  /// TAG
+  /// ======================================================
+
+  Widget _tag(
+    String text,
+    Color bg,
+    Color textColor,
   ) {
-    return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
-
-      children: [
-        Container(
-          padding:
-              const EdgeInsets.all(8),
-
-          decoration: BoxDecoration(
-            color: Colors.white,
-
-            borderRadius:
-                BorderRadius.circular(
-              12,
-            ),
-          ),
-
-          child: Icon(
-            icon,
-
-            size: 16,
-
-            color:
-                const Color(
-              0xFF4F46E5,
-            ),
-          ),
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 7,
+      ),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius:
+            BorderRadius.circular(
+          30,
         ),
-
-        const SizedBox(width: 10),
-
-        Expanded(
-          child: Padding(
-            padding:
-                const EdgeInsets.only(
-              top: 2,
-            ),
-
-            child: Text(
-              value.isEmpty
-                  ? "-"
-                  : value,
-
-              maxLines: 2,
-
-              overflow:
-                  TextOverflow
-                      .ellipsis,
-
-              style:
-                  const TextStyle(
-                fontSize: 13,
-
-                fontWeight:
-                    FontWeight.w600,
-
-                height: 1.35,
-              ),
-            ),
-          ),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: textColor,
+          fontWeight:
+              FontWeight.bold,
+          fontSize: 11,
         ),
-      ],
+      ),
     );
   }
 
-  /// ================= BANK ROW =================
+  /// ======================================================
+  /// INFO TILE
+  /// ======================================================
+
+  Widget _infoTile(
+    IconData icon,
+    String title,
+    String value,
+  ) {
+    return Container(
+      padding:
+          const EdgeInsets.all(
+        14,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(
+          18,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color:
+                    const Color(
+                  0xFF4F46E5,
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors
+                        .grey
+                        .shade600,
+                    fontSize: 12,
+                    fontWeight:
+                        FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          Text(
+            value.isEmpty
+                ? "-"
+                : value,
+            maxLines: 2,
+            overflow:
+                TextOverflow.ellipsis,
+            style:
+                const TextStyle(
+              fontWeight:
+                  FontWeight.bold,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ======================================================
+  /// SECTION TITLE
+  /// ======================================================
+
+  Widget _sectionTitle(
+    String title,
+  ) {
+    return Align(
+      alignment:
+          Alignment.centerLeft,
+      child: Text(
+        title,
+        style: TextStyle(
+          color:
+              Colors.grey.shade800,
+          fontWeight:
+              FontWeight.bold,
+          fontSize: 15,
+        ),
+      ),
+    );
+  }
+
+  /// ======================================================
+  /// BANK ROW
+  /// ======================================================
+
   Widget _bankRow(
     String title,
     String value,
@@ -1161,24 +1579,19 @@ class _ProvidersPageState
           const EdgeInsets.only(
         bottom: 14,
       ),
-
       child: Row(
         children: [
           SizedBox(
-            width: 90,
-
+            width: 95,
             child: Text(
               title,
-
               style: TextStyle(
                 color:
                     Colors.grey
                         .shade700,
-
                 fontSize: 13,
-
                 fontWeight:
-                    FontWeight.w500,
+                    FontWeight.w600,
               ),
             ),
           ),
@@ -1188,15 +1601,12 @@ class _ProvidersPageState
               value.isEmpty
                   ? "-"
                   : value,
-
               overflow:
                   TextOverflow
                       .ellipsis,
-
               style:
                   const TextStyle(
                 fontSize: 13,
-
                 fontWeight:
                     FontWeight.bold,
               ),
@@ -1207,53 +1617,59 @@ class _ProvidersPageState
     );
   }
 
-  /// ================= EMPTY =================
+  /// ======================================================
+  /// EMPTY
+  /// ======================================================
+
   Widget _emptyState() {
     return Center(
       child: Column(
         mainAxisAlignment:
             MainAxisAlignment.center,
-
         children: [
           Container(
-            width: 90,
-            height: 90,
-
+            width: 110,
+            height: 110,
             decoration:
                 BoxDecoration(
               color:
                   const Color(
                 0xFFEEF2FF,
               ),
-
               borderRadius:
                   BorderRadius.circular(
-                28,
+                32,
               ),
             ),
-
             child: const Icon(
               Icons
                   .storefront_outlined,
-
-              size: 42,
-
+              size: 50,
               color:
                   Color(0xFF4F46E5),
             ),
           ),
 
           const SizedBox(
-              height: 18),
+              height: 20),
 
           const Text(
             "No Providers Found",
-
             style: TextStyle(
-              fontSize: 18,
-
+              fontSize: 20,
               fontWeight:
                   FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(
+              height: 8),
+
+          Text(
+            "Registered providers will appear here",
+            style: TextStyle(
+              color:
+                  Colors.grey.shade600,
             ),
           ),
         ],

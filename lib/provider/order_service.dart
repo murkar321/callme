@@ -1,18 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OrderService {
-
   static final FirebaseFirestore _db =
       FirebaseFirestore.instance;
 
   /// =========================================================
-  /// GENERATE READABLE ORDER ID
+  /// GENERATE ORDER ID
   /// =========================================================
 
   static String generateOrderId(
     String userName,
   ) {
-
     final cleanName = userName
         .trim()
         .toLowerCase()
@@ -30,220 +28,231 @@ class OrderService {
   /// =========================================================
 
   static Future<DocumentReference> placeOrder({
-
     required String serviceType,
-
     required List<String> services,
 
     required String userId,
-
     required String userName,
-
     required String phone,
 
     String? email,
 
     required String createdBy,
-
     required String createdByRole,
 
     required String address,
-
     String? note,
 
     required DateTime date,
-
     required String time,
 
     required double totalAmount,
 
     int? adults,
-
     int? children,
 
     String? visitType,
 
     String? providerId,
-
     String? providerName,
-
     String? providerUserId,
 
     bool isEnquiry = false,
-
   }) async {
-
-    /// =====================================================
-    /// READABLE ORDER ID
-    /// =====================================================
-
+    /// ORDER ID
     final orderId =
-    generateOrderId(userName);
+        generateOrderId(userName);
 
     final docRef = _db
         .collection("orders")
         .doc(orderId);
 
-    /// =====================================================
-    /// NORMALIZE
-    /// =====================================================
-
+    /// NORMALIZE SERVICE TYPE
     final normalizedServiceType =
-    serviceType
-        .trim()
-        .toLowerCase();
+        serviceType
+            .trim()
+            .toLowerCase();
+
+    final now =
+        FieldValue.serverTimestamp();
 
     /// =====================================================
     /// SAVE ORDER
     /// =====================================================
 
     await docRef.set({
-
+      /// =================================================
       /// IDS
+      /// =================================================
 
       "orderId": orderId,
-
       "userId": userId,
 
-      /// PROVIDER
-
-      "providerId":
-      providerId ?? "",
-
-      "providerUserId":
-      providerUserId ?? "",
-
-      "providerName":
-      providerName ?? "",
-
-      /// USER
+      /// =================================================
+      /// USER DATA
+      /// =================================================
 
       "userName": userName,
-
       "phone": phone,
-
       "email": email ?? "",
 
+      /// COMPLETE USER OBJECT
+      "user": {
+        "id": userId,
+        "name": userName,
+        "phone": phone,
+        "email": email ?? "",
+      },
+
+      /// =================================================
+      /// PROVIDER
+      /// =================================================
+
+      "providerId":
+          providerId ?? "",
+
+      "providerUserId":
+          providerUserId ?? "",
+
+      "providerName":
+          providerName ?? "",
+
+      "provider": {
+        "providerId":
+            providerId ?? "",
+
+        "providerUserId":
+            providerUserId ?? "",
+
+        "providerName":
+            providerName ?? "",
+      },
+
+      /// =================================================
       /// SERVICE
+      /// =================================================
 
       "serviceType":
-      normalizedServiceType,
+          normalizedServiceType,
+
+      "serviceName":
+          normalizedServiceType,
 
       "services": services,
 
-      /// DATE + TIME
+      /// =================================================
+      /// SCHEDULE
+      /// =================================================
 
       "date":
-      Timestamp.fromDate(date),
+          Timestamp.fromDate(date),
 
       "time": time,
 
       "schedule": {
-
         "date":
-        Timestamp.fromDate(date),
+            Timestamp.fromDate(date),
 
         "time": time,
       },
 
+      /// =================================================
       /// LOCATION
+      /// =================================================
 
       "address":
-      address.isEmpty
-          ? "Not Provided"
-          : address,
+          address.isEmpty
+              ? "Not Provided"
+              : address,
 
       "note": note ?? "",
 
       "location": {
-
         "address":
-        address.isEmpty
-            ? "Not Provided"
-            : address,
+            address.isEmpty
+                ? "Not Provided"
+                : address,
 
         "note": note ?? "",
       },
 
+      /// =================================================
       /// PAYMENT
+      /// =================================================
 
       "totalAmount": totalAmount,
 
       "payment": {
-
         "totalAmount":
-        totalAmount,
+            totalAmount,
 
         "paid":
-        isEnquiry
-            ? false
-            : true,
+            !isEnquiry,
 
         "method":
-        isEnquiry
-            ? "enquiry"
-            : "upi",
+            isEnquiry
+                ? "enquiry"
+                : "upi",
       },
 
+      /// =================================================
       /// META
+      /// =================================================
 
       "adults":
-      adults ?? 0,
+          adults ?? 0,
 
       "children":
-      children ?? 0,
+          children ?? 0,
 
       "visitType":
-      visitType ?? "",
+          visitType ?? "",
 
       "isEnquiry":
-      isEnquiry,
+          isEnquiry,
 
       "meta": {
-
         "adults":
-        adults ?? 0,
+            adults ?? 0,
 
         "children":
-        children ?? 0,
+            children ?? 0,
 
         "visitType":
-        visitType ?? "",
+            visitType ?? "",
 
         "isEnquiry":
-        isEnquiry,
+            isEnquiry,
       },
 
+      /// =================================================
       /// STATUS
+      /// =================================================
 
       "status":
-      isEnquiry
-          ? "enquiry"
-          : "pending",
+          isEnquiry
+              ? "enquiry"
+              : "pending",
 
       "isAssigned": false,
-
       "isCompleted": false,
 
+      /// =================================================
       /// TRACKING
+      /// =================================================
 
       "createdBy":
-      createdBy,
+          createdBy,
 
       "createdByRole":
-      createdByRole,
+          createdByRole,
 
       "lastActionBy":
-      "user",
+          "user",
 
-      "lastActionAt":
-      FieldValue.serverTimestamp(),
-
-      "createdAt":
-      FieldValue.serverTimestamp(),
-
-      "updatedAt":
-      FieldValue.serverTimestamp(),
+      "lastActionAt": now,
+      "createdAt": now,
+      "updatedAt": now,
     });
 
     return docRef;

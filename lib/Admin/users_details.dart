@@ -6,234 +6,51 @@ class UsersPage extends StatefulWidget {
   const UsersPage({super.key});
 
   @override
-  State<UsersPage> createState() =>
-      _UsersPageState();
+  State<UsersPage> createState() => _UsersPageState();
 }
 
-class _UsersPageState
-    extends State<UsersPage> {
-  final CollectionReference usersRef =
-      FirebaseFirestore.instance
-          .collection("users");
+class _UsersPageState extends State<UsersPage> {
+  final FirebaseFirestore firestore =
+      FirebaseFirestore.instance;
 
   String search = "";
+
+  final TextEditingController
+      searchController =
+      TextEditingController();
+
+  /// ================= USERS STREAM =================
+  Stream<QuerySnapshot<Map<String, dynamic>>>
+      usersStream() {
+    return firestore
+        .collection("users")
+        .snapshots();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
-          const Color(0xFFF6F7FB),
+          const Color(0xFFF4F7FC),
 
       body: SafeArea(
         child: Column(
           children: [
             /// ================= HEADER =================
-            Container(
-              padding:
-                  const EdgeInsets.fromLTRB(
-                18,
-                18,
-                18,
-                22,
-              ),
+            _buildHeader(),
 
-              decoration:
-                  const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF5B5FEF),
-                    Color(0xFF8B5CF6),
-                  ],
-                  begin:
-                      Alignment.topLeft,
-                  end:
-                      Alignment.bottomRight,
-                ),
-
-                borderRadius:
-                    BorderRadius.only(
-                  bottomLeft:
-                      Radius.circular(30),
-                  bottomRight:
-                      Radius.circular(30),
-                ),
-              ),
-
-              child: Column(
-                children: [
-                  /// TOP BAR
-                  Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-
-                        decoration:
-                            BoxDecoration(
-                          color: Colors
-                              .white
-                              .withOpacity(
-                            .15,
-                          ),
-
-                          borderRadius:
-                              BorderRadius.circular(
-                            16,
-                          ),
-                        ),
-
-                        child: const Icon(
-                          Icons.people_alt,
-                          color:
-                              Colors.white,
-                          size: 24,
-                        ),
-                      ),
-
-                      const SizedBox(
-                          width: 14),
-
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
-
-                          children: [
-                            Text(
-                              "Users Dashboard",
-
-                              style:
-                                  TextStyle(
-                                color:
-                                    Colors
-                                        .white,
-                                fontSize:
-                                    22,
-                                fontWeight:
-                                    FontWeight
-                                        .bold,
-                              ),
-                            ),
-
-                            SizedBox(
-                                height: 3),
-
-                            Text(
-                              "Manage all registered users",
-
-                              style:
-                                  TextStyle(
-                                color:
-                                    Colors
-                                        .white70,
-                                fontSize:
-                                    13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(
-                      height: 22),
-
-                  /// SEARCH BAR
-                  Container(
-                    height: 58,
-
-                    decoration:
-                        BoxDecoration(
-                      color: Colors.white,
-
-                      borderRadius:
-                          BorderRadius.circular(
-                        18,
-                      ),
-                    ),
-
-                    child: TextField(
-                      onChanged: (value) {
-                        setState(() {
-                          search = value
-                              .toLowerCase();
-                        });
-                      },
-
-                      style:
-                          const TextStyle(
-                        fontSize: 15,
-                      ),
-
-                      decoration:
-                          InputDecoration(
-                        border:
-                            InputBorder.none,
-
-                        hintText:
-                            "Search users...",
-
-                        hintStyle:
-                            TextStyle(
-                          color: Colors
-                              .grey.shade500,
-                        ),
-
-                        prefixIcon:
-                            const Icon(
-                          Icons.search,
-                          color:
-                              Color(
-                            0xFF5B5FEF,
-                          ),
-                        ),
-
-                        suffixIcon:
-                            search.isNotEmpty
-                                ? IconButton(
-                                    onPressed:
-                                        () {
-                                      setState(
-                                        () {
-                                          search =
-                                              "";
-                                        },
-                                      );
-                                    },
-
-                                    icon:
-                                        const Icon(
-                                      Icons
-                                          .close,
-                                      size:
-                                          20,
-                                    ),
-                                  )
-                                : null,
-
-                        contentPadding:
-                            const EdgeInsets.symmetric(
-                          vertical: 18,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            /// ================= USERS LIST =================
+            /// ================= USERS =================
             Expanded(
               child: StreamBuilder<
-                  QuerySnapshot>(
-                stream: usersRef
-                    .orderBy(
-                      "createdAt",
-                      descending: true,
-                    )
-                    .snapshots(),
+                  QuerySnapshot<
+                      Map<String, dynamic>>>(
+                stream: usersStream(),
 
                 builder:
                     (context, snapshot) {
@@ -251,15 +68,30 @@ class _UsersPageState
                   /// ERROR
                   if (snapshot.hasError) {
                     return Center(
-                      child: Text(
-                        "Error: ${snapshot.error}",
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.all(
+                          20,
+                        ),
+                        child: Text(
+                          "Firestore Error\n\n${snapshot.error}",
+
+                          textAlign:
+                              TextAlign.center,
+
+                          style:
+                              const TextStyle(
+                            fontSize: 15,
+                            fontWeight:
+                                FontWeight.w600,
+                          ),
+                        ),
                       ),
                     );
                   }
 
                   /// EMPTY
-                  if (!snapshot
-                          .hasData ||
+                  if (!snapshot.hasData ||
                       snapshot
                           .data!
                           .docs
@@ -269,16 +101,37 @@ class _UsersPageState
                     );
                   }
 
-                  final docs =
+                  List<
+                          QueryDocumentSnapshot<
+                              Map<String,
+                                  dynamic>>>
+                      docs =
                       snapshot.data!.docs;
 
-                  /// SEARCH FILTER
+                  /// ================= SORT SAFELY =================
+                  docs.sort((a, b) {
+                    final aTime =
+                        a.data()['createdAt'];
+                    final bTime =
+                        b.data()['createdAt'];
+
+                    if (aTime is Timestamp &&
+                        bTime is Timestamp) {
+                      return bTime
+                          .toDate()
+                          .compareTo(
+                            aTime.toDate(),
+                          );
+                    }
+
+                    return 0;
+                  });
+
+                  /// ================= FILTER =================
                   final filtered =
                       docs.where((doc) {
                     final data =
-                        doc.data()
-                            as Map<String,
-                                dynamic>;
+                        doc.data();
 
                     final name =
                         (data['name'] ??
@@ -298,12 +151,19 @@ class _UsersPageState
                             .toString()
                             .toLowerCase();
 
-                    return name
-                            .contains(
-                                search) ||
+                    final uid =
+                        (data['uid'] ??
+                                doc.id)
+                            .toString()
+                            .toLowerCase();
+
+                    return name.contains(
+                            search) ||
                         email.contains(
                             search) ||
                         phone.contains(
+                            search) ||
+                        uid.contains(
                             search);
                   }).toList();
 
@@ -313,518 +173,581 @@ class _UsersPageState
                     );
                   }
 
-                  return ListView.builder(
-                    padding:
-                        const EdgeInsets.all(
-                      16,
-                    ),
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      setState(() {});
+                    },
 
-                    itemCount:
-                        filtered.length,
+                    child: ListView.builder(
+                      padding:
+                          const EdgeInsets.all(
+                        16,
+                      ),
 
-                    itemBuilder:
-                        (context, index) {
-                      final data =
-                          filtered[index]
-                                  .data()
-                              as Map<
-                                  String,
-                                  dynamic>;
+                      physics:
+                          const BouncingScrollPhysics(),
 
-                      /// SAFE DATA
-                      final String uid =
-                          data['uid'] ??
-                              filtered[
-                                      index]
-                                  .id;
+                      itemCount:
+                          filtered.length,
 
-                      final String name =
-                          data['name'] ??
-                              "No Name";
+                      itemBuilder:
+                          (context, index) {
+                        final doc =
+                            filtered[index];
 
-                      final String email =
-                          data['email'] ??
-                              "No Email";
+                        final data =
+                            doc.data();
 
-                      final String phone =
-                          data['phone'] ??
-                              "-";
+                        /// ================= SAFE DATA =================
+                        final String uid =
+                            data['uid'] ??
+                                doc.id;
 
-                      final String address =
-                          data['address'] ??
-                              "-";
+                        final String name =
+                            data['name'] ??
+                                "Unknown User";
 
-                      final String photo =
-                          data['photo'] ??
-                              "";
+                        final String email =
+                            data['email'] ??
+                                "No Email";
 
-                      final bool isActive =
-                          data['isActive'] ??
-                              true;
+                        final String phone =
+                            data['phone'] ??
+                                "No Phone";
 
-                      final List providers =
-                          data['providers'] ??
-                              [];
+                        final String address =
+                            data['address'] ??
+                                "No Address";
 
-                      final Timestamp?
-                          createdAt =
-                          data[
-                                  'createdAt']
-                              as Timestamp?;
+                        final String photo =
+                            data['photo'] ??
+                                "";
 
-                      String joinedDate =
-                          "-";
+                        final bool isActive =
+                            data['isActive'] ??
+                                true;
 
-                      if (createdAt !=
-                          null) {
-                        joinedDate =
-                            DateFormat(
-                          'dd MMM yyyy',
-                        ).format(
-                          createdAt
-                              .toDate(),
-                        );
-                      }
+                        final List providers =
+                            data['providers'] ??
+                                [];
 
-                      return Container(
-                        margin:
-                            const EdgeInsets.only(
-                          bottom: 16,
-                        ),
+                        final Timestamp?
+                            createdAt =
+                            data['createdAt'];
 
-                        padding:
-                            const EdgeInsets.all(
-                          16,
-                        ),
+                        String joinedDate =
+                            "N/A";
 
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              Colors.white,
+                        if (createdAt !=
+                            null) {
+                          joinedDate =
+                              DateFormat(
+                            "dd MMM yyyy",
+                          ).format(
+                            createdAt
+                                .toDate(),
+                          );
+                        }
 
-                          borderRadius:
-                              BorderRadius.circular(
-                            24,
+                        return Container(
+                          margin:
+                              const EdgeInsets.only(
+                            bottom: 18,
                           ),
 
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors
-                                  .black
-                                  .withOpacity(
-                                .04,
-                              ),
+                          decoration:
+                              BoxDecoration(
+                            color:
+                                Colors.white,
 
-                              blurRadius:
-                                  12,
-
-                              offset:
-                                  const Offset(
-                                0,
-                                5,
-                              ),
+                            borderRadius:
+                                BorderRadius.circular(
+                              28,
                             ),
-                          ],
-                        ),
 
-                        child: Column(
-                          children: [
-                            /// TOP SECTION
-                            Row(
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors
+                                    .black
+                                    .withOpacity(
+                                  .05,
+                                ),
+
+                                blurRadius:
+                                    18,
+
+                                offset:
+                                    const Offset(
+                                  0,
+                                  8,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.all(
+                              18,
+                            ),
+
+                            child: Column(
                               children: [
-                                CircleAvatar(
-                                  radius: 28,
+                                /// ================= TOP =================
+                                Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment
+                                          .start,
 
-                                  backgroundColor:
-                                      const Color(
-                                    0xFFEEF0FF,
-                                  ),
-
-                                  backgroundImage:
-                                      photo.isNotEmpty
-                                          ? NetworkImage(
-                                              photo,
-                                            )
-                                          : null,
-
-                                  child: photo
-                                          .isEmpty
-                                      ? const Icon(
-                                          Icons
-                                              .person,
-                                          size:
-                                              28,
-                                          color:
-                                              Color(
-                                            0xFF5B5FEF,
-                                          ),
-                                        )
-                                      : null,
-                                ),
-
-                                const SizedBox(
-                                    width:
-                                        14),
-
-                                Expanded(
-                                  child:
-                                      Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment
-                                            .start,
-
-                                    children: [
-                                      Text(
-                                        name,
-
-                                        maxLines:
-                                            1,
-
-                                        overflow:
-                                            TextOverflow
-                                                .ellipsis,
-
-                                        style:
-                                            const TextStyle(
-                                          fontSize:
-                                              17,
-                                          fontWeight:
-                                              FontWeight.bold,
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                          height:
-                                              4),
-
-                                      Text(
-                                        email,
-
-                                        maxLines:
-                                            1,
-
-                                        overflow:
-                                            TextOverflow
-                                                .ellipsis,
-
-                                        style:
-                                            TextStyle(
-                                          color: Colors
-                                              .grey
-                                              .shade700,
-
-                                          fontSize:
-                                              13,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(
-                                    horizontal:
-                                        12,
-                                    vertical:
-                                        7,
-                                  ),
-
-                                  decoration:
-                                      BoxDecoration(
-                                    color: isActive
-                                        ? Colors.green.withOpacity(
-                                            .10)
-                                        : Colors.red.withOpacity(
-                                            .10),
-
-                                    borderRadius:
-                                        BorderRadius.circular(
-                                      30,
-                                    ),
-                                  ),
-
-                                  child:
-                                      Text(
-                                    isActive
-                                        ? "ACTIVE"
-                                        : "BLOCKED",
-
-                                    style:
-                                        TextStyle(
-                                      color: isActive
-                                          ? Colors.green
-                                          : Colors.red,
-
-                                      fontWeight:
-                                          FontWeight.bold,
-
-                                      fontSize:
-                                          11,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(
-                                height:
-                                    18),
-
-                            /// QUICK INFO
-                            Container(
-                              padding:
-                                  const EdgeInsets.all(
-                                14,
-                              ),
-
-                              decoration:
-                                  BoxDecoration(
-                                color:
-                                    const Color(
-                                  0xFFF7F8FD,
-                                ),
-
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  18,
-                                ),
-                              ),
-
-                              child: Column(
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child:
-                                            _compactInfo(
-                                          Icons
-                                              .phone,
-                                          phone,
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                          width:
-                                              12),
-
-                                      Expanded(
-                                        child:
-                                            _compactInfo(
-                                          Icons
-                                              .calendar_today,
-                                          joinedDate,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  const SizedBox(
+                                  children: [
+                                    /// PROFILE
+                                    Container(
+                                      width:
+                                          65,
                                       height:
-                                          14),
-
-                                  _compactInfo(
-                                    Icons
-                                        .location_on,
-                                    address,
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            /// PROVIDERS
-                            if (providers
-                                .isNotEmpty) ...[
-                              const SizedBox(
-                                  height:
-                                      18),
-
-                              Align(
-                                alignment:
-                                    Alignment
-                                        .centerLeft,
-
-                                child:
-                                    Text(
-                                  "Linked Providers",
-
-                                  style:
-                                      TextStyle(
-                                    color: Colors
-                                        .grey
-                                        .shade700,
-
-                                    fontWeight:
-                                        FontWeight
-                                            .w600,
-
-                                    fontSize:
-                                        14,
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(
-                                  height:
-                                      12),
-
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-
-                                children:
-                                    providers
-                                        .map(
-                                  (
-                                    provider,
-                                  ) {
-                                    return Container(
-                                      padding:
-                                          const EdgeInsets.symmetric(
-                                        horizontal:
-                                            12,
-                                        vertical:
-                                            7,
-                                      ),
+                                          65,
 
                                       decoration:
                                           BoxDecoration(
-                                        color:
-                                            const Color(
-                                          0xFFEEF0FF,
+                                        gradient:
+                                            const LinearGradient(
+                                          colors: [
+                                            Color(
+                                              0xFF6D5DF6,
+                                            ),
+                                            Color(
+                                              0xFF8E7CFF,
+                                            ),
+                                          ],
                                         ),
 
                                         borderRadius:
                                             BorderRadius.circular(
-                                          30,
+                                          22,
                                         ),
                                       ),
 
                                       child:
-                                          Row(
-                                        mainAxisSize:
-                                            MainAxisSize.min,
+                                          ClipRRect(
+                                        borderRadius:
+                                            BorderRadius.circular(
+                                          22,
+                                        ),
+
+                                        child: photo
+                                                .isNotEmpty
+                                            ? Image.network(
+                                                photo,
+                                                fit: BoxFit
+                                                    .cover,
+
+                                                errorBuilder:
+                                                    (
+                                                  context,
+                                                  error,
+                                                  stackTrace,
+                                                ) {
+                                                  return const Icon(
+                                                    Icons.person,
+                                                    color:
+                                                        Colors.white,
+                                                    size:
+                                                        32,
+                                                  );
+                                                },
+                                              )
+                                            : const Icon(
+                                                Icons
+                                                    .person,
+                                                color:
+                                                    Colors.white,
+                                                size:
+                                                    32,
+                                              ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(
+                                        width:
+                                            14),
+
+                                    /// DETAILS
+                                    Expanded(
+                                      child:
+                                          Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment
+                                                .start,
 
                                         children: [
-                                          const Icon(
-                                            Icons
-                                                .business_center,
-                                            size:
-                                                14,
-                                            color:
-                                                Color(
-                                              0xFF5B5FEF,
+                                          Text(
+                                            name,
+
+                                            maxLines:
+                                                1,
+
+                                            overflow:
+                                                TextOverflow
+                                                    .ellipsis,
+
+                                            style:
+                                                const TextStyle(
+                                              fontSize:
+                                                  18,
+                                              fontWeight:
+                                                  FontWeight
+                                                      .bold,
+                                            ),
+                                          ),
+
+                                          const SizedBox(
+                                              height:
+                                                  4),
+
+                                          Text(
+                                            email,
+
+                                            maxLines:
+                                                1,
+
+                                            overflow:
+                                                TextOverflow
+                                                    .ellipsis,
+
+                                            style:
+                                                TextStyle(
+                                              color: Colors
+                                                  .grey
+                                                  .shade700,
+
+                                              fontSize:
+                                                  13,
+                                            ),
+                                          ),
+
+                                          const SizedBox(
+                                              height:
+                                                  10),
+
+                                          Container(
+                                            padding:
+                                                const EdgeInsets.symmetric(
+                                              horizontal:
+                                                  12,
+                                              vertical:
+                                                  6,
+                                            ),
+
+                                            decoration:
+                                                BoxDecoration(
+                                              color: isActive
+                                                  ? Colors.green.withOpacity(
+                                                      .12)
+                                                  : Colors.red.withOpacity(
+                                                      .12),
+
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                50,
+                                              ),
+                                            ),
+
+                                            child:
+                                                Text(
+                                              isActive
+                                                  ? "ACTIVE USER"
+                                                  : "BLOCKED USER",
+
+                                              style:
+                                                  TextStyle(
+                                                color: isActive
+                                                    ? Colors.green
+                                                    : Colors.red,
+
+                                                fontSize:
+                                                    11,
+
+                                                fontWeight:
+                                                    FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(
+                                    height:
+                                        20),
+
+                                /// ================= INFO BOX =================
+                                Container(
+                                  padding:
+                                      const EdgeInsets.all(
+                                    16,
+                                  ),
+
+                                  decoration:
+                                      BoxDecoration(
+                                    color:
+                                        const Color(
+                                      0xFFF7F8FD,
+                                    ),
+
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      22,
+                                    ),
+                                  ),
+
+                                  child:
+                                      Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child:
+                                                _infoTile(
+                                              Icons
+                                                  .phone,
+                                              phone,
                                             ),
                                           ),
 
                                           const SizedBox(
                                               width:
-                                                  6),
+                                                  12),
 
-                                          Text(
-                                            provider
-                                                .toString(),
-
-                                            style:
-                                                const TextStyle(
-                                              color:
-                                                  Color(
-                                                0xFF5B5FEF,
-                                              ),
-
-                                              fontWeight:
-                                                  FontWeight.w600,
-
-                                              fontSize:
-                                                  12,
+                                          Expanded(
+                                            child:
+                                                _infoTile(
+                                              Icons
+                                                  .calendar_month,
+                                              joinedDate,
                                             ),
                                           ),
                                         ],
                                       ),
-                                    );
-                                  },
-                                ).toList(),
-                              ),
-                            ],
 
-                            const SizedBox(
-                                height:
-                                    16),
+                                      const SizedBox(
+                                          height:
+                                              14),
 
-                            /// UID
-                            Container(
-                              width: double
-                                  .infinity,
-
-                              padding:
-                                  const EdgeInsets.symmetric(
-                                horizontal:
-                                    14,
-                                vertical:
-                                    12,
-                              ),
-
-                              decoration:
-                                  BoxDecoration(
-                                border:
-                                    Border.all(
-                                  color:
-                                      Colors
-                                          .grey
-                                          .shade200,
+                                      _infoTile(
+                                        Icons
+                                            .location_on,
+                                        address,
+                                      ),
+                                    ],
+                                  ),
                                 ),
 
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  16,
-                                ),
-                              ),
+                                /// ================= PROVIDERS =================
+                                if (providers
+                                    .isNotEmpty) ...[
+                                  const SizedBox(
+                                      height:
+                                          18),
 
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons
-                                        .verified_user,
-                                    size:
-                                        18,
-                                    color:
-                                        Color(
-                                      0xFF5B5FEF,
+                                  Align(
+                                    alignment:
+                                        Alignment
+                                            .centerLeft,
+
+                                    child:
+                                        Text(
+                                      "Linked Providers",
+
+                                      style:
+                                          TextStyle(
+                                        fontWeight:
+                                            FontWeight
+                                                .bold,
+
+                                        color: Colors
+                                            .grey
+                                            .shade800,
+
+                                        fontSize:
+                                            14,
+                                      ),
                                     ),
                                   ),
 
                                   const SizedBox(
-                                      width:
-                                          10),
+                                      height:
+                                          12),
 
-                                  Expanded(
-                                    child:
-                                        Text(
-                                      uid,
+                                  Wrap(
+                                    spacing:
+                                        10,
+                                    runSpacing:
+                                        10,
 
-                                      maxLines:
-                                          1,
+                                    children:
+                                        providers
+                                            .map(
+                                      (
+                                        provider,
+                                      ) {
+                                        return Container(
+                                          padding:
+                                              const EdgeInsets.symmetric(
+                                            horizontal:
+                                                14,
+                                            vertical:
+                                                9,
+                                          ),
 
-                                      overflow:
-                                          TextOverflow
-                                              .ellipsis,
+                                          decoration:
+                                              BoxDecoration(
+                                            gradient:
+                                                const LinearGradient(
+                                              colors: [
+                                                Color(
+                                                  0xFFEEF0FF,
+                                                ),
+                                                Color(
+                                                  0xFFE7E9FF,
+                                                ),
+                                              ],
+                                            ),
 
-                                      style:
-                                          const TextStyle(
-                                        fontSize:
-                                            13,
-                                        fontWeight:
-                                            FontWeight.w600,
-                                      ),
-                                    ),
+                                            borderRadius:
+                                                BorderRadius.circular(
+                                              40,
+                                            ),
+                                          ),
+
+                                          child:
+                                              Row(
+                                            mainAxisSize:
+                                                MainAxisSize.min,
+
+                                            children: [
+                                              const Icon(
+                                                Icons
+                                                    .business_center,
+                                                size:
+                                                    15,
+
+                                                color:
+                                                    Color(
+                                                  0xFF5B5FEF,
+                                                ),
+                                              ),
+
+                                              const SizedBox(
+                                                  width:
+                                                      6),
+
+                                              Text(
+                                                provider
+                                                    .toString(),
+
+                                                style:
+                                                    const TextStyle(
+                                                  color:
+                                                      Color(
+                                                    0xFF5B5FEF,
+                                                  ),
+
+                                                  fontWeight:
+                                                      FontWeight.w700,
+
+                                                  fontSize:
+                                                      12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ).toList(),
                                   ),
                                 ],
-                              ),
+
+                                const SizedBox(
+                                    height:
+                                        18),
+
+                                /// ================= UID =================
+                                Container(
+                                  width: double
+                                      .infinity,
+
+                                  padding:
+                                      const EdgeInsets.all(
+                                    14,
+                                  ),
+
+                                  decoration:
+                                      BoxDecoration(
+                                    border:
+                                        Border.all(
+                                      color: Colors
+                                          .grey
+                                          .shade200,
+                                    ),
+
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      18,
+                                    ),
+                                  ),
+
+                                  child:
+                                      Row(
+                                    children: [
+                                      const Icon(
+                                        Icons
+                                            .verified_user,
+                                        color:
+                                            Color(
+                                          0xFF5B5FEF,
+                                        ),
+
+                                        size:
+                                            18,
+                                      ),
+
+                                      const SizedBox(
+                                          width:
+                                              10),
+
+                                      Expanded(
+                                        child:
+                                            Text(
+                                          uid,
+
+                                          maxLines:
+                                              1,
+
+                                          overflow:
+                                              TextOverflow
+                                                  .ellipsis,
+
+                                          style:
+                                              const TextStyle(
+                                            fontWeight:
+                                                FontWeight.w600,
+
+                                            fontSize:
+                                                13,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      );
-                    },
+                          ),
+                        );
+                      },
+                    ),
                   );
                 },
               ),
@@ -835,8 +758,185 @@ class _UsersPageState
     );
   }
 
-  /// ================= COMPACT INFO =================
-  Widget _compactInfo(
+  /// ================= HEADER =================
+  Widget _buildHeader() {
+    return Container(
+      padding:
+          const EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        24,
+      ),
+
+      decoration:
+          const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF5B5FEF),
+            Color(0xFF8B5CF6),
+          ],
+
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+
+        borderRadius:
+            BorderRadius.only(
+          bottomLeft:
+              Radius.circular(34),
+          bottomRight:
+              Radius.circular(34),
+        ),
+      ),
+
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+
+                decoration:
+                    BoxDecoration(
+                  color: Colors.white
+                      .withOpacity(.15),
+
+                  borderRadius:
+                      BorderRadius.circular(
+                    18,
+                  ),
+                ),
+
+                child: const Icon(
+                  Icons.people_alt_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+
+              const SizedBox(width: 14),
+
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
+
+                  children: [
+                    Text(
+                      "Users Dashboard",
+
+                      style: TextStyle(
+                        color:
+                            Colors.white,
+
+                        fontSize: 24,
+
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
+
+                    SizedBox(height: 4),
+
+                    Text(
+                      "Manage all registered users",
+
+                      style: TextStyle(
+                        color:
+                            Colors.white70,
+
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          /// SEARCH
+          Container(
+            height: 58,
+
+            decoration:
+                BoxDecoration(
+              color: Colors.white,
+
+              borderRadius:
+                  BorderRadius.circular(
+                18,
+              ),
+            ),
+
+            child: TextField(
+              controller:
+                  searchController,
+
+              onChanged: (value) {
+                setState(() {
+                  search = value
+                      .trim()
+                      .toLowerCase();
+                });
+              },
+
+              decoration:
+                  InputDecoration(
+                border:
+                    InputBorder.none,
+
+                hintText:
+                    "Search users by name, email or phone",
+
+                prefixIcon:
+                    const Icon(
+                  Icons.search,
+                  color:
+                      Color(0xFF5B5FEF),
+                ),
+
+                suffixIcon:
+                    search.isNotEmpty
+                        ? IconButton(
+                            onPressed:
+                                () {
+                              searchController
+                                  .clear();
+
+                              setState(
+                                () {
+                                  search =
+                                      "";
+                                },
+                              );
+                            },
+
+                            icon:
+                                const Icon(
+                              Icons.close,
+                            ),
+                          )
+                        : null,
+
+                contentPadding:
+                    const EdgeInsets.symmetric(
+                  vertical: 18,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ================= INFO TILE =================
+  Widget _infoTile(
     IconData icon,
     String value,
   ) {
@@ -847,21 +947,21 @@ class _UsersPageState
       children: [
         Container(
           padding:
-              const EdgeInsets.all(8),
+              const EdgeInsets.all(9),
 
-          decoration: BoxDecoration(
-            color:
-                Colors.white,
+          decoration:
+              BoxDecoration(
+            color: Colors.white,
 
             borderRadius:
                 BorderRadius.circular(
-              12,
+              14,
             ),
           ),
 
           child: Icon(
             icon,
-            size: 16,
+            size: 17,
             color:
                 const Color(
               0xFF5B5FEF,
@@ -875,13 +975,13 @@ class _UsersPageState
           child: Padding(
             padding:
                 const EdgeInsets.only(
-              top: 2,
+              top: 3,
             ),
 
             child: Text(
               value,
 
-              maxLines: 2,
+              maxLines: 3,
 
               overflow:
                   TextOverflow
@@ -892,6 +992,7 @@ class _UsersPageState
                 fontSize: 13,
                 fontWeight:
                     FontWeight.w600,
+
                 height: 1.4,
               ),
             ),
@@ -901,7 +1002,7 @@ class _UsersPageState
     );
   }
 
-  /// ================= EMPTY STATE =================
+  /// ================= EMPTY =================
   Widget _emptyState(
     String title,
   ) {
@@ -912,8 +1013,8 @@ class _UsersPageState
 
         children: [
           Container(
-            width: 90,
-            height: 90,
+            width: 95,
+            height: 95,
 
             decoration:
                 BoxDecoration(
@@ -924,7 +1025,7 @@ class _UsersPageState
 
               borderRadius:
                   BorderRadius.circular(
-                28,
+                30,
               ),
             ),
 
@@ -936,8 +1037,7 @@ class _UsersPageState
             ),
           ),
 
-          const SizedBox(
-              height: 18),
+          const SizedBox(height: 18),
 
           Text(
             title,
