@@ -17,119 +17,188 @@ class _ApproveProvidersPageState
 
   String search = "";
 
-  /// ================= STREAM =================
+  // =====================================================
+  // STREAM — only pending providers
+  // =====================================================
+
   Stream<QuerySnapshot> pendingProvidersStream() {
     return firestore
         .collection("providers")
-        .where(
-          "status",
-          isEqualTo: "pending",
-        )
+        .where("status", isEqualTo: "pending")
         .snapshots();
   }
 
-  /// ================= APPROVE =================
-  Future<void> approveProvider(
-    String providerId,
-  ) async {
+  // =====================================================
+  // SEND FCM HELPER
+  // Writes to fcm_queue — your Cloud Function picks
+  // this up and fires the actual FCM push.
+  // =====================================================
+
+  Future<void> _sendFcm({
+    required String token,
+    required String title,
+    required String body,
+    required String providerId,
+    required String type, // "approved" | "rejected"
+    String? reason,
+  }) async {
+    if (token.trim().isEmpty) return;
+
+    final Map<String, dynamic> payload = {
+      "token":      token.trim(),
+      "title":      title,
+      "body":       body,
+      "providerId": providerId,
+      "type":       type,
+      "createdAt":  FieldValue.serverTimestamp(),
+      "sent":       false,
+    };
+
+    if (reason != null && reason.trim().isNotEmpty) {
+      payload["reason"] = reason.trim();
+    }
+
+    await firestore.collection("fcm_queue").add(payload);
+  }
+
+  // =====================================================
+  // SAVE NOTIFICATION (in-app bell)
+  // =====================================================
+
+  Future<void> _saveNotification({
+    required String providerId,
+    required String title,
+    required String body,
+    String? reason,
+  }) async {
+    final Map<String, dynamic> data = {
+      "userType":   "provider",
+      "providerId": providerId,
+      "title":      title,
+      "body":       body,
+      "createdAt":  FieldValue.serverTimestamp(),
+      "read":       false,
+    };
+
+    if (reason != null && reason.trim().isNotEmpty) {
+      data["reason"] = reason.trim();
+    }
+
+    await firestore.collection("notifications").add(data);
+  }
+
+  // =====================================================
+  // APPROVE
+  // =====================================================
+
+  Future<void> approveProvider(String providerId) async {
     try {
+      final providerDoc = await firestore
+          .collection("providers")
+          .doc(providerId)
+          .get();
+
+      if (!providerDoc.exists) return;
+
+      final data      = providerDoc.data() ?? {};
+      final fcmToken  = (data["fcmToken"] ?? "").toString();
+      final business  = (data["business"] as Map<String, dynamic>?) ?? {};
+      final ownerName = (business["ownerName"] ?? "there").toString();
+
+      const String title = "🎉 Account Approved!";
+      final String body  =
+          "Congratulations $ownerName! Your provider account has been approved. You can now start receiving bookings.";
+
+      // 1 — Update provider status
       await firestore
           .collection("providers")
           .doc(providerId)
           .update({
-        "status": "approved",
-        "isActive": true,
-        "updatedAt":
-            FieldValue.serverTimestamp(),
+        "status":    "approved",
+        "isActive":  true,
+        "updatedAt": FieldValue.serverTimestamp(),
       });
+
+      // 2 — In-app notification
+      await _saveNotification(
+        providerId: providerId,
+        title:      title,
+        body:       body,
+      );
+
+      // 3 — FCM push
+      await _sendFcm(
+        token:      fcmToken,
+        title:      title,
+        body:       body,
+        providerId: providerId,
+        type:       "approved",
+      );
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          behavior:
-              SnackBarBehavior.floating,
-
-          backgroundColor:
-              const Color(0xFF16A34A),
-
-          shape:
-              RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(
-              16,
-            ),
+          behavior:        SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF16A34A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-
-          content: const Text(
-            "Provider approved successfully",
+          content: Row(
+            children: const [
+              Icon(Icons.check_circle_rounded,
+                  color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Text(
+                "Provider approved & notified",
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
           ),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text("$e"),
-        ),
+      debugPrint("APPROVE ERROR: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
       );
     }
   }
 
-  /// ================= REJECT =================
-  Future<void> rejectProvider(
-    String providerId,
-  ) async {
-    String reason = "";
+  // =====================================================
+  // REJECT — with reason dialog
+  // =====================================================
 
-    await showDialog(
+  Future<void> rejectProvider(String providerId) async {
+    final TextEditingController reasonController =
+        TextEditingController();
+
+    final bool? confirmed = await showDialog<bool>(
       context: context,
-
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.white,
-
-          shape:
-              RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(
-              28,
-            ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
           ),
-
           child: Padding(
-            padding:
-                const EdgeInsets.all(22),
-
+            padding: const EdgeInsets.all(24),
             child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
-
+              mainAxisSize: MainAxisSize.min,
               children: [
+                // Icon
                 Container(
-                  width: 62,
-                  height: 62,
-
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        Colors.red.withOpacity(
-                      .10,
-                    ),
-
-                    borderRadius:
-                        BorderRadius.circular(
-                      20,
-                    ),
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(.10),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-
                   child: const Icon(
                     Icons.close_rounded,
-
                     color: Colors.red,
-
-                    size: 30,
+                    size: 32,
                   ),
                 ),
 
@@ -137,57 +206,37 @@ class _ApproveProvidersPageState
 
                 const Text(
                   "Reject Provider",
-
                   style: TextStyle(
                     fontSize: 22,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
 
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
 
                 Text(
-                  "Provide a reason for rejection",
-
+                  "This provider will be notified with your reason.",
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color:
-                        Colors.grey.shade600,
+                    color:    Colors.grey.shade600,
+                    fontSize: 13,
                   ),
                 ),
 
                 const SizedBox(height: 22),
 
                 TextField(
-                  maxLines: 4,
-
-                  decoration:
-                      InputDecoration(
-                    hintText:
-                        "Enter rejection reason",
-
-                    filled: true,
-
-                    fillColor:
-                        const Color(
-                      0xFFF5F7FB,
-                    ),
-
-                    border:
-                        OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        18,
-                      ),
-
-                      borderSide:
-                          BorderSide.none,
+                  controller: reasonController,
+                  maxLines:   4,
+                  decoration: InputDecoration(
+                    hintText:  "Enter rejection reason (sent to provider)",
+                    filled:    true,
+                    fillColor: const Color(0xFFF5F7FB),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: BorderSide.none,
                     ),
                   ),
-
-                  onChanged: (value) {
-                    reason = value;
-                  },
                 ),
 
                 const SizedBox(height: 22),
@@ -195,146 +244,36 @@ class _ApproveProvidersPageState
                 Row(
                   children: [
                     Expanded(
-                      child:
-                          OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(
-                            ctx,
-                          );
-                        },
-
-                        style:
-                            OutlinedButton.styleFrom(
-                          padding:
-                              const EdgeInsets.symmetric(
-                            vertical: 15,
-                          ),
-
-                          shape:
-                              RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(
-                              16,
-                            ),
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-
-                        child:
-                            const Text(
-                          "Cancel",
-                        ),
+                        child: const Text("Cancel"),
                       ),
                     ),
 
-                    const SizedBox(
-                        width: 12),
+                    const SizedBox(width: 12),
 
                     Expanded(
-                      child:
-                          ElevatedButton(
-                        onPressed:
-                            () async {
-                          try {
-                            await firestore
-                                .collection(
-                                    "providers")
-                                .doc(
-                                  providerId,
-                                )
-                                .update({
-                              "status":
-                                  "rejected",
-
-                              "rejectReason":
-                                  reason,
-
-                              "isActive":
-                                  false,
-
-                              "updatedAt":
-                                  FieldValue
-                                      .serverTimestamp(),
-                            });
-
-                            if (!mounted) {
-                              return;
-                            }
-
-                            Navigator.pop(
-                              ctx,
-                            );
-
-                            ScaffoldMessenger.of(
-                                    context)
-                                .showSnackBar(
-                              SnackBar(
-                                behavior:
-                                    SnackBarBehavior.floating,
-
-                                backgroundColor:
-                                    Colors.red,
-
-                                shape:
-                                    RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(
-                                    16,
-                                  ),
-                                ),
-
-                                content:
-                                    const Text(
-                                  "Provider rejected",
-                                ),
-                              ),
-                            );
-                          } catch (e) {
-                            Navigator.pop(
-                              ctx,
-                            );
-
-                            ScaffoldMessenger.of(
-                                    context)
-                                .showSnackBar(
-                              SnackBar(
-                                content:
-                                    Text("$e"),
-                              ),
-                            );
-                          }
-                        },
-
-                        style:
-                            ElevatedButton.styleFrom(
-                          elevation: 0,
-
-                          backgroundColor:
-                              Colors.red,
-
-                          padding:
-                              const EdgeInsets.symmetric(
-                            vertical: 15,
-                          ),
-
-                          shape:
-                              RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(
-                              16,
-                            ),
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: ElevatedButton.styleFrom(
+                          elevation:       0,
+                          backgroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-
-                        child:
-                            const Text(
+                        child: const Text(
                           "Reject",
-
-                          style:
-                              TextStyle(
-                            color:
-                                Colors.white,
-                            fontWeight:
-                                FontWeight.bold,
+                          style: TextStyle(
+                            color:      Colors.white,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
@@ -347,293 +286,244 @@ class _ApproveProvidersPageState
         );
       },
     );
+
+    if (confirmed != true) return;
+
+    final String reason = reasonController.text.trim();
+
+    try {
+      final providerDoc = await firestore
+          .collection("providers")
+          .doc(providerId)
+          .get();
+
+      if (!providerDoc.exists) return;
+
+      final data      = providerDoc.data() ?? {};
+      final fcmToken  = (data["fcmToken"] ?? "").toString();
+      final business  = (data["business"] as Map<String, dynamic>?) ?? {};
+      final ownerName = (business["ownerName"] ?? "there").toString();
+
+      const String title = "Account Not Approved";
+      final String body  = reason.isNotEmpty
+          ? "Hi $ownerName, your provider account was not approved. Reason: $reason"
+          : "Hi $ownerName, your provider account was not approved at this time. Please contact support for more information.";
+
+      // 1 — Update provider status
+      await firestore
+          .collection("providers")
+          .doc(providerId)
+          .update({
+        "status":       "rejected",
+        "isActive":     false,
+        "rejectReason": reason,
+        "updatedAt":    FieldValue.serverTimestamp(),
+      });
+
+      // 2 — In-app notification
+      await _saveNotification(
+        providerId: providerId,
+        title:      title,
+        body:       body,
+        reason:     reason,
+      );
+
+      // 3 — FCM push
+      await _sendFcm(
+        token:      fcmToken,
+        title:      title,
+        body:       body,
+        providerId: providerId,
+        type:       "rejected",
+        reason:     reason,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior:        SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: Row(
+            children: const [
+              Icon(Icons.cancel_rounded,
+                  color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Text(
+                "Provider rejected & notified",
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint("REJECT ERROR: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    }
   }
 
-  /// ================= SERVICE ICON =================
-  IconData getServiceIcon(
-    String service,
-  ) {
-    final value =
-        service.toLowerCase();
+  // =====================================================
+  // SERVICE ICON
+  // =====================================================
 
-    if (value.contains("clean")) {
-      return Icons
-          .cleaning_services_rounded;
-    }
-
-    if (value.contains("electric")) {
-      return Icons
-          .electrical_services_rounded;
-    }
-
-    if (value.contains("plumb")) {
-      return Icons.plumbing_rounded;
-    }
-
-    if (value.contains("water")) {
-      return Icons.water_drop_rounded;
-    }
-
-    if (value.contains("salon")) {
-      return Icons.content_cut_rounded;
-    }
-
-    return Icons
-        .miscellaneous_services_rounded;
+  IconData getServiceIcon(String service) {
+    final v = service.toLowerCase();
+    if (v.contains("clean"))    return Icons.cleaning_services_rounded;
+    if (v.contains("electric")) return Icons.electrical_services_rounded;
+    if (v.contains("plumb"))    return Icons.plumbing_rounded;
+    if (v.contains("water"))    return Icons.water_drop_rounded;
+    if (v.contains("salon"))    return Icons.content_cut_rounded;
+    if (v.contains("cook"))     return Icons.restaurant_rounded;
+    if (v.contains("paint"))    return Icons.format_paint_rounded;
+    if (v.contains("repair"))   return Icons.build_rounded;
+    return Icons.miscellaneous_services_rounded;
   }
+
+  // =====================================================
+  // BUILD
+  // =====================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          const Color(0xFFF5F7FB),
-
+      backgroundColor: const Color(0xFFF5F7FB),
       body: SafeArea(
-        child:
-            StreamBuilder<QuerySnapshot>(
-          stream:
-              pendingProvidersStream(),
-
-          builder:
-              (context, snapshot) {
-            /// LOADING
+        child: StreamBuilder<QuerySnapshot>(
+          stream: pendingProvidersStream(),
+          builder: (context, snapshot) {
             if (snapshot.connectionState ==
                 ConnectionState.waiting) {
               return const Center(
-                child:
-                    CircularProgressIndicator(),
-              );
+                  child: CircularProgressIndicator());
             }
 
-            /// ERROR
             if (snapshot.hasError) {
               return Center(
-                child: Text(
-                  "Error: ${snapshot.error}",
-                ),
-              );
+                  child: Text("Error: ${snapshot.error}"));
             }
 
-            final docs =
-                snapshot.data?.docs ?? [];
+            final docs = snapshot.data?.docs ?? [];
 
-            /// SEARCH FILTER
-            final filtered =
-                docs.where((doc) {
-              final data =
-                  doc.data()
-                      as Map<String, dynamic>;
+            if (docs.isEmpty) return _emptyState();
 
-              final business =
-                  (data['business']
-                          as Map<
-                              String,
-                              dynamic>?) ??
-                      {};
-
-              final businessName =
-                  (business['businessName'] ??
-                          "")
-                      .toString()
-                      .toLowerCase();
-
-              final owner =
-                  (business['ownerName'] ??
-                          "")
-                      .toString()
-                      .toLowerCase();
-
-              final phone =
-                  (business['phone'] ??
-                          "")
-                      .toString()
-                      .toLowerCase();
-
-              return businessName
-                      .contains(
-                    search,
-                  ) ||
-                  owner.contains(
-                    search,
-                  ) ||
-                  phone.contains(
-                    search,
-                  );
+            // Search filter
+            final filtered = docs.where((doc) {
+              final data     = doc.data() as Map<String, dynamic>;
+              final business = (data['business'] as Map<String, dynamic>?) ?? {};
+              final bName    = (business['businessName'] ?? "").toString().toLowerCase();
+              final owner    = (business['ownerName']    ?? "").toString().toLowerCase();
+              final phone    = (business['phone']        ?? "").toString().toLowerCase();
+              return bName.contains(search) ||
+                  owner.contains(search) ||
+                  phone.contains(search);
             }).toList();
-
-            /// EMPTY
-            if (docs.isEmpty) {
-              return _emptyState();
-            }
 
             return Column(
               children: [
-                /// ================= HEADER =================
+
+                // ── HEADER ──────────────────────────────
+
                 Container(
-                  padding:
-                      const EdgeInsets.fromLTRB(
-                    18,
-                    18,
-                    18,
-                    24,
-                  ),
-
-                  decoration:
-                      const BoxDecoration(
-                    gradient:
-                        LinearGradient(
-                      colors: [
-                        Color(
-                          0xFF2563EB,
-                        ),
-                        Color(
-                          0xFF7C3AED,
-                        ),
-                      ],
-
-                      begin:
-                          Alignment.topLeft,
-
-                      end: Alignment
-                          .bottomRight,
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
+                      begin: Alignment.topLeft,
+                      end:   Alignment.bottomRight,
                     ),
-
-                    borderRadius:
-                        BorderRadius.only(
-                      bottomLeft:
-                          Radius.circular(
-                        30,
-                      ),
-                      bottomRight:
-                          Radius.circular(
-                        30,
-                      ),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft:  Radius.circular(30),
+                      bottomRight: Radius.circular(30),
                     ),
                   ),
-
                   child: Column(
                     children: [
-                      /// TOP BAR
+
                       Row(
                         children: [
                           Container(
-                            width: 54,
+                            width:  54,
                             height: 54,
-
-                            decoration:
-                                BoxDecoration(
-                              color: Colors
-                                  .white
-                                  .withOpacity(
-                                .14,
-                              ),
-
-                              borderRadius:
-                                  BorderRadius.circular(
-                                18,
-                              ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(.14),
+                              borderRadius: BorderRadius.circular(18),
                             ),
-
                             child: const Icon(
-                              Icons
-                                  .verified_user_rounded,
-
-                              color:
-                                  Colors.white,
+                              Icons.verified_user_rounded,
+                              color: Colors.white,
                             ),
                           ),
 
-                          const SizedBox(
-                              width: 14),
+                          const SizedBox(width: 14),
 
                           Expanded(
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment
-                                      .start,
-
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
                                   "Provider Approvals",
-
-                                  style:
-                                      TextStyle(
-                                    color:
-                                        Colors.white,
-
-                                    fontWeight:
-                                        FontWeight.bold,
-
-                                    fontSize: 22,
+                                  style: TextStyle(
+                                    color:      Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize:   22,
                                   ),
                                 ),
-
-                                const SizedBox(
-                                    height:
-                                        4),
-
+                                const SizedBox(height: 4),
                                 Text(
-                                  "${filtered.length} pending requests",
-
-                                  style:
-                                      const TextStyle(
-                                    color:
-                                        Colors.white70,
-
-                                    fontSize:
-                                        13,
+                                  "${filtered.length} pending request${filtered.length == 1 ? '' : 's'}",
+                                  style: const TextStyle(
+                                    color:    Colors.white70,
+                                    fontSize: 13,
                                   ),
                                 ),
                               ],
                             ),
                           ),
+
+                          // Pending count badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(.20),
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            child: Text(
+                              "${docs.length}",
+                              style: const TextStyle(
+                                color:      Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize:   16,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
 
-                      const SizedBox(
-                          height: 22),
+                      const SizedBox(height: 22),
 
-                      /// SEARCH
+                      // Search bar
                       Container(
-                        decoration:
-                            BoxDecoration(
-                          color:
-                              Colors.white,
-
-                          borderRadius:
-                              BorderRadius.circular(
-                            18,
-                          ),
+                        decoration: BoxDecoration(
+                          color:        Colors.white,
+                          borderRadius: BorderRadius.circular(18),
                         ),
-
                         child: TextField(
-                          onChanged:
-                              (value) {
-                            setState(() {
-                              search = value
-                                  .toLowerCase();
-                            });
-                          },
-
-                          decoration:
-                              const InputDecoration(
-                            hintText:
-                                "Search business, owner or phone",
-
-                            border:
-                                InputBorder.none,
-
-                            prefixIcon:
-                                Icon(
-                              Icons
-                                  .search_rounded,
-                            ),
-
+                          onChanged: (v) =>
+                              setState(() => search = v.toLowerCase()),
+                          decoration: const InputDecoration(
+                            hintText:        "Search business, owner or phone",
+                            border:          InputBorder.none,
+                            prefixIcon:      Icon(Icons.search_rounded),
                             contentPadding:
-                                EdgeInsets.symmetric(
-                              vertical:
-                                  17,
-                            ),
+                                EdgeInsets.symmetric(vertical: 17),
                           ),
                         ),
                       ),
@@ -641,699 +531,16 @@ class _ApproveProvidersPageState
                   ),
                 ),
 
-                /// ================= LIST =================
+                // ── LIST ───────────────────────────────
+
                 Expanded(
                   child: filtered.isEmpty
                       ? _noMatch()
                       : ListView.builder(
-                          padding:
-                              const EdgeInsets.all(
-                            16,
-                          ),
-
-                          itemCount:
-                              filtered.length,
-
-                          itemBuilder:
-                              (_, index) {
-                            final doc =
-                                filtered[index];
-
-                            final data =
-                                doc.data()
-                                    as Map<
-                                        String,
-                                        dynamic>;
-
-                            final business =
-                                (data['business']
-                                        as Map<
-                                            String,
-                                            dynamic>?) ??
-                                    {};
-
-                            final bank =
-                                (data['bank']
-                                        as Map<
-                                            String,
-                                            dynamic>?) ??
-                                    {};
-
-                            final service =
-                                (data['service']
-                                        as Map<
-                                            String,
-                                            dynamic>?) ??
-                                    {};
-
-                            final categories =
-                                List.from(
-                              data['categories'] ??
-                                  [],
-                            );
-
-                            final Timestamp?
-                                createdAt =
-                                data[
-                                    'createdAt'];
-
-                            final providerId =
-                                doc.id;
-
-                            final businessName =
-                                business[
-                                        'businessName'] ??
-                                    "No Name";
-
-                            final ownerName =
-                                business[
-                                        'ownerName'] ??
-                                    "-";
-
-                            final phone =
-                                business[
-                                        'phone'] ??
-                                    "-";
-
-                            final email =
-                                business[
-                                        'email'] ??
-                                    "-";
-
-                            final address =
-                                business[
-                                        'address'] ??
-                                    "-";
-
-                            final serviceType =
-                                service[
-                                        'serviceType'] ??
-                                    data[
-                                        'serviceType'] ??
-                                    "-";
-
-                            final providerType =
-                                data[
-                                        'providerType'] ??
-                                    "Provider";
-
-                            String appliedDate =
-                                "-";
-
-                            if (createdAt !=
-                                null) {
-                              appliedDate =
-                                  DateFormat(
-                                'dd MMM yyyy',
-                              ).format(
-                                createdAt
-                                    .toDate(),
-                              );
-                            }
-
-                            return Container(
-                              margin:
-                                  const EdgeInsets.only(
-                                bottom: 18,
-                              ),
-
-                              padding:
-                                  const EdgeInsets.all(
-                                16,
-                              ),
-
-                              decoration:
-                                  BoxDecoration(
-                                color:
-                                    Colors.white,
-
-                                borderRadius:
-                                    BorderRadius.circular(
-                                  28,
-                                ),
-
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors
-                                        .black
-                                        .withOpacity(
-                                      .04,
-                                    ),
-
-                                    blurRadius:
-                                        14,
-
-                                    offset:
-                                        const Offset(
-                                      0,
-                                      6,
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              child: Column(
-                                children: [
-                                  /// ================= TOP =================
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment
-                                            .start,
-
-                                    children: [
-                                      Container(
-                                        width: 74,
-                                        height: 74,
-
-                                        decoration:
-                                            BoxDecoration(
-                                          gradient:
-                                              const LinearGradient(
-                                            colors: [
-                                              Color(
-                                                0xFF2563EB,
-                                              ),
-                                              Color(
-                                                0xFF7C3AED,
-                                              ),
-                                            ],
-                                          ),
-
-                                          borderRadius:
-                                              BorderRadius.circular(
-                                            22,
-                                          ),
-                                        ),
-
-                                        child: Icon(
-                                          getServiceIcon(
-                                            serviceType,
-                                          ),
-
-                                          color: Colors
-                                              .white,
-
-                                          size: 34,
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                          width:
-                                              14),
-
-                                      Expanded(
-                                        child:
-                                            Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment
-                                                  .start,
-
-                                          children: [
-                                            Text(
-                                              businessName,
-
-                                              maxLines:
-                                                  1,
-
-                                              overflow:
-                                                  TextOverflow
-                                                      .ellipsis,
-
-                                              style:
-                                                  const TextStyle(
-                                                fontSize:
-                                                    18,
-
-                                                fontWeight:
-                                                    FontWeight.bold,
-                                              ),
-                                            ),
-
-                                            const SizedBox(
-                                                height:
-                                                    5),
-
-                                            Text(
-                                              ownerName,
-
-                                              style:
-                                                  TextStyle(
-                                                color: Colors
-                                                    .grey
-                                                    .shade700,
-
-                                                fontSize:
-                                                    14,
-                                              ),
-                                            ),
-
-                                            const SizedBox(
-                                                height:
-                                                    10),
-
-                                            Wrap(
-                                              spacing:
-                                                  8,
-
-                                              runSpacing:
-                                                  8,
-
-                                              children: [
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                    horizontal:
-                                                        12,
-
-                                                    vertical:
-                                                        6,
-                                                  ),
-
-                                                  decoration:
-                                                      BoxDecoration(
-                                                    color:
-                                                        Colors.orange.withOpacity(
-                                                      .10,
-                                                    ),
-
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                      30,
-                                                    ),
-                                                  ),
-
-                                                  child:
-                                                      const Text(
-                                                    "PENDING",
-
-                                                    style:
-                                                        TextStyle(
-                                                      color:
-                                                          Colors.orange,
-
-                                                      fontWeight:
-                                                          FontWeight.bold,
-
-                                                      fontSize:
-                                                          11,
-                                                    ),
-                                                  ),
-                                                ),
-
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                    horizontal:
-                                                        12,
-
-                                                    vertical:
-                                                        6,
-                                                  ),
-
-                                                  decoration:
-                                                      BoxDecoration(
-                                                    color:
-                                                        const Color(
-                                                      0xFFEEF2FF,
-                                                    ),
-
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                      30,
-                                                    ),
-                                                  ),
-
-                                                  child:
-                                                      Text(
-                                                    providerType,
-
-                                                    style:
-                                                        const TextStyle(
-                                                      color:
-                                                          Color(
-                                                        0xFF4F46E5,
-                                                      ),
-
-                                                      fontWeight:
-                                                          FontWeight.w600,
-
-                                                      fontSize:
-                                                          11,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  const SizedBox(
-                                      height:
-                                          18),
-
-                                  /// ================= INFO BOX =================
-                                  Container(
-                                    padding:
-                                        const EdgeInsets.all(
-                                      14,
-                                    ),
-
-                                    decoration:
-                                        BoxDecoration(
-                                      color:
-                                          const Color(
-                                        0xFFF8FAFC,
-                                      ),
-
-                                      borderRadius:
-                                          BorderRadius.circular(
-                                        18,
-                                      ),
-                                    ),
-
-                                    child: Column(
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child:
-                                                  _compactInfo(
-                                                Icons
-                                                    .phone_rounded,
-                                                phone,
-                                              ),
-                                            ),
-
-                                            const SizedBox(
-                                                width:
-                                                    12),
-
-                                            Expanded(
-                                              child:
-                                                  _compactInfo(
-                                                Icons
-                                                    .email_rounded,
-                                                email,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-
-                                        const SizedBox(
-                                            height:
-                                                14),
-
-                                        _compactInfo(
-                                          Icons
-                                              .location_on_rounded,
-                                          address,
-                                        ),
-
-                                        const SizedBox(
-                                            height:
-                                                14),
-
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child:
-                                                  _compactInfo(
-                                                Icons
-                                                    .miscellaneous_services_rounded,
-                                                serviceType,
-                                              ),
-                                            ),
-
-                                            const SizedBox(
-                                                width:
-                                                    12),
-
-                                            Expanded(
-                                              child:
-                                                  _compactInfo(
-                                                Icons
-                                                    .calendar_month_rounded,
-                                                appliedDate,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-
-                                        const SizedBox(
-                                            height:
-                                                14),
-
-                                        _compactInfo(
-                                          Icons
-                                              .account_balance_rounded,
-                                          bank['accountHolder']
-                                                  ?.toString() ??
-                                              "-",
-                                        ),
-
-                                        const SizedBox(
-                                            height:
-                                                14),
-
-                                        _compactInfo(
-                                          Icons
-                                              .badge_rounded,
-                                          providerId,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  /// ================= CATEGORIES =================
-                                  if (categories
-                                      .isNotEmpty) ...[
-                                    const SizedBox(
-                                        height:
-                                            18),
-
-                                    Align(
-                                      alignment:
-                                          Alignment
-                                              .centerLeft,
-
-                                      child:
-                                          Text(
-                                        "Categories",
-
-                                        style:
-                                            TextStyle(
-                                          color: Colors
-                                              .grey
-                                              .shade700,
-
-                                          fontWeight:
-                                              FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-
-                                    const SizedBox(
-                                        height:
-                                            12),
-
-                                    Wrap(
-                                      spacing:
-                                          8,
-
-                                      runSpacing:
-                                          8,
-
-                                      children:
-                                          List.generate(
-                                        categories
-                                            .length,
-
-                                        (i) {
-                                          return Container(
-                                            padding:
-                                                const EdgeInsets.symmetric(
-                                              horizontal:
-                                                  12,
-
-                                              vertical:
-                                                  7,
-                                            ),
-
-                                            decoration:
-                                                BoxDecoration(
-                                              color:
-                                                  const Color(
-                                                0xFFEEF2FF,
-                                              ),
-
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                30,
-                                              ),
-                                            ),
-
-                                            child:
-                                                Text(
-                                              categories[
-                                                      i]
-                                                  .toString(),
-
-                                              style:
-                                                  const TextStyle(
-                                                color:
-                                                    Color(
-                                                  0xFF4F46E5,
-                                                ),
-
-                                                fontWeight:
-                                                    FontWeight.w600,
-
-                                                fontSize:
-                                                    12,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ],
-
-                                  const SizedBox(
-                                      height:
-                                          22),
-
-                                  /// ================= BUTTONS =================
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child:
-                                            OutlinedButton.icon(
-                                          onPressed:
-                                              () {
-                                            rejectProvider(
-                                              providerId,
-                                            );
-                                          },
-
-                                          icon:
-                                              const Icon(
-                                            Icons
-                                                .close_rounded,
-
-                                            color:
-                                                Colors.red,
-                                          ),
-
-                                          label:
-                                              const Text(
-                                            "Reject",
-
-                                            style:
-                                                TextStyle(
-                                              color:
-                                                  Colors.red,
-
-                                              fontWeight:
-                                                  FontWeight.w600,
-                                            ),
-                                          ),
-
-                                          style:
-                                              OutlinedButton.styleFrom(
-                                            padding:
-                                                const EdgeInsets.symmetric(
-                                              vertical:
-                                                  15,
-                                            ),
-
-                                            side:
-                                                const BorderSide(
-                                              color:
-                                                  Colors.red,
-                                            ),
-
-                                            shape:
-                                                RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                16,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                          width:
-                                              14),
-
-                                      Expanded(
-                                        child:
-                                            ElevatedButton.icon(
-                                          onPressed:
-                                              () {
-                                            approveProvider(
-                                              providerId,
-                                            );
-                                          },
-
-                                          icon:
-                                              const Icon(
-                                            Icons
-                                                .check_rounded,
-
-                                            color: Colors
-                                                .white,
-                                          ),
-
-                                          label:
-                                              const Text(
-                                            "Approve",
-
-                                            style:
-                                                TextStyle(
-                                              color:
-                                                  Colors.white,
-
-                                              fontWeight:
-                                                  FontWeight.bold,
-                                            ),
-                                          ),
-
-                                          style:
-                                              ElevatedButton.styleFrom(
-                                            elevation:
-                                                0,
-
-                                            backgroundColor:
-                                                const Color(
-                                              0xFF16A34A,
-                                            ),
-
-                                            padding:
-                                                const EdgeInsets.symmetric(
-                                              vertical:
-                                                  15,
-                                            ),
-
-                                            shape:
-                                                RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                16,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            );
+                          padding: const EdgeInsets.all(16),
+                          itemCount: filtered.length,
+                          itemBuilder: (_, index) {
+                            return _providerCard(filtered[index]);
                           },
                         ),
                 ),
@@ -1345,67 +552,329 @@ class _ApproveProvidersPageState
     );
   }
 
-  /// ================= COMPACT INFO =================
-  Widget _compactInfo(
-    IconData icon,
-    String value,
-  ) {
-    return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+  // =====================================================
+  // PROVIDER CARD
+  // =====================================================
 
+  Widget _providerCard(DocumentSnapshot doc) {
+    final data       = doc.data() as Map<String, dynamic>;
+    final business   = (data['business']   as Map<String, dynamic>?) ?? {};
+    final bank       = (data['bank']       as Map<String, dynamic>?) ?? {};
+    final service    = (data['service']    as Map<String, dynamic>?) ?? {};
+    final categories = List.from(data['categories'] ?? []);
+
+    final Timestamp? createdAt   = data['createdAt'];
+    final providerId             = doc.id;
+    final businessName           = business['businessName'] ?? "No Name";
+    final ownerName              = business['ownerName']    ?? "-";
+    final phone                  = business['phone']        ?? "-";
+    final email                  = business['email']        ?? "-";
+    final address                = business['address']      ?? "-";
+    final serviceType            = service['serviceType']   ?? data['serviceType'] ?? "-";
+    final providerType           = data['providerType']     ?? "Provider";
+
+    final String appliedDate = createdAt != null
+        ? DateFormat('dd MMM yyyy').format(createdAt.toDate())
+        : "-";
+
+    return Container(
+      margin:  const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color:        Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color:      Colors.black.withOpacity(.04),
+            blurRadius: 14,
+            offset:     const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+
+          // ── TOP ROW ────────────────────────────────
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width:  74,
+                height: 74,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Icon(
+                  getServiceIcon(serviceType),
+                  color: Colors.white,
+                  size:  34,
+                ),
+              ),
+
+              const SizedBox(width: 14),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      businessName,
+                      maxLines:  1,
+                      overflow:  TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize:   18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      ownerName,
+                      style: TextStyle(
+                        color:    Colors.grey.shade600,
+                        fontSize: 14,
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    Wrap(
+                      spacing:    8,
+                      runSpacing: 8,
+                      children: [
+                        _badge("PENDING", Colors.orange),
+                        _badge(providerType, const Color(0xFF4F46E5),
+                            bg: const Color(0xFFEEF2FF)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          // ── INFO BOX ───────────────────────────────
+
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color:        const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                        child: _compactInfo(Icons.phone_rounded, phone)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: _compactInfo(Icons.email_rounded, email)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _compactInfo(Icons.location_on_rounded, address),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _compactInfo(
+                          Icons.miscellaneous_services_rounded, serviceType),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _compactInfo(
+                          Icons.calendar_month_rounded, appliedDate),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _compactInfo(
+                  Icons.account_balance_rounded,
+                  bank['accountHolder']?.toString() ?? "-",
+                ),
+                const SizedBox(height: 12),
+                _compactInfo(Icons.badge_rounded, providerId),
+              ],
+            ),
+          ),
+
+          // ── CATEGORIES ─────────────────────────────
+
+          if (categories.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Categories",
+                style: TextStyle(
+                  color:      Colors.grey.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing:    8,
+              runSpacing: 8,
+              children: categories
+                  .map(
+                    (c) => _badge(
+                      c.toString(),
+                      const Color(0xFF4F46E5),
+                      bg: const Color(0xFFEEF2FF),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+
+          const SizedBox(height: 22),
+
+          // ── NOTIFICATION NOTE ──────────────────────
+
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color:        const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFF86EFAC),
+              ),
+            ),
+            child: Row(
+              children: const [
+                Icon(Icons.notifications_active_rounded,
+                    color: Color(0xFF16A34A), size: 18),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "Provider will receive a push notification + in-app alert on your decision.",
+                    style: TextStyle(
+                      color:    Color(0xFF15803D),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── ACTION BUTTONS ─────────────────────────
+
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => rejectProvider(providerId),
+                  icon:  const Icon(Icons.close_rounded, color: Colors.red),
+                  label: const Text(
+                    "Reject",
+                    style: TextStyle(
+                      color:      Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    side:    const BorderSide(color: Colors.red),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 14),
+
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => approveProvider(providerId),
+                  icon:  const Icon(Icons.check_rounded, color: Colors.white),
+                  label: const Text(
+                    "Approve",
+                    style: TextStyle(
+                      color:      Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    elevation:       0,
+                    backgroundColor: const Color(0xFF16A34A),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // BADGE
+  // =====================================================
+
+  Widget _badge(String label, Color text, {Color? bg}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color:        bg ?? text.withOpacity(.10),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color:      text,
+          fontWeight: FontWeight.bold,
+          fontSize:   11,
+        ),
+      ),
+    );
+  }
+
+  // =====================================================
+  // COMPACT INFO ROW
+  // =====================================================
+
+  Widget _compactInfo(IconData icon, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          padding:
-              const EdgeInsets.all(8),
-
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white,
-
-            borderRadius:
-                BorderRadius.circular(
-              12,
-            ),
+            color:        Colors.white,
+            borderRadius: BorderRadius.circular(12),
           ),
-
-          child: Icon(
-            icon,
-
-            size: 16,
-
-            color: const Color(
-              0xFF4F46E5,
-            ),
-          ),
+          child: Icon(icon, size: 16, color: const Color(0xFF4F46E5)),
         ),
-
         const SizedBox(width: 10),
-
         Expanded(
           child: Padding(
-            padding:
-                const EdgeInsets.only(
-              top: 2,
-            ),
-
+            padding: const EdgeInsets.only(top: 2),
             child: Text(
-              value.isEmpty
-                  ? "-"
-                  : value,
-
-              maxLines: 2,
-
-              overflow:
-                  TextOverflow.ellipsis,
-
-              style:
-                  const TextStyle(
-                fontSize: 13,
-
-                fontWeight:
-                    FontWeight.w600,
-
-                height: 1.4,
+              value.trim().isEmpty ? "-" : value,
+              maxLines:  2,
+              overflow:  TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize:   13,
+                fontWeight: FontWeight.w600,
+                height:     1.4,
               ),
             ),
           ),
@@ -1414,99 +883,61 @@ class _ApproveProvidersPageState
     );
   }
 
-  /// ================= EMPTY =================
+  // =====================================================
+  // EMPTY STATE
+  // =====================================================
+
   Widget _emptyState() {
     return Center(
       child: Column(
-        mainAxisAlignment:
-            MainAxisAlignment.center,
-
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 96,
+            width:  96,
             height: 96,
-
-            decoration:
-                BoxDecoration(
-              color: const Color(
-                0xFFEEF2FF,
-              ),
-
-              borderRadius:
-                  BorderRadius.circular(
-                30,
-              ),
+            decoration: BoxDecoration(
+              color:        const Color(0xFFEEF2FF),
+              borderRadius: BorderRadius.circular(30),
             ),
-
             child: const Icon(
-              Icons
-                  .verified_user_rounded,
-
-              size: 44,
-
-              color: Color(
-                0xFF4F46E5,
-              ),
+              Icons.verified_user_rounded,
+              size:  44,
+              color: Color(0xFF4F46E5),
             ),
           ),
-
           const SizedBox(height: 20),
-
           const Text(
             "No Pending Providers",
-
-            style: TextStyle(
-              fontSize: 20,
-
-              fontWeight:
-                  FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
-
           const SizedBox(height: 8),
-
           Text(
-            "All provider requests are reviewed",
-
-            style: TextStyle(
-              color:
-                  Colors.grey.shade600,
-            ),
+            "All provider requests have been reviewed",
+            style: TextStyle(color: Colors.grey.shade600),
           ),
         ],
       ),
     );
   }
 
-  /// ================= NO MATCH =================
+  // =====================================================
+  // NO MATCH
+  // =====================================================
+
   Widget _noMatch() {
     return Center(
       child: Column(
-        mainAxisAlignment:
-            MainAxisAlignment.center,
-
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.search_off_rounded,
-
-            size: 52,
-
-            color: Colors.grey.shade400,
-          ),
-
+          Icon(Icons.search_off_rounded,
+              size: 52, color: Colors.grey.shade400),
           const SizedBox(height: 14),
-
           Text(
             "No Matching Providers",
-
             style: TextStyle(
-              color:
-                  Colors.grey.shade700,
-
-              fontWeight:
-                  FontWeight.w600,
-
-              fontSize: 16,
+              color:      Colors.grey.shade700,
+              fontWeight: FontWeight.w600,
+              fontSize:   16,
             ),
           ),
         ],

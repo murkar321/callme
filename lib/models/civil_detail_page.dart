@@ -17,146 +17,356 @@ class CivilServiceDetailPage extends StatelessWidget {
     final isRenovation = mainServiceId == "renovation";
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(service.name),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
+      backgroundColor: const Color(0xffF7F8FA),
 
-            /// 🖼️ IMAGE
-            Image.asset(
-              service.image,
-              height: 220,
-              width: double.infinity,
-              fit: BoxFit.cover,
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 10,
+              color: Colors.black.withOpacity(0.08),
             ),
+          ],
+        ),
+        child: SafeArea(
+          child: SizedBox(
+            height: 55,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: () {
+                if (isRenovation) {
+                  Navigator.pop(context);
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CivilBookingPage(
+                        serviceName: service.name,
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: Text(
+                isRenovation
+                    ? "Customize & Book"
+                    : "Book Now",
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
 
-            const SizedBox(height: 10),
+      body: CustomScrollView(
+        slivers: [
 
-            /// 📋 DETAILS
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          /// HERO IMAGE
+          SliverAppBar(
+            expandedHeight: 300,
+            pinned: true,
+            backgroundColor: Colors.white,
+            elevation: 0,
+
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
+                fit: StackFit.expand,
                 children: [
 
-                  /// NAME
-                  Text(
-                    service.name,
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
+                  Image.asset(
+                    service.image,
+                    fit: BoxFit.cover,
                   ),
 
-                  const SizedBox(height: 8),
-
-                  /// PRICE
-                  Text(
-                    service.price,
-                    style: const TextStyle(
-                        color: Colors.green, fontSize: 16),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  /// ⭐ RATING + DISCOUNT
-                  Row(
-                    children: [
-                      const Icon(Icons.star, color: Colors.orange),
-                      const SizedBox(width: 4),
-                      Text("${service.rating}"),
-                      const SizedBox(width: 10),
-                      Text(
-                        "${service.discount}% OFF",
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  /// 🔥 FEATURES FROM DATA (FIXED)
-                  if (service.features != null &&
-                      service.features!.isNotEmpty) ...[
-                    const Text(
-                      "What’s Included",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-
-                    ...service.features!
-                        .map((e) => _bullet(e))
-                        .toList(),
-                  ],
-
-                  const SizedBox(height: 20),
-
-                  /// 📌 NOTE (ONLY FOR RENOVATION)
-                  if (isRenovation)
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.yellow.shade100,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("📌 Note",
-                              style:
-                                  TextStyle(fontWeight: FontWeight.bold)),
-                          SizedBox(height: 4),
-                          Text("• Customize services before booking"),
-                          Text("• Final cost depends on selection"),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
                         ],
                       ),
                     ),
+                  ),
 
-                  const SizedBox(height: 20),
+                  Positioned(
+                    left: 20,
+                    right: 20,
+                    bottom: 20,
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
 
-                  /// 🔘 BOOK BUTTON
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (isRenovation) {
-                          /// 👉 CLOSE DETAIL → OPEN POPUP (BACK FLOW)
-                          Navigator.pop(context);
-                        } else {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CivilBookingPage(
-                                serviceName: service.name,
+                        Text(
+                          service.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        Row(
+                          children: [
+
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                borderRadius:
+                                    BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.star,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    service.rating.toString(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          );
-                        }
-                      },
-                      child: Text(
-                        isRenovation ? "Customize & Book" : "Book Now",
-                      ),
+
+                            const SizedBox(width: 10),
+
+                            if (service.discount > 0)
+                              Container(
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  borderRadius:
+                                      BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  "${service.discount}% OFF",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight:
+                                        FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            )
-          ],
-        ),
-      ),
-    );
-  }
+            ),
+          ),
 
-  /// ✅ BULLET WIDGET
-  Widget _bullet(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          const Icon(Icons.check, size: 16, color: Colors.green),
-          const SizedBox(width: 6),
-          Expanded(child: Text(text)),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+
+                  /// PRICE CARD
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                          BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          blurRadius: 10,
+                          color:
+                              Colors.black.withOpacity(0.05),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+
+                        const Icon(
+                          Icons.currency_rupee,
+                          color: Colors.green,
+                          size: 28,
+                        ),
+
+                        const SizedBox(width: 10),
+
+                        Expanded(
+                          child: Text(
+                            service.price,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+
+                        Container(
+                          padding:
+                              const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                Colors.green.withOpacity(0.1),
+                            borderRadius:
+                                BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            "Best Price",
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  /// INCLUDED
+                  const Text(
+                    "What's Included",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  if (service.features != null)
+                    ...service.features!.map(
+                      (feature) => Container(
+                        margin:
+                            const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius:
+                              BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              blurRadius: 8,
+                              color: Colors.black
+                                  .withOpacity(0.04),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+
+                            Container(
+                              padding:
+                                  const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.green
+                                    .withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check,
+                                color: Colors.green,
+                                size: 18,
+                              ),
+                            ),
+
+                            const SizedBox(width: 12),
+
+                            Expanded(
+                              child: Text(
+                                feature,
+                                style:
+                                    const TextStyle(
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  /// NOTE FOR RENOVATION
+                  if (isRenovation)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius:
+                            BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.orange.shade200,
+                        ),
+                      ),
+                      child: const Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+
+                          Text(
+                            "Customization Available",
+                            style: TextStyle(
+                              fontWeight:
+                                  FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+
+                          SizedBox(height: 8),
+
+                          Text(
+                              "• Select required services"),
+
+                          Text(
+                              "• Modify work scope"),
+
+                          Text(
+                              "• Final quotation shared after inspection"),
+                        ],
+                      ),
+                    ),
+
+                  const SizedBox(height: 100),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
