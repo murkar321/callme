@@ -1,364 +1,154 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class NotificationPage extends StatefulWidget {
-  const NotificationPage({super.key});
+  final String providerId;
+
+  const NotificationPage({
+    super.key,
+    required this.providerId,
+  });
 
   @override
-  State<NotificationPage> createState() =>
-      _NotificationPageState();
+  State<NotificationPage> createState() => _NotificationPageState();
 }
 
-class _NotificationPageState
-    extends State<NotificationPage> {
+class _NotificationPageState extends State<NotificationPage> {
   bool notificationsEnabled = true;
 
-  final String uid =
-      FirebaseAuth.instance.currentUser?.uid ?? '';
-
   Future<void> _markAllAsRead() async {
-    final docs =
-        await FirebaseFirestore.instance
-            .collection('notifications')
-            .where(
-              'userId',
-              isEqualTo: uid,
-            )
-            .where(
-              'isRead',
-              isEqualTo: false,
-            )
-            .get();
+    final docs = await FirebaseFirestore.instance
+        .collection('notifications')
+        .where('providerId', isEqualTo: widget.providerId)
+        .where('read', isEqualTo: false)
+        .get();
 
     for (var doc in docs.docs) {
-      await doc.reference.update({
-        'isRead': true,
-      });
+      await doc.reference.update({'read': true});
     }
   }
 
-  Future<void> _refresh() async {
-    setState(() {});
-  }
+  String _formatTime(dynamic value) {
+    try {
+      if (value == null) return '';
 
-  String _formatTime(
-    Timestamp? timestamp,
-  ) {
-    if (timestamp == null) return '';
+      if (value is Timestamp) {
+        final date = value.toDate();
+        return '${date.day}/${date.month}/${date.year}';
+      }
 
-    final date = timestamp.toDate();
-
-    return
-        '${date.day}/${date.month}/${date.year}';
+      return value.toString();
+    } catch (e) {
+      return '';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text(
-          'Notifications',
-        ),
+        title: const Text("Notifications"),
         actions: [
           IconButton(
+            icon: const Icon(Icons.done_all),
             onPressed: () async {
               await _markAllAsRead();
 
               if (mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(
+                ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text(
-                      'All notifications marked as read',
-                    ),
+                    content: Text("Marked all as read"),
                   ),
                 );
               }
             },
-            icon: const Icon(
-              Icons.done_all,
-            ),
-          ),
+          )
         ],
       ),
 
-      body: Column(
-        children: [
-          Container(
-            margin:
-                const EdgeInsets.all(16),
-            padding:
-                const EdgeInsets.all(16),
-            decoration:
-                BoxDecoration(
-              color:
-                  Theme.of(
-                    context,
-                  )
-                      .colorScheme
-                      .surfaceContainerHighest,
-              borderRadius:
-                  BorderRadius.circular(
-                18,
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('notifications')
+            .where('providerId', isEqualTo: widget.providerId)
+            .snapshots(),
+
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData) {
+            return const Center(child: Text("Something went wrong"));
+          }
+
+          final docs = snapshot.data!.docs;
+
+          if (docs.isEmpty) {
+            return const Center(
+              child: Text(
+                "No Notifications Yet",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.notifications_active,
-                ),
+            );
+          }
 
-                const SizedBox(
-                  width: 12,
-                ),
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final data = docs[index].data() as Map<String, dynamic>;
+              final isRead = data['read'] ?? false;
 
-                const Expanded(
-                  child: Text(
-                    'Enable Push Notifications',
+              return Card(
+                margin:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: ListTile(
+                  leading: Stack(
+                    children: [
+                      const CircleAvatar(
+                        child: Icon(Icons.notifications),
+                      ),
+                      if (!isRead)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        )
+                    ],
+                  ),
+
+                  title: Text(
+                    data['title'] ?? '',
                     style: TextStyle(
                       fontWeight:
-                          FontWeight.w600,
+                          isRead ? FontWeight.normal : FontWeight.bold,
                     ),
                   ),
-                ),
 
-                Switch(
-                  value:
-                      notificationsEnabled,
-                  onChanged: (value) {
-                    setState(() {
-                      notificationsEnabled =
-                          value;
-                    });
+                  subtitle: Text(data['body'] ?? ''),
+
+                  trailing: Text(
+                    _formatTime(data['createdAt']),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+
+                  onTap: () async {
+                    await docs[index].reference.update({'read': true});
                   },
                 ),
-              ],
-            ),
-          ),
-
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refresh,
-              child: StreamBuilder<
-                  QuerySnapshot>(
-                stream:
-                    FirebaseFirestore
-                        .instance
-                        .collection(
-                          'notifications',
-                        )
-                        .where(
-                          'userId',
-                          isEqualTo: uid,
-                        )
-                        .orderBy(
-                          'createdAt',
-                          descending:
-                              true,
-                        )
-                        .snapshots(),
-                builder: (
-                  context,
-                  snapshot,
-                ) {
-                  if (snapshot
-                          .connectionState ==
-                      ConnectionState
-                          .waiting) {
-                    return const Center(
-                      child:
-                          CircularProgressIndicator(),
-                    );
-                  }
-
-                  if (!snapshot
-                          .hasData ||
-                      snapshot
-                          .data!
-                          .docs
-                          .isEmpty) {
-                    return ListView(
-                      children: const [
-                        SizedBox(
-                          height: 120,
-                        ),
-                        Icon(
-                          Icons
-                              .notifications_none_rounded,
-                          size: 80,
-                        ),
-                        SizedBox(
-                          height: 12,
-                        ),
-                        Center(
-                          child: Text(
-                            'No Notifications Yet',
-                            style:
-                                TextStyle(
-                              fontSize:
-                                  18,
-                              fontWeight:
-                                  FontWeight
-                                      .w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-
-                  final notifications =
-                      snapshot
-                          .data!
-                          .docs;
-
-                  return ListView.builder(
-                    padding:
-                        const EdgeInsets
-                            .only(
-                      bottom: 20,
-                    ),
-                    itemCount:
-                        notifications
-                            .length,
-                    itemBuilder:
-                        (
-                          context,
-                          index,
-                        ) {
-                      final data =
-                          notifications[
-                                  index]
-                              .data()
-                              as Map<
-                                  String,
-                                  dynamic>;
-
-                      final isRead =
-                          data['isRead'] ??
-                              false;
-
-                      return Card(
-                        margin:
-                            const EdgeInsets
-                                .symmetric(
-                          horizontal:
-                              16,
-                          vertical:
-                              6,
-                        ),
-                        elevation: 0,
-                        shape:
-                            RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(
-                            18,
-                          ),
-                        ),
-                        child: ListTile(
-                          contentPadding:
-                              const EdgeInsets
-                                  .all(
-                            14,
-                          ),
-                          leading:
-                              Stack(
-                            children: [
-                              CircleAvatar(
-                                radius:
-                                    24,
-                                child:
-                                    const Icon(
-                                  Icons
-                                      .notifications,
-                                ),
-                              ),
-
-                              if (!isRead)
-                                Positioned(
-                                  right:
-                                      0,
-                                  top:
-                                      0,
-                                  child:
-                                      Container(
-                                    width:
-                                        12,
-                                    height:
-                                        12,
-                                    decoration:
-                                        const BoxDecoration(
-                                      color:
-                                          Colors.red,
-                                      shape:
-                                          BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-
-                          title: Text(
-                            data['title'] ??
-                                '',
-                            style:
-                                TextStyle(
-                              fontWeight:
-                                  isRead
-                                      ? FontWeight.w500
-                                      : FontWeight.bold,
-                            ),
-                          ),
-
-                          subtitle:
-                              Padding(
-                            padding:
-                                const EdgeInsets
-                                    .only(
-                              top: 6,
-                            ),
-                            child: Text(
-                              data['body'] ??
-                                  '',
-                            ),
-                          ),
-
-                          trailing:
-                              Text(
-                            _formatTime(
-                              data['createdAt'],
-                            ),
-                            style:
-                                TextStyle(
-                              color:
-                                  Colors.grey
-                                      .shade600,
-                              fontSize:
-                                  12,
-                            ),
-                          ),
-
-                          onTap: () async {
-                            await notifications[
-                                    index]
-                                .reference
-                                .update({
-                              'isRead':
-                                  true,
-                            });
-                          },
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
+              );
+            },
+          );
+        },
       ),
     );
   }

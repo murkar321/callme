@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:callme/models/service_category.dart';
 import 'package:callme/widgets/category_card.dart';
+import 'package:callme/profile/notification_page.dart';
 
 // ✅ UNIVERSAL PAGE
 import 'package:callme/screens/universal_services_page.dart';
@@ -13,6 +14,7 @@ import 'package:callme/models/civil_services_page.dart';
 import 'package:callme/screens/resort_page.dart';
 import 'package:callme/screens/laundry_service_page.dart';
 import 'package:callme/screens/education_services_page.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -146,17 +148,59 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: const Color(0xFFF5F7FB),
 
       /// 🔝 APPBAR
-      appBar: AppBar(
-        title: const Text(
-          'CallMe Services',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
-      ),
+     appBar: AppBar(
+  title: const Text(
+    'CallMe Services',
+    style: TextStyle(
+      fontWeight: FontWeight.w600,
+    ),
+  ),
+  centerTitle: true,
+  backgroundColor: Colors.white,
+  foregroundColor: Colors.black,
+  elevation: 1,
 
+  actions: [
+    Padding(
+      padding: const EdgeInsets.only(
+        right: 12,
+      ),
+      child: Stack(
+        children: [
+          IconButton(
+            icon: const Icon(
+              Icons.notifications_rounded,
+              size: 28,
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const NotificationPage(providerId: '',),
+                ),
+              );
+            },
+          ),
+
+          /// Red Notification Dot
+          Positioned(
+            right: 10,
+            top: 10,
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ],
+),
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
