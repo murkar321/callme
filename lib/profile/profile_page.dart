@@ -39,23 +39,23 @@ class _ProfilePageState extends State<ProfilePage> {
   // =====================================================
 
   final firstNameController = TextEditingController();
-  final lastNameController   = TextEditingController();
-  final emailController      = TextEditingController();
-  final phoneController      = TextEditingController();
-  final addressController    = TextEditingController();
+  final lastNameController  = TextEditingController();
+  final emailController     = TextEditingController();
+  final phoneController     = TextEditingController();
+  final addressController   = TextEditingController();
 
   // =====================================================
   // STATE
   // =====================================================
 
-  bool isLoading = true;
-  bool _isUploading = false;
+  bool   isLoading    = true;
+  bool   _isUploading = false;
+  double _uploadProgress = 0;
 
-  File?   imageFile;
-  String  networkImage = "";
+  File?  imageFile;
+  String networkImage = "";
 
   String _collection = "users";
-  String _docId      = "";
 
   // =====================================================
   // INIT
@@ -76,39 +76,47 @@ class _ProfilePageState extends State<ProfilePage> {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      setState(() => isLoading = true);
+      if (mounted) setState(() => isLoading = true);
 
-      _collection = "users";
-      _docId = (user.email ?? "").trim().toLowerCase();
+      final docId = (user.email ?? "").trim().toLowerCase();
 
-      if (_docId.isEmpty) {
-        showMsg("Email not found");
+      if (docId.isEmpty) {
+        showMsg("No email found on this account");
         return;
       }
 
+      // Prefill from Auth
+      emailController.text = user.email ?? "";
+      phoneController.text = user.phoneNumber ?? "";
+
       final doc = await FirebaseFirestore.instance
           .collection("users")
-          .doc(_docId)
+          .doc(docId)
           .get();
-
-      phoneController.text = user.phoneNumber ?? "";
-      emailController.text = user.email ?? "";
 
       if (doc.exists) {
         final data = doc.data()!;
-        firstNameController.text = data["firstName"]?.toString() ?? "";
-        lastNameController.text  = data["lastName"]?.toString()  ?? "";
-        addressController.text   = data["address"]?.toString()   ?? "";
-        networkImage             = data["photo"]?.toString()     ?? "";
+
+        firstNameController.text =
+            data["firstName"]?.toString() ?? "";
+        lastNameController.text =
+            data["lastName"]?.toString() ?? "";
+        addressController.text =
+            data["address"]?.toString() ?? "";
 
         final storedEmail = data["email"]?.toString() ?? "";
         if (storedEmail.isNotEmpty) emailController.text = storedEmail;
 
         final storedPhone = data["phone"]?.toString() ?? "";
         if (storedPhone.isNotEmpty) phoneController.text = storedPhone;
+
+        final storedPhoto = data["photo"]?.toString() ?? "";
+        if (storedPhoto.isNotEmpty) {
+          networkImage = storedPhoto;
+        }
       }
 
-      setState(() {});
+      if (mounted) setState(() {});
     } catch (e) {
       debugPrint("LOAD ERROR: $e");
     } finally {
@@ -117,32 +125,61 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   // =====================================================
-  // UPLOAD IMAGE TO FIREBASE STORAGE
-  // Returns the public download URL, or null on failure.
+  // UPLOAD IMAGE — FIXED
+  // Uses UploadTask directly so we get a real
+  // TaskSnapshot with a working getDownloadURL().
   // =====================================================
 
-  Future<String?> _uploadImageToStorage(File file) async {
+  Future<String?> _uploadProfilePhoto(File file) async {
     try {
-      final email = (FirebaseAuth.instance.currentUser?.email ?? "")
-          .trim()
-          .toLowerCase()
-          .replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return null;
 
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('profile_images')
-          .child('$email.jpg');
+      // Build a safe storage path using uid (always available,
+      // never contains special chars — avoids email encoding issues)
+      final storagePath =
+          'profile_images/${user.uid}/profile.jpg';
 
-      final uploadTask = ref.putFile(
+      final ref = FirebaseStorage.instance.ref(storagePath);
+
+      // Create the upload task
+      final UploadTask uploadTask = ref.putFile(
         file,
-        SettableMetadata(contentType: 'image/jpeg'),
+        SettableMetadata(
+          contentType: 'image/jpeg',
+          customMetadata: {
+            'uid':   user.uid,
+            'email': user.email ?? '',
+          },
+        ),
       );
 
-      final snapshot = await uploadTask.whenComplete(() {});
-      final downloadUrl = await snapshot.ref.getDownloadURL();
+      // Listen to progress so the UI spinner is accurate
+      uploadTask.snapshotEvents.listen((TaskSnapshot snap) {
+        if (!mounted) return;
+        final progress =
+            snap.bytesTransferred / (snap.totalBytes == 0 ? 1 : snap.totalBytes);
+        setState(() => _uploadProgress = progress);
+      });
+
+      // Await the task directly — this is the KEY fix.
+      // Do NOT use .whenComplete() — it returns void.
+      final TaskSnapshot snapshot = await uploadTask;
+
+      if (snapshot.state != TaskState.success) {
+        debugPrint("Upload state: ${snapshot.state}");
+        return null;
+      }
+
+      // Get the permanent download URL
+      final String downloadUrl = await snapshot.ref.getDownloadURL();
+      debugPrint("Upload success. URL: $downloadUrl");
       return downloadUrl;
+    } on FirebaseException catch (e) {
+      debugPrint("FIREBASE STORAGE ERROR [${e.code}]: ${e.message}");
+      return null;
     } catch (e) {
-      debugPrint("STORAGE UPLOAD ERROR: $e");
+      debugPrint("UPLOAD ERROR: $e");
       return null;
     }
   }
@@ -157,44 +194,64 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final User? user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        showMsg("User not found");
+        showMsg("User not found. Please login again.");
         return;
       }
 
-      setState(() => isLoading = true);
+      if (mounted) setState(() => isLoading = true);
 
-      final email = (user.email ?? "").trim().toLowerCase();
+      final String email = (user.email ?? "").trim().toLowerCase();
       if (email.isEmpty) {
-        showMsg("Email not found");
+        showMsg("No email found on this account");
         return;
       }
 
-      // ── Upload new profile photo if one was picked ──
+      // ── Step 1: Upload photo if a new one was picked ──
       if (imageFile != null) {
-        setState(() => _isUploading = true);
-        final uploadedUrl = await _uploadImageToStorage(imageFile!);
-        if (uploadedUrl != null) {
-          networkImage = uploadedUrl;
-          imageFile = null; // clear local file; we now use the network URL
-        } else {
-          showMsg("Photo upload failed — other details will still be saved");
+        if (mounted) {
+          setState(() {
+            _isUploading    = true;
+            _uploadProgress = 0;
+          });
         }
+
+        final String? uploadedUrl =
+            await _uploadProfilePhoto(imageFile!);
+
         if (mounted) setState(() => _isUploading = false);
+
+        if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+          networkImage = uploadedUrl;
+          imageFile    = null; // switch to network image
+          debugPrint("Photo saved to Firestore as: $networkImage");
+        } else {
+          showMsg(
+            "Photo upload failed. Check Firebase Storage rules.\n"
+            "Other profile details will still be saved.",
+          );
+          // Don't return — still save the rest of the profile
+        }
       }
 
-      // ── Update Firebase Auth display name ──
-      final fullName =
-          "${firstNameController.text.trim()} ${lastNameController.text.trim()}"
-              .trim();
+      // ── Step 2: Update Firebase Auth display name ──
+      final String fullName =
+          "${firstNameController.text.trim()} "
+          "${lastNameController.text.trim()}".trim();
+
       await user.updateDisplayName(fullName);
 
-      // ── Write all fields to Firestore ──
+      // Also update photoURL in Auth so it's consistent
+      if (networkImage.isNotEmpty) {
+        await user.updatePhotoURL(networkImage);
+      }
+
+      // ── Step 3: Build Firestore payload ──
       final docRef = FirebaseFirestore.instance
           .collection("users")
           .doc(email);
 
-      // Preserve createdAt — only set it if the doc doesn't exist yet
-      final existing = await docRef.get();
+      final existingDoc = await docRef.get();
+
       final Map<String, dynamic> payload = {
         "userId":      email,
         "firebaseUid": user.uid,
@@ -208,20 +265,29 @@ class _ProfilePageState extends State<ProfilePage> {
         "updatedAt":   FieldValue.serverTimestamp(),
       };
 
-      if (!existing.exists) {
+      // Only set createdAt on first write
+      if (!existingDoc.exists) {
         payload["createdAt"] = FieldValue.serverTimestamp();
       }
 
       await docRef.set(payload, SetOptions(merge: true));
 
-      if (mounted) setState(() {}); // refresh name in header card
+      debugPrint("Firestore saved. photo field = $networkImage");
 
-      showMsg("Profile Updated Successfully");
+      if (mounted) setState(() {}); // rebuild header card
+
+      showMsg("Profile updated successfully ✓");
     } catch (e) {
-      debugPrint("SAVE ERROR: $e");
-      showMsg("Failed to save profile: $e");
+      debugPrint("SAVE PROFILE ERROR: $e");
+      showMsg("Save failed: $e");
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) {
+        setState(() {
+          isLoading       = false;
+          _isUploading    = false;
+          _uploadProgress = 0;
+        });
+      }
     }
   }
 
@@ -231,15 +297,18 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> pickImage() async {
     try {
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 70,
+      final XFile? picked = await ImagePicker().pickImage(
+        source:       ImageSource.gallery,
+        imageQuality: 75,
+        maxWidth:     800,
+        maxHeight:    800,
       );
       if (picked != null && mounted) {
         setState(() => imageFile = File(picked.path));
       }
     } catch (e) {
       debugPrint("IMAGE PICK ERROR: $e");
+      showMsg("Could not open gallery");
     }
   }
 
@@ -276,15 +345,19 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   // =====================================================
-  // MESSAGE
+  // SNACKBAR
   // =====================================================
 
   void showMsg(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        behavior: SnackBarBehavior.floating,
+        behavior:      SnackBarBehavior.floating,
+        duration:      const Duration(seconds: 3),
         content: Text(msg),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
       ),
     );
   }
@@ -293,7 +366,7 @@ class _ProfilePageState extends State<ProfilePage> {
   // AVATAR IMAGE PROVIDER
   // =====================================================
 
-  ImageProvider buildImage() {
+  ImageProvider _buildImageProvider() {
     if (imageFile != null)       return FileImage(imageFile!);
     if (networkImage.isNotEmpty) return NetworkImage(networkImage);
     return const AssetImage("assets/user.jfif");
@@ -314,25 +387,25 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   // =====================================================
-  // UI
+  // BUILD
   // =====================================================
 
   @override
   Widget build(BuildContext context) {
-    final double width    = MediaQuery.of(context).size.width;
-    final bool   isTablet = width > 700;
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool   isTablet    = screenWidth > 700;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FB),
 
       appBar: AppBar(
-        elevation: 0,
+        elevation:       0,
         backgroundColor: Colors.transparent,
-        centerTitle: true,
+        centerTitle:     true,
         title: const Text(
           "My Profile",
           style: TextStyle(
-            color: Colors.black87,
+            color:      Colors.black87,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -341,11 +414,13 @@ class _ProfilePageState extends State<ProfilePage> {
       body: Stack(
         children: [
 
+          // ── SCROLLABLE CONTENT ────────────────────
+
           SafeArea(
             child: SingleChildScrollView(
               padding: EdgeInsets.symmetric(
                 horizontal: isTablet ? 28 : 16,
-                vertical: 16,
+                vertical:   16,
               ),
               child: Center(
                 child: ConstrainedBox(
@@ -355,149 +430,13 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: Column(
                       children: [
 
-                        // ── PROFILE HEADER CARD ──────────
+                        // ── HEADER CARD ──────────────
 
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF5B67F1), Color(0xFF7D89FF)],
-                            ),
-                            borderRadius: BorderRadius.circular(30),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.indigo.withOpacity(0.2),
-                                blurRadius: 18,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-
-                              // Avatar + edit button
-                              Stack(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 3,
-                                      ),
-                                    ),
-                                    child: CircleAvatar(
-                                      radius: isTablet ? 62 : 55,
-                                      backgroundImage: buildImage(),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    bottom: 0,
-                                    right: 0,
-                                    child: InkWell(
-                                      onTap: isLoading ? null : pickImage,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: const BoxDecoration(
-                                          color: Colors.white,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: _isUploading
-                                            ? const SizedBox(
-                                                width: 18,
-                                                height: 18,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  color: Colors.indigo,
-                                                ),
-                                              )
-                                            : const Icon(
-                                                Icons.edit,
-                                                size: 18,
-                                                color: Colors.indigo,
-                                              ),
-                                      ),
-                                    ),
-                                  ),
-
-                                  // "New photo" indicator badge
-                                  if (imageFile != null)
-                                    Positioned(
-                                      top: 0,
-                                      left: 0,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.orange,
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Text(
-                                          "New",
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-
-                              const SizedBox(height: 18),
-
-                              Text(
-                                "${firstNameController.text} ${lastNameController.text}".trim().isEmpty
-                                    ? "Your Name"
-                                    : "${firstNameController.text} ${lastNameController.text}",
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-
-                              const SizedBox(height: 8),
-
-                              Text(
-                                phoneController.text.isNotEmpty
-                                    ? phoneController.text
-                                    : emailController.text,
-                                style: const TextStyle(color: Colors.white70),
-                              ),
-
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  _collection == "admins"
-                                      ? "Admin Account"
-                                      : "User Account",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _buildHeaderCard(isTablet),
 
                         const SizedBox(height: 24),
 
-                        // ── PERSONAL INFO SECTION ────────
+                        // ── PERSONAL INFO ────────────
 
                         _section(
                           title: "Personal Information",
@@ -515,37 +454,19 @@ class _ProfilePageState extends State<ProfilePage> {
                                   : Column(
                                       children: [
                                         _field(firstNameController, "First Name", Icons.person),
-                                        _field(lastNameController, "Last Name", Icons.person_outline),
+                                        _field(lastNameController,  "Last Name",  Icons.person_outline),
                                       ],
                                     ),
 
-                              _field(
-                                emailController,
-                                "Email",
-                                Icons.email,
-                                readOnly: true,
-                              ),
-
-                              _field(
-                                phoneController,
-                                "Phone Number",
-                                Icons.phone,
-                                keyboard: TextInputType.phone,
-                              ),
-
-                              _field(
-                                addressController,
-                                "Address",
-                                Icons.location_on,
-                                maxLines: 3,
-                                required: false,
-                              ),
+                              _field(emailController, "Email",        Icons.email,       readOnly: true),
+                              _field(phoneController, "Phone Number", Icons.phone,       keyboard: TextInputType.phone),
+                              _field(addressController, "Address",    Icons.location_on, maxLines: 3, required: false),
 
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton.icon(
                                   onPressed: openMap,
-                                  icon: const Icon(Icons.map),
+                                  icon:  const Icon(Icons.map),
                                   label: const Text("Pick From Map"),
                                 ),
                               ),
@@ -555,23 +476,25 @@ class _ProfilePageState extends State<ProfilePage> {
 
                         const SizedBox(height: 28),
 
-                        // ── SAVE BUTTON ──────────────────
+                        // ── SAVE BUTTON ──────────────
 
                         SizedBox(
-                          width: double.infinity,
+                          width:  double.infinity,
                           height: 56,
                           child: ElevatedButton.icon(
-                            onPressed: isLoading ? null : saveProfile,
-                            icon: const Icon(Icons.save),
+                            onPressed: (isLoading || _isUploading)
+                                ? null
+                                : saveProfile,
+                            icon:  const Icon(Icons.save),
                             label: const Text(
                               "Save Profile",
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize:   16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             style: ElevatedButton.styleFrom(
-                              elevation: 0,
+                              elevation:       0,
                               backgroundColor: Colors.indigo,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
@@ -583,18 +506,18 @@ class _ProfilePageState extends State<ProfilePage> {
 
                         const SizedBox(height: 16),
 
-                        // ── LOGOUT BUTTON ────────────────
+                        // ── LOGOUT BUTTON ────────────
 
                         SizedBox(
-                          width: double.infinity,
+                          width:  double.infinity,
                           height: 56,
                           child: OutlinedButton.icon(
                             onPressed: logout,
-                            icon: const Icon(Icons.logout),
+                            icon:  const Icon(Icons.logout),
                             label: const Text(
                               "Logout",
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize:   16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -617,13 +540,202 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
 
-          // ── LOADING OVERLAY ──────────────────────────
+          // ── LOADING OVERLAY ───────────────────────
 
           if (isLoading)
             Container(
-              color: Colors.black.withOpacity(0.2),
-              child: const Center(child: CircularProgressIndicator()),
+              color: Colors.black.withOpacity(0.25),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(color: Colors.white),
+                    if (_isUploading) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        "Uploading photo… "
+                        "${(_uploadProgress * 100).toStringAsFixed(0)}%",
+                        style: const TextStyle(
+                          color:      Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: 200,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value:           _uploadProgress,
+                            backgroundColor: Colors.white30,
+                            color:           Colors.white,
+                            minHeight:       6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // HEADER CARD
+  // =====================================================
+
+  Widget _buildHeaderCard(bool isTablet) {
+    final double avatarRadius = isTablet ? 62 : 52;
+
+    return Container(
+      width:   double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF5B67F1), Color(0xFF7D89FF)],
+        ),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color:      Colors.indigo.withOpacity(0.2),
+            blurRadius: 18,
+            offset:     const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+
+          // ── AVATAR ────────────────────────────────
+
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+
+              // White ring + avatar
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                ),
+                child: CircleAvatar(
+                  radius:          avatarRadius,
+                  backgroundImage: _buildImageProvider(),
+                  backgroundColor: const Color(0xFFEEF2FF),
+                ),
+              ),
+
+              // Edit / upload spinner button
+              Positioned(
+                bottom: 0,
+                right:  0,
+                child: GestureDetector(
+                  onTap: (isLoading || _isUploading) ? null : pickImage,
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: _isUploading
+                        ? SizedBox(
+                            width:  18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              value: _uploadProgress > 0
+                                  ? _uploadProgress
+                                  : null,
+                              color: Colors.indigo,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.camera_alt,
+                            size:  18,
+                            color: Colors.indigo,
+                          ),
+                  ),
+                ),
+              ),
+
+              // "New" badge — visible after picking but before saving
+              if (imageFile != null)
+                Positioned(
+                  top:  0,
+                  left: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color:        Colors.orange,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      "New",
+                      style: TextStyle(
+                        color:      Colors.white,
+                        fontSize:   10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          // ── NAME ──────────────────────────────────
+
+          Text(
+            () {
+              final n =
+                  "${firstNameController.text} ${lastNameController.text}"
+                      .trim();
+              return n.isEmpty ? "Your Name" : n;
+            }(),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color:      Colors.white,
+              fontSize:   22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          // ── PHONE OR EMAIL ────────────────────────
+
+          Text(
+            phoneController.text.isNotEmpty
+                ? phoneController.text
+                : emailController.text,
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+
+          const SizedBox(height: 10),
+
+          // ── ACCOUNT TYPE BADGE ────────────────────
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color:        Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              _collection == "admins" ? "Admin Account" : "User Account",
+              style: const TextStyle(
+                color:      Colors.white,
+                fontSize:   12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -635,26 +747,25 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _section({required String title, required Widget child}) {
     return Container(
-      width: double.infinity,
+      width:   double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color:        Colors.white,
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color:      Colors.black.withOpacity(0.05),
             blurRadius: 14,
-            offset: const Offset(0, 6),
+            offset:     const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 22),
           child,
         ],
@@ -678,39 +789,44 @@ class _ProfilePageState extends State<ProfilePage> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
-        controller: c,
+        controller:  c,
         keyboardType: keyboard,
-        maxLines: maxLines,
-        readOnly: readOnly,
+        maxLines:    maxLines,
+        readOnly:    readOnly,
         validator: (v) {
-          if (required && (v == null || v.trim().isEmpty)) return "Required";
+          if (required && (v == null || v.trim().isEmpty)) {
+            return "This field is required";
+          }
           return null;
         },
         decoration: InputDecoration(
-          hintText: hint,
+          hintText:   hint,
           prefixIcon: Icon(icon, color: Colors.indigo),
           suffixIcon: readOnly
-              ? const Icon(Icons.lock_outline, size: 16, color: Colors.grey)
+              ? const Icon(Icons.lock_outline,
+                  size: 16, color: Colors.grey)
               : null,
-          filled: true,
+          filled:    true,
           fillColor: readOnly
               ? const Color(0xFFEEEFF5)
               : const Color(0xFFF7F8FC),
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 18,
-          ),
+              horizontal: 18, vertical: 18),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: Colors.grey.shade200),
+            borderSide:  BorderSide(color: Colors.grey.shade200),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: Colors.indigo, width: 1.3),
+            borderSide:  const BorderSide(color: Colors.indigo, width: 1.3),
           ),
-          disabledBorder: OutlineInputBorder(
+          errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: Colors.grey.shade100),
+            borderSide:  const BorderSide(color: Colors.red),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide:  const BorderSide(color: Colors.red, width: 1.3),
           ),
         ),
       ),

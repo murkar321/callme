@@ -1,4 +1,4 @@
-import 'package:callme/profile/notifications.dart';
+import 'package:callme/profile/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
