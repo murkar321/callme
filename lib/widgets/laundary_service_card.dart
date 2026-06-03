@@ -18,8 +18,6 @@ class LaundryServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-
-        /// 🔁 Redirect to Detail Page (FULL SCREEN)
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -34,9 +32,10 @@ class LaundryServiceCard extends StatelessWidget {
 
       child: Container(
         margin: const EdgeInsets.symmetric(
-            vertical: 8, horizontal: 10),
+          vertical: 8,
+          horizontal: 10,
+        ),
         padding: const EdgeInsets.all(12),
-
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -44,10 +43,9 @@ class LaundryServiceCard extends StatelessWidget {
             BoxShadow(
               color: Colors.black12,
               blurRadius: 6,
-            )
+            ),
           ],
         ),
-
         child: Row(
           children: [
 
@@ -59,6 +57,15 @@ class LaundryServiceCard extends StatelessWidget {
                 height: 70,
                 width: 70,
                 fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 70,
+                  width: 70,
+                  color: Colors.grey.shade100,
+                  child: Icon(
+                    Icons.image_not_supported,
+                    color: Colors.grey.shade400,
+                  ),
+                ),
               ),
             ),
 
@@ -67,8 +74,7 @@ class LaundryServiceCard extends StatelessWidget {
             /// 📄 DETAILS
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
                   /// NAME
@@ -84,15 +90,13 @@ class LaundryServiceCard extends StatelessWidget {
 
                   /// DESCRIPTION
                   Text(
-                    service.description ??
-                        "Laundry Service",
+                    service.description ?? "Laundry Service",
                     style: const TextStyle(
                       fontSize: 12,
                       color: Colors.grey,
                     ),
                     maxLines: 2,
-                    overflow:
-                        TextOverflow.ellipsis,
+                    overflow: TextOverflow.ellipsis,
                   ),
 
                   const SizedBox(height: 6),
@@ -101,8 +105,7 @@ class LaundryServiceCard extends StatelessWidget {
                   Text(
                     "₹${service.calculatedFinalPrice}",
                     style: const TextStyle(
-                      fontWeight:
-                          FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                       fontSize: 14,
                     ),
                   ),
@@ -115,7 +118,7 @@ class LaundryServiceCard extends StatelessWidget {
               Icons.arrow_forward_ios,
               size: 16,
               color: Colors.grey,
-            )
+            ),
           ],
         ),
       ),

@@ -168,6 +168,73 @@ class _UniversalServicesPageState
             color: Colors.black,
           ),
         ),
+        actions: [
+          /// 🛒 CART BADGE — top-right of AppBar
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: GestureDetector(
+              onTap: totalItems > 0
+                  ? () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CartPage(
+                            service: widget.serviceName,
+                            serviceName: widget.serviceName,
+                            cart: Cart.getItems(
+                              widget.serviceName,
+                            ),
+                          ),
+                        ),
+                      ).then((_) => refresh());
+                    }
+                  : null,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    Icons.shopping_cart_outlined,
+                    color: Colors.black87,
+                    size: 26,
+                  ),
+                  if (totalItems > 0)
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: AnimatedScale(
+                        scale: totalItems > 0 ? 1.0 : 0.0,
+                        duration:
+                            const Duration(milliseconds: 200),
+                        curve: Curves.elasticOut,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
+                          child: Text(
+                            totalItems > 99
+                                ? "99+"
+                                : "$totalItems",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
 
       body: Column(
@@ -293,11 +360,12 @@ class _UniversalServicesPageState
                   child: ListView.builder(
 
                     padding:
-                        const EdgeInsets.fromLTRB(
+                        EdgeInsets.fromLTRB(
                       6,
                       8,
                       6,
-                      110,
+                      // Add extra bottom padding when cart bar is visible
+                      totalItems > 0 ? 110 : 20,
                     ),
 
                     itemCount: items.length,
@@ -451,11 +519,12 @@ class _UniversalServicesPageState
         ],
       ),
 
-      /// 🔥 FIXED CART BAR
+      /// 🔥 FIXED CART BAR — disappears instantly when cart is empty
       bottomNavigationBar: totalItems > 0
           ? SafeArea(
-              child: Container(
-
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
                 padding:
                     const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -478,7 +547,7 @@ class _UniversalServicesPageState
 
                     Expanded(
                       child: Text(
-                        "$totalItems items • ₹$totalPrice",
+                        "$totalItems item${totalItems == 1 ? '' : 's'} • ₹$totalPrice",
                         overflow:
                             TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -526,7 +595,7 @@ class _UniversalServicesPageState
                                 ),
                               ),
                             ),
-                          );
+                          ).then((_) => refresh());
                         },
 
                         child:

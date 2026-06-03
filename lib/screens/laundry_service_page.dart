@@ -28,24 +28,47 @@ class _LaundryServicePageState
     selectedCategory = laundryData.keys.first;
   }
 
-  /// 🧺 FABRIC POPUP
+  // ─── Fabric options ────────────────────────────────────────────
+  final List<Map<String, dynamic>> fabricOptions = const [
+    {"name": "Cotton",   "price": 50},
+    {"name": "Silk",     "price": 70},
+    {"name": "Wool",     "price": 80},
+    {"name": "Denim",    "price": 60},
+    {"name": "Curtains", "price": 90},
+    {"name": "Shoes",    "price": 100},
+  ];
+
+  // ─── Multi-select fabric popup ─────────────────────────────────
   void showFabricPopup(ServiceProduct product) {
 
-    String selectedFabric = "Cotton";
-    int selectedPrice = 50;
+    // Track qty per fabric: name → qty (0 = not selected)
+    final Map<String, int> fabricQty = {
+      for (var f in fabricOptions) f["name"] as String: 0,
+    };
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-
         return StatefulBuilder(
           builder: (context, setModalState) {
 
+            // Total extra cost from selected fabrics
+            int fabricTotal = 0;
+            int totalPieces = 0;
+            for (var f in fabricOptions) {
+              final name  = f["name"]  as String;
+              final price = f["price"] as int;
+              final qty   = fabricQty[name]!;
+              fabricTotal += price * qty;
+              totalPieces += qty;
+            }
+
+            final basePrice = product.calculatedFinalPrice;
+
             return Container(
-              height:
-                  MediaQuery.of(context).size.height * 0.55,
+              height: MediaQuery.of(context).size.height * 0.65,
               padding: const EdgeInsets.all(16),
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -53,154 +76,201 @@ class _LaundryServicePageState
                   top: Radius.circular(22),
                 ),
               ),
-
               child: Column(
                 children: [
 
-                  /// HANDLE
+                  // Handle
                   Container(
-                    width: 50,
-                    height: 5,
+                    width: 50, height: 5,
                     decoration: BoxDecoration(
                       color: Colors.grey.shade300,
-                      borderRadius:
-                          BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
 
                   const SizedBox(height: 10),
 
-                  /// HEADER
+                  // Header
                   Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-
                       const Text(
-                        "Laundry Guide",
+                        "Select Fabric & Qty",
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
                       IconButton(
-                        onPressed: () =>
-                            Navigator.pop(context),
+                        onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.close),
-                      )
+                      ),
                     ],
                   ),
 
                   const Divider(),
 
-                  /// FABRIC LIST
+                  // Fabric list with +/- controls
                   Expanded(
                     child: ListView(
+                      children: fabricOptions.map((f) {
+                        final name  = f["name"]  as String;
+                        final price = f["price"] as int;
+                        final qty   = fabricQty[name]!;
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 6,
+                          ),
+                          child: Row(
+                            children: [
+
+                              // Fabric name + price
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      "₹$price / piece",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Qty control
+                              Row(
+                                children: [
+                                  _qtyButton(
+                                    icon: Icons.remove,
+                                    onTap: qty > 0
+                                        ? () => setModalState(() =>
+                                            fabricQty[name] = qty - 1)
+                                        : null,
+                                  ),
+                                  Container(
+                                    width: 36,
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      "$qty",
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  _qtyButton(
+                                    icon: Icons.add,
+                                    onTap: () => setModalState(() =>
+                                        fabricQty[name] = qty + 1),
+                                  ),
+                                ],
+                              ),
+
+                              // Sub-total for this fabric
+                              SizedBox(
+                                width: 60,
+                                child: Text(
+                                  qty > 0
+                                      ? "₹${price * qty}"
+                                      : "",
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFAE91BA),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+                  const Divider(),
+
+                  // Total row
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-
-                        fabricTile(
-                            "Cotton", 50,
-                            selectedFabric,
-                            setModalState,
-                            (f, p) {
-                          selectedFabric = f;
-                          selectedPrice = p;
-                        }),
-
-                        fabricTile(
-                            "Silk", 70,
-                            selectedFabric,
-                            setModalState,
-                            (f, p) {
-                          selectedFabric = f;
-                          selectedPrice = p;
-                        }),
-
-                        fabricTile(
-                            "Wool", 80,
-                            selectedFabric,
-                            setModalState,
-                            (f, p) {
-                          selectedFabric = f;
-                          selectedPrice = p;
-                        }),
-
-                        fabricTile(
-                            "Denim", 60,
-                            selectedFabric,
-                            setModalState,
-                            (f, p) {
-                          selectedFabric = f;
-                          selectedPrice = p;
-                        }),
-
-                        fabricTile(
-                            "Curtains", 90,
-                            selectedFabric,
-                            setModalState,
-                            (f, p) {
-                          selectedFabric = f;
-                          selectedPrice = p;
-                        }),
-
-                        fabricTile(
-                            "Shoes", 100,
-                            selectedFabric,
-                            setModalState,
-                            (f, p) {
-                          selectedFabric = f;
-                          selectedPrice = p;
-                        }),
+                        Text(
+                          "$totalPieces piece${totalPieces == 1 ? '' : 's'} selected",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        Text(
+                          "Total ₹${basePrice + fabricTotal}",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
 
-                  /// TOTAL
-                  Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Total ₹${product.calculatedFinalPrice + selectedPrice}",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: 6),
 
-                  const SizedBox(height: 10),
-
-                  /// ADD TO CART
+                  // ADD TO CART button
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: () {
-
-                        Cart.addLaundry(
-                          id: product.id,
-                          name:
-                              "${product.name} ($selectedFabric)",
-                          price: product.calculatedFinalPrice +
-                              selectedPrice,
-                          category: selectedCategory,
-                          image: product.imagePath,
-                        );
-
-                        Navigator.pop(context);
-                        setState(() {});
-                      },
+                      onPressed: totalPieces == 0
+                          ? null
+                          : () {
+                              // Add one cart entry per selected fabric
+                              fabricOptions.forEach((f) {
+                                final name  = f["name"]  as String;
+                                final price = f["price"] as int;
+                                final qty   = fabricQty[name]!;
+                                if (qty > 0) {
+                                  for (int i = 0; i < qty; i++) {
+                                    Cart.addLaundry(
+                                      id: "${product.id}_${name.toLowerCase()}",
+                                      name: "${product.name} ($name)",
+                                      price: basePrice + price,
+                                      category: selectedCategory,
+                                      image: product.imagePath,
+                                    );
+                                  }
+                                }
+                              });
+                              Navigator.pop(context);
+                              setState(() {});
+                            },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            const Color(0xFFAE91BA),
+                        backgroundColor: const Color(0xFFAE91BA),
+                        disabledBackgroundColor:
+                            Colors.grey.shade300,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      child: const Text(
-                        "ADD TO CART",
-                        style: TextStyle(
+                      child: Text(
+                        totalPieces == 0
+                            ? "SELECT AT LEAST ONE"
+                            : "ADD $totalPieces ITEM${totalPieces == 1 ? '' : 'S'} TO CART",
+                        style: const TextStyle(
                           color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
@@ -208,15 +278,13 @@ class _LaundryServicePageState
 
                   const SizedBox(height: 8),
 
-                  /// VIEW CART
+                  // VIEW CART button
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: OutlinedButton(
                       onPressed: () {
-
                         Navigator.pop(context);
-
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -228,9 +296,14 @@ class _LaundryServicePageState
                           ),
                         ).then((_) => setState(() {}));
                       },
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                       child: const Text("VIEW CART"),
                     ),
-                  )
+                  ),
                 ],
               ),
             );
@@ -240,25 +313,29 @@ class _LaundryServicePageState
     );
   }
 
-  /// FABRIC TILE
-  Widget fabricTile(
-    String name,
-    int price,
-    String selectedFabric,
-    StateSetter setModalState,
-    Function(String, int) onSelect,
-  ) {
-    return ListTile(
-      title: Text(name),
-      trailing: Text("₹$price"),
-      leading: Radio(
-        value: name,
-        groupValue: selectedFabric,
-        onChanged: (val) {
-          setModalState(() {
-            onSelect(name, price);
-          });
-        },
+  // Small +/- icon button helper
+  Widget _qtyButton({
+    required IconData icon,
+    required VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: onTap != null
+              ? const Color(0xFFAE91BA).withOpacity(0.15)
+              : Colors.grey.shade100,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          size: 16,
+          color: onTap != null
+              ? const Color(0xFFAE91BA)
+              : Colors.grey.shade400,
+        ),
       ),
     );
   }
@@ -266,67 +343,116 @@ class _LaundryServicePageState
   @override
   Widget build(BuildContext context) {
 
-    int cartCount = Cart.totalItems("Laundry");
+    final int cartCount  = Cart.totalItems("Laundry");
+    final int totalPrice = Cart.getTotal("Laundry");
+    const Color themeColor = Color(0xFFAE91BA);
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
 
       appBar: AppBar(
-        title: const Text("Laundry"),
+        title: const Text(
+          "Laundry",
+          style: TextStyle(color: Colors.black),
+        ),
         centerTitle: true,
-        backgroundColor: const Color(0xFFAE91BA),
+        backgroundColor: themeColor,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black),
+        actions: [
+          /// 🛒 CART BADGE
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: GestureDetector(
+              onTap: cartCount > 0
+                  ? () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CartPage(
+                            service: "Laundry",
+                            serviceName: "Laundry",
+                            cart: Cart.getItems("Laundry"),
+                          ),
+                        ),
+                      ).then((_) => setState(() {}));
+                    }
+                  : null,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(
+                    Icons.shopping_cart_outlined,
+                    color: Colors.black87,
+                    size: 26,
+                  ),
+                  if (cartCount > 0)
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: AnimatedScale(
+                        scale: 1.0,
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.elasticOut,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
+                          child: Text(
+                            cartCount > 99 ? "99+" : "$cartCount",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
 
       body: Row(
         children: [
 
-          /// LEFT CATEGORY
+          /// LEFT CATEGORY PANEL
           Container(
             width: 90,
             color: Colors.white,
             child: ListView(
-              padding:
-                  const EdgeInsets.only(top: 10),
-              children:
-                  laundryData.keys.map((category) {
-
-                bool isSelected =
-                    selectedCategory == category;
-
-                String image =
-                    laundryData[category]!
-                        .first
-                        .imagePath;
+              padding: const EdgeInsets.only(top: 10),
+              children: laundryData.keys.map((category) {
+                final isSelected = selectedCategory == category;
+                final image = laundryData[category]!.first.imagePath;
 
                 return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      selectedCategory = category;
-                    });
-                  },
-
+                  onTap: () => setState(() => selectedCategory = category),
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(
-                            vertical: 10),
-
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     child: Column(
                       children: [
-
                         CircleAvatar(
                           radius: 28,
                           backgroundColor: isSelected
-                              ? const Color(0xFFAE91BA)
+                              ? themeColor
                               : Colors.grey.shade200,
                           child: CircleAvatar(
                             radius: 24,
-                            backgroundImage:
-                                AssetImage(image),
+                            backgroundImage: AssetImage(image),
                           ),
                         ),
-
                         const SizedBox(height: 6),
-
                         Text(
                           category,
                           textAlign: TextAlign.center,
@@ -334,10 +460,10 @@ class _LaundryServicePageState
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: isSelected
-                                ? const Color(0xFFAE91BA)
+                                ? themeColor
                                 : Colors.black,
                           ),
-                        )
+                        ),
                       ],
                     ),
                   ),
@@ -349,40 +475,35 @@ class _LaundryServicePageState
           /// RIGHT GRID
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.all(10),
-              itemCount:
-                  laundryData[selectedCategory]!.length,
-
+              padding: EdgeInsets.fromLTRB(
+                10,
+                10,
+                10,
+                cartCount > 0 ? 90 : 10,
+              ),
+              itemCount: laundryData[selectedCategory]!.length,
               gridDelegate:
                   const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 mainAxisSpacing: 10,
                 crossAxisSpacing: 10,
-                mainAxisExtent: 240, // ✅ overflow fixed
+                mainAxisExtent: 240,
               ),
-
               itemBuilder: (context, index) {
-
                 final product =
                     laundryData[selectedCategory]![index];
-
                 return LaundryCard(
                   product: product,
                   category: selectedCategory,
-                  onAdd: () =>
-                      showFabricPopup(product),
+                  onAdd: () => showFabricPopup(product),
                   onView: () {
-
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            LaundryDetailPage(
+                        builder: (_) => LaundryDetailPage(
                           product: product,
-                          category:
-                              selectedCategory,
-                          serviceName:
-                              "Laundry",
+                          category: selectedCategory,
+                          serviceName: "Laundry",
                         ),
                       ),
                     );
@@ -394,65 +515,62 @@ class _LaundryServicePageState
         ],
       ),
 
-      /// CART BAR
+      /// 🔥 BOTTOM CART BAR — disappears instantly when cart is empty
       bottomNavigationBar: cartCount > 0
-          ? Container(
-              height: 60,
-              margin:
-                  const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color:
-                    const Color(0xFFAE91BA),
-                borderRadius:
-                    BorderRadius.circular(12),
-              ),
-              child: InkWell(
-                onTap: () {
-
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CartPage(
-                        service: "Laundry",
-                        serviceName:
-                            "Laundry",
-                        cart: Cart.getItems(
-                            "Laundry"),
-                      ),
+          ? SafeArea(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: themeColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 6,
                     ),
-                  ).then(
-                      (_) => setState(() {}));
-                },
+                  ],
+                ),
                 child: Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment.spaceBetween,
                   children: [
-
-                    Padding(
-                      padding:
-                          const EdgeInsets.all(12),
+                    Expanded(
                       child: Text(
-                        "$cartCount items added",
+                        "$cartCount item${cartCount == 1 ? '' : 's'} • ₹$totalPrice",
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 15,
-                          fontWeight:
-                              FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-
-                    const Padding(
-                      padding:
-                          EdgeInsets.all(12),
-                      child: Text(
-                        "VIEW CART",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight:
-                              FontWeight.bold,
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 42,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: themeColor,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
                         ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CartPage(
+                                service: "Laundry",
+                                serviceName: "Laundry",
+                                cart: Cart.getItems("Laundry"),
+                              ),
+                            ),
+                          ).then((_) => setState(() {}));
+                        },
+                        child: const Text("View Cart"),
                       ),
                     ),
                   ],

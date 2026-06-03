@@ -43,6 +43,8 @@ class _EducationServicesPageState
     final groupedData = groupByCategory();
     final categories = groupedData.keys.toList()..sort();
 
+    const Color themeColor = Color(0xFFAE91BA);
+
     /// 🛑 EMPTY STATE
     if (categories.isEmpty) {
       return Scaffold(
@@ -60,6 +62,7 @@ class _EducationServicesPageState
     final services = groupedData[selectedCategory]!;
 
     final totalItems = Cart.getTotalItems("Education");
+    final totalPrice = Cart.getTotal("Education");
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -67,12 +70,85 @@ class _EducationServicesPageState
       /// 🔝 APP BAR
       appBar: AppBar(
         title: const Text("Education Services"),
+        backgroundColor: themeColor,
+        centerTitle: true,
+        elevation: 0,
+        titleTextStyle: const TextStyle(
+          color: Colors.black,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+        iconTheme: const IconThemeData(color: Colors.black),
+        actions: [
+          /// 🛒 CART BADGE — top-right of AppBar
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: GestureDetector(
+              onTap: totalItems > 0
+                  ? () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CartPage(
+                            service: "Education",
+                            serviceName: "Education",
+                            cart: [],
+                          ),
+                        ),
+                      ).then((_) => refresh());
+                    }
+                  : null,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(
+                    Icons.shopping_cart_outlined,
+                    color: Colors.black87,
+                    size: 26,
+                  ),
+                  if (totalItems > 0)
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: AnimatedScale(
+                        scale: 1.0,
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.elasticOut,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
+                          child: Text(
+                            totalItems > 99
+                                ? "99+"
+                                : "$totalItems",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
 
       body: Column(
         children: [
 
-          /// 🔍 SEARCH BAR (IMPROVED UI)
+          /// 🔍 SEARCH BAR
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
             child: TextField(
@@ -101,7 +177,7 @@ class _EducationServicesPageState
             child: Row(
               children: [
 
-                /// 📂 LEFT CATEGORY PANEL (IMPROVED)
+                /// 📂 LEFT CATEGORY PANEL
                 Container(
                   width: MediaQuery.of(context).size.width * 0.28,
                   color: Colors.white,
@@ -127,12 +203,12 @@ class _EducationServicesPageState
                               const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? Colors.blue.shade50
+                                ? const Color(0xFFAE91BA).withOpacity(0.12)
                                 : Colors.transparent,
                             border: Border(
                               left: BorderSide(
                                 color: isSelected
-                                    ? Colors.blue
+                                    ? themeColor
                                     : Colors.transparent,
                                 width: 4,
                               ),
@@ -173,8 +249,12 @@ class _EducationServicesPageState
                 /// 📄 RIGHT PANEL (SERVICES)
                 Expanded(
                   child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(
-                        8, 8, 8, 80),
+                    padding: EdgeInsets.fromLTRB(
+                      8,
+                      8,
+                      8,
+                      totalItems > 0 ? 110 : 20,
+                    ),
                     itemCount: services.length,
                     itemBuilder: (context, index) {
                       return EducationServiceCard(
@@ -190,46 +270,60 @@ class _EducationServicesPageState
         ],
       ),
 
-      /// 🟣 BOTTOM CART BAR (IMPROVED)
+      /// 🟣 BOTTOM CART BAR — disappears instantly when cart is empty
       bottomNavigationBar: totalItems > 0
           ? SafeArea(
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFAE91BA),
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: themeColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 6,
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
-                    Text(
-                      "$totalItems courses selected",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Text(
+                        "$totalItems course${totalItems == 1 ? '' : 's'} • ₹$totalPrice",
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                    const Spacer(),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const CartPage(
-                              service: "Education",
-                              serviceName: '',
-                              cart: [],
-                            ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 42,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: themeColor,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
                           ),
-                        ).then((_) => refresh());
-                      },
-                      child: const Text(
-                        "View Courses",
-                        style: TextStyle(color: Colors.black),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CartPage(
+                                service: "Education",
+                                serviceName: "Education",
+                                cart: [],
+                              ),
+                            ),
+                          ).then((_) => refresh());
+                        },
+                        child: const Text("View Cart"),
                       ),
                     ),
                   ],

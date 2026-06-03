@@ -2,7 +2,6 @@ import 'package:callme/models/cart.dart';
 import 'package:flutter/material.dart';
 import '../data/education_data.dart';
 import '../models/education_detail_page.dart';
-import '../models/cart_page.dart';
 
 class EducationServiceCard extends StatelessWidget {
   final EducationService service;
@@ -85,11 +84,8 @@ class EducationServiceCard extends StatelessWidget {
                       padding: const EdgeInsets.all(10),
                       child: Image.asset(
                         service.image,
-
-                        /// PERFECT FOR MIXED RATIOS
                         fit: BoxFit.contain,
                         alignment: Alignment.center,
-
                         errorBuilder: (_, __, ___) {
                           return Center(
                             child: Icon(
@@ -287,7 +283,6 @@ class EducationServiceCard extends StatelessWidget {
                             ),
                           ),
                           onPressed: () {
-
                             Cart.addEducation(
                               id: service.id,
                               name: service.name,
@@ -297,31 +292,6 @@ class EducationServiceCard extends StatelessWidget {
                             );
 
                             onUpdate();
-
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  "${service.name} added",
-                                ),
-                                action: SnackBarAction(
-                                  label: "View",
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const CartPage(
-                                          service: "Education",
-                                          serviceName: '',
-                                          cart: [],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            );
                           },
                           child: const Text(
                             "Enquiry",

@@ -1,148 +1,195 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class NotificationPage extends StatefulWidget {
-  final String providerId;
-
-  const NotificationPage({
-    super.key,
-    required this.providerId,
-  });
+  const NotificationPage({super.key, required String providerId});
 
   @override
-  State<NotificationPage> createState() => _NotificationPageState();
+  State<NotificationPage> createState() =>
+      _NotificationPageState();
 }
 
-class _NotificationPageState extends State<NotificationPage> {
-  bool notificationsEnabled = true;
+class _NotificationPageState
+    extends State<NotificationPage> {
+  String? uid;
+
+  @override
+  void initState() {
+    super.initState();
+    uid = FirebaseAuth.instance.currentUser?.uid;
+  }
 
   Future<void> _markAllAsRead() async {
-    final docs = await FirebaseFirestore.instance
+    if (uid == null) return;
+
+    final snapshot = await FirebaseFirestore.instance
         .collection('notifications')
-        .where('providerId', isEqualTo: widget.providerId)
+        .where('receiverId', isEqualTo: uid)
         .where('read', isEqualTo: false)
         .get();
 
-    for (var doc in docs.docs) {
-      await doc.reference.update({'read': true});
+    final batch =
+        FirebaseFirestore.instance.batch();
+
+    for (final doc in snapshot.docs) {
+      batch.update(doc.reference, {
+        'read': true,
+      });
     }
+
+    await batch.commit();
   }
 
-  String _formatTime(dynamic value) {
-    try {
-      if (value == null) return '';
+  String _formatDate(dynamic value) {
+    if (value == null) return '';
 
-      if (value is Timestamp) {
-        final date = value.toDate();
-        return '${date.day}/${date.month}/${date.year}';
-      }
+    if (value is Timestamp) {
+      final date = value.toDate();
 
-      return value.toString();
-    } catch (e) {
-      return '';
+      return '${date.day}/${date.month}/${date.year}';
     }
+
+    return value.toString();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (uid == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text('User not logged in'),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Notifications"),
         actions: [
           IconButton(
             icon: const Icon(Icons.done_all),
-            onPressed: () async {
-              await _markAllAsRead();
-
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Marked all as read"),
-                  ),
-                );
-              }
-            },
-          )
+            onPressed: _markAllAsRead,
+          ),
         ],
       ),
-
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('notifications')
-            .where('providerId', isEqualTo: widget.providerId)
+            .where(
+              'receiverId',
+              isEqualTo: uid,
+            )
             .snapshots(),
-
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                snapshot.error.toString(),
+              ),
+            );
           }
 
           if (!snapshot.hasData) {
-            return const Center(child: Text("Something went wrong"));
+            return const Center(
+              child:
+                  CircularProgressIndicator(),
+            );
           }
 
           final docs = snapshot.data!.docs;
 
           if (docs.isEmpty) {
             return const Center(
-              child: Text(
-                "No Notifications Yet",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              child: Column(
+                mainAxisAlignment:
+                    MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.notifications_none,
+                    size: 70,
+                    color: Colors.grey,
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    "No Notifications Yet",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight:
+                          FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             );
           }
 
           return ListView.builder(
             itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final data = docs[index].data() as Map<String, dynamic>;
-              final isRead = data['read'] ?? false;
+            itemBuilder:
+                (context, index) {
+              final data =
+                  docs[index].data()
+                      as Map<String, dynamic>;
+
+              final isRead =
+                  data['read'] ?? false;
 
               return Card(
                 margin:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 child: ListTile(
-                  leading: Stack(
-                    children: [
-                      const CircleAvatar(
-                        child: Icon(Icons.notifications),
-                      ),
-                      if (!isRead)
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        )
-                    ],
+                  leading: CircleAvatar(
+                    backgroundColor:
+                        isRead
+                            ? Colors.grey
+                            : Colors.blue,
+                    child: const Icon(
+                      Icons.notifications,
+                      color: Colors.white,
+                    ),
                   ),
-
                   title: Text(
                     data['title'] ?? '',
                     style: TextStyle(
-                      fontWeight:
-                          isRead ? FontWeight.normal : FontWeight.bold,
+                      fontWeight: isRead
+                          ? FontWeight.normal
+                          : FontWeight.bold,
                     ),
                   ),
-
-                  subtitle: Text(data['body'] ?? ''),
-
-                  trailing: Text(
-                    _formatTime(data['createdAt']),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
+                  subtitle: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment
+                            .start,
+                    children: [
+                      Text(
+                        data['body'] ?? '',
+                      ),
+                      const SizedBox(
+                          height: 4),
+                      Text(
+                        _formatDate(
+                          data['createdAt'],
+                        ),
+                        style:
+                            const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ),
-
                   onTap: () async {
-                    await docs[index].reference.update({'read': true});
+                    if (!isRead) {
+                      await docs[index]
+                          .reference
+                          .update({
+                        'read': true,
+                      });
+                    }
                   },
                 ),
               );
