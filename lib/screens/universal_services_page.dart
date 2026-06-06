@@ -183,7 +183,7 @@ class _UniversalServicesPageState
                             serviceName: widget.serviceName,
                             cart: Cart.getItems(
                               widget.serviceName,
-                            ),
+                            ), providerId: '',
                           ),
                         ),
                       ).then((_) => refresh());
@@ -592,7 +592,7 @@ class _UniversalServicesPageState
 
                                 cart: Cart.getItems(
                                   widget.serviceName,
-                                ),
+                                ), providerId: '',
                               ),
                             ),
                           ).then((_) => refresh());

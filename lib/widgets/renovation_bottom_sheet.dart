@@ -173,7 +173,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                                             context,
                                             MaterialPageRoute(
                                               builder: (_) => CivilBookingPage(
-                                                serviceName: widget.packageName,
+                                                serviceName: widget.packageName, providerId: '',
                                               ),
                                             ),
                                           );

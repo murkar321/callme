@@ -49,7 +49,7 @@ class CivilServiceDetailPage extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => CivilBookingPage(
-                        serviceName: service.name,
+                        serviceName: service.name, providerId: '',
                       ),
                     ),
                   );

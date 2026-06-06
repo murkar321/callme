@@ -10,13 +10,10 @@ class LaundryServicePage extends StatefulWidget {
   const LaundryServicePage({super.key});
 
   @override
-  State<LaundryServicePage> createState() =>
-      _LaundryServicePageState();
+  State<LaundryServicePage> createState() => _LaundryServicePageState();
 }
 
-class _LaundryServicePageState
-    extends State<LaundryServicePage> {
-
+class _LaundryServicePageState extends State<LaundryServicePage> {
   final Map<String, List<ServiceProduct>> laundryData =
       serviceProducts['Laundry']!;
 
@@ -28,20 +25,17 @@ class _LaundryServicePageState
     selectedCategory = laundryData.keys.first;
   }
 
-  // ─── Fabric options ────────────────────────────────────────────
+  // ─── Fabric options (no price shown) ──────────────────────────
   final List<Map<String, dynamic>> fabricOptions = const [
-    {"name": "Cotton",   "price": 50},
-    {"name": "Silk",     "price": 70},
-    {"name": "Wool",     "price": 80},
-    {"name": "Denim",    "price": 60},
-    {"name": "Curtains", "price": 90},
-    {"name": "Shoes",    "price": 100},
+    {"name": "Cotton" },
+    {"name": "Silk"     },
+    {"name": "Wool"},
+    {"name": "Denim"},
+    {"name": "Polystein"},
   ];
 
   // ─── Multi-select fabric popup ─────────────────────────────────
   void showFabricPopup(ServiceProduct product) {
-
-    // Track qty per fabric: name → qty (0 = not selected)
     final Map<String, int> fabricQty = {
       for (var f in fabricOptions) f["name"] as String: 0,
     };
@@ -53,19 +47,11 @@ class _LaundryServicePageState
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-
-            // Total extra cost from selected fabrics
-            int fabricTotal = 0;
             int totalPieces = 0;
             for (var f in fabricOptions) {
-              final name  = f["name"]  as String;
-              final price = f["price"] as int;
-              final qty   = fabricQty[name]!;
-              fabricTotal += price * qty;
-              totalPieces += qty;
+              final name = f["name"] as String;
+              totalPieces += fabricQty[name]!;
             }
-
-            final basePrice = product.calculatedFinalPrice;
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.65,
@@ -81,7 +67,8 @@ class _LaundryServicePageState
 
                   // Handle
                   Container(
-                    width: 50, height: 5,
+                    width: 50,
+                    height: 5,
                     decoration: BoxDecoration(
                       color: Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(10),
@@ -114,38 +101,22 @@ class _LaundryServicePageState
                   Expanded(
                     child: ListView(
                       children: fabricOptions.map((f) {
-                        final name  = f["name"]  as String;
-                        final price = f["price"] as int;
-                        final qty   = fabricQty[name]!;
+                        final name = f["name"] as String;
+                        final qty = fabricQty[name]!;
 
                         return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 6,
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Row(
                             children: [
 
-                              // Fabric name + price
+                              // Fabric name only (no price label)
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      name,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    Text(
-                                      "₹$price / piece",
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                  ],
+                                child: Text(
+                                  name,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
 
@@ -155,8 +126,8 @@ class _LaundryServicePageState
                                   _qtyButton(
                                     icon: Icons.remove,
                                     onTap: qty > 0
-                                        ? () => setModalState(() =>
-                                            fabricQty[name] = qty - 1)
+                                        ? () => setModalState(
+                                            () => fabricQty[name] = qty - 1)
                                         : null,
                                   ),
                                   Container(
@@ -172,26 +143,10 @@ class _LaundryServicePageState
                                   ),
                                   _qtyButton(
                                     icon: Icons.add,
-                                    onTap: () => setModalState(() =>
-                                        fabricQty[name] = qty + 1),
+                                    onTap: () => setModalState(
+                                        () => fabricQty[name] = qty + 1),
                                   ),
                                 ],
-                              ),
-
-                              // Sub-total for this fabric
-                              SizedBox(
-                                width: 60,
-                                child: Text(
-                                  qty > 0
-                                      ? "₹${price * qty}"
-                                      : "",
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFFAE91BA),
-                                  ),
-                                ),
                               ),
                             ],
                           ),
@@ -202,7 +157,7 @@ class _LaundryServicePageState
 
                   const Divider(),
 
-                  // Total row
+                  // Pieces count only (no total price)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Row(
@@ -213,13 +168,6 @@ class _LaundryServicePageState
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey.shade600,
-                          ),
-                        ),
-                        Text(
-                          "Total ₹${basePrice + fabricTotal}",
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
@@ -236,17 +184,16 @@ class _LaundryServicePageState
                       onPressed: totalPieces == 0
                           ? null
                           : () {
-                              // Add one cart entry per selected fabric
                               fabricOptions.forEach((f) {
-                                final name  = f["name"]  as String;
+                                final name = f["name"] as String;
                                 final price = f["price"] as int;
-                                final qty   = fabricQty[name]!;
+                                final qty = fabricQty[name]!;
                                 if (qty > 0) {
                                   for (int i = 0; i < qty; i++) {
                                     Cart.addLaundry(
                                       id: "${product.id}_${name.toLowerCase()}",
                                       name: "${product.name} ($name)",
-                                      price: basePrice + price,
+                                      price: product.calculatedFinalPrice + price,
                                       category: selectedCategory,
                                       image: product.imagePath,
                                     );
@@ -258,8 +205,7 @@ class _LaundryServicePageState
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFAE91BA),
-                        disabledBackgroundColor:
-                            Colors.grey.shade300,
+                        disabledBackgroundColor: Colors.grey.shade300,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -291,7 +237,7 @@ class _LaundryServicePageState
                             builder: (_) => CartPage(
                               service: "Laundry",
                               serviceName: "Laundry",
-                              cart: Cart.getItems("Laundry"),
+                              cart: Cart.getItems("Laundry"), providerId: '',
                             ),
                           ),
                         ).then((_) => setState(() {}));
@@ -342,9 +288,7 @@ class _LaundryServicePageState
 
   @override
   Widget build(BuildContext context) {
-
-    final int cartCount  = Cart.totalItems("Laundry");
-    final int totalPrice = Cart.getTotal("Laundry");
+    final int cartCount = Cart.totalItems("Laundry");
     const Color themeColor = Color(0xFFAE91BA);
 
     return Scaffold(
@@ -360,7 +304,7 @@ class _LaundryServicePageState
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
         actions: [
-          /// 🛒 CART BADGE
+          // 🛒 CART BADGE
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
@@ -372,7 +316,7 @@ class _LaundryServicePageState
                           builder: (_) => CartPage(
                             service: "Laundry",
                             serviceName: "Laundry",
-                            cart: Cart.getItems("Laundry"),
+                            cart: Cart.getItems("Laundry"), providerId: '',
                           ),
                         ),
                       ).then((_) => setState(() {}));
@@ -390,29 +334,24 @@ class _LaundryServicePageState
                     Positioned(
                       top: -6,
                       right: -6,
-                      child: AnimatedScale(
-                        scale: 1.0,
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.elasticOut,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        child: Text(
+                          cartCount > 99 ? "99+" : "$cartCount",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
                           ),
-                          constraints: const BoxConstraints(
-                            minWidth: 18,
-                            minHeight: 18,
-                          ),
-                          child: Text(
-                            cartCount > 99 ? "99+" : "$cartCount",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),
@@ -426,7 +365,7 @@ class _LaundryServicePageState
       body: Row(
         children: [
 
-          /// LEFT CATEGORY PANEL
+          // LEFT CATEGORY PANEL
           Container(
             width: 90,
             color: Colors.white,
@@ -459,9 +398,7 @@ class _LaundryServicePageState
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: isSelected
-                                ? themeColor
-                                : Colors.black,
+                            color: isSelected ? themeColor : Colors.black,
                           ),
                         ),
                       ],
@@ -472,7 +409,7 @@ class _LaundryServicePageState
             ),
           ),
 
-          /// RIGHT GRID
+          // RIGHT GRID
           Expanded(
             child: GridView.builder(
               padding: EdgeInsets.fromLTRB(
@@ -490,8 +427,7 @@ class _LaundryServicePageState
                 mainAxisExtent: 240,
               ),
               itemBuilder: (context, index) {
-                final product =
-                    laundryData[selectedCategory]![index];
+                final product = laundryData[selectedCategory]![index];
                 return LaundryCard(
                   product: product,
                   category: selectedCategory,
@@ -515,7 +451,7 @@ class _LaundryServicePageState
         ],
       ),
 
-      /// 🔥 BOTTOM CART BAR — disappears instantly when cart is empty
+      // BOTTOM CART BAR — item count only, no price
       bottomNavigationBar: cartCount > 0
           ? SafeArea(
               child: AnimatedContainer(
@@ -538,7 +474,7 @@ class _LaundryServicePageState
                   children: [
                     Expanded(
                       child: Text(
-                        "$cartCount item${cartCount == 1 ? '' : 's'} • ₹$totalPrice",
+                        "$cartCount item${cartCount == 1 ? '' : 's'} in cart",
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
@@ -565,7 +501,7 @@ class _LaundryServicePageState
                               builder: (_) => CartPage(
                                 service: "Laundry",
                                 serviceName: "Laundry",
-                                cart: Cart.getItems("Laundry"),
+                                cart: Cart.getItems("Laundry"), providerId: '',
                               ),
                             ),
                           ).then((_) => setState(() {}));

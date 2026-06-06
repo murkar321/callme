@@ -39,7 +39,7 @@ $feedback
 ''';
 
     final Uri whatsappUri = Uri.parse(
-      'https://wa.me/918591286480?text=${Uri.encodeComponent(message)}',
+      'https://wa.me/918668425211?text=${Uri.encodeComponent(message)}',
     );
 
     if (await canLaunchUrl(whatsappUri)) {

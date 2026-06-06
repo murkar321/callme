@@ -1,6 +1,8 @@
+
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -18,32 +20,31 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db  = FirebaseFirestore.instance;
+  final User?             _adminUser = FirebaseAuth.instance.currentUser;
 
   bool isLoading = true;
 
   Map<String, dynamic> dashboardData = {
-    "users":     0,
-    "providers": 0,
-    "orders":    0,
-    "approvals": 0,
-    "pending":   0,
-    "accepted":  0,
-    "completed": 0,
-    "rejected":  0,
+    'users':     0,
+    'providers': 0,
+    'orders':    0,
+    'approvals': 0,
+    'pending':   0,
+    'accepted':  0,
+    'completed': 0,
+    'rejected':  0,
   };
 
-  // In-app banner for new provider — shown at top
   String? _newProviderBanner;
 
-  // Real-time stream subscription for new pending providers
   StreamSubscription<QuerySnapshot>? _providerSub;
 
-  // Track seen provider IDs so we don't re-notify on hot restart
-  final Set<String> _notifiedProviderIds = {};
+  // Pre-populated via get() before stream attaches — avoids false positives
+  final Set<String> _seenProviderIds = {};
 
   // =====================================================
-  // INIT
+  // INIT / DISPOSE
   // =====================================================
 
   @override
@@ -51,7 +52,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     super.initState();
     _saveAdminFcmToken();
     loadDashboard();
-    _listenForNewProviders();
+    _seedAndListenForNewProviders();
   }
 
   @override
@@ -62,8 +63,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // =====================================================
   // SAVE ADMIN FCM TOKEN
-  // Run every time admin opens the dashboard so the token
-  // stays fresh. Stored at admin_config/fcm → { token }.
+  // Also writes adminUid so Cloud Function can verify recipient.
   // =====================================================
 
   Future<void> _saveAdminFcmToken() async {
@@ -71,103 +71,106 @@ class _AdminDashboardState extends State<AdminDashboard> {
       final token = await FirebaseMessaging.instance.getToken();
       if (token == null || token.isEmpty) return;
 
-      await _db.doc("admin_config/fcm").set({
-        "token":     token,
-        "updatedAt": FieldValue.serverTimestamp(),
+      await _db.doc('admin_config/fcm').set({
+        'token':     token,
+        'adminUid':  _adminUser?.uid ?? '',   // ← NEW: link token to uid
+        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      debugPrint("Admin FCM token saved: $token");
+      debugPrint('[Admin] FCM token saved');
 
-      // Also refresh when token rotates
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-        _db.doc("admin_config/fcm").set({
-          "token":     newToken,
-          "updatedAt": FieldValue.serverTimestamp(),
+        _db.doc('admin_config/fcm').set({
+          'token':     newToken,
+          'adminUid':  _adminUser?.uid ?? '',
+          'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       });
     } catch (e) {
-      debugPrint("FCM TOKEN SAVE ERROR: $e");
+      debugPrint('[Admin] FCM token save error: $e');
     }
   }
 
   // =====================================================
-  // LISTEN FOR NEW PROVIDERS (real-time)
-  // Watches "pending" providers. When a NEW doc appears
-  // that we haven't notified about yet:
-  //   1. Show in-app banner
-  //   2. Queue FCM push to admin_config/fcm token
-  //   3. Save in-app notification record
-  //   4. Refresh dashboard counts
+  // SEED KNOWN IDs THEN ATTACH STREAM
+  // Uses a one-time get() to populate _seenProviderIds
+  // before the stream fires, so cold restarts and
+  // stream reconnections never re-notify stale docs.
   // =====================================================
 
-  void _listenForNewProviders() {
+  Future<void> _seedAndListenForNewProviders() async {
+    try {
+      // Seed: mark all currently-pending providers as already seen
+      final existing = await _db
+          .collection('providers')
+          .where('status', isEqualTo: 'pending')
+          .get();
+      for (final doc in existing.docs) {
+        _seenProviderIds.add(doc.id);
+      }
+    } catch (e) {
+      debugPrint('[Admin] seed error: $e');
+    }
+
+    // Now attach stream — only genuinely new docs will trigger notifications
     _providerSub = _db
-        .collection("providers")
-        .where("status", isEqualTo: "pending")
-        .orderBy("createdAt", descending: true)
+        .collection('providers')
+        .where('status', isEqualTo: 'pending')
+        .orderBy('createdAt', descending: true)
         .snapshots()
         .listen((snapshot) async {
-      // Seed known IDs on first snapshot so we don't spam
-      // on initial load — only react to genuinely new docs
-      if (_notifiedProviderIds.isEmpty && snapshot.docs.isNotEmpty) {
-        for (final doc in snapshot.docs) {
-          _notifiedProviderIds.add(doc.id);
-        }
-        return;
-      }
-
       for (final change in snapshot.docChanges) {
         if (change.type != DocumentChangeType.added) continue;
 
-        final doc  = change.doc;
-        final id   = doc.id;
-        final data = doc.data() ?? {};
+        final doc = change.doc;
+        final id  = doc.id;
+        if (_seenProviderIds.contains(id)) continue;
+        _seenProviderIds.add(id);
 
-        if (_notifiedProviderIds.contains(id)) continue;
-        _notifiedProviderIds.add(id);
+        final data         = doc.data() ?? {};
+        final business     = (data['business'] as Map<String, dynamic>?) ?? {};
+        final businessName = (business['businessName'] ?? data['providerName'] ?? 'A provider').toString();
+        final ownerName    = (business['ownerName']    ?? data['ownerName'] ?? '').toString();
+        final serviceType  = (data['serviceType']      ?? 'service').toString();
+        final phone        = (business['phone']        ?? data['phone'] ?? '').toString();
+        (data['userId']           ?? data['uid'] ?? '').toString();
 
-        final business    = (data["business"]  as Map<String, dynamic>?) ?? {};
-        final businessName = (business["businessName"] ?? "A provider").toString();
-        final ownerName    = (business["ownerName"]    ?? "").toString();
-        final serviceType  = (data["serviceType"]      ?? "service").toString();
-        final phone        = (business["phone"]        ?? "").toString();
+        const title = '🆕 New Provider Registration';
+        final body  =
+            '$businessName by $ownerName registered as a '
+            '$serviceType provider and is awaiting approval.';
 
-        const String title = "🆕 New Provider Registration";
-        final String body  =
-            "$businessName by $ownerName registered as a "
-            "$serviceType provider and is awaiting approval.";
-
-        // 1 — Show banner inside the app
+        // 1 — In-app banner
         if (mounted) {
           setState(() => _newProviderBanner =
-              "$businessName registered — tap Approvals to review");
+              '$businessName registered — tap Approvals to review');
 
-          // Auto-dismiss after 6 seconds
           Future.delayed(const Duration(seconds: 6), () {
             if (mounted) setState(() => _newProviderBanner = null);
           });
         }
 
-        // 2 — In-app notification record
-        await _db.collection("notifications").add({
-          "userType":     "admin",
-          "providerId":   id,
-          "businessName": businessName,
-          "ownerName":    ownerName,
-          "phone":        phone,
-          "serviceType":  serviceType,
-          "title":        title,
-          "body":         body,
-          "type":         "new_provider_registration",
-          "read":         false,
-          "createdAt":    FieldValue.serverTimestamp(),
-        });
+        // 2 — In-app notification (receiverId = admin Auth UID)
+        await _writeNotification(
+          receiverId: _adminUser?.uid ?? '',
+          role:       'admin',
+          title:      title,
+          body:       body,
+          type:       'provider_registered',
+          extraData: {
+            'providerId':   id,
+            'businessName': businessName,
+            'ownerName':    ownerName,
+            'serviceType':  serviceType,
+            'phone':        phone,
+          },
+        );
 
-        // 3 — Queue FCM push to admin device
+        // 3 — FCM push to admin device
         await _queueAdminFcm(
           title:        title,
           body:         body,
-          type:         "new_provider_registration",
+          type:         'provider_registered',
           providerId:   id,
           businessName: businessName,
           ownerName:    ownerName,
@@ -179,14 +182,49 @@ class _AdminDashboardState extends State<AdminDashboard> {
         loadDashboard();
       }
     }, onError: (e) {
-      debugPrint("PROVIDER LISTENER ERROR: $e");
+      debugPrint('[Admin] provider listener error: $e');
     });
   }
 
   // =====================================================
-  // QUEUE FCM TO ADMIN
-  // Reads admin token from admin_config/fcm and writes
-  // to fcm_queue. Cloud Function delivers the push.
+  // NOTIFY PROVIDER OF APPROVAL / REJECTION
+  // Called from ApproveProvidersPage or inline actions.
+  // receiverId = provider's Firebase Auth UID (userId field).
+  // =====================================================
+
+
+  // =====================================================
+  // SHARED NOTIFICATION WRITER
+  // Single method — always writes receiverId correctly.
+  // =====================================================
+
+  Future<void> _writeNotification({
+    required String receiverId,
+    required String role,
+    required String title,
+    required String body,
+    required String type,
+    Map<String, dynamic> extraData = const {},
+  }) async {
+    if (receiverId.isEmpty) return;
+    try {
+      await _db.collection('notifications').add({
+        'receiverId': receiverId,
+        'role':       role,
+        'title':      title,
+        'body':       body,
+        'type':       type,
+        'read':       false,
+        'createdAt':  FieldValue.serverTimestamp(),
+        ...extraData,
+      });
+    } catch (e) {
+      debugPrint('[Admin] _writeNotification error: $e');
+    }
+  }
+
+  // =====================================================
+  // QUEUE FCM TO ADMIN DEVICE
   // =====================================================
 
   Future<void> _queueAdminFcm({
@@ -200,76 +238,90 @@ class _AdminDashboardState extends State<AdminDashboard> {
     required String phone,
   }) async {
     try {
-      final configDoc = await _db.doc("admin_config/fcm").get();
+      final configDoc  = await _db.doc('admin_config/fcm').get();
       final adminToken =
-          (configDoc.data()?["token"] ?? "").toString().trim();
+          (configDoc.data()?['token'] ?? '').toString().trim();
 
       if (adminToken.isEmpty) {
-        debugPrint("Admin FCM token not set — skipping push");
+        debugPrint('[Admin] FCM token not set — skipping push');
         return;
       }
 
-      await _db.collection("fcm_queue").add({
-        "token":        adminToken,
-        "title":        title,
-        "body":         body,
-        "type":         type,
-        "providerId":   providerId,
-        "businessName": businessName,
-        "ownerName":    ownerName,
-        "serviceType":  serviceType,
-        "phone":        phone,
-        "sent":         false,
-        "createdAt":    FieldValue.serverTimestamp(),
+      await _db.collection('fcm_queue').add({
+        'token':        adminToken,
+        'receiverId':   _adminUser?.uid ?? '',  // ← always set
+        'title':        title,
+        'body':         body,
+        'type':         type,
+        'providerId':   providerId,
+        'businessName': businessName,
+        'ownerName':    ownerName,
+        'serviceType':  serviceType,
+        'phone':        phone,
+        'data': {
+          'type':       type,
+          'providerId': providerId,
+        },
+        'sent':      false,
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
-      debugPrint("Admin FCM queued for: $businessName");
+      debugPrint('[Admin] FCM queued for: $businessName');
     } catch (e) {
-      debugPrint("ADMIN FCM QUEUE ERROR: $e");
+      debugPrint('[Admin] FCM queue error: $e');
     }
   }
 
   // =====================================================
   // LOAD DASHBOARD
+  // Fixed: counts "cancelled" orders under rejected bucket
   // =====================================================
 
   Future<void> loadDashboard() async {
     try {
       if (mounted) setState(() => isLoading = true);
 
-      final usersSnap = await _db.collection("users").count().get();
-      final providersSnap = await _db.collection("providers").count().get();
+      final usersSnap     = await _db.collection('users').count().get();
+      final providersSnap = await _db.collection('providers').count().get();
       final approvalsSnap = await _db
-          .collection("providers")
-          .where("status", isEqualTo: "pending")
+          .collection('providers')
+          .where('status', isEqualTo: 'pending')
           .count()
           .get();
 
-      final ordersSnap = await _db.collection("orders").get();
+      final ordersSnap = await _db.collection('orders').get();
 
       int pending = 0, accepted = 0, completed = 0, rejected = 0;
       for (final doc in ordersSnap.docs) {
         final status =
-            (doc.data()['status'] ?? "pending").toString().toLowerCase();
+            (doc.data()['status'] ?? 'pending').toString().toLowerCase();
         switch (status) {
-          case "accepted":  accepted++;  break;
-          case "completed": completed++; break;
-          case "rejected":  rejected++;  break;
-          default:          pending++;
+          case 'accepted':
+            accepted++;
+            break;
+          case 'completed':
+            completed++;
+            break;
+          case 'rejected':
+          case 'cancelled':   // ← FIXED: was missing cancelled
+            rejected++;
+            break;
+          default:
+            pending++;
         }
       }
 
       if (mounted) {
         setState(() {
           dashboardData = {
-            "users":     usersSnap.count     ?? 0,
-            "providers": providersSnap.count ?? 0,
-            "orders":    ordersSnap.docs.length,
-            "approvals": approvalsSnap.count ?? 0,
-            "pending":   pending,
-            "accepted":  accepted,
-            "completed": completed,
-            "rejected":  rejected,
+            'users':     usersSnap.count     ?? 0,
+            'providers': providersSnap.count ?? 0,
+            'orders':    ordersSnap.docs.length,
+            'approvals': approvalsSnap.count ?? 0,
+            'pending':   pending,
+            'accepted':  accepted,
+            'completed': completed,
+            'rejected':  rejected,
           };
           isLoading = false;
         });
@@ -277,14 +329,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
     } catch (e) {
       if (mounted) {
         setState(() => isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   // =====================================================
-  // BUILD
+  // BUILD — UI unchanged
   // =====================================================
 
   @override
@@ -297,8 +349,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final int completed = dashboardData['completed'];
     final int rejected  = dashboardData['rejected'];
     final int maxValue  =
-        [pending, accepted, completed, rejected]
-            .reduce((a, b) => a > b ? a : b);
+        [pending, accepted, completed, rejected].reduce((a, b) => a > b ? a : b);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F8),
@@ -312,86 +363,82 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-
-                      // ── HERO HEADER ──────────────────────────
-
                       _buildHeroHeader(isMobile, pending),
-
-                      // ── NEW PROVIDER BANNER ──────────────────
-                      // Appears below header when a provider registers
 
                       if (_newProviderBanner != null)
                         _buildNewProviderBanner(),
 
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
+                        padding:
+                            const EdgeInsets.fromLTRB(16, 28, 16, 0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-
-                            _sectionLabel("Overview"),
+                            _sectionLabel('Overview'),
                             const SizedBox(height: 14),
 
                             GridView(
                               shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
+                              physics:
+                                  const NeverScrollableScrollPhysics(),
                               gridDelegate:
                                   SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount:   isMobile ? 2 : 4,
+                                crossAxisCount:  isMobile ? 2 : 4,
                                 crossAxisSpacing: 12,
                                 mainAxisSpacing:  12,
                                 childAspectRatio: isMobile ? 1.1 : 1.2,
                               ),
                               children: [
                                 _statCard(context,
-                                    title: "Users",
-                                    icon:  Icons.people_alt_rounded,
-                                    count: dashboardData['users'],
-                                    color: const Color(0xFF3B82F6),
-                                    page:  UsersPage(),
-                                    trend: "+12%",
+                                    title:   'Users',
+                                    icon:    Icons.people_alt_rounded,
+                                    count:   dashboardData['users'],
+                                    color:   const Color(0xFF3B82F6),
+                                    page:    UsersPage(),
+                                    trend:   '+12%',
                                     trendUp: true),
                                 _statCard(context,
-                                    title: "Providers",
-                                    icon:  Icons.storefront_rounded,
-                                    count: dashboardData['providers'],
-                                    color: const Color(0xFF10B981),
-                                    page:  ProvidersPage(),
-                                    trend: "+5%",
+                                    title:   'Providers',
+                                    icon:    Icons.storefront_rounded,
+                                    count:   dashboardData['providers'],
+                                    color:   const Color(0xFF10B981),
+                                    page:    ProvidersPage(),
+                                    trend:   '+5%',
                                     trendUp: true),
                                 _statCard(context,
-                                    title: "Orders",
-                                    icon:  Icons.receipt_long_rounded,
-                                    count: dashboardData['orders'],
-                                    color: const Color(0xFFF59E0B),
-                                    page:  const AdminOrdersPage(),
-                                    trend: "+8%",
+                                    title:   'Orders',
+                                    icon:    Icons.receipt_long_rounded,
+                                    count:   dashboardData['orders'],
+                                    color:   const Color(0xFFF59E0B),
+                                    page:    const AdminOrdersPage(),
+                                    trend:   '+8%',
                                     trendUp: true),
                                 _statCard(context,
-                                    title:   "Approvals",
+                                    title:   'Approvals',
                                     icon:    Icons.pending_actions_rounded,
                                     count:   dashboardData['approvals'],
                                     color:   const Color(0xFFEF4444),
                                     page:    const ApproveProvidersPage(),
-                                    trend:   "${dashboardData['approvals']} new",
+                                    trend:
+                                        '${dashboardData['approvals']} new',
                                     trendUp: false),
                               ],
                             ),
 
                             const SizedBox(height: 30),
 
-                            _sectionLabel("Order Status Breakdown"),
+                            _sectionLabel('Order Status Breakdown'),
                             const SizedBox(height: 14),
 
                             Row(
                               children: [
-                                _statusPill("Pending",  pending,   const Color(0xFFF59E0B)),
+                                _statusPill('Pending',  pending,   const Color(0xFFF59E0B)),
                                 const SizedBox(width: 10),
-                                _statusPill("Accepted", accepted,  const Color(0xFF10B981)),
+                                _statusPill('Accepted', accepted,  const Color(0xFF10B981)),
                                 const SizedBox(width: 10),
-                                _statusPill("Done",     completed, const Color(0xFF3B82F6)),
+                                _statusPill('Done',     completed, const Color(0xFF3B82F6)),
                                 const SizedBox(width: 10),
-                                _statusPill("Rejected", rejected,  const Color(0xFFEF4444)),
+                                _statusPill('Rejected', rejected,  const Color(0xFFEF4444)),
                               ],
                             ),
 
@@ -402,28 +449,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
                             const SizedBox(height: 30),
 
-                            _sectionLabel("Quick Actions"),
+                            _sectionLabel('Quick Actions'),
                             const SizedBox(height: 14),
 
                             Row(
                               children: [
-                                Expanded(child: _actionButton(context,
-                                    label: "Manage Users",
-                                    icon:  Icons.manage_accounts_rounded,
-                                    color: const Color(0xFF3B82F6),
-                                    page:  UsersPage())),
+                                Expanded(
+                                    child: _actionButton(context,
+                                        label: 'Manage Users',
+                                        icon:  Icons.manage_accounts_rounded,
+                                        color: const Color(0xFF3B82F6),
+                                        page:  UsersPage())),
                                 const SizedBox(width: 12),
-                                Expanded(child: _actionButton(context,
-                                    label: "View Orders",
-                                    icon:  Icons.list_alt_rounded,
-                                    color: const Color(0xFFF59E0B),
-                                    page:  const AdminOrdersPage())),
+                                Expanded(
+                                    child: _actionButton(context,
+                                        label: 'View Orders',
+                                        icon:  Icons.list_alt_rounded,
+                                        color: const Color(0xFFF59E0B),
+                                        page:  const AdminOrdersPage())),
                                 const SizedBox(width: 12),
-                                Expanded(child: _actionButton(context,
-                                    label: "Approvals",
-                                    icon:  Icons.verified_rounded,
-                                    color: const Color(0xFFEF4444),
-                                    page:  const ApproveProvidersPage())),
+                                Expanded(
+                                    child: _actionButton(context,
+                                        label: 'Approvals',
+                                        icon:  Icons.verified_rounded,
+                                        color: const Color(0xFFEF4444),
+                                        page:  const ApproveProvidersPage())),
                               ],
                             ),
 
@@ -439,16 +489,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // =====================================================
-  // NEW PROVIDER BANNER (animated, auto-dismisses)
-  // =====================================================
+  // ─── All UI widgets below are 100% unchanged ─────────────────────────────
 
   Widget _buildNewProviderBanner() {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
-      curve:    Curves.easeOut,
-      margin:   const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      padding:  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      duration:  const Duration(milliseconds: 400),
+      curve:     Curves.easeOut,
+      margin:    const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      padding:   const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF0F172A), Color(0xFF1E3A5F)],
@@ -464,27 +512,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
       child: Row(
         children: [
-          // Pulsing dot
           Container(
-            width:  10,
-            height: 10,
+            width: 10, height: 10,
             decoration: const BoxDecoration(
               color: Color(0xFF4ADE80),
               shape: BoxShape.circle,
             ),
           ),
           const SizedBox(width: 12),
-
           const Icon(Icons.person_add_rounded,
               color: Colors.white70, size: 20),
           const SizedBox(width: 10),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "New Provider Registered",
+                  'New Provider Registered',
                   style: TextStyle(
                     color:      Colors.white,
                     fontWeight: FontWeight.bold,
@@ -493,21 +537,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _newProviderBanner ?? "",
+                  _newProviderBanner ?? '',
                   style: const TextStyle(
-                    color:    Colors.white60,
-                    fontSize: 12,
-                  ),
-                  maxLines:  1,
-                  overflow:  TextOverflow.ellipsis,
+                      color: Colors.white60, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-
           const SizedBox(width: 10),
-
-          // Go to Approvals
           GestureDetector(
             onTap: () {
               setState(() => _newProviderBanner = null);
@@ -525,7 +564,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(
-                "Review",
+                'Review',
                 style: TextStyle(
                   color:      Colors.white,
                   fontWeight: FontWeight.bold,
@@ -538,10 +577,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     );
   }
-
-  // =====================================================
-  // HERO HEADER
-  // =====================================================
 
   Widget _buildHeroHeader(bool isMobile, int pending) {
     return Container(
@@ -560,9 +595,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          // ── PENDING ORDERS ALERT ───────────────────────
-
           if (pending > 0)
             Container(
               width:   double.infinity,
@@ -580,8 +612,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color:  Colors.orange.withOpacity(0.25),
-                      shape:  BoxShape.circle,
+                      color: Colors.orange.withOpacity(0.25),
+                      shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.notifications_active_rounded,
@@ -592,7 +624,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      "$pending pending order${pending == 1 ? '' : 's'} require your attention",
+                      '$pending pending order${pending == 1 ? '' : 's'} require your attention',
                       style: const TextStyle(
                         color:      Colors.white,
                         fontWeight: FontWeight.w600,
@@ -608,7 +640,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      "$pending",
+                      '$pending',
                       style: const TextStyle(
                         color:      Colors.white,
                         fontWeight: FontWeight.bold,
@@ -619,8 +651,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ],
               ),
             ),
-
-          // ── TITLE + REFRESH ───────────────────────────
 
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
@@ -644,7 +674,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Admin Dashboard",
+                        'Admin Dashboard',
                         style: TextStyle(
                           color:      Colors.white,
                           fontSize:   22,
@@ -653,21 +683,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        "Manage your platform",
+                        'Manage your platform',
                         style: TextStyle(
                             color: Colors.white60, fontSize: 13),
                       ),
                     ],
                   ),
                 ),
-                // Notification bell with approval badge
                 Stack(
                   children: [
                     GestureDetector(
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => const ApproveProvidersPage()),
+                            builder: (_) =>
+                                const ApproveProvidersPage()),
                       ),
                       child: Container(
                         padding: const EdgeInsets.all(11),
@@ -695,10 +725,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           ),
                           child: Center(
                             child: Text(
-                              "${dashboardData['approvals']}",
+                              '${dashboardData['approvals']}',
                               style: const TextStyle(
-                                color:    Colors.white,
-                                fontSize: 9,
+                                color:      Colors.white,
+                                fontSize:   9,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -727,8 +757,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ),
 
-          // ── SEARCH ────────────────────────────────────
-
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
             child: Container(
@@ -745,11 +773,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               child: const TextField(
                 decoration: InputDecoration(
-                  hintText:   "Search users, orders, providers...",
-                  hintStyle:  TextStyle(color: Colors.grey, fontSize: 14),
+                  hintText:  'Search users, orders, providers...',
+                  hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
                   prefixIcon: Icon(Icons.search_rounded,
                       color: Color(0xFF6D28D9)),
-                  border:          InputBorder.none,
+                  border:         InputBorder.none,
                   contentPadding:
                       EdgeInsets.symmetric(vertical: 16),
                 ),
@@ -760,10 +788,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     );
   }
-
-  // =====================================================
-  // SECTION LABEL
-  // =====================================================
 
   Widget _sectionLabel(String text) {
     return Row(
@@ -789,10 +813,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // =====================================================
-  // STAT CARD
-  // =====================================================
-
   Widget _statCard(BuildContext context, {
     required String   title,
     required IconData icon,
@@ -803,8 +823,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     required bool     trendUp,
   }) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-          context, MaterialPageRoute(builder: (_) => page)),
+      onTap: () =>
+          Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -871,7 +891,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               children: [
                 FittedBox(
                   child: Text(
-                    "$count",
+                    '$count',
                     style: TextStyle(
                       fontSize:   30,
                       fontWeight: FontWeight.bold,
@@ -896,10 +916,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // =====================================================
-  // STATUS PILL
-  // =====================================================
-
   Widget _statusPill(String label, int count, Color color) {
     return Expanded(
       child: Container(
@@ -912,7 +928,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         child: Column(
           children: [
             Text(
-              "$count",
+              '$count',
               style: TextStyle(
                 fontSize:   20,
                 fontWeight: FontWeight.bold,
@@ -933,10 +949,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     );
   }
-
-  // =====================================================
-  // BAR CHART
-  // =====================================================
 
   Widget _buildChart(bool isMobile, int maxValue,
       int pending, int accepted, int completed, int rejected) {
@@ -974,7 +986,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Orders Analytics",
+                      'Orders Analytics',
                       style: TextStyle(
                         fontSize:   17,
                         fontWeight: FontWeight.bold,
@@ -983,7 +995,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      "Visual breakdown of all order statuses",
+                      'Visual breakdown of all order statuses',
                       style: TextStyle(
                           color: Color(0xFF94A3B8), fontSize: 12),
                     ),
@@ -1001,8 +1013,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 maxY:       (maxValue + 2).toDouble(),
                 borderData: FlBorderData(show: false),
                 gridData: FlGridData(
-                  show:               true,
-                  drawVerticalLine:   false,
+                  show:             true,
+                  drawVerticalLine: false,
                   horizontalInterval: 1,
                   getDrawingHorizontalLine: (v) => FlLine(
                     color:       const Color(0xFFE2E8F0),
@@ -1030,8 +1042,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       showTitles: true,
                       getTitlesWidget: (v, m) {
                         const labels = [
-                          "Pending", "Accepted",
-                          "Completed", "Rejected"
+                          'Pending', 'Accepted',
+                          'Completed', 'Rejected',
                         ];
                         return Padding(
                           padding: const EdgeInsets.only(top: 10),
@@ -1059,23 +1071,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           const SizedBox(height: 20),
           Wrap(
-            spacing:    20,
-            runSpacing: 10,
+            spacing: 20, runSpacing: 10,
             children: [
-              _legend(const Color(0xFFF59E0B), "Pending"),
-              _legend(const Color(0xFF10B981), "Accepted"),
-              _legend(const Color(0xFF3B82F6), "Completed"),
-              _legend(const Color(0xFFEF4444), "Rejected"),
+              _legend(const Color(0xFFF59E0B), 'Pending'),
+              _legend(const Color(0xFF10B981), 'Accepted'),
+              _legend(const Color(0xFF3B82F6), 'Completed'),
+              _legend(const Color(0xFFEF4444), 'Rejected'),
             ],
           ),
         ],
       ),
     );
   }
-
-  // =====================================================
-  // QUICK ACTION
-  // =====================================================
 
   Widget _actionButton(BuildContext context, {
     required String   label,
@@ -1084,8 +1091,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     required Widget   page,
   }) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-          context, MaterialPageRoute(builder: (_) => page)),
+      onTap: () =>
+          Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
@@ -1125,10 +1132,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // =====================================================
-  // BAR + LEGEND
-  // =====================================================
-
   BarChartGroupData _bar(int x, int value, Color color) {
     return BarChartGroupData(
       x: x,
@@ -1155,8 +1158,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           width:  12,
           height: 12,
           decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(4)),
+              color: color, borderRadius: BorderRadius.circular(4)),
         ),
         const SizedBox(width: 6),
         Text(

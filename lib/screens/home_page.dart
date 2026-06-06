@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:callme/models/service_category.dart';
 import 'package:callme/widgets/category_card.dart';
@@ -15,7 +17,6 @@ import 'package:callme/screens/resort_page.dart';
 import 'package:callme/screens/laundry_service_page.dart';
 import 'package:callme/screens/education_services_page.dart';
 
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -27,37 +28,35 @@ class _HomePageState extends State<HomePage> {
   final ScrollController _scrollController = ScrollController();
   double _offset = 0.0;
 
-  /// 🔥 UPDATED CATEGORY NAMES (IMPORTANT)
+  // ── Current user UID (null if not signed in) ──────────────────────────────
+  final String? _uid = FirebaseAuth.instance.currentUser?.uid;
+
   final List<ServiceCategory> categories = [
-    ServiceCategory(name: 'Education', imagePath: 'assets/Education.jpg'),
-    ServiceCategory(name: 'Salon', imagePath: 'assets/salon.png'),
-    ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jpg'),
-    ServiceCategory(name: 'Resorts', imagePath: 'assets/resort.jpg'),
-    ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpg'),
-    ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.jpg'),
-    ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
-    ServiceCategory(name: 'Water', imagePath: 'assets/water services.jpeg'),
+    ServiceCategory(name: 'Education',      imagePath: 'assets/Education.jpg'),
+    ServiceCategory(name: 'Salon',          imagePath: 'assets/salon.png'),
+    ServiceCategory(name: 'Cleaning',       imagePath: 'assets/cleaning.jpg'),
+    ServiceCategory(name: 'Resorts',        imagePath: 'assets/resort.jpg'),
+    ServiceCategory(name: 'Plumbing',       imagePath: 'assets/plumbing.jpg'),
+    ServiceCategory(name: 'Laundry',        imagePath: 'assets/laundary.jpg'),
+    ServiceCategory(name: 'Hotel',          imagePath: 'assets/hotel.jfif'),
+    ServiceCategory(name: 'Water',          imagePath: 'assets/water services.jpeg'),
     ServiceCategory(name: 'Civil Services', imagePath: 'assets/civil.jpeg'),
   ];
 
   String searchQuery = '';
   String selectedCategory = '';
 
-  /// 🔍 FILTER VERTICAL
   List<ServiceCategory> get filteredCategories {
     return categories.where((category) {
       final matchesSearch = category.name
           .toLowerCase()
           .contains(searchQuery.toLowerCase().trim());
-
       final matchesSelected =
           selectedCategory.isEmpty || category.name == selectedCategory;
-
       return matchesSearch && matchesSelected;
     }).toList();
   }
 
-  /// 🔍 FILTER HORIZONTAL
   List<ServiceCategory> get filteredHorizontal {
     return categories.where((category) {
       return category.name
@@ -69,13 +68,9 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-
     _scrollController.addListener(() {
-      if (mounted) {
-        setState(() => _offset = _scrollController.offset);
-      }
+      if (mounted) setState(() => _offset = _scrollController.offset);
     });
-
     Future.delayed(const Duration(milliseconds: 500), autoScroll);
   }
 
@@ -84,7 +79,6 @@ class _HomePageState extends State<HomePage> {
 
     final max = _scrollController.position.maxScrollExtent;
     double next = _scrollController.offset + 120;
-
     if (next >= max) next = 0;
 
     _scrollController.animateTo(
@@ -102,44 +96,51 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  /// 🚀 FINAL ROUTER (CLEAN)
   Widget getServicePage(String serviceName) {
     switch (serviceName.trim()) {
-
-      /// 🔥 UNIVERSAL SERVICES (MERGED)
       case "Cleaning":
       case "Plumbing":
       case "Water":
         return UniversalServicesPage(serviceName: serviceName);
-
-      /// 🧺 SEPARATE FLOW (SPECIAL UI)
       case "Laundry":
         return const LaundryServicePage();
-
-      /// 💇 SALON
       case "Salon":
         return const SalonPage();
-
-      /// 🏝 RESORT
       case "Resorts":
         return const ResortPage(resorts: []);
-
-      /// 🏨 HOTEL
       case "Hotel":
         return const HotelServicePage();
-
-      /// 🏗 CIVIL
       case "Civil Services":
         return const CivilServicesPage();
-
-        /// Education
-   case "Education":
-  return const EducationServicesPage();
-
-      /// DEFAULT FALLBACK
+      case "Education":
+        return const EducationServicesPage();
       default:
         return UniversalServicesPage(serviceName: serviceName);
     }
+  }
+
+  /// Opens NotificationPage. Unread count clears automatically because
+  /// NotificationPage marks items as read — the Firestore stream here
+  /// will update the badge in real time.
+  Future<void> _openNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const NotificationPage(),
+      ),
+    );
+  }
+
+  // ─── Unread-count stream straight from Firestore ────────────────────────
+  Stream<int> get _unreadCountStream {
+    if (_uid == null) return Stream.value(0);
+
+    return FirebaseFirestore.instance
+        .collection('notifications')
+        .where('receiverId', isEqualTo: _uid)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((snap) => snap.docs.length);
   }
 
   @override
@@ -147,66 +148,77 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
 
-      /// 🔝 APPBAR
-     appBar: AppBar(
-  title: const Text(
-    'CallMe Services',
-    style: TextStyle(
-      fontWeight: FontWeight.w600,
-    ),
-  ),
-  centerTitle: true,
-  backgroundColor: Colors.white,
-  foregroundColor: Colors.black,
-  elevation: 1,
+      appBar: AppBar(
+        title: const Text(
+          'CallMe Services',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 1,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
 
-  actions: [
-    Padding(
-      padding: const EdgeInsets.only(
-        right: 12,
-      ),
-      child: Stack(
-        children: [
-          IconButton(
-            icon: const Icon(
-              Icons.notifications_rounded,
-              size: 28,
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const NotificationPage(providerId: '',),
-                ),
-              );
-            },
-          ),
+            // ── Real-time badge using StreamBuilder ──────────────────────
+            child: StreamBuilder<int>(
+              stream: _unreadCountStream,
+              builder: (context, snapshot) {
+                final unreadCount = snapshot.data ?? 0;
 
-          /// Red Notification Dot
-          Positioned(
-            right: 10,
-            top: 10,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
-              ),
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.notifications_rounded, size: 28),
+                      onPressed: _openNotifications,
+                    ),
+
+                    // Badge — shown only when there are unread notifications
+                    if (unreadCount > 0)
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: IgnorePointer(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 2),
+                            constraints: const BoxConstraints(
+                                minWidth: 18, minHeight: 18),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: Colors.white, width: 1.5),
+                            ),
+                            child: Text(
+                              unreadCount > 99 ? '99+' : '$unreadCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                height: 1,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         ],
       ),
-    ),
-  ],
-),
+
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
 
-            /// 🔍 SEARCH
+            // 🔍 SEARCH
             TextField(
               decoration: InputDecoration(
                 hintText: 'Search for a service...',
@@ -228,7 +240,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            /// 🔹 HORIZONTAL SCROLL
+            // 🔹 HORIZONTAL SCROLL (category chips)
             SizedBox(
               height: 110,
               child: NotificationListener<ScrollNotification>(
@@ -244,9 +256,7 @@ class _HomePageState extends State<HomePage> {
                   itemBuilder: (context, index) {
                     final category = filteredHorizontal[index];
                     final isSelected = selectedCategory == category.name;
-
                     const width = 106.0;
-
                     final scale = 1 -
                         (((_offset / width) - index).abs() * 0.18)
                             .clamp(0.0, 0.18);
@@ -254,12 +264,10 @@ class _HomePageState extends State<HomePage> {
                     return Transform.scale(
                       scale: scale,
                       child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            selectedCategory =
-                                isSelected ? '' : category.name;
-                          });
-                        },
+                        onTap: () => setState(() {
+                          selectedCategory =
+                              isSelected ? '' : category.name;
+                        }),
                         child: Padding(
                           padding:
                               const EdgeInsets.symmetric(horizontal: 6),
@@ -278,26 +286,23 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            /// 🔹 VERTICAL LIST
+            // 🔹 VERTICAL LIST
             Expanded(
               child: ListView.builder(
                 itemCount: filteredCategories.length,
                 padding: const EdgeInsets.only(bottom: 12),
                 itemBuilder: (context, index) {
                   final category = filteredCategories[index];
-
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
                     child: GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                getServicePage(category.name),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              getServicePage(category.name),
+                        ),
+                      ),
                       child: CategoryCard(
                         name: category.name,
                         imagePath: category.imagePath,

@@ -346,7 +346,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                               builder: (_) => CartPage(
                                 service: serviceName,
                                 serviceName: serviceName,
-                                cart: Cart.getItems(serviceName),
+                                cart: Cart.getItems(serviceName), providerId: '',
                               ),
                             ),
                           ).then((_) => refresh());

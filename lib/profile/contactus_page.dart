@@ -56,12 +56,12 @@ class ContactUsPage extends StatelessWidget {
             _infoCard(
               icon: Icons.phone,
               title: 'Phone Support',
-              value: '+91 98765 43210',
+              value: '+91 8668425211',
             ),
             _infoCard(
               icon: Icons.email,
               title: 'Email',
-              value: 'support@callmeapp.com',
+              value: 'allinone@gmail.com',
             ),
             _infoCard(
               icon: Icons.location_on,

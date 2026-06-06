@@ -559,7 +559,7 @@ class UniversalDetailPage extends StatelessWidget {
             products:
                 Cart.getItems("Water"),
 
-            serviceName: "Water",
+            serviceName: "Water", providerId: '',
           ),
         ),
       );
@@ -578,7 +578,7 @@ class UniversalDetailPage extends StatelessWidget {
             serviceName: serviceName,
 
             cart:
-                Cart.getItems(serviceName),
+                Cart.getItems(serviceName), providerId: '',
           ),
         ),
       );

@@ -113,7 +113,7 @@ class HotelCard extends StatelessWidget {
                                 MaterialPageRoute(
                                   builder: (_) => HotelBookingPage(
                                     hotel: hotel,
-                                    products: [],
+                                    products: [], providerId: '<PROVIDER_ID>',
                                   ),
                                 ),
                               );

@@ -4,150 +4,187 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:callme/data/hotel_data.dart';
 import 'package:callme/models/cart.dart';
 import 'package:callme/provider/order_service.dart';
+import 'package:callme/payment/payment_page.dart';
 import 'package:callme/screens/bottom_nav_page.dart';
 
 class HotelBookingPage extends StatefulWidget {
   final HotelRoom hotel;
   final List<dynamic> products;
 
+  /// The providerId of the hotel — required so OrderService can fetch
+  /// providerName & providerUserId from Firestore and send FCM notifications.
+  final String providerId;
+
   const HotelBookingPage({
     super.key,
     required this.hotel,
     required this.products,
+    required this.providerId, // ← NEW: pass from the caller screen
   });
 
   @override
-  State<HotelBookingPage> createState() =>
-      _HotelBookingPageState();
+  State<HotelBookingPage> createState() => _HotelBookingPageState();
 }
 
-class _HotelBookingPageState
-    extends State<HotelBookingPage> {
-  final nameController =
-      TextEditingController();
+class _HotelBookingPageState extends State<HotelBookingPage>
+    with SingleTickerProviderStateMixin {
+  final _nameController    = TextEditingController();
+  final _phoneController   = TextEditingController();
+  final _addressController = TextEditingController();
+  final _noteController    = TextEditingController();
 
-  final phoneController =
-      TextEditingController();
+  DateTime?  _selectedDate;
+  TimeOfDay? _selectedTime;
 
-  final addressController =
-      TextEditingController();
+  bool _isLoading = false;
 
-  final noteController =
-      TextEditingController();
+  late final AnimationController _animController;
+  late final Animation<double>    _fadeIn;
 
-  DateTime? selectedDate;
-  TimeOfDay? selectedTime;
+  // ── Cart helpers ───────────────────────────────────────────
+  List<CartItem> get _cartItems => Cart.getItems('Hotel');
 
-  bool isLoading = false;
-
-  List<CartItem> get cartItems =>
-      Cart.getItems("Hotel");
-
-  double get totalAmount {
-    if (cartItems.isNotEmpty) {
-      return Cart.getTotal("Hotel")
-          .toDouble();
+  double get _totalAmount {
+    if (_cartItems.isNotEmpty) {
+      return Cart.getTotal('Hotel').toDouble();
     }
+    // Single room — apply discount
+    final price    = widget.hotel.price.toDouble();
+    final discount = widget.hotel.discount.toDouble();
+    return price - (price * discount / 100);
+  }
 
-    return (widget.hotel.price -
-            (widget.hotel.price *
-                widget.hotel.discount /
-                100))
-        .toDouble();
+  // ── Services list for OrderService ────────────────────────
+  List<String> get _servicesForOrder {
+    if (_cartItems.isNotEmpty) {
+      return _cartItems
+          .map((e) => '${e.name} x${e.quantity}')
+          .toList();
+    }
+    return [widget.hotel.category];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
+    _fadeIn = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOut,
+    );
+    _animController.forward();
   }
 
   @override
   void dispose() {
-    nameController.dispose();
-    phoneController.dispose();
-    addressController.dispose();
-    noteController.dispose();
+    _animController.dispose();
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
+
+  // ==========================================================
+  // BUILD
+  // ==========================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          const Color(0xffF6F7FB),
-
+      backgroundColor: const Color(0xFFF6F7FB),
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding:
-                    EdgeInsets.zero,
-
-                children: [
-                  _hotelHeader(),
-
-                  Padding(
-                    padding:
-                        const EdgeInsets.all(
-                      16,
+        child: FadeTransition(
+          opacity: _fadeIn,
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _buildHeroHeader(),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          _buildHotelInfoCard(),
+                          const SizedBox(height: 16),
+                          _buildBookingSummary(),
+                          const SizedBox(height: 16),
+                          _buildScheduleCard(),
+                          const SizedBox(height: 16),
+                          _buildGuestCard(),
+                          const SizedBox(height: 120),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      children: [
-                        _hotelInfoCard(),
-
-                        const SizedBox(
-                            height: 16),
-
-                        _bookingSummary(),
-
-                        const SizedBox(
-                            height: 16),
-
-                        _scheduleCard(),
-
-                        const SizedBox(
-                            height: 16),
-
-                        _guestCard(),
-
-                        const SizedBox(
-                            height: 120),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-
-            _bottomBar(),
-          ],
+            ],
+          ),
         ),
       ),
+      bottomNavigationBar: _buildBottomBar(),
     );
   }
 
-  Widget _hotelHeader() {
+  // ==========================================================
+  // HERO HEADER
+  // ==========================================================
+
+  Widget _buildHeroHeader() {
     return Stack(
       children: [
         SizedBox(
-          height: 250,
+          height: 260,
           width: double.infinity,
           child: Image.asset(
             widget.hotel.image,
             fit: BoxFit.cover,
           ),
         ),
-
+        // Gradient overlay for readability
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(0.35),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
         Positioned(
-          top: 12,
-          left: 12,
+          top: 14,
+          left: 14,
           child: CircleAvatar(
-            backgroundColor:
-                Colors.white,
+            backgroundColor: Colors.white,
             child: IconButton(
-              icon: const Icon(
-                Icons.arrow_back,
-              ),
-              onPressed: () =>
-                  Navigator.pop(
-                context,
-              ),
+              icon: const Icon(Icons.arrow_back, color: Colors.black87),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+        ),
+        // Hotel name overlay
+        Positioned(
+          bottom: 16,
+          left: 16,
+          right: 16,
+          child: Text(
+            widget.hotel.hotelName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              shadows: [Shadow(blurRadius: 6, color: Colors.black45)],
             ),
           ),
         ),
@@ -155,192 +192,227 @@ class _HotelBookingPageState
     );
   }
 
-  Widget _hotelInfoCard() {
-    return Container(
-      padding:
-          const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(
-          24,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+  // ==========================================================
+  // HOTEL INFO CARD
+  // ==========================================================
+
+  Widget _buildHotelInfoCard() {
+    return _card(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.hotel.hotelName,
-            style:
-                const TextStyle(
-              fontSize: 22,
-              fontWeight:
-                  FontWeight.bold,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.hotel.city,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.hotel.category,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
             ),
           ),
-
-          const SizedBox(height: 8),
-
-          Text(
-            widget.hotel.city,
-            style: TextStyle(
-              color:
-                  Colors.grey.shade700,
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          Text(
-            widget.hotel.category,
-            style:
-                const TextStyle(
-              fontWeight:
-                  FontWeight.w600,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Text(
-            "₹${totalAmount.toStringAsFixed(0)}",
-            style:
-                const TextStyle(
-              color:
-                  Colors.deepPurple,
-              fontSize: 24,
-              fontWeight:
-                  FontWeight.bold,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (widget.hotel.discount > 0) ...[
+                Text(
+                  '₹${widget.hotel.price.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    decoration: TextDecoration.lineThrough,
+                    color: Colors.grey,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  '${widget.hotel.discount.toStringAsFixed(0)}% off',
+                  style: const TextStyle(
+                    color: Colors.green,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              Text(
+                '₹${_totalAmount.toStringAsFixed(0)}',
+                style: const TextStyle(
+                  color: Colors.deepPurple,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _bookingSummary() {
+  // ==========================================================
+  // BOOKING SUMMARY
+  // ==========================================================
+
+  Widget _buildBookingSummary() {
     return _card(
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            "Booking Summary",
-            style: TextStyle(
-              fontWeight:
-                  FontWeight.bold,
-              fontSize: 18,
-            ),
+            'Booking Summary',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
           ),
-
           const SizedBox(height: 12),
-
-          if (cartItems.isEmpty)
-            ListTile(
-              contentPadding:
-                  EdgeInsets.zero,
-              title: Text(
-                widget.hotel.category,
-              ),
-              trailing: Text(
-                "₹${totalAmount.toStringAsFixed(0)}",
+          if (_cartItems.isEmpty)
+            _summaryRow(widget.hotel.category, _totalAmount)
+          else
+            ..._cartItems.map(
+              (e) => _summaryRow(
+                '${e.name} × ${e.quantity}',
+                (e.price * e.quantity) as double,
               ),
             ),
-
-          ...cartItems.map(
-            (e) => ListTile(
-              contentPadding:
-                  EdgeInsets.zero,
-              title: Text(e.name),
-              subtitle: Text(
-                "Qty ${e.quantity}",
-              ),
-              trailing: Text(
-                "₹${e.price * e.quantity}",
-              ),
-            ),
-          ),
+          const Divider(height: 20),
+          _summaryRow('Total', _totalAmount, bold: true),
         ],
       ),
     );
   }
 
-  Widget _scheduleCard() {
+  Widget _summaryRow(String label, double amount, {bool bold = false}) {
+    final style = TextStyle(
+      fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+      fontSize: bold ? 16 : 14,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: style)),
+          Text('₹${amount.toStringAsFixed(0)}', style: style),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================
+  // SCHEDULE CARD
+  // ==========================================================
+
+  Widget _buildScheduleCard() {
     return _card(
       child: Column(
         children: [
           ListTile(
-            leading: const Icon(
-              Icons.calendar_month,
+            contentPadding: EdgeInsets.zero,
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.calendar_month,
+                  color: Colors.deepPurple),
             ),
             title: Text(
-              selectedDate == null
-                  ? "Select Check-In Date"
-                  : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
+              _selectedDate == null
+                  ? 'Select Check-In Date'
+                  : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+              style: TextStyle(
+                color: _selectedDate == null
+                    ? Colors.grey.shade500
+                    : Colors.black87,
+                fontWeight: _selectedDate != null
+                    ? FontWeight.w600
+                    : FontWeight.normal,
+              ),
             ),
-            onTap: pickDate,
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _pickDate,
           ),
-
-          const Divider(),
-
+          Divider(color: Colors.grey.shade200),
           ListTile(
-            leading: const Icon(
-              Icons.access_time,
+            contentPadding: EdgeInsets.zero,
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.access_time, color: Colors.deepPurple),
             ),
             title: Text(
-              selectedTime == null
-                  ? "Select Time"
-                  : selectedTime!
-                      .format(
-                    context,
-                  ),
+              _selectedTime == null
+                  ? 'Select Check-In Time'
+                  : _selectedTime!.format(context),
+              style: TextStyle(
+                color: _selectedTime == null
+                    ? Colors.grey.shade500
+                    : Colors.black87,
+                fontWeight: _selectedTime != null
+                    ? FontWeight.w600
+                    : FontWeight.normal,
+              ),
             ),
-            onTap: pickTime,
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _pickTime,
           ),
         ],
       ),
     );
   }
 
-  Widget _guestCard() {
+  // ==========================================================
+  // GUEST DETAILS CARD
+  // ==========================================================
+
+  Widget _buildGuestCard() {
     return _card(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _field(
-            nameController,
-            "Guest Name",
+          const Text(
+            'Guest Details',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
           ),
-          _field(
-            phoneController,
-            "Phone Number",
-          ),
-          _field(
-            addressController,
-            "Address",
-            maxLines: 3,
-          ),
-          _field(
-            noteController,
-            "Special Request",
-            maxLines: 3,
-          ),
+          const SizedBox(height: 16),
+          _inputField(_nameController, 'Full Name', Icons.person),
+          const SizedBox(height: 12),
+          _inputField(_phoneController, 'Phone Number', Icons.phone,
+              keyboardType: TextInputType.phone),
+          const SizedBox(height: 12),
+          _inputField(_addressController, 'Home Address', Icons.location_on,
+              maxLines: 3),
+          const SizedBox(height: 12),
+          _inputField(_noteController, 'Special Request (optional)',
+              Icons.notes,
+              maxLines: 3),
         ],
       ),
     );
   }
 
-  Widget _bottomBar() {
+  // ==========================================================
+  // BOTTOM BAR
+  // ==========================================================
+
+  Widget _buildBottomBar() {
     return Container(
-      padding:
-          const EdgeInsets.all(16),
-      decoration:
-          const BoxDecoration(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+      decoration: BoxDecoration(
         color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
-            blurRadius: 10,
-            color: Colors.black12,
+            blurRadius: 20,
+            color: Colors.black.withOpacity(0.07),
           ),
         ],
       ),
@@ -348,26 +420,54 @@ class _HotelBookingPageState
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                "₹${totalAmount.toStringAsFixed(0)}",
-                style:
-                    const TextStyle(
-                  fontSize: 24,
-                  fontWeight:
-                      FontWeight.bold,
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Total',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  Text(
+                    '₹${_totalAmount.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.deepPurple,
+                    ),
+                  ),
+                ],
               ),
             ),
+            const SizedBox(width: 16),
             Expanded(
               child: ElevatedButton(
-                onPressed:
-                    isLoading
-                        ? null
-                        : submitBooking,
-                child: isLoading
-                    ? const CircularProgressIndicator()
+                onPressed: _isLoading ? null : _continueToPayment,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor:
+                      Colors.deepPurple.withOpacity(0.5),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                     : const Text(
-                        "Book Now",
+                        'Book Now',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
               ),
             ),
@@ -377,213 +477,248 @@ class _HotelBookingPageState
     );
   }
 
-  Widget _card({
-    required Widget child,
-  }) {
-    return Container(
-      padding:
-          const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(
-          22,
-        ),
-      ),
-      child: child,
-    );
-  }
+  // ==========================================================
+  // PAYMENT + ORDER FLOW
+  // ==========================================================
 
-  Widget _field(
-    TextEditingController c,
-    String hint, {
-    int maxLines = 1,
-  }) {
-    return Padding(
-      padding:
-          const EdgeInsets.only(
-        bottom: 12,
-      ),
-      child: TextField(
-        controller: c,
-        maxLines: maxLines,
-        decoration:
-            InputDecoration(
-          hintText: hint,
-          border:
-              OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(
-              14,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> pickDate() async {
-    final d =
-        await showDatePicker(
-      context: context,
-      firstDate:
-          DateTime.now(),
-      lastDate:
-          DateTime(2100),
-      initialDate:
-          DateTime.now(),
-    );
-
-    if (d != null) {
-      setState(() {
-        selectedDate = d;
-      });
-    }
-  }
-
-  Future<void> pickTime() async {
-    final t =
-        await showTimePicker(
-      context: context,
-      initialTime:
-          TimeOfDay.now(),
-    );
-
-    if (t != null) {
-      setState(() {
-        selectedTime = t;
-      });
-    }
-  }
-
-  Future<void> submitBooking()
-      async {
-    if (nameController.text
-            .trim()
-            .isEmpty ||
-        phoneController.text
-            .trim()
-            .isEmpty ||
-        addressController.text
-            .trim()
-            .isEmpty) {
-      _show(
-        "Please fill all details",
-      );
+  Future<void> _continueToPayment() async {
+    // ── Validation ──────────────────────────────────────────
+    if (_nameController.text.trim().isEmpty ||
+        _phoneController.text.trim().isEmpty ||
+        _addressController.text.trim().isEmpty) {
+      _showPopup('Please fill all guest details', false);
       return;
     }
 
-    if (selectedDate == null ||
-        selectedTime == null) {
-      _show(
-        "Select date & time",
-      );
+    if (_selectedDate == null || _selectedTime == null) {
+      _showPopup('Please select check-in date and time', false);
       return;
     }
 
-    final user =
-        FirebaseAuth
-            .instance
-            .currentUser;
-
+    final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      _show("Login required");
+      _showPopup('Please log in first', false);
       return;
     }
 
-    setState(() {
-      isLoading = true;
-    });
+    if (widget.providerId.isEmpty) {
+      _showPopup('Hotel provider information missing. Please try again.', false);
+      return;
+    }
+
+    // ── Navigate to payment ─────────────────────────────────
+    final result = await Navigator.push<dynamic>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentPage(
+          serviceName: 'Hotel Booking — ${widget.hotel.hotelName}',
+          amount: _totalAmount.toInt(),
+        ),
+      ),
+    );
+
+    // result == true  → online payment success
+    // result == 'offline' → cash/offline
+    if (result != true && result != 'offline') return;
+
+    setState(() => _isLoading = true);
 
     try {
+      // ── Place order via OrderService ────────────────────────
+      // OrderService resolves providerName & providerUserId from Firestore
+      // using providerId, so we only need to pass the ID here.
       await OrderService.placeOrder(
-        serviceType: "hotel",
-        services: [
-          widget.hotel.category,
-        ],
-        userId: user.uid,
-        userName:
-            nameController.text,
-        phone:
-            phoneController.text,
-        createdBy: user.uid,
-        createdByRole: "user",
-        address:
-            addressController.text,
-        note: noteController.text,
-        date: selectedDate!,
-        time: selectedTime!
-            .format(context),
-        totalAmount:
-            totalAmount,
+        serviceType:   'hotel',
+        services:      _servicesForOrder,
+        userId:        user.uid,
+        userName:      _nameController.text.trim(),
+        phone:         _phoneController.text.trim(),
+        email:         user.email ?? '',
+        createdBy:     user.uid,
+        createdByRole: 'user',
+        address:       _addressController.text.trim(),
+        note:          _noteController.text.trim(),
+        date:          _selectedDate!,
+        time:          _selectedTime!.format(context),
+        totalAmount:   _totalAmount,
+        visitType:     'Hotel',
+        providerId:    widget.providerId,
+        isEnquiry:     false,
+        providerName:  '', // resolved internally by OrderService
       );
 
-      Cart.clear("Hotel");
+      // ── Clear cart ──────────────────────────────────────────
+      Cart.clear('Hotel');
 
+      // ── Success dialog ──────────────────────────────────────
       if (!mounted) return;
-
-      await showDialog(
-        context: context,
-        barrierDismissible:
-            false,
-        builder: (_) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(
-              20,
-            ),
-          ),
-          content: const Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.check_circle,
-                color: Colors.green,
-                size: 70,
-              ),
-              SizedBox(height: 12),
-              Text(
-                "Booking Confirmed",
-              ),
-            ],
-          ),
-        ),
+      _showPopup(
+        result == 'offline'
+            ? 'Booking Placed Successfully!'
+            : 'Payment Successful!\nBooking Confirmed.',
+        true,
       );
+
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
 
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              BottomNavPage(
-            userPhone:
-                phoneController
-                    .text,
-            userEmail: "",
+          builder: (_) => BottomNavPage(
+            userPhone: _phoneController.text.trim(),
+            userEmail: user.email ?? '',
           ),
         ),
-        (route) => false,
+        (_) => false,
       );
     } catch (e) {
-      _show(e.toString());
+      debugPrint('[HotelBooking] placeOrder error: $e');
+      _showPopup('Something went wrong. Please try again.', false);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
 
-    if (mounted) {
-      setState(() {
-        isLoading = false;
+  // ==========================================================
+  // DATE / TIME PICKERS
+  // ==========================================================
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: Colors.deepPurple),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _selectedDate = picked);
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: Colors.deepPurple),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _selectedTime = picked);
+  }
+
+  // ==========================================================
+  // POPUP
+  // ==========================================================
+
+  void _showPopup(String message, bool success) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: !success,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 80,
+                width: 80,
+                decoration: BoxDecoration(
+                  color: success
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  success
+                      ? Icons.check_circle_rounded
+                      : Icons.error_rounded,
+                  color: success ? Colors.green : Colors.red,
+                  size: 52,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (!success) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && Navigator.canPop(context)) Navigator.pop(context);
       });
     }
   }
 
-  void _show(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-      ),
-    );
-  }
-}
+  // ==========================================================
+  // UI HELPERS
+  // ==========================================================
 
+  Widget _card({required Widget child}) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+              color: Colors.black.withOpacity(0.05),
+            ),
+          ],
+        ),
+        child: child,
+      );
+
+  Widget _inputField(
+    TextEditingController controller,
+    String hint,
+    IconData icon, {
+    int maxLines = 1,
+    TextInputType keyboardType = TextInputType.text,
+  }) =>
+      Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FD),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: TextField(
+          controller: controller,
+          maxLines: maxLines,
+          keyboardType: keyboardType,
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 16,
+            ),
+            hintText: hint,
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            prefixIcon: Icon(icon, color: Colors.deepPurple),
+          ),
+        ),
+      );
+}

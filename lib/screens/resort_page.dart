@@ -343,7 +343,7 @@ class _ResortPageState
                               ),
 
                               Text(
-                                "No Resorts Found",
+                                "${filteredResorts.length} Resorts not available",
 
                                 style: TextStyle(
                                   fontSize: 18,

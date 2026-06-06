@@ -64,7 +64,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '240198181802',
     projectId: 'callme-2f7fe',
     storageBucket: 'callme-2f7fe.firebasestorage.app',
-    iosBundleId: 'com.example.callme',
+    iosBundleId: 'com.allinone.callme',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -73,7 +73,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '240198181802',
     projectId: 'callme-2f7fe',
     storageBucket: 'callme-2f7fe.firebasestorage.app',
-    iosBundleId: 'com.example.callme',
+    iosBundleId: 'com.allinone.callme',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

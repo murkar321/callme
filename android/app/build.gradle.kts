@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.callme"
+    namespace = "com.allinone.callme"
 
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.callme"
+        applicationId = "com.allinone.callme"
 
         minSdk = flutter.minSdkVersion
         targetSdk = 36

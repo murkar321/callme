@@ -92,7 +92,7 @@ class _EducationServicesPageState
                           builder: (_) => const CartPage(
                             service: "Education",
                             serviceName: "Education",
-                            cart: [],
+                            cart: [], providerId: '',
                           ),
                         ),
                       ).then((_) => refresh());
@@ -318,7 +318,7 @@ class _EducationServicesPageState
                               builder: (_) => const CartPage(
                                 service: "Education",
                                 serviceName: "Education",
-                                cart: [],
+                                cart: [], providerId: '',
                               ),
                             ),
                           ).then((_) => refresh());

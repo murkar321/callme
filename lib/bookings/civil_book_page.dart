@@ -1,382 +1,215 @@
-import 'package:callme/provider/order_service.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+
+import 'package:callme/provider/order_service.dart';
+import 'package:callme/screens/bottom_nav_page.dart';
 
 class CivilBookingPage extends StatefulWidget {
   final String serviceName;
 
+  /// Pass the providerId of the civil service provider.
+  /// Required so OrderService fetches providerName & providerUserId from
+  /// Firestore and sends the FCM notification correctly.
+  final String providerId;
+
   const CivilBookingPage({
     super.key,
     required this.serviceName,
+    required this.providerId, // ← NEW: pass from caller screen
   });
 
   @override
-  State<CivilBookingPage> createState() =>
-      _CivilBookingPageState();
+  State<CivilBookingPage> createState() => _CivilBookingPageState();
 }
 
-class _CivilBookingPageState
-    extends State<CivilBookingPage> {
+class _CivilBookingPageState extends State<CivilBookingPage>
+    with SingleTickerProviderStateMixin {
+  final _nameController    = TextEditingController();
+  final _phoneController   = TextEditingController();
+  final _addressController = TextEditingController();
+  final _noteController    = TextEditingController();
 
-  final nameController =
-      TextEditingController();
+  DateTime?  _selectedDate;
+  TimeOfDay? _selectedTime;
 
-  final phoneController =
-      TextEditingController();
+  bool _isLoading         = false;
+  bool _isGettingLocation = false;
 
-  final addressController =
-      TextEditingController();
+  late final AnimationController _animController;
+  late final Animation<double>    _fadeIn;
 
-  final noteController =
-      TextEditingController();
+  static const _accent = Color(0xFF5B67F1);
 
-  DateTime? selectedDate;
-
-  TimeOfDay? selectedTime;
-
-  bool isLoading = false;
-
-  bool isGettingLocation = false;
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
+    _fadeIn = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _animController.forward();
+  }
 
   @override
   void dispose() {
-    nameController.dispose();
-    phoneController.dispose();
-    addressController.dispose();
-    noteController.dispose();
+    _animController.dispose();
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
+  // ==========================================================
+  // BUILD
+  // ==========================================================
+
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-
-      backgroundColor:
-          const Color(0xFFF5F7FC),
-
+      backgroundColor: const Color(0xFFF5F7FC),
       body: SafeArea(
-
-        child: Column(
-          children: [
-
-            _header(),
-
-            Expanded(
-              child: ListView(
-
-                padding:
-                    const EdgeInsets.all(
-                  20,
-                ),
-
-                children: [
-
-                  _detailsCard(),
-
-                  const SizedBox(height: 20),
-
-                  _dateTimeCard(),
-
-                  const SizedBox(height: 120),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-
-      bottomNavigationBar:
-          Container(
-
-        padding:
-            const EdgeInsets.all(
-          18,
-        ),
-
-        color: Colors.white,
-
-        child: SafeArea(
-
-          child: SizedBox(
-
-            height: 58,
-
-            child: ElevatedButton(
-
-              onPressed:
-                  isLoading
-                      ? null
-                      : _submit,
-
-              style:
-                  ElevatedButton.styleFrom(
-
-                backgroundColor:
-                    const Color(
-                  0xFF5B67F1,
-                ),
-
-                foregroundColor:
-                    Colors.white,
-
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                    18,
-                  ),
+        child: FadeTransition(
+          opacity: _fadeIn,
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    _buildDetailsCard(),
+                    const SizedBox(height: 20),
+                    _buildDateTimeCard(),
+                    const SizedBox(height: 120),
+                  ],
                 ),
               ),
-
-              child: isLoading
-                  ? const CircularProgressIndicator(
-                      color:
-                          Colors.white,
-                    )
-                  : const Text(
-                      "Submit Enquiry",
-
-                      style:
-                          TextStyle(
-                        fontSize: 16,
-                        fontWeight:
-                            FontWeight.bold,
-                      ),
-                    ),
-            ),
+            ],
           ),
         ),
       ),
+      bottomNavigationBar: _buildBottomBar(),
     );
   }
 
-  /// HEADER
+  // ==========================================================
+  // HEADER
+  // ==========================================================
 
-  Widget _header() {
-
+  Widget _buildHeader() {
     return Container(
-
       width: double.infinity,
-
-      padding:
-          const EdgeInsets.all(24),
-
-      decoration:
-          const BoxDecoration(
-
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Color(0xFF5B67F1),
-            Color(0xFF7B86FF),
-          ],
+          colors: [Color(0xFF5B67F1), Color(0xFF7B86FF)],
         ),
-
-        borderRadius:
-            BorderRadius.vertical(
-          bottom:
-              Radius.circular(32),
-        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
-
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           GestureDetector(
-            onTap: () =>
-                Navigator.pop(
-                  context,
-                ),
-
+            onTap: () => Navigator.pop(context),
             child: Container(
-
-              padding:
-                  const EdgeInsets.all(
-                10,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
               ),
-
-              decoration:
-                  BoxDecoration(
-                color: Colors.white
-                    .withOpacity(0.2),
-
-                borderRadius:
-                    BorderRadius.circular(
-                  12,
-                ),
-              ),
-
-              child: const Icon(
-                Icons.arrow_back,
-                color:
-                    Colors.white,
-              ),
+              child: const Icon(Icons.arrow_back, color: Colors.white),
             ),
           ),
-
           const SizedBox(height: 28),
-
           Text(
             widget.serviceName,
-
             style: const TextStyle(
               color: Colors.white,
               fontSize: 28,
-              fontWeight:
-                  FontWeight.bold,
+              fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 8),
-
           Text(
-            "Tell us about your project requirements",
-
-            style: TextStyle(
-              color: Colors.white
-                  .withOpacity(0.9),
-            ),
+            'Tell us about your project requirements',
+            style: TextStyle(color: Colors.white.withOpacity(0.9)),
           ),
         ],
       ),
     );
   }
 
-  /// DETAILS
+  // ==========================================================
+  // DETAILS CARD
+  // ==========================================================
 
-  Widget _detailsCard() {
-
+  Widget _buildDetailsCard() {
     return _card(
-
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           const Text(
-            "Project Details",
-
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight:
-                  FontWeight.bold,
-            ),
+            'Project Details',
+            style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
           ),
-
           const SizedBox(height: 20),
-
           _input(
-            controller:
-                nameController,
-            hint:
-                "Full Name",
-            icon:
-                Icons.person,
+            controller: _nameController,
+            hint: 'Full Name',
+            icon: Icons.person,
           ),
-
-          const SizedBox(height: 16),
-
+          const SizedBox(height: 14),
           _input(
-            controller:
-                phoneController,
-            hint:
-                "Mobile Number",
-            icon:
-                Icons.phone,
-            keyboard:
-                TextInputType.phone,
+            controller: _phoneController,
+            hint: 'Mobile Number',
+            icon: Icons.phone,
+            keyboard: TextInputType.phone,
           ),
-
-          const SizedBox(height: 16),
-
+          const SizedBox(height: 14),
           _input(
-            controller:
-                addressController,
-            hint:
-                "Project Address",
-            icon:
-                Icons.location_on,
+            controller: _addressController,
+            hint: 'Project Address',
+            icon: Icons.location_on,
             maxLines: 3,
           ),
-
           const SizedBox(height: 12),
-
           SizedBox(
             width: double.infinity,
-
-            child:
-                ElevatedButton.icon(
-
-              onPressed:
-                  isGettingLocation
-                      ? null
-                      : _getLocation,
-
-              style:
-                  ElevatedButton.styleFrom(
-
-                backgroundColor:
-                    const Color(
-                  0xFF5B67F1,
-                ),
-
-                foregroundColor:
-                    Colors.white,
-
-                padding:
-                    const EdgeInsets.symmetric(
-                  vertical: 14,
-                ),
-
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                    16,
-                  ),
+            child: ElevatedButton.icon(
+              onPressed: _isGettingLocation ? null : _getLocation,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accent,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: _accent.withOpacity(0.5),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
-
-              icon:
-                  isGettingLocation
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-
-                          child:
-                              CircularProgressIndicator(
-                            color:
-                                Colors.white,
-                            strokeWidth:
-                                2,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.my_location,
-                        ),
-
+              icon: _isGettingLocation
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.my_location),
               label: Text(
-                isGettingLocation
-                    ? "Getting Location..."
-                    : "Use Current Location",
+                _isGettingLocation ? 'Getting Location…' : 'Use Current Location',
               ),
             ),
           ),
-
-          const SizedBox(height: 16),
-
+          const SizedBox(height: 14),
           _input(
-            controller:
-                noteController,
-            hint:
-                "Describe your requirement",
-            icon:
-                Icons.description,
+            controller: _noteController,
+            hint: 'Describe your requirement (optional)',
+            icon: Icons.description,
             maxLines: 5,
           ),
         ],
@@ -384,361 +217,409 @@ class _CivilBookingPageState
     );
   }
 
-  /// DATE TIME
+  // ==========================================================
+  // DATE / TIME CARD
+  // ==========================================================
 
-  Widget _dateTimeCard() {
-
+  Widget _buildDateTimeCard() {
     return Row(
       children: [
-
         Expanded(
           child: _pickerCard(
-            icon:
-                Icons.calendar_today,
-            title: "Date",
-            value:
-                selectedDate == null
-                    ? "Select"
-                    : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-            onTap:
-                _pickDate,
+            icon: Icons.calendar_today,
+            title: 'Date',
+            value: _selectedDate == null
+                ? 'Select'
+                : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+            selected: _selectedDate != null,
+            onTap: _pickDate,
           ),
         ),
-
         const SizedBox(width: 16),
-
         Expanded(
           child: _pickerCard(
-            icon:
-                Icons.access_time,
-            title: "Time",
-            value:
-                selectedTime == null
-                    ? "Select"
-                    : selectedTime!
-                        .format(
-                      context,
-                    ),
-            onTap:
-                _pickTime,
+            icon: Icons.access_time,
+            title: 'Time',
+            value: _selectedTime == null
+                ? 'Select'
+                : _selectedTime!.format(context),
+            selected: _selectedTime != null,
+            onTap: _pickTime,
           ),
         ),
       ],
     );
   }
 
-  Widget _pickerCard({
-    required IconData icon,
-    required String title,
-    required String value,
-    required VoidCallback onTap,
-  }) {
+  // ==========================================================
+  // BOTTOM BAR
+  // ==========================================================
 
-    return GestureDetector(
-
-      onTap: onTap,
-
-      child: Container(
-
-        padding:
-            const EdgeInsets.all(
-          18,
-        ),
-
-        decoration:
-            BoxDecoration(
-          color: Colors.white,
-
-          borderRadius:
-              BorderRadius.circular(
-            24,
-          ),
-
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black
-                  .withOpacity(0.05),
-
-              blurRadius: 14,
-            ),
-          ],
-        ),
-
-        child: Column(
-          children: [
-
-            Icon(
-              icon,
-              color:
-                  const Color(
-                0xFF5B67F1,
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            Text(title),
-
-            const SizedBox(height: 6),
-
-            Text(
-              value,
-
-              style: const TextStyle(
-                fontWeight:
-                    FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _card({
-    required Widget child,
-  }) {
-
+  Widget _buildBottomBar() {
     return Container(
-
-      padding:
-          const EdgeInsets.all(
-        20,
-      ),
-
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
       decoration: BoxDecoration(
         color: Colors.white,
-
-        borderRadius:
-            BorderRadius.circular(
-          28,
-        ),
-
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black
-                .withOpacity(0.05),
-
-            blurRadius: 15,
+            blurRadius: 20,
+            color: Colors.black.withOpacity(0.07),
           ),
         ],
       ),
-
-      child: child,
-    );
-  }
-
-  Widget _input({
-    required TextEditingController
-        controller,
-    required String hint,
-    required IconData icon,
-    TextInputType keyboard =
-        TextInputType.text,
-    int maxLines = 1,
-  }) {
-
-    return Container(
-
-      decoration: BoxDecoration(
-        color:
-            const Color(
-          0xFFF8F9FD,
-        ),
-
-        borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
-      ),
-
-      child: TextField(
-
-        controller: controller,
-
-        keyboardType: keyboard,
-
-        maxLines: maxLines,
-
-        decoration: InputDecoration(
-
-          border:
-              InputBorder.none,
-
-          hintText: hint,
-
-          prefixIcon: Icon(
-            icon,
-            color:
-                const Color(
-              0xFF5B67F1,
+      child: SafeArea(
+        child: SizedBox(
+          height: 56,
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _submit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accent,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: _accent.withOpacity(0.5),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
             ),
-          ),
-
-          contentPadding:
-              const EdgeInsets.all(
-            18,
+            child: _isLoading
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Text(
+                    'Submit Enquiry',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
           ),
         ),
       ),
     );
   }
 
-  Future<void> _pickDate() async {
-
-    final picked =
-        await showDatePicker(
-      context: context,
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2100),
-      initialDate: DateTime.now(),
-    );
-
-    if (picked != null) {
-      setState(() {
-        selectedDate = picked;
-      });
-    }
-  }
-
-  Future<void> _pickTime() async {
-
-    final picked =
-        await showTimePicker(
-      context: context,
-      initialTime:
-          TimeOfDay.now(),
-    );
-
-    if (picked != null) {
-      setState(() {
-        selectedTime = picked;
-      });
-    }
-  }
-
-  Future<void> _getLocation() async {
-
-    try {
-
-      setState(() {
-        isGettingLocation =
-            true;
-      });
-
-      Position position =
-          await Geolocator
-              .getCurrentPosition();
-
-      List<Placemark> places =
-          await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-
-      final place =
-          places.first;
-
-      addressController.text =
-          "${place.street}, ${place.locality}, ${place.administrativeArea}, ${place.postalCode}";
-
-    } catch (_) {}
-
-    setState(() {
-      isGettingLocation =
-          false;
-    });
-  }
+  // ==========================================================
+  // SUBMIT — ENQUIRY ORDER
+  // ==========================================================
 
   Future<void> _submit() async {
-
-    if (nameController.text
-            .trim()
-            .isEmpty ||
-        phoneController.text
-            .trim()
-            .isEmpty ||
-        addressController.text
-            .trim()
-            .isEmpty ||
-        selectedDate == null ||
-        selectedTime == null) {
-
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Please fill all required fields",
-          ),
-        ),
-      );
-
+    // ── Validation ──────────────────────────────────────────
+    if (_nameController.text.trim().isEmpty ||
+        _phoneController.text.trim().isEmpty ||
+        _addressController.text.trim().isEmpty) {
+      _showPopup('Please fill your name, phone, and address', false);
       return;
     }
 
-    setState(() {
-      isLoading = true;
-    });
+    if (_selectedDate == null || _selectedTime == null) {
+      _showPopup('Please select a preferred date and time', false);
+      return;
+    }
+
+    if (widget.providerId.isEmpty) {
+      _showPopup('Provider information missing. Please try again.', false);
+      return;
+    }
+
+    // ── Auth ────────────────────────────────────────────────
+    // Civil/enquiry bookings allow guest submission, but we strongly prefer
+    // a logged-in user so the order is linked to a real uid.
+    final user = FirebaseAuth.instance.currentUser;
+    final uid  = user?.uid ?? '';
+
+    setState(() => _isLoading = true);
 
     try {
-
+      // ── Place enquiry via OrderService ─────────────────────
+      // isEnquiry: true → status = 'enquiry', payment.paid = false
+      // totalAmount: 0  → quote will be given by the provider
+      // OrderService resolves providerName & providerUserId from Firestore
+      // using providerId — no need to pass them manually.
       await OrderService.placeOrder(
-        serviceType:
-            widget.serviceName,
-
-        services: [
-          widget.serviceName,
-        ],
-
-        userName:
-            nameController.text,
-
-        phone:
-            phoneController.text,
-
-        email: "",
-
-        address:
-            addressController.text,
-
-        note:
-            noteController.text,
-
-        date: selectedDate!,
-
-        time:
-            selectedTime!.format(
-          context,
-        ),
-
-        totalAmount: 0,
-
-        userId: "",
-
-        createdBy: "",
-
-        createdByRole: "",
-
-        isEnquiry: true,
+        serviceType:   widget.serviceName.toLowerCase(),
+        services:      [widget.serviceName],
+        userId:        uid,
+        userName:      _nameController.text.trim(),
+        phone:         _phoneController.text.trim(),
+        email:         user?.email ?? '',
+        createdBy:     uid,
+        createdByRole: 'user',
+        address:       _addressController.text.trim(),
+        note:          _noteController.text.trim(),
+        date:          _selectedDate!,
+        time:          _selectedTime!.format(context),
+        totalAmount:   0,
+        visitType:     'Site Visit',
+        providerId:    widget.providerId,
+        isEnquiry:     true,
+        providerName:  '', // resolved internally by OrderService
       );
 
       if (!mounted) return;
 
-      Navigator.pop(context);
+      // ── Success ─────────────────────────────────────────────
+      _showPopup('Enquiry Submitted!\nWe will contact you shortly.', true);
 
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+
+      // Navigate home if logged in, otherwise just pop
+      if (user != null) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BottomNavPage(
+              userPhone: _phoneController.text.trim(),
+              userEmail: user.email ?? '',
+            ),
+          ),
+          (_) => false,
+        );
+      } else {
+        Navigator.pop(context);
+      }
     } catch (e) {
+      debugPrint('[CivilBooking] placeOrder error: $e');
+      _showPopup('Something went wrong. Please try again.', false);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content:
-              Text("$e"),
+  // ==========================================================
+  // LOCATION
+  // ==========================================================
+
+  Future<void> _getLocation() async {
+    setState(() => _isGettingLocation = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showPopup('Location services are disabled', false);
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _showPopup('Location permission denied', false);
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      final places = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (places.isNotEmpty) {
+        final p = places.first;
+        _addressController.text =
+            '${p.street ?? ''}, ${p.locality ?? ''}, '
+            '${p.administrativeArea ?? ''} ${p.postalCode ?? ''}'
+                .replaceAll(RegExp(r',\s*,'), ',')
+                .trim();
+      }
+    } catch (e) {
+      debugPrint('[CivilBooking] location error: $e');
+      _showPopup('Could not fetch location', false);
+    } finally {
+      if (mounted) setState(() => _isGettingLocation = false);
+    }
+  }
+
+  // ==========================================================
+  // DATE / TIME PICKERS
+  // ==========================================================
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: _accent),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _selectedDate = picked);
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: _accent),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _selectedTime = picked);
+  }
+
+  // ==========================================================
+  // POPUP
+  // ==========================================================
+
+  void _showPopup(String message, bool success) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: !success,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 80,
+                width: 80,
+                decoration: BoxDecoration(
+                  color: success
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  success ? Icons.check_circle_rounded : Icons.error_rounded,
+                  color: success ? Colors.green : Colors.red,
+                  size: 52,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (!success) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && Navigator.canPop(context)) Navigator.pop(context);
+      });
+    }
+  }
+
+  // ==========================================================
+  // UI HELPERS
+  // ==========================================================
+
+  Widget _card({required Widget child}) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 15,
+            ),
+          ],
+        ),
+        child: child,
+      );
+
+  Widget _pickerCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required bool selected,
+    required VoidCallback onTap,
+  }) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: selected ? _accent.withOpacity(0.4) : Colors.transparent,
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 14,
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: _accent),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: selected ? _accent : Colors.black87,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       );
-    }
 
-    setState(() {
-      isLoading = false;
-    });
-  }
+  Widget _input({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboard = TextInputType.text,
+    int maxLines = 1,
+  }) =>
+      Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FD),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: TextField(
+          controller: controller,
+          keyboardType: keyboard,
+          maxLines: maxLines,
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            hintText: hint,
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            prefixIcon: Icon(icon, color: _accent),
+            contentPadding: const EdgeInsets.all(18),
+          ),
+        ),
+      );
 }

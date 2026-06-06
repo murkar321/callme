@@ -254,7 +254,7 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => const CivilBookingPage(
-                              serviceName: "Civil Contract Services",
+                              serviceName: "Civil Contract Services", providerId: '',
                             ),
                           ),
                         ).then((_) => refresh());

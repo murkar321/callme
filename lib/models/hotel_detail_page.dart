@@ -219,6 +219,7 @@ class HotelDetailPage extends StatelessWidget {
                       builder: (_) => HotelBookingPage(
                         hotel: hotel,
                         products: [],
+                        providerId: '<PROVIDER_ID>',
                       ),
                     ),
                   );

@@ -284,7 +284,7 @@ class _LaundryDetailPageState
                                 builder: (_) => CartPage(
                                   service: "Laundry",
                                   serviceName: "Laundry",
-                                  cart: Cart.getItems("Laundry"),
+                                  cart: Cart.getItems("Laundry"), providerId: '',
                                 ),
                               ),
                             ).then((_) => setState(() {}));
@@ -693,7 +693,7 @@ class _LaundryDetailPageState
                             builder: (_) => BookingPage(
                               serviceName: widget.serviceName,
                               product: widget.product,
-                              products: [],
+                              products: [], providerId: '',
                             ),
                           ),
                         );

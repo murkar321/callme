@@ -6,14 +6,11 @@ class ApproveProvidersPage extends StatefulWidget {
   const ApproveProvidersPage({super.key});
 
   @override
-  State<ApproveProvidersPage> createState() =>
-      _ApproveProvidersPageState();
+  State<ApproveProvidersPage> createState() => _ApproveProvidersPageState();
 }
 
-class _ApproveProvidersPageState
-    extends State<ApproveProvidersPage> {
-  final FirebaseFirestore firestore =
-      FirebaseFirestore.instance;
+class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
+  final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
   String search = "";
 
@@ -71,20 +68,22 @@ class _ApproveProvidersPageState
     required String body,
     String? reason,
   }) async {
-    final Map<String, dynamic> data = {
-      "userType":   "provider",
-      "providerId": providerId,
-      "title":      title,
-      "body":       body,
-      "createdAt":  FieldValue.serverTimestamp(),
-      "read":       false,
+    final Map<String, dynamic> notification = {
+      "title":     title,
+      "body":      body,
+      "read":      false,
+      "createdAt": FieldValue.serverTimestamp(),
     };
 
     if (reason != null && reason.trim().isNotEmpty) {
-      data["reason"] = reason.trim();
+      notification["reason"] = reason.trim();
     }
 
-    await firestore.collection("notifications").add(data);
+    await firestore
+        .collection("providers")
+        .doc(providerId)
+        .collection("notifications")
+        .add(notification);
   }
 
   // =====================================================
@@ -146,8 +145,7 @@ class _ApproveProvidersPageState
           ),
           content: Row(
             children: const [
-              Icon(Icons.check_circle_rounded,
-                  color: Colors.white, size: 20),
+              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
               Text(
                 "Provider approved & notified",
@@ -171,8 +169,7 @@ class _ApproveProvidersPageState
   // =====================================================
 
   Future<void> rejectProvider(String providerId) async {
-    final TextEditingController reasonController =
-        TextEditingController();
+    final TextEditingController reasonController = TextEditingController();
 
     final bool? confirmed = await showDialog<bool>(
       context: context,
@@ -187,18 +184,17 @@ class _ApproveProvidersPageState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Icon
                 Container(
-                  width: 64,
+                  width:  64,
                   height: 64,
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(.10),
+                    color:        Colors.red.withOpacity(.10),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Icon(
                     Icons.close_rounded,
                     color: Colors.red,
-                    size: 32,
+                    size:  32,
                   ),
                 ),
 
@@ -207,7 +203,7 @@ class _ApproveProvidersPageState
                 const Text(
                   "Reject Provider",
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize:   22,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -234,7 +230,7 @@ class _ApproveProvidersPageState
                     fillColor: const Color(0xFFF5F7FB),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(18),
-                      borderSide: BorderSide.none,
+                      borderSide:   BorderSide.none,
                     ),
                   ),
                 ),
@@ -349,8 +345,7 @@ class _ApproveProvidersPageState
           ),
           content: Row(
             children: const [
-              Icon(Icons.cancel_rounded,
-                  color: Colors.white, size: 20),
+              Icon(Icons.cancel_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
               Text(
                 "Provider rejected & notified",
@@ -398,15 +393,12 @@ class _ApproveProvidersPageState
         child: StreamBuilder<QuerySnapshot>(
           stream: pendingProvidersStream(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState ==
-                ConnectionState.waiting) {
-              return const Center(
-                  child: CircularProgressIndicator());
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
             }
 
             if (snapshot.hasError) {
-              return Center(
-                  child: Text("Error: ${snapshot.error}"));
+              return Center(child: Text("Error: ${snapshot.error}"));
             }
 
             final docs = snapshot.data?.docs ?? [];
@@ -435,8 +427,8 @@ class _ApproveProvidersPageState
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
-                      begin: Alignment.topLeft,
-                      end:   Alignment.bottomRight,
+                      begin:  Alignment.topLeft,
+                      end:    Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.only(
                       bottomLeft:  Radius.circular(30),
@@ -445,14 +437,13 @@ class _ApproveProvidersPageState
                   ),
                   child: Column(
                     children: [
-
                       Row(
                         children: [
                           Container(
                             width:  54,
                             height: 54,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(.14),
+                              color:        Colors.white.withOpacity(.14),
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: const Icon(
@@ -492,7 +483,7 @@ class _ApproveProvidersPageState
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 7),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(.20),
+                              color:        Colors.white.withOpacity(.20),
                               borderRadius: BorderRadius.circular(30),
                             ),
                             child: Text(
@@ -519,11 +510,10 @@ class _ApproveProvidersPageState
                           onChanged: (v) =>
                               setState(() => search = v.toLowerCase()),
                           decoration: const InputDecoration(
-                            hintText:        "Search business, owner or phone",
-                            border:          InputBorder.none,
-                            prefixIcon:      Icon(Icons.search_rounded),
-                            contentPadding:
-                                EdgeInsets.symmetric(vertical: 17),
+                            hintText:      "Search business, owner or phone",
+                            border:        InputBorder.none,
+                            prefixIcon:    Icon(Icons.search_rounded),
+                            contentPadding: EdgeInsets.symmetric(vertical: 17),
                           ),
                         ),
                       ),
@@ -537,8 +527,8 @@ class _ApproveProvidersPageState
                   child: filtered.isEmpty
                       ? _noMatch()
                       : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: filtered.length,
+                          padding:     const EdgeInsets.all(16),
+                          itemCount:   filtered.length,
                           itemBuilder: (_, index) {
                             return _providerCard(filtered[index]);
                           },
@@ -563,15 +553,15 @@ class _ApproveProvidersPageState
     final service    = (data['service']    as Map<String, dynamic>?) ?? {};
     final categories = List.from(data['categories'] ?? []);
 
-    final Timestamp? createdAt   = data['createdAt'];
-    final providerId             = doc.id;
-    final businessName           = business['businessName'] ?? "No Name";
-    final ownerName              = business['ownerName']    ?? "-";
-    final phone                  = business['phone']        ?? "-";
-    final email                  = business['email']        ?? "-";
-    final address                = business['address']      ?? "-";
-    final serviceType            = service['serviceType']   ?? data['serviceType'] ?? "-";
-    final providerType           = data['providerType']     ?? "Provider";
+    final Timestamp? createdAt = data['createdAt'];
+    final providerId           = doc.id;
+    final businessName         = business['businessName'] ?? "No Name";
+    final ownerName            = business['ownerName']    ?? "-";
+    final phone                = business['phone']        ?? "-";
+    final email                = business['email']        ?? "-";
+    final address              = business['address']      ?? "-";
+    final serviceType          = service['serviceType']   ?? data['serviceType'] ?? "-";
+    final providerType         = data['providerType']     ?? "Provider";
 
     final String appliedDate = createdAt != null
         ? DateFormat('dd MMM yyyy').format(createdAt.toDate())
@@ -623,8 +613,8 @@ class _ApproveProvidersPageState
                   children: [
                     Text(
                       businessName,
-                      maxLines:  1,
-                      overflow:  TextOverflow.ellipsis,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize:   18,
                         fontWeight: FontWeight.bold,
@@ -672,11 +662,9 @@ class _ApproveProvidersPageState
               children: [
                 Row(
                   children: [
-                    Expanded(
-                        child: _compactInfo(Icons.phone_rounded, phone)),
+                    Expanded(child: _compactInfo(Icons.phone_rounded, phone)),
                     const SizedBox(width: 12),
-                    Expanded(
-                        child: _compactInfo(Icons.email_rounded, email)),
+                    Expanded(child: _compactInfo(Icons.email_rounded, email)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -741,14 +729,11 @@ class _ApproveProvidersPageState
           // ── NOTIFICATION NOTE ──────────────────────
 
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color:        const Color(0xFFF0FDF4),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: const Color(0xFF86EFAC),
-              ),
+              border: Border.all(color: const Color(0xFF86EFAC)),
             ),
             child: Row(
               children: const [
@@ -869,8 +854,8 @@ class _ApproveProvidersPageState
             padding: const EdgeInsets.only(top: 2),
             child: Text(
               value.trim().isEmpty ? "-" : value,
-              maxLines:  2,
-              overflow:  TextOverflow.ellipsis,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize:   13,
                 fontWeight: FontWeight.w600,
@@ -929,8 +914,7 @@ class _ApproveProvidersPageState
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.search_off_rounded,
-              size: 52, color: Colors.grey.shade400),
+          Icon(Icons.search_off_rounded, size: 52, color: Colors.grey.shade400),
           const SizedBox(height: 14),
           Text(
             "No Matching Providers",

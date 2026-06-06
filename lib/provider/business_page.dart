@@ -4,815 +4,655 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-
-import 'package:callme/models/service_category.dart';
-import 'package:callme/widgets/category_card.dart';
 import 'package:callme/provider/service_provider_form.dart';
 import 'package:callme/provider/provider_dashboard.dart';
+
+// =====================================================
+// CATEGORY MODEL
+// =====================================================
+
+class ServiceCategoryStyle {
+  final String name;
+  final IconData icon;
+  final Color iconColor;      // only the icon gets colour
+  final Color iconBg;         // soft tinted circle behind icon
+
+  const ServiceCategoryStyle({
+    required this.name,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+  });
+}
+
+// =====================================================
+// PAGE
+// =====================================================
 
 class BusinessPage extends StatefulWidget {
   const BusinessPage({super.key});
 
   @override
-  State<BusinessPage> createState() =>
-      _BusinessPageState();
+  State<BusinessPage> createState() => _BusinessPageState();
 }
 
-class _BusinessPageState
-    extends State<BusinessPage> {
+class _BusinessPageState extends State<BusinessPage>
+    with TickerProviderStateMixin {
 
-  /// =====================================================
-  /// FIREBASE
-  /// =====================================================
+  // ── Firebase ──────────────────────────────────────
+  User? get user => FirebaseAuth.instance.currentUser;
+  final firestore = FirebaseFirestore.instance;
 
-  User? get user =>
-      FirebaseAuth.instance.currentUser;
-
-  final firestore =
-      FirebaseFirestore.instance;
-
-  /// =====================================================
-  /// LOCATION
-  /// =====================================================
-
+  // ── Location ──────────────────────────────────────
   String city = "";
-
   bool loadingLocation = true;
 
-  /// =====================================================
-  /// CATEGORIES
-  /// =====================================================
+  // ── Stagger animation ─────────────────────────────
+  late AnimationController _listController;
 
-  final List<ServiceCategory>
-      businessCategories = [
-
-    ServiceCategory(
+  // ── Categories ────────────────────────────────────
+  static const List<ServiceCategoryStyle> businessCategories = [
+    ServiceCategoryStyle(
       name: 'Salon',
-      icon: Icons.content_cut,
+      icon: Icons.content_cut_rounded,
+      iconColor: Color(0xFFE91E8C),
+      iconBg: Color(0xFFFCE4F1),
     ),
-
-    ServiceCategory(
+    ServiceCategoryStyle(
       name: 'Educational Services',
-      icon: Icons.school,
+      icon: Icons.menu_book_rounded,
+      iconColor: Color(0xFF5C6BC0),
+      iconBg: Color(0xFFE8EAF6),
     ),
-
-    ServiceCategory(
+    ServiceCategoryStyle(
       name: 'Cleaning',
-      icon:
-      Icons.cleaning_services,
+      icon: Icons.cleaning_services_rounded,
+      iconColor: Color(0xFF00897B),
+      iconBg: Color(0xFFE0F2F1),
     ),
-
-    ServiceCategory(
+    ServiceCategoryStyle(
       name: 'Plumbing',
-      icon: Icons.plumbing,
+      icon: Icons.plumbing_rounded,
+      iconColor: Color(0xFF0288D1),
+      iconBg: Color(0xFFE1F5FE),
     ),
-
-    ServiceCategory(
+    ServiceCategoryStyle(
       name: 'Hotel',
-      icon: Icons.hotel,
+      icon: Icons.hotel_rounded,
+      iconColor: Color(0xFFF57C00),
+      iconBg: Color(0xFFFFF3E0),
     ),
-
-    ServiceCategory(
+    ServiceCategoryStyle(
       name: 'Resort',
-      icon:
-      Icons.holiday_village,
+      icon: Icons.beach_access_rounded,
+      iconColor: Color(0xFF2E7D32),
+      iconBg: Color(0xFFE8F5E9),
     ),
-
-    ServiceCategory(
+    ServiceCategoryStyle(
       name: 'Laundry',
-      icon:
-      Icons.local_laundry_service,
+      icon: Icons.local_laundry_service_rounded,
+      iconColor: Color(0xFF8E24AA),
+      iconBg: Color(0xFFF3E5F5),
     ),
-
-    ServiceCategory(
+    ServiceCategoryStyle(
       name: 'Water',
-      icon: Icons.water_drop,
+      icon: Icons.water_drop_rounded,
+      iconColor: Color(0xFF1976D2),
+      iconBg: Color(0xFFE3F2FD),
     ),
-
-    ServiceCategory(
+    ServiceCategoryStyle(
       name: 'Civil',
-      icon: Icons.construction,
+      icon: Icons.construction_rounded,
+      iconColor: Color(0xFFD84315),
+      iconBg: Color(0xFFFBE9E7),
     ),
   ];
 
-  /// =====================================================
-  /// INIT
-  /// =====================================================
-
+  // ── Init ──────────────────────────────────────────
   @override
   void initState() {
-
     super.initState();
 
-    _getLocation();
+    _listController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..forward();
 
+    _getLocation();
     _setupFCM();
   }
 
-  /// =====================================================
-  /// FCM SETUP
-  /// =====================================================
+  @override
+  void dispose() {
+    _listController.dispose();
+    super.dispose();
+  }
 
+  // ── FCM ───────────────────────────────────────────
   Future<void> _setupFCM() async {
-
     try {
+      await FirebaseMessaging.instance.requestPermission(
+          alert: true, badge: true, sound: true);
 
-      /// REQUEST PERMISSION
-
-      await FirebaseMessaging.instance
-          .requestPermission(
-
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-
-      /// GET TOKEN
-
-      String? token =
-
-      await FirebaseMessaging.instance
-          .getToken();
-
-      debugPrint(
-        "FCM TOKEN: $token",
-      );
-
-      if (token != null &&
-          user != null) {
-
-        /// SAVE TOKEN TO PROVIDER
-
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null && user != null) {
         await firestore
             .collection("users")
-            .doc(user!.uid)
-            .set({
-
-          "fcmToken": token,
-
-        }, SetOptions(
-          merge: true,
-        ));
+            .doc(user!.email?.toLowerCase())
+            .set({"fcmToken": token}, SetOptions(merge: true));
       }
 
-      /// TOKEN REFRESH
-
-      FirebaseMessaging.instance
-          .onTokenRefresh
-          .listen((newToken) async {
-
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
         if (user != null) {
-
           await firestore
               .collection("users")
-              .doc(user!.uid)
-              .set({
-
-            "fcmToken": newToken,
-
-          }, SetOptions(
-            merge: true,
-          ));
+              .doc(user!.email?.toLowerCase())
+              .set({"fcmToken": newToken}, SetOptions(merge: true));
         }
       });
 
-      /// FOREGROUND MESSAGE
-
-      FirebaseMessaging.onMessage
-          .listen((RemoteMessage message) {
-
-        if (message.notification !=
-            null) {
-
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(
-
-            SnackBar(
-
-              content: Text(
-
-                message.notification
-                    ?.title ??
-                    "New Notification",
-              ),
-
-              backgroundColor:
-              Colors.green,
-            ),
-          );
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        if (message.notification != null) {
+          _showSnack(
+              message.notification?.title ?? "New Notification",
+              isSuccess: true);
         }
       });
-
     } catch (e) {
-
-      debugPrint(
-        "FCM ERROR: $e",
-      );
+      debugPrint("FCM ERROR: $e");
     }
   }
 
-  /// =====================================================
-  /// LOCATION
-  /// =====================================================
-
+  // ── Location ──────────────────────────────────────
   Future<void> _getLocation() async {
-
     try {
-
-      await Geolocator
-          .requestPermission();
-
-      Position pos =
-      await Geolocator
-          .getCurrentPosition(
-
-        timeLimit:
-        const Duration(
-          seconds: 5,
-        ),
-      );
-
-      List<Placemark>
-      placemarks =
-      await placemarkFromCoordinates(
-
-        pos.latitude,
-        pos.longitude,
-      );
-
+      await Geolocator.requestPermission();
+      final pos = await Geolocator.getCurrentPosition(
+          timeLimit: const Duration(seconds: 6));
+      final marks =
+          await placemarkFromCoordinates(pos.latitude, pos.longitude);
       if (!mounted) return;
-
       setState(() {
-
-        city =
-            placemarks
-                .first
-                .locality ?? "";
-
+        city = marks.first.locality ?? "";
         loadingLocation = false;
       });
-
-    } catch (e) {
-
+    } catch (_) {
       if (!mounted) return;
-
-      setState(() {
-
-        loadingLocation = false;
-      });
+      setState(() => loadingLocation = false);
     }
   }
 
-  /// =====================================================
-  /// HELPERS
-  /// =====================================================
+  // ── Helpers ───────────────────────────────────────
+  String normalize(String s) => s.trim().toLowerCase();
 
-  String normalize(String s) {
-
-    return s
-        .trim()
-        .toLowerCase();
-  }
-
-  String _getServiceType(
-      String name) {
-
-    if (name ==
-        "Educational Services") {
-
-      return "education";
-    }
-
+  String _getServiceType(String name) {
+    if (name == "Educational Services") return "education";
     return normalize(name);
   }
 
-  void _showMessage(String msg) {
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-
+  void _showSnack(String msg, {bool isSuccess = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
-      ),
-    );
-  }
-
-  /// =====================================================
-  /// TAP
-  /// =====================================================
-
-  void _handleTap(
-
-      ServiceCategory service,
-
-      Map<String, dynamic>? provider,
-      ) {
-
-    final serviceType =
-    _getServiceType(
-      service.name,
-    );
-
-    if (user == null) {
-
-      _showMessage(
-        "Please login first",
-      );
-
-      return;
-    }
-
-    /// NO PROVIDER
-
-    if (provider == null) {
-
-      _showProviderTypeSelector(
-        service,
-      );
-
-      return;
-    }
-
-    final status =
-        provider['status']
-        ?? "pending";
-
-    /// PENDING
-
-    if (status == "pending") {
-
-      _showMessage(
-        "⏳ Under review",
-      );
-
-      return;
-    }
-
-    /// REJECTED
-
-    if (status == "rejected") {
-
-      _showRejectedDialog(
-
-        service,
-
-        provider['rejectReason']
-        ??
-            "No reason provided",
-      );
-
-      return;
-    }
-
-    /// APPROVED
-
-    if (status == "approved") {
-
-      Navigator.push(
-
-        context,
-
-        MaterialPageRoute(
-
-          builder: (_) =>
-              BusinessDashboardPage(
-
-                providerId:
-                provider['providerId'],
-
-                businessName:
-                provider['business']
-                ?['businessName']
-                    ??
-                    "My Business",
-
-                serviceType:
-                serviceType,
-              ),
-        ),
-      );
-    }
-  }
-
-  /// =====================================================
-  /// REJECT DIALOG
-  /// =====================================================
-
-  void _showRejectedDialog(
-
-      ServiceCategory service,
-
-      String reason,
-      ) {
-
-    showDialog(
-
-      context: context,
-
-      builder: (_) => AlertDialog(
-
-        title:
-        const Text("Rejected ❌"),
-
-        content:
-        Text("Reason: $reason"),
-
-        actions: [
-
-          TextButton(
-
-            onPressed: () {
-
-              Navigator.pop(context);
-
-              _showProviderTypeSelector(
-                service,
-              );
-            },
-
-            child:
-            const Text("Reapply"),
+        content: Row(children: [
+          Icon(
+            isSuccess ? Icons.check_circle_outline : Icons.info_outline,
+            color: Colors.white,
+            size: 18,
           ),
-        ],
-      ),
-    );
-  }
-
-  /// =====================================================
-  /// PROVIDER TYPE
-  /// =====================================================
-
-  void _showProviderTypeSelector(
-      ServiceCategory service,
-      ) {
-
-    showModalBottomSheet(
-
-      context: context,
-
-      shape:
-      const RoundedRectangleBorder(
-
-        borderRadius:
-        BorderRadius.vertical(
-          top: Radius.circular(22),
-        ),
-      ),
-
-      builder: (_) {
-
-        return Padding(
-
-          padding:
-          const EdgeInsets.all(18),
-
-          child: Column(
-
-            mainAxisSize:
-            MainAxisSize.min,
-
-            children: [
-
-              Text(
-
-                "Register as ${service.name}",
-
-                style: const TextStyle(
-
-                  fontSize: 18,
-
-                  fontWeight:
-                  FontWeight.bold,
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              _typeTile(
-                service,
-                "Individual",
-                Icons.person,
-              ),
-
-              _typeTile(
-                service,
-                "Agency",
-                Icons.groups,
-              ),
-
-              _typeTile(
-                service,
-                "Business",
-                Icons.business,
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _typeTile(
-
-      ServiceCategory service,
-
-      String type,
-
-      IconData icon,
-      ) {
-
-    return ListTile(
-
-      leading: Icon(icon),
-
-      title: Text(type),
-
-      onTap: () {
-
-        Navigator.pop(context);
-
-        Navigator.push(
-
-          context,
-
-          MaterialPageRoute(
-
-            builder: (_) =>
-                ServiceProviderForm(
-
-                  type:
-                  _getServiceType(
-                    service.name,
-                  ),
-
-                  providerType: type,
-                ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// =====================================================
-  /// BUILD
-  /// =====================================================
-
-  @override
-  Widget build(BuildContext context) {
-
-    final size =
-    MediaQuery.of(context).size;
-
-    return Scaffold(
-
-      backgroundColor:
-      const Color(0xFFF4F6FA),
-
-      appBar: AppBar(
-
+          const SizedBox(width: 8),
+          Expanded(child: Text(msg)),
+        ]),
         backgroundColor:
-        Colors.white,
+            isSuccess ? const Color(0xFF388E3C) : const Color(0xFF37474F),
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+    );
+  }
 
-        centerTitle: true,
-
-        title: const Text(
-
-          "Become a Provider",
-
-          style: TextStyle(
-            color: Colors.black,
+  // ── Tap handler ───────────────────────────────────
+  void _handleTap(
+      ServiceCategoryStyle service, Map<String, dynamic>? provider) {
+    final serviceType = _getServiceType(service.name);
+    if (user == null) {
+      _showSnack("Please login first");
+      return;
+    }
+    if (provider == null) {
+      _showProviderTypeSelector(service);
+      return;
+    }
+    final status = provider['status'] ?? "pending";
+    if (status == "pending") {
+      _showSnack("⏳ Your application is under review");
+      return;
+    }
+    if (status == "rejected") {
+      _showRejectedDialog(
+          service, provider['rejectReason'] ?? "No reason provided");
+      return;
+    }
+    if (status == "approved") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BusinessDashboardPage(
+            providerId: provider['providerId'],
+            businessName:
+                provider['business']?['businessName'] ?? "My Business",
+            serviceType: serviceType,
           ),
         ),
-      ),
+      );
+    }
+  }
 
-      body: Column(
-
-        children: [
-
-          /// HEADER
-
-          Container(
-
-            width: double.infinity,
-
-            margin:
-            const EdgeInsets.all(12),
-
-            padding:
-            const EdgeInsets.all(18),
-
-            decoration: BoxDecoration(
-
-              gradient:
-              const LinearGradient(
-
-                colors: [
-                  Colors.blue,
-                  Colors.purple,
+  // ── Rejected dialog ───────────────────────────────
+  void _showRejectedDialog(ServiceCategoryStyle service, String reason) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFBE9E7),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.cancel_rounded,
+                    color: Color(0xFFD84315), size: 30),
+              ),
+              const SizedBox(height: 16),
+              const Text("Application Rejected",
+                  style: TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text(reason,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Color(0xFF757575), height: 1.5)),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                      child: const Text("Cancel",
+                          style: TextStyle(color: Color(0xFF424242))),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showProviderTypeSelector(service);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5C6BC0),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                      child: const Text("Reapply"),
+                    ),
+                  ),
                 ],
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-              borderRadius:
-              BorderRadius.circular(16),
-            ),
-
-            child: Text(
-
-              loadingLocation
-
-                  ? "Detecting location..."
-
-                  : "Available in $city",
-
-              style: const TextStyle(
-                color: Colors.white,
+  // ── Provider type bottom sheet ────────────────────
+  void _showProviderTypeSelector(ServiceCategoryStyle service) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: Colors.white,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // handle
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0E0E0),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
+            const SizedBox(height: 20),
 
-          const Padding(
-
-            padding:
-            EdgeInsets.symmetric(
-              horizontal: 16,
-            ),
-
-            child: Align(
-
-              alignment:
-              Alignment.centerLeft,
-
-              child: Text(
-
-                "Select Service Category",
-
-                style: TextStyle(
-
-                  fontSize: 16,
-
-                  fontWeight:
-                  FontWeight.w600,
+            // Header row
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: service.iconBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(service.icon,
+                      color: service.iconColor, size: 22),
                 ),
+                const SizedBox(width: 14),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Register as",
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[500],
+                            fontWeight: FontWeight.w500)),
+                    Text(service.name,
+                        style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF212121))),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+            const Divider(height: 28),
+
+            _typeTile(service, "Individual",
+                Icons.person_rounded, const Color(0xFF5C6BC0)),
+            const SizedBox(height: 8),
+            _typeTile(service, "Agency",
+                Icons.groups_rounded, const Color(0xFF00897B)),
+            const SizedBox(height: 8),
+            _typeTile(service, "Business",
+                Icons.business_rounded, const Color(0xFFF57C00)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _typeTile(ServiceCategoryStyle service, String type,
+      IconData icon, Color color) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ServiceProviderForm(
+                type: _getServiceType(service.name),
+                providerType: type,
+              ),
+            ),
+          );
+        },
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFF0F0F0)),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Text(type,
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF212121))),
+              const Spacer(),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Color(0xFFBDBDBD), size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── BUILD ─────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F8FC),
+      body: CustomScrollView(
+        slivers: [
+          // ── App Bar ──────────────────────────────────
+          SliverAppBar(
+            expandedHeight: 160,
+            pinned: true,
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: true,
+            title: const Text(
+              "Become a Provider",
+              style: TextStyle(
+                color: Color(0xFF212121),
+                fontWeight: FontWeight.w700,
+                fontSize: 17,
+              ),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              background: _buildHeader(),
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(
+                  height: 1, color: const Color(0xFFF0F0F0)),
+            ),
+          ),
+
+          // ── Section label ─────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+              child: Row(
+                children: [
+                  const Text(
+                    "Service Categories",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF212121),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8EAF6),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      "${businessCategories.length}",
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF5C6BC0),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
-          const SizedBox(height: 10),
-
-          /// =====================================================
-          /// PROVIDERS STREAM
-          /// =====================================================
-
-          Expanded(
-
-            child: user == null
-
-                ? _buildGrid(
-              {},
-              {},
-              size,
+          // ── Grid ─────────────────────────────────────
+          if (user == null)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              sliver: _buildGridSliver({}, {}, size),
             )
-
-                : StreamBuilder<
-                QuerySnapshot>(
-
-              stream: firestore
-                  .collection(
-                "providers",
-              )
-                  .where(
-                "userId",
-                isEqualTo:
-                user!.uid,
-              )
-                  .snapshots(),
-
-              builder: (
-                  context,
-                  providerSnapshot,
-                  ) {
-
-                if (providerSnapshot
-                    .hasError) {
-
-                  return const Center(
-                    child: Text(
-                      "Error loading providers",
-                    ),
-                  );
-                }
-
-                Map<String,
-                    Map<String,
-                        dynamic>>
-                providerMap = {};
-
-                if (providerSnapshot
-                    .hasData) {
-
-                  for (var doc
-                  in providerSnapshot
-                      .data!
-                      .docs) {
-
-                    final data =
-                    doc.data()
-                    as Map<String,
-                        dynamic>;
-
-                    final type =
-                    normalize(
-                      data['serviceType']
-                      ??
-                          "",
-                    );
-
-                    providerMap[type] =
-                        data;
-                  }
-                }
-
-                /// =====================================================
-                /// ORDERS STREAM
-                /// =====================================================
-
-                return StreamBuilder<
-                    QuerySnapshot>(
-
-                  stream: firestore
-                      .collection(
-                    "orders",
-                  )
-                      .where(
-                    "providerUserId",
-                    isEqualTo:
-                    user!.uid,
-                  )
-                      .where(
-                    "status",
-                    whereIn: [
-
-                      "pending",
-
-                      "accepted",
-
-                      "ongoing",
-                    ],
-                  )
-                      .snapshots(),
-
-                  builder: (
-                      context,
-                      orderSnapshot,
-                      ) {
-
-                    Map<String, int>
-                    orderCountMap = {};
-
-                    if (orderSnapshot
-                        .hasData) {
-
-                      for (var doc
-                      in orderSnapshot
-                          .data!
-                          .docs) {
-
-                        final order =
-                        doc.data()
-                        as Map<String,
-                            dynamic>;
-
-                        final type =
-                        normalize(
-
-                          order[
-                          'serviceType']
-                              ??
-                              "",
-                        );
-
-                        orderCountMap[
-                        type] =
-
-                            (orderCountMap[
-                            type] ??
-                                0) +
-                                1;
-                      }
+          else
+            SliverToBoxAdapter(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: firestore
+                    .collection("providers")
+                    .where("userId", isEqualTo: user!.uid)
+                    .snapshots(),
+                builder: (context, providerSnap) {
+                  final Map<String, Map<String, dynamic>> providerMap = {};
+                  if (providerSnap.hasData) {
+                    for (var doc in providerSnap.data!.docs) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final type =
+                          normalize(data['serviceType'] ?? "");
+                      providerMap[type] = data;
                     }
+                  }
 
-                    return _buildGrid(
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: firestore
+                        .collection("orders")
+                        .where("providerUserId",
+                            isEqualTo: user!.uid)
+                        .where("status", whereIn: [
+                      "pending",
+                      "accepted",
+                      "ongoing"
+                    ]).snapshots(),
+                    builder: (context, orderSnap) {
+                      final Map<String, int> orderCountMap = {};
+                      if (orderSnap.hasData) {
+                        for (var doc in orderSnap.data!.docs) {
+                          final order =
+                              doc.data() as Map<String, dynamic>;
+                          final type =
+                              normalize(order['serviceType'] ?? "");
+                          orderCountMap[type] =
+                              (orderCountMap[type] ?? 0) + 1;
+                        }
+                      }
+                      return Padding(
+                        padding:
+                            const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics:
+                              const NeverScrollableScrollPhysics(),
+                          itemCount: businessCategories.length,
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount:
+                                size.width < 600 ? 2 : 3,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: 1.05,
+                          ),
+                          itemBuilder: (_, i) => _buildCard(
+                              i, providerMap, orderCountMap),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
-                      providerMap,
-
-                      orderCountMap,
-
-                      size,
-                    );
-                  },
-                );
-              },
+  // ── Header ────────────────────────────────────────
+  Widget _buildHeader() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      alignment: Alignment.bottomLeft,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Location chip
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 400),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F4FF),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: const Color(0xFFDDE3FF)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  loadingLocation
+                      ? Icons.location_searching_rounded
+                      : Icons.location_on_rounded,
+                  color: const Color(0xFF5C6BC0),
+                  size: 15,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  loadingLocation
+                      ? "Detecting location..."
+                      : city.isNotEmpty
+                          ? city
+                          : "Location unavailable",
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF5C6BC0),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Grow your business with us",
+            style: TextStyle(
+              fontSize: 13,
+              color: Color(0xFF9E9E9E),
+              fontWeight: FontWeight.w400,
             ),
           ),
         ],
@@ -820,144 +660,217 @@ class _BusinessPageState
     );
   }
 
-  /// =====================================================
-  /// GRID
-  /// =====================================================
-
-  Widget _buildGrid(
-
-      Map<String,
-      Map<String, dynamic>>
-      providerMap,
-
-      Map<String, int>
-      orderCountMap,
-
-      Size size,
-      ) {
-
-    return GridView.builder(
-
-      padding:
-      const EdgeInsets.all(12),
-
-      itemCount:
-      businessCategories.length,
-
-      gridDelegate:
-      SliverGridDelegateWithFixedCrossAxisCount(
-
-        crossAxisCount:
-        size.width < 600
-            ? 2
-            : 3,
-
+  // ── Grid sliver (no-user fallback) ────────────────
+  SliverGrid _buildGridSliver(
+    Map<String, Map<String, dynamic>> providerMap,
+    Map<String, int> orderCountMap,
+    Size size,
+  ) {
+    return SliverGrid(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: size.width < 600 ? 2 : 3,
         crossAxisSpacing: 12,
-
         mainAxisSpacing: 12,
+        childAspectRatio: 1.05,
       ),
+      delegate: SliverChildBuilderDelegate(
+        (_, i) => _buildCard(i, providerMap, orderCountMap),
+        childCount: businessCategories.length,
+      ),
+    );
+  }
 
-      itemBuilder: (_, i) {
+  // ── Card ──────────────────────────────────────────
+  Widget _buildCard(
+    int i,
+    Map<String, Map<String, dynamic>> providerMap,
+    Map<String, int> orderCountMap,
+  ) {
+    final category = businessCategories[i];
+    final serviceType = _getServiceType(category.name);
+    final provider = providerMap[serviceType];
+    final count = orderCountMap[serviceType] ?? 0;
+    final status = provider?['status'];
 
-        final category =
-        businessCategories[i];
+    // Stagger-in animation
+    final delay = i * 0.05;
+    final animation = CurvedAnimation(
+      parent: _listController,
+      curve: Interval(delay.clamp(0.0, 0.8), 1.0,
+          curve: Curves.easeOutCubic),
+    );
 
-        final serviceType =
-        _getServiceType(
-          category.name,
-        );
-
-        final provider =
-        providerMap[serviceType];
-
-        final count =
-            orderCountMap[
-            serviceType] ??
-                0;
-
-        return GestureDetector(
-
-          onTap: () => _handleTap(
-            category,
-            provider,
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (_, child) => Opacity(
+        opacity: animation.value,
+        child: Transform.translate(
+          offset: Offset(0, 18 * (1 - animation.value)),
+          child: child,
+        ),
+      ),
+      child: GestureDetector(
+        onTap: () => _handleTap(category, provider),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFF0F0F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-
           child: Stack(
-
             children: [
+              // Main content
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Icon circle
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: category.iconBg,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        category.icon,
+                        color: category.iconColor,
+                        size: 26,
+                      ),
+                    ),
 
-              Positioned.fill(
+                    const Spacer(),
 
-                child: CategoryCard(
+                    Text(
+                      category.name,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF212121),
+                        height: 1.25,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
 
-                  name:
-                  category.name,
+                    const SizedBox(height: 6),
 
-                  icon:
-                  category.icon,
-
-                  showName: true,
-
-                  imagePath: '',
+                    // Status pill
+                    if (status != null)
+                      _statusPill(status)
+                    else
+                      Row(
+                        children: const [
+                          Icon(Icons.add_circle_outline_rounded,
+                              size: 12, color: Color(0xFFBDBDBD)),
+                          SizedBox(width: 4),
+                          Text(
+                            "Register",
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF9E9E9E),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
               ),
 
-              /// ORDER BADGE
-
+              // Order badge (top-right)
               if (count > 0)
-
                 Positioned(
-
-                  top: 8,
-
-                  right: 8,
-
+                  top: 10,
+                  right: 10,
                   child: Container(
-
-                    padding:
-                    const EdgeInsets
-                        .symmetric(
-
-                      horizontal: 8,
-
-                      vertical: 4,
+                    constraints: const BoxConstraints(minWidth: 22),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: category.iconColor,
+                      borderRadius: BorderRadius.circular(30),
                     ),
-
-                    decoration:
-                    BoxDecoration(
-
-                      color: Colors.red,
-
-                      borderRadius:
-                      BorderRadius.circular(
-                        30,
-                      ),
-                    ),
-
                     child: Text(
-
-                      count > 99
-                          ? "99+"
-                          : count.toString(),
-
-                      style:
-                      const TextStyle(
-
-                        color:
-                        Colors.white,
-
-                        fontWeight:
-                        FontWeight.bold,
-
-                        fontSize: 12,
+                      count > 99 ? "99+" : "$count",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 10,
                       ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ),
             ],
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  // ── Status pill ───────────────────────────────────
+  Widget _statusPill(String status) {
+    late Color color;
+    late Color bg;
+    late String label;
+    late IconData icon;
+
+    switch (status) {
+      case "approved":
+        color = const Color(0xFF2E7D32);
+        bg = const Color(0xFFE8F5E9);
+        label = "Active";
+        icon = Icons.check_circle_rounded;
+        break;
+      case "pending":
+        color = const Color(0xFFE65100);
+        bg = const Color(0xFFFFF3E0);
+        label = "Pending";
+        icon = Icons.hourglass_top_rounded;
+        break;
+      case "rejected":
+        color = const Color(0xFFD84315);
+        bg = const Color(0xFFFBE9E7);
+        label = "Rejected";
+        icon = Icons.cancel_rounded;
+        break;
+      default:
+        color = const Color(0xFF757575);
+        bg = const Color(0xFFF5F5F5);
+        label = status;
+        icon = Icons.info_outline_rounded;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 11),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

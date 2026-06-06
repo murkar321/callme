@@ -65,7 +65,7 @@ class _SalonPageState extends State<SalonPage> {
                         builder: (_) => const CartPage(
                           service: "Salon",
                           serviceName: "Salon",
-                          cart: [],
+                          cart: [], providerId: '',
                         ),
                       ),
                     );
@@ -211,7 +211,7 @@ class _SalonPageState extends State<SalonPage> {
                       builder: (_) => const CartPage(
                         service: "Salon",
                         serviceName: "Salon",
-                        cart: [],
+                        cart: [], providerId: '',
                       ),
                     ),
                   );

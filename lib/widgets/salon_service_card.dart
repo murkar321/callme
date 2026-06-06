@@ -210,7 +210,7 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                               builder: (_) => const CartPage(
                                 service: "Salon",
                                 serviceName: "Salon",
-                                cart: [],
+                                cart: [], providerId: '',
                               ),
                             ),
                           );

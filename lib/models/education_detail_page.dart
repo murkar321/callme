@@ -254,7 +254,7 @@ class EducationDetailPage extends StatelessWidget {
                         MaterialPageRoute(
                           builder: (_) =>
                               const CartPage(
-                            service: "Education", serviceName: '', cart: [],
+                            service: "Education", serviceName: '', cart: [], providerId: '',
                           ),
                         ),
                       );

@@ -1,4 +1,4 @@
-package com.example.callme
+package com.allinone.callme
 
 import io.flutter.embedding.android.FlutterActivity
 
