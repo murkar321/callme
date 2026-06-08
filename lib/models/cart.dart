@@ -137,12 +137,30 @@ class Cart {
         category: category,
         image: image,
         visitType: visitType,
-
-        /// 🔥 SAFE VALUES
         adults: 1,
         children: 0,
       ),
       service: "Salon",
+    );
+  }
+
+  /// =========================
+  /// 🏗️ CIVIL
+  /// =========================
+  static void addCivil({
+    required String id,
+    required String name,
+    required int price,
+    required String category,
+    String? image,
+  }) {
+    addItem(
+      id: id,
+      name: name,
+      price: price,
+      service: "Civil",
+      category: category,
+      image: image,
     );
   }
 
@@ -193,20 +211,24 @@ class Cart {
   }
 
   /// =========================
-  /// 💰 TOTAL PRICE (🔥 FIXED)
+  /// 💰 TOTAL PRICE
   /// =========================
   static int getTotal(String service) {
     return _items
         .where((e) => e.service == service)
         .fold(0, (sum, e) {
-
-      /// 💇 SALON FIX
+      /// 💇 SALON
       if (service == "Salon") {
         return sum + (e.price * e.quantity);
       }
 
       /// 🎓 EDUCATION
       if (service == "Education") {
+        return sum + (e.price * e.quantity);
+      }
+
+      /// 🏗️ CIVIL
+      if (service == "Civil") {
         return sum + (e.price * e.quantity);
       }
 
@@ -228,9 +250,17 @@ class Cart {
             e.service == service,
       );
       return item.quantity;
-    } catch (e) {
+    } catch (_) {
       return 0;
     }
+  }
+
+  /// =========================
+  /// 🔢 GET ITEM COUNT
+  /// ✅ FIX: was always returning null — now delegates to getQuantity
+  /// =========================
+  static int getItemCount(String id, String service) {
+    return getQuantity(id, service);
   }
 
   /// =========================
@@ -284,11 +314,6 @@ class Cart {
   /// =========================
   /// 🔁 BACKWARD COMPAT
   /// =========================
-  static int totalItems(String service) {
-    return getTotalItems(service);
-  }
-
-  static int totalPrice(String service) {
-    return getTotal(service);
-  }
+  static int totalItems(String service) => getTotalItems(service);
+  static int totalPrice(String service) => getTotal(service);
 }

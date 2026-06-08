@@ -5,7 +5,7 @@ import '../models/cart.dart';
 import '../widgets/civil_card.dart';
 import '../widgets/renovation_bottom_sheet.dart';
 import '../models/civil_detail_page.dart';
-import '../bookings/civil_book_page.dart';
+import '../models/cart_page.dart';
 
 class CivilServicesPage extends StatefulWidget {
   const CivilServicesPage({super.key});
@@ -19,14 +19,14 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
 
   void refresh() => setState(() {});
 
-  /// PRICE FIX
+  /// Extract numeric price from a price string like "₹500/sqft"
   int extractPrice(String price) {
     final numbers = price.replaceAll(RegExp(r'[^0-9]'), '');
     if (numbers.isEmpty) return 0;
     return int.tryParse(numbers) ?? 0;
   }
 
-  /// CONVERT SUBSERVICE → SERVICE PRODUCT
+  /// Convert SubService → ServiceProduct
   ServiceProduct convert(SubService sub, String category) {
     return ServiceProduct(
       id: sub.id,
@@ -40,7 +40,7 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     );
   }
 
-  /// ADD TO CART
+  /// Add item to cart
   void addToCart(ServiceProduct service) {
     Cart.add(
       CartItem(
@@ -64,33 +64,27 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     );
   }
 
-  /// BOOK HANDLER
+  /// Handle booking tap: Renovation → bottom sheet, Others → add to cart
   void handleBooking(ServiceProduct service) {
-    /// RENOVATION → OPEN BOTTOM SHEET
     if (service.category == "Renovation") {
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.white,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(20),
-          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         builder: (_) => RenovationBottomSheet(
-          packageId: service.id, // basic / standard / premium
+          packageId: service.id,
           packageName: service.name,
         ),
       );
-    }
-
-    /// OTHER SERVICES → ADD TO CART
-    else {
+    } else {
       addToCart(service);
     }
   }
 
-  /// OPEN DETAILS PAGE
+  /// Open detail page
   void openDetails(SubService sub, String mainId) {
     Navigator.push(
       context,
@@ -103,6 +97,20 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     ).then((_) => refresh());
   }
 
+  /// Navigate to cart
+  void openCart() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CartPage(
+          serviceName: "Civil Contract Services",
+          providerId: '',
+          service: '',
+        ),
+      ),
+    ).then((_) => refresh());
+  }
+
   @override
   Widget build(BuildContext context) {
     final categories = civilServices;
@@ -110,18 +118,82 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     final subServices = selectedService.subServices;
 
     final totalItems = Cart.getTotalItems("Civil Contract Services");
-
     final totalPrice = Cart.getTotal("Civil Contract Services");
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Civil Contract Services"),
         centerTitle: true,
+        actions: [
+          /// CART ICON in AppBar with badge
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.shopping_cart_outlined),
+                onPressed: totalItems > 0 ? openCart : null,
+              ),
+              if (totalItems > 0)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      totalItems > 9 ? "9+" : "$totalItems",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
+
       body: SafeArea(
         child: Column(
           children: [
-            /// MAIN CONTENT
+            /// ── CHOOSE A SERVICE HEADER ──────────────────────────────
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+              color: Colors.white,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Choose a Service",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Select a category from the left to browse services",
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const Divider(height: 1),
+
+            /// ── MAIN CONTENT ─────────────────────────────────────────
             Expanded(
               child: Row(
                 children: [
@@ -136,11 +208,7 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                         final isSelected = selectedIndex == index;
 
                         return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              selectedIndex = index;
-                            });
-                          },
+                          onTap: () => setState(() => selectedIndex = index),
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             decoration: BoxDecoration(
@@ -164,8 +232,8 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                                 ),
                                 const SizedBox(height: 6),
                                 Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4),
                                   child: Text(
                                     category.name,
                                     textAlign: TextAlign.center,
@@ -199,20 +267,13 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                       itemCount: subServices.length,
                       itemBuilder: (context, index) {
                         final sub = subServices[index];
-
-                        final service = convert(
-                          sub,
-                          selectedService.name,
-                        );
+                        final service = convert(sub, selectedService.name);
 
                         return CivilServiceCard(
                           service: service,
                           displayPrice: sub.price,
                           onAddCart: () => handleBooking(service),
-                          onTap: () => openDetails(
-                            sub,
-                            selectedService.id,
-                          ),
+                          onTap: () => openDetails(sub, selectedService.id),
                         );
                       },
                     ),
@@ -221,7 +282,7 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
               ),
             ),
 
-            /// CART BAR
+            /// ── VIEW CART BAR ─────────────────────────────────────────
             if (totalItems > 0)
               Container(
                 width: double.infinity,
@@ -230,36 +291,50 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                 color: Colors.black,
                 child: Row(
                   children: [
-                    Text(
-                      "$totalItems items",
-                      style: const TextStyle(
-                        color: Colors.white,
-                      ),
+                    /// Item count + price
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "$totalItems item${totalItems > 1 ? 's' : ''} added",
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          "₹$totalPrice",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
                     ),
+
                     const Spacer(),
-                    Text(
-                      "₹$totalPrice",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton(
+
+                    /// VIEW CART button
+                    ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const CivilBookingPage(
-                              serviceName: "Civil Contract Services", providerId: '',
-                            ),
-                          ),
-                        ).then((_) => refresh());
-                      },
-                      child: const Text("View Cart"),
+                      onPressed: openCart,
+                      icon: const Icon(Icons.shopping_cart, size: 18),
+                      label: const Text(
+                        "View Cart",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ],
                 ),

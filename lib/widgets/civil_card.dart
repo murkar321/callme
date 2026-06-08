@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../data/service_product.dart';
+import '../models/cart.dart';
+
+// Cart key used everywhere for Civil services — must match widget.service in CartPage
+const kCivilCartKey = "Civil";
 
 class CivilServiceCard extends StatelessWidget {
   final ServiceProduct service;
@@ -19,38 +23,31 @@ class CivilServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
 
+    // ✅ FIX: Use service.id directly — no prefix.
+    //    The parent must also add CartItem(id: service.id, ...) so the IDs match.
+    final cartCount = Cart.getItemCount(service.id, kCivilCartKey);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: width * 0.40, // responsive height
-        margin: const EdgeInsets.symmetric(
-          vertical: 8,
-          horizontal: 4,
-        ),
-
+        height: width * 0.40,
+        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
           boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 5,
-            )
+            BoxShadow(color: Colors.black26, blurRadius: 5),
           ],
         ),
-
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: Stack(
             children: [
               /// IMAGE
               Positioned.fill(
-                child: Image.asset(
-                  service.imagePath,
-                  fit: BoxFit.cover,
-                ),
+                child: Image.asset(service.imagePath, fit: BoxFit.cover),
               ),
 
-              /// GRADIENT
+              /// GRADIENT OVERLAY
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -66,7 +63,7 @@ class CivilServiceCard extends StatelessWidget {
                 ),
               ),
 
-              /// VIEW DETAILS
+              /// VIEW DETAILS BUTTON
               Positioned(
                 left: 10,
                 top: 10,
@@ -74,33 +71,26 @@ class CivilServiceCard extends StatelessWidget {
                   onTap: onTap,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
+                        horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: Colors.black54,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Text(
                       "View Details",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                      ),
+                      style: TextStyle(color: Colors.white, fontSize: 11),
                     ),
                   ),
                 ),
               ),
 
-              /// PRICE
+              /// PRICE CHIP
               Positioned(
                 right: 10,
                 top: 10,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
+                      horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(6),
@@ -133,30 +123,59 @@ class CivilServiceCard extends StatelessWidget {
                 ),
               ),
 
-              /// BOOK BUTTON
+              /// BOOK / SELECT BUTTON + CART BADGE
               Positioned(
                 right: 10,
                 bottom: 10,
-                child: InkWell(
-                  onTap: onAddCart,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      service.category == "Renovation" ? "SELECT" : "BOOK",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    InkWell(
+                      onTap: onAddCart,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          service.category == "Renovation"
+                              ? "SELECT"
+                              : "BOOK",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+
+                    // Badge — only shown when item is already in cart
+                    if (cartCount > 0)
+                      Positioned(
+                        top: -8,
+                        right: -8,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            color: Colors.orange,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            cartCount > 9 ? "9+" : "$cartCount",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],

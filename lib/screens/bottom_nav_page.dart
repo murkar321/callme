@@ -1,28 +1,4 @@
-// bottom_nav_page.dart
-//
-// CHANGES vs original:
-//
-// 1. userPhone / userEmail constructor params REMOVED
-//    These were passed as empty strings from main.dart and never reliably set.
-//    All user data is now read directly from FirebaseAuth.instance.currentUser
-//    inside initState() — single source of truth, always fresh after login.
-//
-// 2. Admin check moved to async Firestore lookup (optional but recommended)
-//    Hardcoding an email string for admin detection is fragile — anyone who
-//    knows the email can register with it. The recommended pattern is a
-//    Firestore field: users/{uid}.role == 'admin'.
-//    Both approaches are shown; the email fallback is kept for compatibility.
-//
-// 3. Navigation rebuild on auth state change
-//    If the user signs in/out without restarting the app the nav tabs never
-//    updated. Now uses FirebaseAuth.authStateChanges() stream to rebuild.
-//
-// 4. _currentIndex guard
-//    If the admin tab is removed after a sign-out while _currentIndex == 4
-//    the app would crash with a RangeError. Added a clamp on rebuild.
-//
-// 5. Theme colors pulled from ColorScheme instead of hardcoded deepPurple/grey
-//    Respects the seed color defined in main.dart automatically.
+
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';

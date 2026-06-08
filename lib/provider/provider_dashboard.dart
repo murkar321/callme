@@ -94,11 +94,12 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage>
 
     // ── My jobs ───────────────────────────────────────────────────────────
     // Orders where THIS provider's userId is stored as the winning acceptor.
+    // Show all jobs belonging to current provider.
+    // Uses providerUserId as primary key because older orders may not have acceptedByUid.
     _myJobsStream = _db
         .collection('orders')
-        .where('acceptedByUid', isEqualTo: _myUid)
-        .orderBy('createdAt', descending: true)
-        .limit(50)
+        .where('providerUserId', isEqualTo: _myUid)
+        .where('isAssigned', isEqualTo: true)
         .snapshots();
   }
 
@@ -114,79 +115,35 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage>
 
   /// Accept an order — uses a transaction to guard against multiple providers
   /// trying to accept the same order simultaneously.
-  Future<void> _acceptOrder(String orderId, Map<String, dynamic> data) async {
-    // Capture notification fields BEFORE the transaction runs, so even if
-    // Firestore updates first the notification still has valid data.
-    final customerId = (data['userId'] ?? '').toString();
-    final svcLabel   = widget.serviceType;
+  
+Future<void> _acceptOrder(String orderId, Map<String, dynamic> data) async {
+  try {
+    await _db.collection('orders').doc(orderId).update({
+      'providerId': widget.providerId,
+      'providerUserId': _myUid,
+      'acceptedByUid': _myUid,
+      'providerName': widget.businessName,
+      'status': 'accepted',
+      'isAssigned': true,
+      'acceptedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
 
-    try {
-      final ref = _db.collection('orders').doc(orderId);
+    _tab.animateTo(1);
 
-      await _db.runTransaction((tx) async {
-        final snap = await tx.get(ref);
-
-        if (!snap.exists) throw _AppErr('not_found');
-
-        final d      = snap.data()!;
-        final status = (d['status'] ?? '').toString().toLowerCase();
-
-        // Guard: already taken by another provider
-        if (d['isAssigned'] == true)
-          throw _AppErr('already_assigned');
-
-        // Guard: order is no longer in an acceptable state
-        if (status != 'pending' && status != 'enquiry')
-          throw _AppErr('not_available');
-
-        tx.update(ref, {
-          // Provider identity — stored in two shapes for backward compatibility
-          'providerId':     widget.providerId,
-          'providerUserId': _myUid,
-          'acceptedByUid':  _myUid,         // used by _myJobsStream query
-          'providerName':   widget.businessName,
-          'provider': {
-            'providerId':     widget.providerId,
-            'providerUserId': _myUid,
-            'providerName':   widget.businessName,
-          },
-
-          'status':       'accepted',
-          'isAssigned':   true,
-          'acceptedAt':   FieldValue.serverTimestamp(),
-          'updatedAt':    FieldValue.serverTimestamp(),
-          'lastActionBy': 'provider',
-
-          // Remove this provider from any earlier decline list if present
-          'declinedBy': FieldValue.arrayRemove([_myUid]),
-        });
-      });
-
-      // Notify the customer — runs AFTER the transaction commits
-      await OrderService.notifyUser(
-        userId:  customerId,
-        orderId: orderId,
-        title:   '🎉 Booking Accepted!',
-        body:    '${widget.businessName} accepted your $svcLabel booking.',
-        type:    'booking_accepted',
-      );
-
-      _snack('Job accepted! Check "My Jobs" tab.', _C.green, Icons.check_circle_rounded);
-    } on _AppErr catch (e) {
-      switch (e.code) {
-        case 'already_assigned':
-          _snack('Another provider just accepted this job.', _C.orange, Icons.info_rounded);
-          break;
-        case 'not_available':
-          _snack('This order is no longer available.', _C.red, Icons.warning_rounded);
-          break;
-        default:
-          _snack('Order not found. It may have been removed.', _C.red, Icons.error_rounded);
-      }
-    } catch (_) {
-      _snack('Could not accept job. Please try again.', _C.red, Icons.error_rounded);
-    }
+    _snack(
+      'Job accepted and moved to My Jobs',
+      _C.green,
+      Icons.check_circle_rounded,
+    );
+  } catch (e) {
+    _snack(
+      'Accept failed',
+      _C.red,
+      Icons.error_outline,
+    );
   }
+}
 
   /// Decline an available order — marks this provider as having declined it
   /// without removing it from the pool so other providers can still accept.
@@ -259,6 +216,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage>
         'acceptedByUid':      FieldValue.delete(),
         'providerId':         FieldValue.delete(),
         'providerUserId':     FieldValue.delete(),
+        'assignedProviderUid': FieldValue.delete(),
         'providerName':       FieldValue.delete(),
         'provider':           FieldValue.delete(),
 
@@ -424,10 +382,6 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage>
 // TYPED ERROR
 // ══════════════════════════════════════════════════════════════════════════════
 
-class _AppErr implements Exception {
-  final String code;
-  const _AppErr(this.code);
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // PENDING SCAFFOLD
@@ -748,7 +702,11 @@ class _JobsListState extends State<_JobsList>
                 final declinedBy = (d.data()['declinedBy'] as List?) ?? [];
                 return !declinedBy.contains(widget.myUid);
               }).toList()
-            : allDocs;
+            : allDocs.where((d) {
+                final m = d.data();
+                final st = (m['status'] ?? '').toString().toLowerCase();
+                return st != 'pending' && st != 'enquiry';
+              }).toList();
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) widget.onCount(docs.length);
