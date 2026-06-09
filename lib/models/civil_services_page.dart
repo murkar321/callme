@@ -7,6 +7,9 @@ import '../widgets/renovation_bottom_sheet.dart';
 import '../models/civil_detail_page.dart';
 import '../models/cart_page.dart';
 
+/// Single source of truth for the Civil cart key — must match CartPage usage
+const kCivilServiceKey = "Civil";
+
 class CivilServicesPage extends StatefulWidget {
   const CivilServicesPage({super.key});
 
@@ -19,14 +22,12 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
 
   void refresh() => setState(() {});
 
-  /// Extract numeric price from a price string like "₹500/sqft"
   int extractPrice(String price) {
     final numbers = price.replaceAll(RegExp(r'[^0-9]'), '');
     if (numbers.isEmpty) return 0;
     return int.tryParse(numbers) ?? 0;
   }
 
-  /// Convert SubService → ServiceProduct
   ServiceProduct convert(SubService sub, String category) {
     return ServiceProduct(
       id: sub.id,
@@ -36,35 +37,25 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
       category: category,
       rating: sub.rating,
       discount: sub.discount,
-      service: "Civil Contract Services",
+      service: kCivilServiceKey,
     );
   }
 
-  /// Add item to cart
   void addToCart(ServiceProduct service) {
     Cart.add(
       CartItem(
-        id: "civil_${service.id}",
+        id: service.id,           // no prefix — matches CivilServiceCard.getItemCount
         name: service.name,
         price: service.price,
-        service: "Civil Contract Services",
+        service: kCivilServiceKey,
         category: service.category ?? "",
         image: service.imagePath,
       ),
-      service: "Civil Contract Services",
+      service: kCivilServiceKey,  // ← consistent key
     );
-
     refresh();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("${service.name} added to cart"),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
-  /// Handle booking tap: Renovation → bottom sheet, Others → add to cart
   void handleBooking(ServiceProduct service) {
     if (service.category == "Renovation") {
       showModalBottomSheet(
@@ -84,7 +75,6 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     }
   }
 
-  /// Open detail page
   void openDetails(SubService sub, String mainId) {
     Navigator.push(
       context,
@@ -97,15 +87,14 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     ).then((_) => refresh());
   }
 
-  /// Navigate to cart
   void openCart() {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => const CartPage(
           serviceName: "Civil Contract Services",
+          service: kCivilServiceKey,   // ← key CartPage uses to read Cart
           providerId: '',
-          service: '',
         ),
       ),
     ).then((_) => refresh());
@@ -117,15 +106,14 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     final selectedService = categories[selectedIndex];
     final subServices = selectedService.subServices;
 
-    final totalItems = Cart.getTotalItems("Civil Contract Services");
-    final totalPrice = Cart.getTotal("Civil Contract Services");
+    final totalItems = Cart.getTotalItems(kCivilServiceKey);
+    final totalPrice = Cart.getTotal(kCivilServiceKey);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Civil Contract Services"),
         centerTitle: true,
         actions: [
-          /// CART ICON in AppBar with badge
           Stack(
             alignment: Alignment.center,
             children: [
@@ -163,37 +151,6 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
       body: SafeArea(
         child: Column(
           children: [
-            /// ── CHOOSE A SERVICE HEADER ──────────────────────────────
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-              color: Colors.white,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Choose a Service",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "Select a category from the left to browse services",
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const Divider(height: 1),
-
-            /// ── MAIN CONTENT ─────────────────────────────────────────
             Expanded(
               child: Row(
                 children: [
@@ -212,14 +169,10 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Colors.white
-                                  : Colors.transparent,
+                              color: isSelected ? Colors.white : Colors.transparent,
                               border: Border(
                                 left: BorderSide(
-                                  color: isSelected
-                                      ? Colors.blue
-                                      : Colors.transparent,
+                                  color: isSelected ? Colors.blue : Colors.transparent,
                                   width: 4,
                                 ),
                               ),
@@ -232,8 +185,7 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                                 ),
                                 const SizedBox(height: 6),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
                                   child: Text(
                                     category.name,
                                     textAlign: TextAlign.center,
@@ -259,10 +211,7 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                   Expanded(
                     child: ListView.builder(
                       padding: EdgeInsets.fromLTRB(
-                        10,
-                        10,
-                        10,
-                        totalItems > 0 ? 90 : 10,
+                        10, 10, 10, totalItems > 0 ? 90 : 10,
                       ),
                       itemCount: subServices.length,
                       itemBuilder: (context, index) {
@@ -282,26 +231,21 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
               ),
             ),
 
-            /// ── VIEW CART BAR ─────────────────────────────────────────
+            /// VIEW CART BAR
             if (totalItems > 0)
               Container(
                 width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 color: Colors.black,
                 child: Row(
                   children: [
-                    /// Item count + price
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           "$totalItems item${totalItems > 1 ? 's' : ''} added",
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                         Text(
                           "₹$totalPrice",
@@ -313,18 +257,13 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                         ),
                       ],
                     ),
-
                     const Spacer(),
-
-                    /// VIEW CART button
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 10,
-                        ),
+                            horizontal: 18, vertical: 10),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),

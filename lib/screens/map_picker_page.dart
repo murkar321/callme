@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 
@@ -13,8 +12,28 @@ import 'package:http/http.dart' as http;
 // ─────────────────────────────────────────────
 const String _kGoogleApiKey = 'AIzaSyBaPH1fJfFbf9nTW64HCkBr5FViH3AlXw8';
 
+/// Result returned via [Navigator.pop] when the user confirms a location.
+class MapPickerResult {
+  final String shortAddress;
+  final String fullAddress;
+  final String addressDetails;
+  final LatLng latLng;
+
+  const MapPickerResult({
+    required this.shortAddress,
+    required this.fullAddress,
+    required this.addressDetails,
+    required this.latLng,
+  });
+}
+
 class MapPickerPage extends StatefulWidget {
-  const MapPickerPage({super.key});
+  /// Optional seed position. When provided the map opens centred here instead
+  /// of the device's current GPS fix. Useful when the user already entered a
+  /// location and wants to refine it.
+  final LatLng? initialLatLng;
+
+  const MapPickerPage({super.key, this.initialLatLng});
 
   @override
   State<MapPickerPage> createState() => _MapPickerPageState();
@@ -68,7 +87,16 @@ class _MapPickerPageState extends State<MapPickerPage>
       CurvedAnimation(parent: _pinAnimController, curve: Curves.easeOut),
     );
 
-    _getCurrentLocation();
+    // If a seed location was passed in, use it directly and skip GPS.
+    if (widget.initialLatLng != null) {
+      _pickedLatLng = widget.initialLatLng;
+      _reverseGeocode(_pickedLatLng!).then((_) {
+        _fetchNearbyPlaces(_pickedLatLng!);
+      });
+      setState(() => _loading = false);
+    } else {
+      _getCurrentLocation();
+    }
   }
 
   @override
@@ -128,7 +156,7 @@ class _MapPickerPageState extends State<MapPickerPage>
   }
 
   // ──────────────────────────────────────────
-  //  REVERSE GEOCODING  (Google Geocoding API)
+  //  REVERSE GEOCODING
   // ──────────────────────────────────────────
 
   Future<void> _reverseGeocode(LatLng latlng) async {
@@ -144,8 +172,7 @@ class _MapPickerPageState extends State<MapPickerPage>
 
       if (data['status'] == 'OK' && data['results'].isNotEmpty) {
         final result = data['results'][0];
-        final components =
-            result['address_components'] as List<dynamic>;
+        final components = result['address_components'] as List<dynamic>;
 
         String sublocality = '';
         String locality = '';
@@ -192,7 +219,7 @@ class _MapPickerPageState extends State<MapPickerPage>
             _fullAddress =
                 full.isNotEmpty ? full : result['formatted_address'] ?? '';
           });
-        } 
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -208,7 +235,7 @@ class _MapPickerPageState extends State<MapPickerPage>
   }
 
   // ──────────────────────────────────────────
-  //  NEARBY PLACES  (Google Places Nearby Search)
+  //  NEARBY PLACES
   // ──────────────────────────────────────────
 
   Future<void> _fetchNearbyPlaces(LatLng center) async {
@@ -238,7 +265,8 @@ class _MapPickerPageState extends State<MapPickerPage>
               markerId: MarkerId(placeId),
               position: LatLng(lat, lng),
               infoWindow: InfoWindow(title: name),
-              icon: await _buildNearbyMarkerIcon(name),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueAzure),
               onTap: () {
                 _mapController?.showMarkerInfoWindow(MarkerId(placeId));
               },
@@ -248,18 +276,7 @@ class _MapPickerPageState extends State<MapPickerPage>
 
         if (mounted) setState(() => _markers = newMarkers);
       }
-    } catch (_) {
-      // Nearby places are non-critical; silently ignore
-    }
-  }
-
-  /// Builds a white rounded label marker like in the reference image
-  Future<BitmapDescriptor> _buildNearbyMarkerIcon(String label) async {
-    // Truncate long names
-
-    // Use default blue dot for simplicity — customise further with canvas if needed
-    // For production: use flutter_map_marker_cluster or custom canvas painter
-    return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+    } catch (_) {}
   }
 
   // ──────────────────────────────────────────
@@ -305,7 +322,8 @@ class _MapPickerPageState extends State<MapPickerPage>
     } catch (_) {}
   }
 
-  Future<void> _onPredictionSelected(Map<String, dynamic> prediction) async {
+  Future<void> _onPredictionSelected(
+      Map<String, dynamic> prediction) async {
     final placeId = prediction['place_id'];
     FocusScope.of(context).unfocus();
     setState(() {
@@ -316,7 +334,6 @@ class _MapPickerPageState extends State<MapPickerPage>
       _predictions = [];
     });
 
-    // Get place details → lat/lng
     try {
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/place/details/json'
@@ -329,8 +346,10 @@ class _MapPickerPageState extends State<MapPickerPage>
 
       if (data['status'] == 'OK') {
         final loc = data['result']['geometry']['location'];
-        final latlng =
-            LatLng((loc['lat'] as num).toDouble(), (loc['lng'] as num).toDouble());
+        final latlng = LatLng(
+          (loc['lat'] as num).toDouble(),
+          (loc['lng'] as num).toDouble(),
+        );
 
         _mapController?.animateCamera(
           CameraUpdate.newLatLngZoom(latlng, 16),
@@ -345,12 +364,13 @@ class _MapPickerPageState extends State<MapPickerPage>
   }
 
   // ──────────────────────────────────────────
-  //  CAMERA IDLE → reverse geocode center
+  //  CAMERA IDLE → reverse geocode centre
   // ──────────────────────────────────────────
 
   void _onCameraIdle() {
     _geocodeDebounce?.cancel();
-    _geocodeDebounce = Timer(const Duration(milliseconds: 300), () async {
+    _geocodeDebounce =
+        Timer(const Duration(milliseconds: 300), () async {
       if (_mapController == null) return;
       final bounds = await _mapController!.getVisibleRegion();
       final center = LatLng(
@@ -374,6 +394,20 @@ class _MapPickerPageState extends State<MapPickerPage>
         .showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _confirmLocation() {
+    if (_pickedLatLng == null || _fullAddress.isEmpty) return;
+    HapticFeedback.mediumImpact();
+    Navigator.pop(
+      context,
+      MapPickerResult(
+        shortAddress: _shortAddress,
+        fullAddress: _fullAddress,
+        addressDetails: _detailsController.text.trim(),
+        latLng: _pickedLatLng!,
+      ),
+    );
+  }
+
   // ──────────────────────────────────────────
   //  BUILD
   // ──────────────────────────────────────────
@@ -390,7 +424,6 @@ class _MapPickerPageState extends State<MapPickerPage>
     }
 
     final screenH = MediaQuery.of(context).size.height;
-    // Map occupies top 60% of the screen; bottom sheet the rest
     const sheetMinFraction = 0.38;
 
     return Scaffold(
@@ -403,7 +436,7 @@ class _MapPickerPageState extends State<MapPickerPage>
         },
         child: Stack(
           children: [
-            // ── 1. GOOGLE MAP ──────────────────────────────
+            // ── 1. GOOGLE MAP ────────────────────────────
             Positioned.fill(
               child: GoogleMap(
                 initialCameraPosition: CameraPosition(
@@ -415,12 +448,8 @@ class _MapPickerPageState extends State<MapPickerPage>
                 myLocationButtonEnabled: false,
                 zoomControlsEnabled: false,
                 mapToolbarEnabled: false,
-                onMapCreated: (ctrl) {
-                  _mapController = ctrl;
-                },
-                onCameraMoveStarted: () {
-                  _pinAnimController.forward();
-                },
+                onMapCreated: (ctrl) => _mapController = ctrl,
+                onCameraMoveStarted: () => _pinAnimController.forward(),
                 onCameraIdle: () {
                   _pinAnimController.reverse();
                   _onCameraIdle();
@@ -428,7 +457,7 @@ class _MapPickerPageState extends State<MapPickerPage>
               ),
             ),
 
-            // ── 2. CENTER PIN ──────────────────────────────
+            // ── 2. CENTRE PIN ────────────────────────────
             IgnorePointer(
               child: Align(
                 alignment: Alignment.center,
@@ -467,7 +496,7 @@ class _MapPickerPageState extends State<MapPickerPage>
               ),
             ),
 
-            // ── 3. TOP BAR (Back + Title + Search) ────────
+            // ── 3. TOP BAR ───────────────────────────────
             Positioned(
               top: 0,
               left: 0,
@@ -475,12 +504,11 @@ class _MapPickerPageState extends State<MapPickerPage>
               child: SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Back + Title
                       Row(
                         children: [
                           _CircleButton(
@@ -499,8 +527,6 @@ class _MapPickerPageState extends State<MapPickerPage>
                         ],
                       ),
                       const SizedBox(height: 8),
-
-                      // Search Bar
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -554,7 +580,7 @@ class _MapPickerPageState extends State<MapPickerPage>
               ),
             ),
 
-            // ── 4. AUTOCOMPLETE SUGGESTIONS ───────────────
+            // ── 4. AUTOCOMPLETE SUGGESTIONS ──────────────
             if (_showSuggestions && _predictions.isNotEmpty)
               Positioned(
                 top: MediaQuery.of(context).padding.top + 110,
@@ -571,38 +597,33 @@ class _MapPickerPageState extends State<MapPickerPage>
                       itemCount: _predictions.length > 6
                           ? 6
                           : _predictions.length,
-                      separatorBuilder: (_, __) => Divider(
-                        height: 1,
-                        color: Colors.grey.shade100,
-                      ),
+                      separatorBuilder: (_, __) =>
+                          Divider(height: 1, color: Colors.grey.shade100),
                       itemBuilder: (context, i) {
                         final p = _predictions[i];
                         final main =
                             p['structured_formatting']?['main_text'] ??
                                 p['description'];
                         final secondary =
-                            p['structured_formatting']?['secondary_text'] ??
+                            p['structured_formatting']
+                                    ?['secondary_text'] ??
                                 '';
                         return ListTile(
                           dense: true,
                           leading: const Icon(Icons.location_on_outlined,
                               color: Color(0xFFE8344E), size: 20),
-                          title: Text(
-                            main,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87),
-                          ),
+                          title: Text(main,
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87)),
                           subtitle: secondary.isNotEmpty
-                              ? Text(
-                                  secondary,
+                              ? Text(secondary,
                                   style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey.shade500),
                                   maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                )
+                                  overflow: TextOverflow.ellipsis)
                               : null,
                           onTap: () => _onPredictionSelected(p),
                         );
@@ -612,7 +633,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                 ),
               ),
 
-            // ── 5. "USE CURRENT LOCATION" BUTTON ──────────
+            // ── 5. "USE CURRENT LOCATION" BUTTON ─────────
             Positioned(
               bottom: screenH * sheetMinFraction + 12,
               left: 0,
@@ -640,7 +661,6 @@ class _MapPickerPageState extends State<MapPickerPage>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Target circle icon
                         SizedBox(
                           width: 20,
                           height: 20,
@@ -684,7 +704,7 @@ class _MapPickerPageState extends State<MapPickerPage>
               ),
             ),
 
-            // ── 6. BOTTOM SHEET ────────────────────────────
+            // ── 6. BOTTOM SHEET ───────────────────────────
             DraggableScrollableSheet(
               controller: _sheetController,
               initialChildSize: sheetMinFraction,
@@ -714,7 +734,8 @@ class _MapPickerPageState extends State<MapPickerPage>
                       // Drag handle
                       Center(
                         child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 10),
+                          margin:
+                              const EdgeInsets.symmetric(vertical: 10),
                           width: 40,
                           height: 4,
                           decoration: BoxDecoration(
@@ -724,7 +745,6 @@ class _MapPickerPageState extends State<MapPickerPage>
                         ),
                       ),
 
-                      // Section label
                       Text(
                         'Delivery details',
                         style: TextStyle(
@@ -736,7 +756,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                       ),
                       const SizedBox(height: 10),
 
-                      // ── Address tile ──
+                      // Address tile
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 14),
@@ -785,8 +805,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                                             _fullAddress,
                                             style: TextStyle(
                                               fontSize: 12.5,
-                                              color:
-                                                  Colors.grey.shade600,
+                                              color: Colors.grey.shade600,
                                             ),
                                             maxLines: 2,
                                             overflow:
@@ -803,7 +822,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                       ),
                       const SizedBox(height: 12),
 
-                      // ── Address details input ──
+                      // Address details input
                       Container(
                         decoration: BoxDecoration(
                           border: Border.all(
@@ -814,7 +833,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                           controller: _detailsController,
                           onChanged: (_) => setState(() {}),
                           decoration: InputDecoration(
-                            labelText: 'Address details*',
+                            labelText: 'Address details (optional)',
                             labelStyle: TextStyle(
                               color: Colors.grey.shade500,
                               fontSize: 13,
@@ -825,40 +844,35 @@ class _MapPickerPageState extends State<MapPickerPage>
                             border: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 14),
-                            suffixIcon: _detailsController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: Icon(Icons.cancel,
-                                        color: Colors.grey.shade400,
-                                        size: 20),
-                                    onPressed: () {
-                                      _detailsController.clear();
-                                      setState(() {});
-                                    },
-                                  )
-                                : null,
+                            suffixIcon:
+                                _detailsController.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: Icon(Icons.cancel,
+                                            color: Colors.grey.shade400,
+                                            size: 20),
+                                        onPressed: () {
+                                          _detailsController.clear();
+                                          setState(() {});
+                                        },
+                                      )
+                                    : null,
                           ),
                         ),
                       ),
                       const SizedBox(height: 20),
 
-                      // ── Save button ──
+                      // Save button
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _fullAddress.isEmpty
+                          onPressed: (_fullAddress.isEmpty ||
+                                  _addressLoading)
                               ? null
-                              : () {
-                                  HapticFeedback.mediumImpact();
-                                  Navigator.pop(context, {
-                                    'shortAddress': _shortAddress,
-                                    'fullAddress': _fullAddress,
-                                    'addressDetails': _detailsController.text,
-                                    'latLng': _pickedLatLng,
-                                  });
-                                },
+                              : _confirmLocation,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFE8344E),
-                            disabledBackgroundColor: Colors.grey.shade300,
+                            disabledBackgroundColor:
+                                Colors.grey.shade300,
                             padding:
                                 const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(

@@ -119,9 +119,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// Opens NotificationPage. Unread count clears automatically because
-  /// NotificationPage marks items as read — the Firestore stream here
-  /// will update the badge in real time.
   Future<void> _openNotifications() async {
     await Navigator.push(
       context,
@@ -150,12 +147,12 @@ class _HomePageState extends State<HomePage> {
 
       appBar: AppBar(
         title: const Text(
-          'CallMe Services',
+          'Callme Services',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        foregroundColor: const Color.fromARGB(255, 45, 19, 111),
         elevation: 1,
         actions: [
           Padding(

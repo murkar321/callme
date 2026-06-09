@@ -13,6 +13,10 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
+import 'package:google_maps_flutter/google_maps_flutter.dart'
+    show LatLng; // only LatLng needed here; full map is in MapPickerPage
+import 'package:callme/screens/map_picker_page.dart';
+
 import 'package:intl/intl.dart';
 
 class BookingPage extends StatefulWidget {
@@ -20,17 +24,14 @@ class BookingPage extends StatefulWidget {
   final ServiceProduct? product;
   final List<CartItem>? cart;
 
-  // FIX 1: Removed unused required `products` and `providerId` constructor
-  // params that were causing compile errors at call sites. The provider is
-  // resolved internally from Firestore, so the param was both redundant and
-  // breaking. If you need to pass a providerId hint from outside, make it
-  // optional (shown below as `initialProviderId`).
   const BookingPage({
     super.key,
     required this.serviceName,
     this.product,
     this.cart,
-    this.initialProviderId, required List<dynamic> products, required String providerId, // optional hint — skips Firestore lookup if given
+    this.initialProviderId,
+    required List<dynamic> products,
+    required String providerId,
   });
 
   final String? initialProviderId;
@@ -60,6 +61,10 @@ class _BookingPageState extends State<BookingPage>
   bool _isGettingLocation = false;
   bool _isLoadingProvider = true;
 
+  // Keeps the LatLng chosen from the map picker so it can be attached to the
+  // order if needed later (currently stored as address string).
+  LatLng? _pickedLatLng;
+
   String _bookingId = '';
 
   // Provider resolved from Firestore
@@ -67,7 +72,7 @@ class _BookingPageState extends State<BookingPage>
   String? _providerName;
   String? _noProviderMessage;
 
-  // Adaptive reveal: summary + datetime shown after phone is filled
+  // Adaptive reveal: schedule + summary shown after phone is filled
   bool _phoneComplete = false;
 
   // Animation controllers
@@ -108,14 +113,10 @@ class _BookingPageState extends State<BookingPage>
 
     _phoneController.addListener(_onPhoneChanged);
 
-    // FIX 2: If a providerId hint was passed in, use it directly and skip
-    // the Firestore lookup entirely, which was a common source of the page
-    // getting stuck on the loading spinner.
     if (widget.initialProviderId != null &&
         widget.initialProviderId!.isNotEmpty) {
-      _providerId       = widget.initialProviderId;
+      _providerId        = widget.initialProviderId;
       _isLoadingProvider = false;
-      // Still try to fetch the name for display, but don't block the UI
       _fetchProviderName(widget.initialProviderId!);
     } else {
       _loadProvider();
@@ -165,20 +166,17 @@ class _BookingPageState extends State<BookingPage>
                 data['providerName'] ?? '')
             .toString();
       });
-    } catch (_) {
-      // Non-critical — name display only
-    }
+    } catch (_) {}
   }
 
   Future<void> _loadProvider() async {
     setState(() {
-      _isLoadingProvider  = true;
-      _noProviderMessage  = null;
+      _isLoadingProvider = true;
+      _noProviderMessage = null;
     });
     try {
       final normalised = widget.serviceName.trim().toLowerCase();
 
-      // First try exact match
       final snap = await FirebaseFirestore.instance
           .collection('providers')
           .where('serviceType', isEqualTo: normalised)
@@ -191,7 +189,6 @@ class _BookingPageState extends State<BookingPage>
         return;
       }
 
-      // Fallback: scan all approved providers for a case-insensitive match
       final allSnap = await FirebaseFirestore.instance
           .collection('providers')
           .where('status', isEqualTo: 'approved')
@@ -201,7 +198,7 @@ class _BookingPageState extends State<BookingPage>
         final st =
             (doc.data()['serviceType'] ?? '').toString().toLowerCase();
         return st == normalised;
-      }).firstOrNull; // FIX 3: use firstOrNull instead of firstWhere+orElse
+      }).firstOrNull;
 
       if (match != null) {
         _setProvider(match.id, match.data());
@@ -244,13 +241,9 @@ class _BookingPageState extends State<BookingPage>
   // CART / TOTAL
   // =========================================================
 
-  // FIX 4: Prioritise widget.cart; only fall back to Cart.getItems when it is
-  // null AND empty, to avoid the guard `_total <= 0` blocking single-product
-  // bookings where the product was passed directly.
   List<CartItem> get _cartItems {
     if (widget.cart != null && widget.cart!.isNotEmpty) return widget.cart!;
-    final fromStore = Cart.getItems(widget.serviceName);
-    return fromStore;
+    return Cart.getItems(widget.serviceName);
   }
 
   bool get _isCart   => _cartItems.isNotEmpty;
@@ -261,8 +254,6 @@ class _BookingPageState extends State<BookingPage>
       return _cartItems.fold(
           0.0, (sum, item) => sum + item.price * item.quantity);
     }
-    // FIX 5: _isSingle no longer checks _cartItems.isEmpty, so a product is
-    // always used when provided, even if cart also has items.
     if (_isSingle) return widget.product!.calculatedFinalPrice.toDouble();
     return 0.0;
   }
@@ -328,12 +319,12 @@ class _BookingPageState extends State<BookingPage>
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
       children: [
+        // ── Step 1: Your Details ──────────────────────────────
         _stepLabel('1', 'Your Details'),
         const SizedBox(height: 10),
         _buildDetailsCard(),
-        const SizedBox(height: 8),
 
-        // Revealed after phone is filled
+        // ── Steps 2 & 3 revealed after phone is complete ─────
         AnimatedSize(
           duration: const Duration(milliseconds: 350),
           curve: Curves.easeOutCubic,
@@ -345,14 +336,17 @@ class _BookingPageState extends State<BookingPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // ── Step 2: Schedule ──────────────────
                         const SizedBox(height: 20),
-                        _stepLabel('2', 'Booking Summary'),
-                        const SizedBox(height: 10),
-                        _buildSummaryCard(),
-                        const SizedBox(height: 20),
-                        _stepLabel('3', 'Schedule'),
+                        _stepLabel('2', 'Schedule'),
                         const SizedBox(height: 10),
                         _buildDateTimeRow(),
+
+                        // ── Step 3: Booking Summary ───────────
+                        const SizedBox(height: 20),
+                        _stepLabel('3', 'Booking Summary'),
+                        const SizedBox(height: 10),
+                        _buildSummaryCard(),
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -372,7 +366,7 @@ class _BookingPageState extends State<BookingPage>
 
   Widget _buildHeader() {
     return Container(
-      width:   double.infinity,
+      width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -538,7 +532,7 @@ class _BookingPageState extends State<BookingPage>
   }
 
   // =========================================================
-  // DETAILS CARD
+  // DETAILS CARD  (Step 1)
   // =========================================================
 
   Widget _buildDetailsCard() {
@@ -602,33 +596,59 @@ class _BookingPageState extends State<BookingPage>
           ),
           const SizedBox(height: 12),
 
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _isGettingLocation ? null : _getCurrentLocation,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _accent,
-                side: const BorderSide(color: _accent, width: 1.4),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+          // ── Location buttons row ──────────────────────────
+          Row(
+            children: [
+              // GPS button
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed:
+                      _isGettingLocation ? null : _getCurrentLocation,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _accent,
+                    side: const BorderSide(color: _accent, width: 1.4),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: _isGettingLocation
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                              color: _accent, strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location_rounded, size: 18),
+                  label: Text(
+                    _isGettingLocation ? 'Detecting…' : 'GPS',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
                 ),
               ),
-              icon: _isGettingLocation
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                          color: _accent, strokeWidth: 2),
-                    )
-                  : const Icon(Icons.my_location_rounded, size: 18),
-              label: Text(
-                _isGettingLocation
-                    ? 'Detecting location…'
-                    : 'Use Current Location',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              const SizedBox(width: 10),
+              // Map picker button
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _openMapPicker,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _accent,
+                    side: const BorderSide(color: _accent, width: 1.4),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text(
+                    'Pick on Map',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
 
           const SizedBox(height: 14),
@@ -645,75 +665,7 @@ class _BookingPageState extends State<BookingPage>
   }
 
   // =========================================================
-  // SUMMARY CARD
-  // =========================================================
-
-  Widget _buildSummaryCard() {
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ..._buildServiceItems(),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
-            child: Divider(height: 1),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Total',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [_accent, _accent2],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '₹${_total.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildServiceItems() {
-    if (_isCart) {
-      return _cartItems
-          .map((item) => _ServiceRow(
-                name:  item.name,
-                qty:   item.quantity,
-                price: (item.price * item.quantity).toDouble(),
-              ))
-          .toList();
-    }
-    return [
-      _ServiceRow(
-        name:  widget.product?.name ?? widget.serviceName,
-        qty:   1,
-        price: _total,
-      ),
-    ];
-  }
-
-  // =========================================================
-  // DATE TIME ROW
+  // DATE TIME ROW  (Step 2)
   // =========================================================
 
   Widget _buildDateTimeRow() {
@@ -814,6 +766,74 @@ class _BookingPageState extends State<BookingPage>
   }
 
   // =========================================================
+  // SUMMARY CARD  (Step 3)
+  // =========================================================
+
+  Widget _buildSummaryCard() {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ..._buildServiceItems(),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(height: 1),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Total',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [_accent, _accent2],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '₹${_total.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildServiceItems() {
+    if (_isCart) {
+      return _cartItems
+          .map((item) => _ServiceRow(
+                name:  item.name,
+                qty:   item.quantity,
+                price: (item.price * item.quantity).toDouble(),
+              ))
+          .toList();
+    }
+    return [
+      _ServiceRow(
+        name:  widget.product?.name ?? widget.serviceName,
+        qty:   1,
+        price: _total,
+      ),
+    ];
+  }
+
+  // =========================================================
   // BOTTOM BAR
   // =========================================================
 
@@ -844,9 +864,6 @@ class _BookingPageState extends State<BookingPage>
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                // FIX 6: Button is enabled as long as phone is complete AND a
-                // provider exists — no longer also gated on _total > 0 here
-                // (that check stays in _validateAndPay with a proper message).
                 onPressed: canProceed && _phoneComplete
                     ? _validateAndPay
                     : null,
@@ -1088,7 +1105,7 @@ class _BookingPageState extends State<BookingPage>
   }
 
   // =========================================================
-  // LOCATION
+  // GPS LOCATION
   // =========================================================
 
   Future<void> _getCurrentLocation() async {
@@ -1118,12 +1135,44 @@ class _BookingPageState extends State<BookingPage>
           '${place.administrativeArea ?? ''} ${place.postalCode ?? ''}'
               .replaceAll(RegExp(r',\s*,'), ',')
               .trim();
+
+      setState(() {
+        _pickedLatLng = LatLng(position.latitude, position.longitude);
+      });
     } catch (e) {
       if (!mounted) return;
       _showSnack('$e');
     } finally {
       if (mounted) setState(() => _isGettingLocation = false);
     }
+  }
+
+  // =========================================================
+  // MAP PICKER
+  // =========================================================
+
+  /// Opens [MapPickerPage] (Google Maps). The user searches or drags the
+  /// map, then taps "Save address". The result's fullAddress + optional
+  /// addressDetails are written into [_addressController] and the LatLng is
+  /// stored in [_pickedLatLng].
+  Future<void> _openMapPicker() async {
+    final result = await Navigator.push<MapPickerResult>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => MapPickerPage(initialLatLng: _pickedLatLng),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    setState(() => _pickedLatLng = result.latLng);
+
+    // Compose address: full address + optional flat/floor details
+    final details = result.addressDetails.isNotEmpty
+        ? '${result.addressDetails}, ${result.fullAddress}'
+        : result.fullAddress;
+    _addressController.text = details;
   }
 
   // =========================================================
@@ -1151,8 +1200,6 @@ class _BookingPageState extends State<BookingPage>
       _showSnack('Please select your preferred date and time.');
       return;
     }
-    // FIX 7: Moved the _total check AFTER all field validations so the user
-    // gets a useful message rather than just the button staying greyed out.
     if (_total <= 0) {
       _showSnack('No services selected. Please go back and add a service.');
       return;
@@ -1161,10 +1208,6 @@ class _BookingPageState extends State<BookingPage>
   }
 
   Future<void> _pay() async {
-    // FIX 8: Accept ANY non-null result from PaymentPage as success.
-    // Previously only `true` or `'offline'` triggered _save(); if PaymentPage
-    // returned a different truthy value (e.g. a Map, a String 'success', etc.)
-    // the booking was silently dropped.
     final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(
@@ -1177,12 +1220,10 @@ class _BookingPageState extends State<BookingPage>
 
     if (!mounted) return;
 
-    // Treat null / false as "user cancelled / payment failed"
     final paid = result != null && result != false;
     if (paid) {
       await _save();
     } else {
-      // Payment was cancelled or failed — show a gentle message
       _showSnack('Payment was not completed. Please try again.');
     }
   }
@@ -1197,9 +1238,6 @@ class _BookingPageState extends State<BookingPage>
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('User not logged in');
 
-      // FIX 9: Pass _providerName (resolved from Firestore) instead of '' so
-      // OrderService doesn't have to do a second lookup — and doesn't fail if
-      // it requires a non-empty name.
       final docRef = await OrderService.placeOrder(
         serviceType:   widget.serviceName.trim().toLowerCase(),
         services:      _servicesForOrder,
@@ -1216,6 +1254,9 @@ class _BookingPageState extends State<BookingPage>
         createdByRole: 'user',
         providerId:    _providerId!,
         providerName:  _providerName ?? '',
+        // Pass lat/lng if your OrderService supports it (optional).
+        // latitude:   _pickedLatLng?.latitude,
+        // longitude:  _pickedLatLng?.longitude,
       );
 
       if (!mounted) return;
@@ -1305,6 +1346,7 @@ class _BookingPageState extends State<BookingPage>
         ),
       );
 }
+
 
 // =========================================================
 // SERVICE ROW WIDGET

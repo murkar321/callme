@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../data/service_product.dart';
 import '../models/cart.dart';
 
-// Cart key used everywhere for Civil services — must match widget.service in CartPage
 const kCivilCartKey = "Civil";
 
 class CivilServiceCard extends StatelessWidget {
@@ -22,10 +21,8 @@ class CivilServiceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-
-    // ✅ FIX: Use service.id directly — no prefix.
-    //    The parent must also add CartItem(id: service.id, ...) so the IDs match.
     final cartCount = Cart.getItemCount(service.id, kCivilCartKey);
+    final bool inCart = cartCount > 0;
 
     return GestureDetector(
       onTap: onTap,
@@ -63,7 +60,7 @@ class CivilServiceCard extends StatelessWidget {
                 ),
               ),
 
-              /// VIEW DETAILS BUTTON
+              /// VIEW DETAILS BUTTON — top left
               Positioned(
                 left: 10,
                 top: 10,
@@ -84,7 +81,7 @@ class CivilServiceCard extends StatelessWidget {
                 ),
               ),
 
-              /// PRICE CHIP
+              /// PRICE CHIP — top right
               Positioned(
                 right: 10,
                 top: 10,
@@ -106,7 +103,7 @@ class CivilServiceCard extends StatelessWidget {
                 ),
               ),
 
-              /// SERVICE NAME
+              /// SERVICE NAME — bottom left
               Positioned(
                 left: 12,
                 bottom: 14,
@@ -123,7 +120,7 @@ class CivilServiceCard extends StatelessWidget {
                 ),
               ),
 
-              /// BOOK / SELECT BUTTON + CART BADGE
+              /// BOOK / SELECT BUTTON — bottom right
               Positioned(
                 right: 10,
                 bottom: 10,
@@ -136,23 +133,36 @@ class CivilServiceCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.red,
+                          /// Green when already in cart, red otherwise
+                          color: inCart ? Colors.green : Colors.red,
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Text(
-                          service.category == "Renovation"
-                              ? "SELECT"
-                              : "BOOK",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (inCart) ...[
+                              const Icon(Icons.check,
+                                  color: Colors.white, size: 13),
+                              const SizedBox(width: 4),
+                            ],
+                            Text(
+                              service.category == "Renovation"
+                                  ? "SELECT"
+                                  : inCart
+                                      ? "BOOKED"
+                                      : "BOOK",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
 
-                    // Badge — only shown when item is already in cart
+                    /// Cart count badge
                     if (cartCount > 0)
                       Positioned(
                         top: -8,

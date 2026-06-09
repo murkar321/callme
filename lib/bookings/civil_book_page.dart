@@ -1,3 +1,4 @@
+import 'package:callme/models/cart.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
@@ -17,7 +18,7 @@ class CivilBookingPage extends StatefulWidget {
   const CivilBookingPage({
     super.key,
     required this.serviceName,
-    required this.providerId, // ← NEW: pass from caller screen
+    required this.providerId, required List<CartItem> cart, required List<dynamic> products, // ← NEW: pass from caller screen
   });
 
   @override

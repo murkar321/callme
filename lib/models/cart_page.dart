@@ -1,3 +1,4 @@
+import 'package:callme/bookings/civil_book_page.dart';
 import 'package:flutter/material.dart';
 
 import '../models/cart.dart';
@@ -5,17 +6,15 @@ import '../bookings/booking_page.dart';
 import '../bookings/salon_booking_page.dart';
 import '../bookings/enquiry_page.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Services that use the enquiry flow instead of direct booking
-// ─────────────────────────────────────────────────────────────────────────────
-const _enquiryServices = {'Education', 'Civil'};
+// Services that use the enquiry flow instead of direct booking
+const _enquiryServices = {'Education'};
+
+// Services that go to CivilBookingPage
+const _civilServices = {'Civil'};
 
 class CartPage extends StatefulWidget {
-  final String service;
-  final String serviceName;
-
-  /// The providerId of the service provider.
-  /// Must be passed so booking pages can send FCM notifications correctly.
+  final String service;      // cart key  e.g. "Civil", "Salon"
+  final String serviceName;  // display name e.g. "Civil Contract Services"
   final String providerId;
 
   const CartPage({
@@ -42,8 +41,7 @@ class _CartPageState extends State<CartPage>
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _fadeIn =
-        CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _fadeIn = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
   }
 
@@ -57,13 +55,11 @@ class _CartPageState extends State<CartPage>
 
   int get _totalAmount => Cart.getTotal(widget.service);
 
-  // Returns a visit-type label for Salon items only
   String _visitLabel(CartItem item) {
     if (widget.service != 'Salon') return '';
     return item.id.toString().contains('Home') ? 'Home Visit' : 'Salon Visit';
   }
 
-  // ── Accent colour per service ──────────────────────────────────────────────
   Color get _accent {
     switch (widget.service) {
       case 'Salon':
@@ -77,14 +73,13 @@ class _CartPageState extends State<CartPage>
     }
   }
 
-  // ── CTA label ─────────────────────────────────────────────────────────────
-  String get _ctaLabel {
-    if (_enquiryServices.contains(widget.service)) return 'Send Enquiry';
-    return 'Book Now';
-  }
-
-  // ── Whether this service uses the enquiry flow ─────────────────────────────
   bool get _isEnquiry => _enquiryServices.contains(widget.service);
+  bool get _isCivil => _civilServices.contains(widget.service);
+
+  String get _ctaLabel {
+    if (_isEnquiry) return 'Send Enquiry';
+    return 'Proceed to Book';
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   //  BUILD
@@ -111,8 +106,7 @@ class _CartPageState extends State<CartPage>
           ),
         ),
       ),
-      bottomNavigationBar:
-          items.isEmpty ? null : _buildBottomBar(items),
+      bottomNavigationBar: items.isEmpty ? null : _buildBottomBar(items),
     );
   }
 
@@ -125,8 +119,7 @@ class _CartPageState extends State<CartPage>
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            const BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
             blurRadius: 16,
@@ -137,7 +130,6 @@ class _CartPageState extends State<CartPage>
       ),
       child: Row(
         children: [
-          // Back button
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
@@ -151,13 +143,14 @@ class _CartPageState extends State<CartPage>
           ),
           const SizedBox(width: 14),
 
-          // Title + item count
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${widget.service} Cart',
+                  widget.serviceName.isNotEmpty
+                      ? widget.serviceName
+                      : '${widget.service} Cart',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 20,
@@ -167,21 +160,16 @@ class _CartPageState extends State<CartPage>
                 if (count > 0)
                   Text(
                     '$count item${count == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
                   ),
               ],
             ),
           ),
 
-          // Enquiry badge for Civil / Education
           if (_isEnquiry && count > 0)
             Container(
               margin: const EdgeInsets.only(right: 8),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: _accent.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(20),
@@ -192,20 +180,17 @@ class _CartPageState extends State<CartPage>
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: _accent,
-                  letterSpacing: 0.2,
                 ),
               ),
             ),
 
-          // Clear all
           if (count > 0)
             TextButton(
               onPressed: () {
                 Cart.clear(widget.service);
                 _refresh();
               },
-              style:
-                  TextButton.styleFrom(foregroundColor: Colors.red),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Clear All'),
             ),
         ],
@@ -229,7 +214,6 @@ class _CartPageState extends State<CartPage>
     final visitLabel = _visitLabel(item);
 
     return Dismissible(
-      // ✅ FIX: Key uses item.id + service so it's always unique per service
       key: ValueKey('${widget.service}_${item.id}'),
       direction: DismissDirection.endToStart,
       background: Container(
@@ -244,7 +228,6 @@ class _CartPageState extends State<CartPage>
             color: Colors.red, size: 28),
       ),
       onDismissed: (_) {
-        // ✅ FIX: delete by item.id (no prefix) with the correct service key
         Cart.delete(item.id, widget.service);
         _refresh();
       },
@@ -266,7 +249,7 @@ class _CartPageState extends State<CartPage>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Image ──────────────────────────────────
+              // Image
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
@@ -282,18 +265,16 @@ class _CartPageState extends State<CartPage>
                             color: Colors.grey.shade400,
                           ),
                         )
-                      : Icon(Icons.image_outlined,
-                          color: Colors.grey.shade400),
+                      : Icon(Icons.image_outlined, color: Colors.grey.shade400),
                 ),
               ),
               const SizedBox(width: 14),
 
-              // ── Details ────────────────────────────────
+              // Details
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Name
                     Text(
                       item.name,
                       maxLines: 2,
@@ -305,13 +286,11 @@ class _CartPageState extends State<CartPage>
                       ),
                     ),
 
-                    // Visit badge (Salon only)
                     if (visitLabel.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       _badge(visitLabel),
                     ],
 
-                    // Enquiry badge (Civil / Education)
                     if (_isEnquiry) ...[
                       const SizedBox(height: 6),
                       _badge('Enquiry item', color: _accent),
@@ -319,7 +298,6 @@ class _CartPageState extends State<CartPage>
 
                     const SizedBox(height: 10),
 
-                    // Price row + qty stepper
                     Row(
                       children: [
                         Expanded(
@@ -333,7 +311,7 @@ class _CartPageState extends State<CartPage>
                           ),
                         ),
 
-                        // ── Qty stepper ──────────────────────────
+                        // Qty stepper
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.grey.shade100,
@@ -342,21 +320,16 @@ class _CartPageState extends State<CartPage>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // ✅ FIX: removeById removes one unit of this item
                               _stepButton(
                                 icon: Icons.remove,
                                 onTap: () {
-                                  Cart.removeById(
-                                      item.id, widget.service);
+                                  Cart.removeById(item.id, widget.service);
                                   _refresh();
                                 },
                               ),
                               SizedBox(
                                 width: 32,
                                 child: Text(
-                                  // ✅ FIX: read live quantity from Cart, not
-                                  //    stale item reference, so it always reflects
-                                  //    the current count after add/remove.
                                   '${Cart.getItemCount(item.id, widget.service)}',
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
@@ -365,13 +338,11 @@ class _CartPageState extends State<CartPage>
                                   ),
                                 ),
                               ),
-                              // ✅ FIX: add uses item.id (not a prefixed key)
                               _stepButton(
                                 icon: Icons.add,
                                 color: _accent,
                                 onTap: () {
-                                  Cart.add(item,
-                                      service: widget.service);
+                                  Cart.add(item, service: widget.service);
                                   _refresh();
                                 },
                               ),
@@ -382,8 +353,6 @@ class _CartPageState extends State<CartPage>
                     ),
 
                     const SizedBox(height: 6),
-
-                    // Line total — recalculate live from Cart
                     Text(
                       'Subtotal: ₹${item.price * Cart.getItemCount(item.id, widget.service)}',
                       style: TextStyle(
@@ -410,8 +379,7 @@ class _CartPageState extends State<CartPage>
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.07),
@@ -424,7 +392,7 @@ class _CartPageState extends State<CartPage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ── Enquiry notice banner (Civil / Education) ──
+            // Enquiry notice (Education only now)
             if (_isEnquiry) ...[
               Container(
                 width: double.infinity,
@@ -434,8 +402,8 @@ class _CartPageState extends State<CartPage>
                 decoration: BoxDecoration(
                   color: _accent.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: _accent.withOpacity(0.25), width: 1),
+                  border:
+                      Border.all(color: _accent.withOpacity(0.25), width: 1),
                 ),
                 child: Row(
                   children: [
@@ -458,7 +426,6 @@ class _CartPageState extends State<CartPage>
               ),
             ],
 
-            // ── Total + CTA row ─────────────────────────
             Row(
               children: [
                 Expanded(
@@ -484,15 +451,13 @@ class _CartPageState extends State<CartPage>
                   ),
                 ),
 
-                // Proceed / Enquiry button
                 Expanded(
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _accent,
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -504,8 +469,7 @@ class _CartPageState extends State<CartPage>
                         if (_isEnquiry)
                           const Padding(
                             padding: EdgeInsets.only(right: 6),
-                            child:
-                                Icon(Icons.send_rounded, size: 16),
+                            child: Icon(Icons.send_rounded, size: 16),
                           ),
                         Text(
                           _ctaLabel,
@@ -533,44 +497,51 @@ class _CartPageState extends State<CartPage>
   // =========================================================
 
   Future<void> _onProceed(List<CartItem> items) async {
-    switch (widget.service) {
-      case 'Education':
-      case 'Civil':
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EnquiryPage(
-              serviceName: widget.service,
-              cart: items,
-            ),
+    if (_isEnquiry) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EnquiryPage(
+            serviceName: widget.service,
+            cart: items,
           ),
-        );
-        break;
-
-      case 'Salon':
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => SalonBookingPage(
-              cartItems: items,
-              providerId: widget.providerId,
-            ),
+        ),
+      );
+    } else if (_isCivil) {
+      // Civil goes to the standard BookingPage (swap for CivilBookingPage if you have one)
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CivilBookingPage(
+            serviceName: widget.serviceName,
+            cart: items,
+            products: const [],
+            providerId: widget.providerId,
           ),
-        );
-        break;
-
-      default:
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => BookingPage(
-              serviceName: widget.service,
-              cart: items,
-              products: const [],
-              providerId: widget.providerId,
-            ),
+        ),
+      );
+    } else if (widget.service == 'Salon') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SalonBookingPage(
+            cartItems: items,
+            providerId: widget.providerId,
           ),
-        );
+        ),
+      );
+    } else {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BookingPage(
+            serviceName: widget.serviceName,
+            cart: items,
+            products: const [],
+            providerId: widget.providerId,
+          ),
+        ),
+      );
     }
     _refresh();
   }
@@ -582,8 +553,7 @@ class _CartPageState extends State<CartPage>
   Widget _badge(String label, {Color? color}) {
     final c = color ?? _accent;
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: c.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
@@ -634,18 +604,12 @@ class _CartPageState extends State<CartPage>
           const SizedBox(height: 20),
           const Text(
             'Your cart is empty',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Text(
             'Add items to get started',
-            style: TextStyle(
-              color: Colors.grey.shade500,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
           ),
           const SizedBox(height: 28),
           ElevatedButton.icon(

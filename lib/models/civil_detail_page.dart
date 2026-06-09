@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../data/civil_data.dart';
 import '../models/cart.dart';
 import '../models/cart_page.dart';
+import 'civil_services_page.dart'; // for kCivilServiceKey
 
-
-class CivilServiceDetailPage extends StatelessWidget {
+class CivilServiceDetailPage extends StatefulWidget {
   final SubService service;
   final String mainServiceId;
 
@@ -15,40 +15,55 @@ class CivilServiceDetailPage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final isRenovation = mainServiceId == "renovation";
+  State<CivilServiceDetailPage> createState() =>
+      _CivilServiceDetailPageState();
+}
 
-    void handlePrimaryAction() {
-      if (isRenovation) {
-        /// Renovation → go back to trigger the bottom sheet
-        Navigator.pop(context);
-      } else {
-        /// Add to cart first, then navigate to CartPage
-        Cart.add(
-          CartItem(
-            id: "civil_${service.id}",
-            name: service.name,
-            price: _extractPrice(service.price),
-            service: "Civil Contract Services",
-            category: mainServiceId,
-            image: service.image,
-          ),
-          service: "Civil Contract Services",
-        );
+class _CivilServiceDetailPageState extends State<CivilServiceDetailPage> {
+  bool _addedToCart = false;
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CartPage(
-              serviceName: "Civil Contract Services",
-              providerId: '',
-              service: service.name,
-            ),
-          ),
-        );
-      }
+  bool get isRenovation => widget.mainServiceId == "renovation";
+
+  int _extractPrice(String price) {
+    final numbers = price.replaceAll(RegExp(r'[^0-9]'), '');
+    if (numbers.isEmpty) return 0;
+    return int.tryParse(numbers) ?? 0;
+  }
+
+  void handlePrimaryAction() {
+    if (isRenovation) {
+      Navigator.pop(context);
+    } else {
+      Cart.add(
+        CartItem(
+          id: widget.service.id,        // no prefix — same as services page
+          name: widget.service.name,
+          price: _extractPrice(widget.service.price),
+          service: kCivilServiceKey,    // ← consistent key
+          category: widget.mainServiceId,
+          image: widget.service.image,
+        ),
+        service: kCivilServiceKey,      // ← consistent key
+      );
+      setState(() => _addedToCart = true);
     }
+  }
 
+  void openCart() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CartPage(
+          serviceName: "Civil Contract Services",
+          service: kCivilServiceKey,    // ← consistent key
+          providerId: '',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xffF7F8FA),
 
@@ -57,39 +72,64 @@ class CivilServiceDetailPage extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
-            BoxShadow(
-              blurRadius: 10,
-              color: Colors.black.withOpacity(0.08),
-            ),
+            BoxShadow(blurRadius: 10, color: Colors.black.withOpacity(0.08)),
           ],
         ),
         child: SafeArea(
           child: SizedBox(
             height: 55,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: handlePrimaryAction,
-              child: Text(
-                isRenovation ? "Customize & Book" : "Book Now",
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+            child: isRenovation
+                ? ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: handlePrimaryAction,
+                    child: const Text(
+                      "Customize & Book",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                  )
+                : _addedToCart
+                    ? ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: openCart,
+                        icon: const Icon(Icons.shopping_cart, size: 20),
+                        label: const Text(
+                          "View Cart",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                      )
+                    : ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: handlePrimaryAction,
+                        child: const Text(
+                          "Book Now",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                      ),
           ),
         ),
       ),
 
       body: CustomScrollView(
         slivers: [
-          /// ── HERO IMAGE ────────────────────────────────────────────
+          /// HERO IMAGE
           SliverAppBar(
             expandedHeight: 300,
             pinned: true,
@@ -99,7 +139,7 @@ class CivilServiceDetailPage extends StatelessWidget {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.asset(service.image, fit: BoxFit.cover),
+                  Image.asset(widget.service.image, fit: BoxFit.cover),
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -120,7 +160,7 @@ class CivilServiceDetailPage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          service.name,
+                          widget.service.name,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 24,
@@ -130,12 +170,9 @@ class CivilServiceDetailPage extends StatelessWidget {
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            /// RATING BADGE
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
+                                  horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
                                 color: Colors.green,
                                 borderRadius: BorderRadius.circular(20),
@@ -146,27 +183,23 @@ class CivilServiceDetailPage extends StatelessWidget {
                                       color: Colors.white, size: 16),
                                   const SizedBox(width: 4),
                                   Text(
-                                    service.rating.toString(),
-                                    style:
-                                        const TextStyle(color: Colors.white),
+                                    widget.service.rating.toString(),
+                                    style: const TextStyle(color: Colors.white),
                                   ),
                                 ],
                               ),
                             ),
                             const SizedBox(width: 10),
-                            /// DISCOUNT BADGE
-                            if (service.discount > 0)
+                            if (widget.service.discount > 0)
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
+                                    horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: Colors.red,
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
-                                  "${service.discount}% OFF",
+                                  "${widget.service.discount}% OFF",
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
@@ -189,7 +222,7 @@ class CivilServiceDetailPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  /// ── PRICE CARD ──────────────────────────────────
+                  /// PRICE CARD
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
@@ -209,7 +242,7 @@ class CivilServiceDetailPage extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            service.price,
+                            widget.service.price,
                             style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
@@ -218,9 +251,7 @@ class CivilServiceDetailPage extends StatelessWidget {
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
+                              horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: Colors.green.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
@@ -239,18 +270,15 @@ class CivilServiceDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  /// ── WHAT'S INCLUDED ─────────────────────────────
+                  /// WHAT'S INCLUDED
                   const Text(
                     "What's Included",
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
 
-                  if (service.features != null)
-                    ...service.features!.map(
+                  if (widget.service.features != null)
+                    ...widget.service.features!.map(
                       (feature) => Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(14),
@@ -272,18 +300,13 @@ class CivilServiceDetailPage extends StatelessWidget {
                                 color: Colors.green.withOpacity(0.1),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
-                                Icons.check,
-                                color: Colors.green,
-                                size: 18,
-                              ),
+                              child: const Icon(Icons.check,
+                                  color: Colors.green, size: 18),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(
-                                feature,
-                                style: const TextStyle(fontSize: 15),
-                              ),
+                              child: Text(feature,
+                                  style: const TextStyle(fontSize: 15)),
                             ),
                           ],
                         ),
@@ -292,7 +315,7 @@ class CivilServiceDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  /// ── RENOVATION NOTE ─────────────────────────────
+                  /// RENOVATION NOTE
                   if (isRenovation)
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -307,21 +330,42 @@ class CivilServiceDetailPage extends StatelessWidget {
                           Text(
                             "Customization Available",
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                                fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           SizedBox(height: 8),
                           Text("• Select required services"),
                           Text("• Modify work scope"),
-                          Text(
-                              "• Final quotation shared after inspection"),
+                          Text("• Final quotation shared after inspection"),
                         ],
                       ),
                     ),
 
-                  /// ── NON-RENOVATION: BOOK INFO NOTE ──────────────
-                  if (!isRenovation)
+                  /// ADDED TO CART confirmation
+                  if (!isRenovation && _addedToCart)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle,
+                              color: Colors.green.shade700, size: 20),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              "Service added to your cart! Tap 'View Cart' to proceed.",
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  /// BOOK INFO NOTE (before booking)
+                  if (!isRenovation && !_addedToCart)
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -336,7 +380,7 @@ class CivilServiceDetailPage extends StatelessWidget {
                           const SizedBox(width: 10),
                           const Expanded(
                             child: Text(
-                              "Tap 'Book Now' to add this service to your cart and proceed to checkout.",
+                              "Tap 'Book Now' to add this service to your cart.",
                               style: TextStyle(fontSize: 13),
                             ),
                           ),
@@ -352,12 +396,5 @@ class CivilServiceDetailPage extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  /// Helper: extract numeric price from a string like "₹500/sqft"
-  int _extractPrice(String price) {
-    final numbers = price.replaceAll(RegExp(r'[^0-9]'), '');
-    if (numbers.isEmpty) return 0;
-    return int.tryParse(numbers) ?? 0;
   }
 }
