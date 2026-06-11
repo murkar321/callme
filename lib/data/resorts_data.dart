@@ -48,7 +48,7 @@ const List<Resort> resortList = [
 
     providerId: "resort_001",
 
-    image: "assets/resort.jpg",
+    image: "assets/anand.jpeg",
 
     price: 700,
     originalPrice: 900,

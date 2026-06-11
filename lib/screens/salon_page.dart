@@ -5,7 +5,7 @@ import '../models/cart_page.dart';
 import '../widgets/salon_service_card.dart';
 
 class SalonPage extends StatefulWidget {
-  const SalonPage({super.key});
+  const SalonPage({super.key, required String providerId});
 
   @override
   State<SalonPage> createState() => _SalonPageState();

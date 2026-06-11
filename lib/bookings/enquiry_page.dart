@@ -158,7 +158,7 @@ class _EnquiryPageState extends State<EnquiryPage> {
         totalAmount:   0,
         isEnquiry:     true,
 
-        providerId:    _providerId!, providerName: '',   // ← resolved from Firestore, never empty
+        providerId:    _providerId!, providerName: 'service provider',   // ← resolved from Firestore, never empty
       );
 
       // Clear cart if this was a cart-based enquiry

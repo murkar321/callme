@@ -55,13 +55,25 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage>
 
   late final TabController _tab;
 
-  // Streams cached once — never recreated on rebuild
   late final Stream<DocumentSnapshot<Map<String, dynamic>>> _providerStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>>    _availableStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>>    _myJobsStream;
 
-  String get _svcNorm  => widget.serviceType.trim().toLowerCase();
-  String get _myUid    => _auth.currentUser?.uid ?? '';
+  // FIX 1: Match serviceType flexibly — store both raw and normalised forms
+  // so we can query Firestore with multiple possible casings/values.
+  String get _svcRaw   => widget.serviceType.trim();
+  String get _svcLower => _svcRaw.toLowerCase();
+
+  // Build a list of all plausible stored variants so we cover:
+  //   "education", "Education", "EDUCATION", "salon", "Salon", etc.
+  List<String> get _svcVariants {
+    final lower = _svcLower;
+    final upper = lower.toUpperCase();
+    final title = lower[0].toUpperCase() + lower.substring(1);
+    return {_svcRaw, lower, upper, title}.toList();
+  }
+
+  String get _myUid => _auth.currentUser?.uid ?? '';
 
   int _availableCount = 0;
   int _myJobsCount    = 0;
@@ -79,23 +91,23 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage>
         .doc(widget.providerId)
         .snapshots();
 
-    // ── Available jobs ────────────────────────────────────────────────────
-    // Fetch all pending/enquiry orders for this serviceType that are unassigned.
-    // Client-side we additionally hide orders this provider already declined,
-    // so multiple providers can all see and race to accept the same order.
+    // ── FIX 2: Available jobs ─────────────────────────────────────────────
+    // Removed the strict isEqualTo serviceType filter from Firestore because
+    // casing mismatches (e.g. "Education" vs "education") silently drop rows.
+    // We instead fetch ALL pending/unassigned orders and filter client-side
+    // with case-insensitive comparison — much more robust.
+    //
+    // Also removed isAssigned == false from the compound query because some
+    // providers (e.g. education) store orders without that field, which means
+    // Firestore returns nothing. We filter isAssigned client-side too.
     _availableStream = _db
         .collection('orders')
-        .where('serviceType', isEqualTo: _svcNorm)
-        .where('status',      whereIn: ['pending', 'enquiry'])
-        .where('isAssigned',  isEqualTo: false)
+        .where('status', whereIn: ['pending', 'enquiry'])
         .orderBy('createdAt', descending: true)
-        .limit(50)
+        .limit(100)
         .snapshots();
 
     // ── My jobs ───────────────────────────────────────────────────────────
-    // Orders where THIS provider's userId is stored as the winning acceptor.
-    // Show all jobs belonging to current provider.
-    // Uses providerUserId as primary key because older orders may not have acceptedByUid.
     _myJobsStream = _db
         .collection('orders')
         .where('providerUserId', isEqualTo: _myUid)
@@ -113,68 +125,68 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage>
   // FIRESTORE ACTIONS
   // ══════════════════════════════════════════════════════════════════════════
 
-  /// Accept an order — uses a transaction to guard against multiple providers
-  /// trying to accept the same order simultaneously.
-  
-Future<void> _acceptOrder(String orderId, Map<String, dynamic> data) async {
-  try {
-    await _db.collection('orders').doc(orderId).update({
-      'providerId': widget.providerId,
-      'providerUserId': _myUid,
-      'acceptedByUid': _myUid,
-      'providerName': widget.businessName,
-      'status': 'accepted',
-      'isAssigned': true,
-      'acceptedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+  Future<void> _acceptOrder(String orderId, Map<String, dynamic> data) async {
+    final customerId = (data['userId'] ?? '').toString();
+    try {
+      await _db.collection('orders').doc(orderId).update({
+        'providerId':     widget.providerId,
+        'providerUserId': _myUid,
+        'acceptedByUid':  _myUid,
+        'providerName':   widget.businessName,
+        'serviceType':    _svcLower, // normalise on write so future reads are consistent
+        'status':         'accepted',
+        'isAssigned':     true,
+        'acceptedAt':     FieldValue.serverTimestamp(),
+        'updatedAt':      FieldValue.serverTimestamp(),
+      });
 
-    _tab.animateTo(1);
+      // FIX 3: Notify the customer that their order was accepted
+      if (customerId.isNotEmpty) {
+        await OrderService.notifyUser(
+          userId:  customerId,
+          orderId: orderId,
+          title:   '✅ Provider Found!',
+          body:    '${widget.businessName} has accepted your ${widget.serviceType} booking.',
+          type:    'booking_accepted',
+        );
+      }
 
-    _snack(
-      'Job accepted and moved to My Jobs',
-      _C.green,
-      Icons.check_circle_rounded,
-    );
-  } catch (e) {
-    _snack(
-      'Accept failed',
-      _C.red,
-      Icons.error_outline,
-    );
+      _tab.animateTo(1);
+      _snack('Job accepted and moved to My Jobs', _C.green, Icons.check_circle_rounded);
+    } catch (e) {
+      debugPrint('[_acceptOrder] error: $e');
+      _snack('Accept failed — please try again', _C.red, Icons.error_outline);
+    }
   }
-}
 
-  /// Decline an available order — marks this provider as having declined it
-  /// without removing it from the pool so other providers can still accept.
   Future<void> _declineAvailable(
       String orderId, String note, Map<String, dynamic> data) async {
     final customerId = (data['userId'] ?? '').toString();
     try {
       await _db.collection('orders').doc(orderId).update({
-        // Track which providers declined so we can hide from them client-side
         'declinedBy':         FieldValue.arrayUnion([_myUid]),
         'providerCancelNote': note.isEmpty ? 'Provider declined' : note,
         'lastActionBy':       'provider',
         'updatedAt':          FieldValue.serverTimestamp(),
-        // status stays 'pending' / 'enquiry' — order stays visible to others
       });
 
-      await OrderService.notifyUser(
-        userId:  customerId,
-        orderId: orderId,
-        title:   '🔄 Finding Another Provider',
-        body:    "A provider was unavailable. We're finding another for you.",
-        type:    'booking_rejected',
-      );
+      if (customerId.isNotEmpty) {
+        await OrderService.notifyUser(
+          userId:  customerId,
+          orderId: orderId,
+          title:   '🔄 Finding Another Provider',
+          body:    "A provider was unavailable. We're finding another for you.",
+          type:    'booking_rejected',
+        );
+      }
 
       _snack('Order declined.', _C.orange, Icons.thumb_down_rounded);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[_declineAvailable] error: $e');
       _snack('Could not decline. Try again.', _C.red, Icons.error_rounded);
     }
   }
 
-  /// Mark an accepted job as complete.
   Future<void> _completeOrder(String orderId, Map<String, dynamic> data) async {
     final customerId = (data['userId'] ?? '').toString();
     try {
@@ -186,55 +198,57 @@ Future<void> _acceptOrder(String orderId, Map<String, dynamic> data) async {
         'lastActionBy': 'provider',
       });
 
-      await OrderService.notifyUser(
-        userId:  customerId,
-        orderId: orderId,
-        title:   '✅ Service Completed',
-        body:    'Your ${widget.serviceType} service by ${widget.businessName} is complete.',
-        type:    'booking_completed',
-      );
+      if (customerId.isNotEmpty) {
+        await OrderService.notifyUser(
+          userId:  customerId,
+          orderId: orderId,
+          title:   '✅ Service Completed',
+          body:    'Your ${widget.serviceType} service by ${widget.businessName} is complete.',
+          type:    'booking_completed',
+        );
+      }
 
       _snack('Marked as completed!', _C.green, Icons.verified_rounded);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[_completeOrder] error: $e');
       _snack('Could not complete. Try again.', _C.red, Icons.error_rounded);
     }
   }
 
-  /// Cancel an already-accepted job.
   Future<void> _cancelAccepted(
       String orderId, String note, Map<String, dynamic> data) async {
     final customerId = (data['userId'] ?? '').toString();
     try {
       await _db.collection('orders').doc(orderId).update({
-        'status':             'cancelled',
-        'providerCancelNote': note.isEmpty ? 'Provider cancelled' : note,
-        'cancelledBy':        'provider',
-        'cancelledAt':        FieldValue.serverTimestamp(),
-
-        // Release the order so another provider can potentially pick it up
-        'isAssigned':         false,
-        'acceptedByUid':      FieldValue.delete(),
-        'providerId':         FieldValue.delete(),
-        'providerUserId':     FieldValue.delete(),
+        'status':              'cancelled',
+        'providerCancelNote':  note.isEmpty ? 'Provider cancelled' : note,
+        'cancelledBy':         'provider',
+        'cancelledAt':         FieldValue.serverTimestamp(),
+        'isAssigned':          false,
+        'acceptedByUid':       FieldValue.delete(),
+        'providerId':          FieldValue.delete(),
+        'providerUserId':      FieldValue.delete(),
         'assignedProviderUid': FieldValue.delete(),
-        'providerName':       FieldValue.delete(),
-        'provider':           FieldValue.delete(),
-
-        'updatedAt':          FieldValue.serverTimestamp(),
-        'lastActionBy':       'provider',
+        'providerName':        FieldValue.delete(),
+        'provider':            FieldValue.delete(),
+        'updatedAt':           FieldValue.serverTimestamp(),
+        'lastActionBy':        'provider',
       });
 
-      await OrderService.notifyUser(
-        userId:  customerId,
-        orderId: orderId,
-        title:   '❌ Booking Cancelled',
-        body:    '${widget.businessName} cancelled your booking. '
-                 'Reason: ${note.isEmpty ? "Not specified" : note}',
-        type:    'booking_cancelled',
-      );
+      if (customerId.isNotEmpty) {
+        await OrderService.notifyUser(
+          userId:  customerId,
+          orderId: orderId,
+          title:   '❌ Booking Cancelled',
+          body:    '${widget.businessName} cancelled your booking. '
+                   'Reason: ${note.isEmpty ? "Not specified" : note}',
+          type:    'booking_cancelled',
+        );
+      }
 
       _snack('Order cancelled.', _C.orange, Icons.cancel_rounded);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[_cancelAccepted] error: $e');
       _snack('Could not cancel. Try again.', _C.red, Icons.error_rounded);
     }
   }
@@ -349,11 +363,13 @@ Future<void> _acceptOrder(String orderId, Map<String, dynamic> data) async {
                   stream:       _availableStream,
                   isAvailable:  true,
                   myUid:        _myUid,
+                  // FIX 4: pass all serviceType variants for client-side matching
+                  svcVariants:  _svcVariants,
                   onCount: (c) {
                     if (_availableCount != c) setState(() => _availableCount = c);
                   },
-                  onAccept:  _acceptOrder,
-                  onDecline: _showDeclineDialog,
+                  onAccept:     _acceptOrder,
+                  onDecline:    _showDeclineDialog,
                   serviceType:  widget.serviceType,
                   businessName: widget.businessName,
                 ),
@@ -361,6 +377,7 @@ Future<void> _acceptOrder(String orderId, Map<String, dynamic> data) async {
                   stream:       _myJobsStream,
                   isAvailable:  false,
                   myUid:        _myUid,
+                  svcVariants:  _svcVariants,
                   onCount: (c) {
                     if (_myJobsCount != c) setState(() => _myJobsCount = c);
                   },
@@ -379,11 +396,6 @@ Future<void> _acceptOrder(String orderId, Map<String, dynamic> data) async {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// TYPED ERROR
-// ══════════════════════════════════════════════════════════════════════════════
-
-
-// ══════════════════════════════════════════════════════════════════════════════
 // PENDING SCAFFOLD
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -396,7 +408,7 @@ class _PendingScaffold extends StatelessWidget {
         backgroundColor:  Colors.white,
         surfaceTintColor: Colors.transparent,
         elevation:        0,
-        leading:  BackButton(color: _C.text),
+        leading:          BackButton(color: _C.text),
         title: const Text('Dashboard',
             style: TextStyle(color: _C.text, fontWeight: FontWeight.w700)),
       ),
@@ -647,16 +659,17 @@ class _StatChip extends StatelessWidget {
 
 class _JobsList extends StatefulWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
-  final bool        isAvailable;
-  final String      myUid;
-  final String      serviceType;
-  final String      businessName;
+  final bool          isAvailable;
+  final String        myUid;
+  final String        serviceType;
+  final String        businessName;
+  final List<String>  svcVariants;
   final void Function(int) onCount;
 
-  final Future<void> Function(String, Map<String, dynamic>)?  onAccept;
-  final Future<void> Function(String, Map<String, dynamic>)?  onDecline;
-  final Future<void> Function(String, Map<String, dynamic>)?  onComplete;
-  final Future<void> Function(String, Map<String, dynamic>)?  onCancel;
+  final Future<void> Function(String, Map<String, dynamic>)? onAccept;
+  final Future<void> Function(String, Map<String, dynamic>)? onDecline;
+  final Future<void> Function(String, Map<String, dynamic>)? onComplete;
+  final Future<void> Function(String, Map<String, dynamic>)? onCancel;
 
   const _JobsList({
     required this.stream,
@@ -664,6 +677,7 @@ class _JobsList extends StatefulWidget {
     required this.myUid,
     required this.serviceType,
     required this.businessName,
+    required this.svcVariants,
     required this.onCount,
     this.onAccept,
     this.onDecline,
@@ -681,6 +695,14 @@ class _JobsListState extends State<_JobsList>
   @override
   bool get wantKeepAlive => true;
 
+  /// FIX 5: Case-insensitive service type matching.
+  /// Checks the stored serviceType field against all known variants.
+  bool _matchesServiceType(Map<String, dynamic> data) {
+    final stored = (data['serviceType'] ?? '').toString().trim().toLowerCase();
+    return widget.svcVariants
+        .any((v) => v.trim().toLowerCase() == stored);
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -694,16 +716,24 @@ class _JobsListState extends State<_JobsList>
 
         final allDocs = snap.data?.docs ?? [];
 
-        // ── Client-side filter for Available tab ─────────────────────────
-        // Hide orders that THIS provider already declined so they don't see
-        // them again, while other providers still can.
         final docs = widget.isAvailable
             ? allDocs.where((d) {
-                final declinedBy = (d.data()['declinedBy'] as List?) ?? [];
-                return !declinedBy.contains(widget.myUid);
+                final m = d.data();
+                // FIX 6: client-side service type filter (case-insensitive)
+                if (!_matchesServiceType(m)) return false;
+
+                // FIX 7: treat missing isAssigned field as false (older orders)
+                final isAssigned = m['isAssigned'];
+                if (isAssigned == true) return false;
+
+                // Hide orders this provider already declined
+                final declinedBy = (m['declinedBy'] as List?) ?? [];
+                if (declinedBy.contains(widget.myUid)) return false;
+
+                return true;
               }).toList()
             : allDocs.where((d) {
-                final m = d.data();
+                final m  = d.data();
                 final st = (m['status'] ?? '').toString().toLowerCase();
                 return st != 'pending' && st != 'enquiry';
               }).toList();
@@ -748,10 +778,10 @@ class _JobCard extends StatelessWidget {
   final bool        isAvailable;
   final String      serviceType;
   final String      businessName;
-  final Future<void> Function(String, Map<String, dynamic>)?  onAccept;
-  final Future<void> Function(String, Map<String, dynamic>)?  onDecline;
-  final Future<void> Function(String, Map<String, dynamic>)?  onComplete;
-  final Future<void> Function(String, Map<String, dynamic>)?  onCancel;
+  final Future<void> Function(String, Map<String, dynamic>)? onAccept;
+  final Future<void> Function(String, Map<String, dynamic>)? onDecline;
+  final Future<void> Function(String, Map<String, dynamic>)? onComplete;
+  final Future<void> Function(String, Map<String, dynamic>)? onCancel;
 
   const _JobCard({
     required this.doc,
@@ -786,30 +816,117 @@ class _JobCard extends StatelessWidget {
   }[s] ?? Icons.schedule_rounded;
 
   String _safeStr(dynamic v, [String fallback = '-']) =>
-      (v?.toString() ?? '').isEmpty ? fallback : v.toString();
+      (v?.toString() ?? '').trim().isEmpty ? fallback : v.toString().trim();
+
+  /// FIX 8: Robustly resolve customer name from multiple possible field names.
+  String _resolveCustomerName(Map<String, dynamic> data) {
+    for (final key in ['userName', 'customerName', 'name', 'displayName', 'fullName']) {
+      final v = _safeStr(data[key]);
+      if (v != '-') return v;
+    }
+    return 'Customer';
+  }
+
+  /// FIX 9: Robustly resolve phone from multiple possible field names.
+  String _resolvePhone(Map<String, dynamic> data) {
+    for (final key in ['phone', 'phoneNumber', 'mobile', 'contactPhone', 'customerPhone']) {
+      final v = _safeStr(data[key]);
+      if (v != '-') return v;
+    }
+    return '-';
+  }
+
+  /// FIX 10: Robustly resolve address from multiple possible structures.
+  String _resolveAddress(Map<String, dynamic> data) {
+    // Try flat address fields first
+    for (final key in ['address', 'fullAddress', 'customerAddress']) {
+      final v = _safeStr(data[key]);
+      if (v != '-') return v;
+    }
+
+    // Try nested location map
+    final location = data['location'];
+    if (location is Map) {
+      for (final key in ['address', 'fullAddress', 'formattedAddress', 'name']) {
+        final v = _safeStr(location[key]);
+        if (v != '-') return v;
+      }
+      // Build from components if broken into parts
+      final parts = [
+        _safeStr(location['street']),
+        _safeStr(location['area']),
+        _safeStr(location['city']),
+        _safeStr(location['state']),
+      ].where((p) => p != '-').toList();
+      if (parts.isNotEmpty) return parts.join(', ');
+    }
+
+    // Try nested address map
+    final addrMap = data['address'];
+    if (addrMap is Map) {
+      for (final key in ['full', 'formatted', 'line1', 'street']) {
+        final v = _safeStr(addrMap[key]);
+        if (v != '-') return v;
+      }
+    }
+
+    return '-';
+  }
+
+  /// FIX 11: Robustly resolve scheduled time.
+  String _resolveSchedule(Map<String, dynamic> data) {
+    // Flat fields
+    for (final key in ['scheduledTime', 'scheduledDate', 'appointmentTime', 'bookingTime']) {
+      final v = _safeStr(data[key]);
+      if (v != '-') return v;
+    }
+
+    // Nested schedule map
+    final schedule = data['schedule'];
+    if (schedule is Map) {
+      for (final key in ['time', 'scheduledTime', 'date', 'dateTime', 'slot']) {
+        final v = _safeStr(schedule[key]);
+        if (v != '-') return v;
+      }
+    }
+
+    return '-';
+  }
+
+  /// FIX 12: Robustly resolve amount from multiple possible structures.
+  double _resolveAmount(Map<String, dynamic> data) {
+    // Try flat
+    for (final key in ['totalAmount', 'amount', 'price', 'total', 'cost']) {
+      final v = data[key];
+      if (v is num) return v.toDouble();
+    }
+    // Try nested payment map
+    final payment = data['payment'];
+    if (payment is Map) {
+      for (final key in ['totalAmount', 'amount', 'total', 'price']) {
+        final v = payment[key];
+        if (v is num) return v.toDouble();
+      }
+    }
+    return 0.0;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final data     = doc.data()!;
-    final status   = (data['status'] ?? 'pending').toString().toLowerCase();
-
-    // ── Safely read nested maps ──────────────────────────────────────────
-    final payment  = (data['payment']  is Map) ? data['payment']  as Map : {};
-    final location = (data['location'] is Map) ? data['location'] as Map : {};
-    final schedule = (data['schedule'] is Map) ? data['schedule'] as Map : {};
+    final data   = doc.data()!;
+    final status = (data['status'] ?? 'pending').toString().toLowerCase();
 
     final ts      = data['createdAt'] as Timestamp?;
     final dateStr = ts != null
         ? DateFormat('dd MMM • hh:mm a').format(ts.toDate()) : '-';
 
-    final rawAmt = payment['totalAmount'];
-    final amount = rawAmt is num ? rawAmt.toDouble() : 0.0;
-
-    // address can live at location.address OR location.fullAddress
-    final address = _safeStr(location['address'] ?? location['fullAddress']);
-    // schedule time can be a string or nested
-    final schedTime = _safeStr(
-      schedule['time'] ?? schedule['scheduledTime'] ?? schedule['date']);
+    // Use the robust resolvers
+    final customerName = _resolveCustomerName(data);
+    final phone        = _resolvePhone(data);
+    final address      = _resolveAddress(data);
+    final schedTime    = _resolveSchedule(data);
+    final amount       = _resolveAmount(data);
+    final note         = _safeStr(data['note'] ?? data['notes'] ?? data['description']);
 
     final sc   = _sc(status);
     final soft = _sf(status);
@@ -880,9 +997,8 @@ class _JobCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(13)),
                   child: Center(
                     child: Text(
-                      (_safeStr(data['userName'], 'U'))
-                          .substring(0, 1)
-                          .toUpperCase(),
+                      customerName.isNotEmpty
+                          ? customerName[0].toUpperCase() : 'C',
                       style: const TextStyle(
                           color:      _C.indigo,
                           fontWeight: FontWeight.bold,
@@ -894,7 +1010,7 @@ class _JobCard extends StatelessWidget {
                 Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_safeStr(data['userName'], 'Customer'),
+                    Text(customerName,
                         style: const TextStyle(
                             fontSize:   15,
                             fontWeight: FontWeight.w700,
@@ -929,20 +1045,15 @@ class _JobCard extends StatelessWidget {
               const Divider(height: 1, color: _C.divider),
               const SizedBox(height: 12),
 
-              _InfoRow(Icons.phone_rounded,
-                  _safeStr(data['phone']), _C.indigo, _C.indigoSft),
+              _InfoRow(Icons.phone_rounded,        phone,     _C.indigo, _C.indigoSft),
               const SizedBox(height: 8),
-              _InfoRow(Icons.location_on_rounded,
-                  address, _C.red, _C.redSft),
+              _InfoRow(Icons.location_on_rounded,  address,   _C.red,    _C.redSft),
               const SizedBox(height: 8),
-              _InfoRow(Icons.schedule_rounded,
-                  schedTime, _C.green, _C.greenSft),
+              _InfoRow(Icons.schedule_rounded,     schedTime, _C.green,  _C.greenSft),
 
-              if (_safeStr(data['note']).isNotEmpty &&
-                  _safeStr(data['note']) != '-') ...[
+              if (note.isNotEmpty && note != '-') ...[
                 const SizedBox(height: 8),
-                _InfoRow(Icons.notes_rounded,
-                    _safeStr(data['note']), _C.orange, _C.orangeSft),
+                _InfoRow(Icons.notes_rounded, note, _C.orange, _C.orangeSft),
               ],
 
               const SizedBox(height: 14),
@@ -1002,7 +1113,7 @@ class _JobCard extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SMALL STATELESS WIDGETS (unchanged)
+// SMALL STATELESS WIDGETS
 // ══════════════════════════════════════════════════════════════════════════════
 
 class _InfoRow extends StatelessWidget {
@@ -1038,11 +1149,11 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _ActionBtn extends StatelessWidget {
-  final String       label;
-  final IconData     icon;
-  final Color        bg;
-  final Color        fg;
-  final bool         outlined;
+  final String        label;
+  final IconData      icon;
+  final Color         bg;
+  final Color         fg;
+  final bool          outlined;
   final VoidCallback? onTap;
 
   const _ActionBtn({
@@ -1080,9 +1191,9 @@ class _ActionBtn extends StatelessWidget {
 }
 
 class _ActionIconBtn extends StatelessWidget {
-  final IconData     icon;
-  final Color        color;
-  final Color        bg;
+  final IconData      icon;
+  final Color         color;
+  final Color         bg;
   final VoidCallback? onTap;
 
   const _ActionIconBtn({

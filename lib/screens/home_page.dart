@@ -6,10 +6,7 @@ import 'package:callme/models/service_category.dart';
 import 'package:callme/widgets/category_card.dart';
 import 'package:callme/profile/notification_page.dart';
 
-// ✅ UNIVERSAL PAGE
 import 'package:callme/screens/universal_services_page.dart';
-
-// ✅ OTHER PAGES
 import 'package:callme/screens/salon_page.dart';
 import 'package:callme/models/hotel_service_page.dart';
 import 'package:callme/models/civil_services_page.dart';
@@ -28,7 +25,6 @@ class _HomePageState extends State<HomePage> {
   final ScrollController _scrollController = ScrollController();
   double _offset = 0.0;
 
-  // ── Current user UID (null if not signed in) ──────────────────────────────
   final String? _uid = FirebaseAuth.instance.currentUser?.uid;
 
   final List<ServiceCategory> categories = [
@@ -76,17 +72,14 @@ class _HomePageState extends State<HomePage> {
 
   void autoScroll() {
     if (!mounted || !_scrollController.hasClients) return;
-
     final max = _scrollController.position.maxScrollExtent;
     double next = _scrollController.offset + 120;
     if (next >= max) next = 0;
-
     _scrollController.animateTo(
       next,
       duration: const Duration(milliseconds: 600),
       curve: Curves.easeOut,
     );
-
     Future.delayed(const Duration(seconds: 4), autoScroll);
   }
 
@@ -96,23 +89,64 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  Widget getServicePage(String serviceName) {
+  // ── Fetch the first active salon provider ID from Firestore ──────────────
+  Future<String> _fetchSalonProviderId() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('providers')
+          .where('serviceType', isEqualTo: 'salon')
+          .where('isActive', isEqualTo: true)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isNotEmpty) return snap.docs.first.id;
+    } catch (_) {}
+    return ''; // fallback — SalonBookingPage will show error if still empty
+  }
+
+  // ── Navigate to the correct page for each service ────────────────────────
+  Future<void> _navigateToService(String serviceName) async {
+    Widget page;
+
+    if (serviceName == 'Salon') {
+      // Show a loading indicator while fetching provider ID
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final providerId = await _fetchSalonProviderId();
+
+      if (!mounted) return;
+      Navigator.pop(context); // dismiss loader
+
+      page = SalonPage(providerId: providerId);
+    } else {
+      page = _getStaticPage(serviceName);
+    }
+
+    if (!mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
+  // ── All non-Salon pages (no async needed) ────────────────────────────────
+  Widget _getStaticPage(String serviceName) {
     switch (serviceName.trim()) {
-      case "Cleaning":
-      case "Plumbing":
-      case "Water":
+      case 'Cleaning':
+      case 'Plumbing':
+      case 'Water':
         return UniversalServicesPage(serviceName: serviceName);
-      case "Laundry":
+      case 'Laundry':
         return const LaundryServicePage();
-      case "Salon":
-        return const SalonPage();
-      case "Resorts":
+      case 'Resorts':
         return const ResortPage(resorts: []);
-      case "Hotel":
+      case 'Hotel':
         return const HotelServicePage();
-      case "Civil Services":
+      case 'Civil Services':
         return const CivilServicesPage();
-      case "Education":
+      case 'Education':
         return const EducationServicesPage();
       default:
         return UniversalServicesPage(serviceName: serviceName);
@@ -122,16 +156,12 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openNotifications() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const NotificationPage(),
-      ),
+      MaterialPageRoute(builder: (_) => const NotificationPage()),
     );
   }
 
-  // ─── Unread-count stream straight from Firestore ────────────────────────
   Stream<int> get _unreadCountStream {
     if (_uid == null) return Stream.value(0);
-
     return FirebaseFirestore.instance
         .collection('notifications')
         .where('receiverId', isEqualTo: _uid)
@@ -157,13 +187,10 @@ class _HomePageState extends State<HomePage> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
-
-            // ── Real-time badge using StreamBuilder ──────────────────────
             child: StreamBuilder<int>(
               stream: _unreadCountStream,
               builder: (context, snapshot) {
                 final unreadCount = snapshot.data ?? 0;
-
                 return Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -171,8 +198,6 @@ class _HomePageState extends State<HomePage> {
                       icon: const Icon(Icons.notifications_rounded, size: 28),
                       onPressed: _openNotifications,
                     ),
-
-                    // Badge — shown only when there are unread notifications
                     if (unreadCount > 0)
                       Positioned(
                         right: 6,
@@ -237,7 +262,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // 🔹 HORIZONTAL SCROLL (category chips)
+            // 🔹 HORIZONTAL SCROLL
             SizedBox(
               height: 110,
               child: NotificationListener<ScrollNotification>(
@@ -293,13 +318,8 @@ class _HomePageState extends State<HomePage> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
                     child: GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              getServicePage(category.name),
-                        ),
-                      ),
+                      // ✅ FIXED: now calls async method that fetches providerId
+                      onTap: () => _navigateToService(category.name),
                       child: CategoryCard(
                         name: category.name,
                         imagePath: category.imagePath,

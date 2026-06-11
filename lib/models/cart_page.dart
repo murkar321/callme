@@ -1,20 +1,16 @@
-import 'package:callme/bookings/civil_book_page.dart';
 import 'package:flutter/material.dart';
 
 import '../models/cart.dart';
 import '../bookings/booking_page.dart';
 import '../bookings/salon_booking_page.dart';
 import '../bookings/enquiry_page.dart';
+import '../bookings/civil_book_page.dart';
 
-// Services that use the enquiry flow instead of direct booking
 const _enquiryServices = {'Education'};
 
-// Services that go to CivilBookingPage
-const _civilServices = {'Civil'};
-
 class CartPage extends StatefulWidget {
-  final String service;      // cart key  e.g. "Civil", "Salon"
-  final String serviceName;  // display name e.g. "Civil Contract Services"
+  final String service;       // cart key  e.g. "Civil", "Salon"
+  final String serviceName;   // display   e.g. "Civil Contract Services"
   final String providerId;
 
   const CartPage({
@@ -73,12 +69,13 @@ class _CartPageState extends State<CartPage>
     }
   }
 
-  bool get _isEnquiry => _enquiryServices.contains(widget.service);
-  bool get _isCivil => _civilServices.contains(widget.service);
+  bool get _isEnquiry  => _enquiryServices.contains(widget.service);
+  bool get _isCivil    => widget.service == 'Civil';
 
   String get _ctaLabel {
     if (_isEnquiry) return 'Send Enquiry';
-    return 'Proceed to Book';
+    if (_isCivil)   return 'Proceed to Book';
+    return 'Book Now';
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -119,7 +116,8 @@ class _CartPageState extends State<CartPage>
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius:
+            const BorderRadius.vertical(bottom: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
             blurRadius: 16,
@@ -160,7 +158,10 @@ class _CartPageState extends State<CartPage>
                 if (count > 0)
                   Text(
                     '$count item${count == 1 ? '' : 's'}',
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 13,
+                    ),
                   ),
               ],
             ),
@@ -169,7 +170,8 @@ class _CartPageState extends State<CartPage>
           if (_isEnquiry && count > 0)
             Container(
               margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: _accent.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(20),
@@ -265,7 +267,8 @@ class _CartPageState extends State<CartPage>
                             color: Colors.grey.shade400,
                           ),
                         )
-                      : Icon(Icons.image_outlined, color: Colors.grey.shade400),
+                      : Icon(Icons.image_outlined,
+                          color: Colors.grey.shade400),
                 ),
               ),
               const SizedBox(width: 14),
@@ -379,7 +382,8 @@ class _CartPageState extends State<CartPage>
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.07),
@@ -392,7 +396,6 @@ class _CartPageState extends State<CartPage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Enquiry notice (Education only now)
             if (_isEnquiry) ...[
               Container(
                 width: double.infinity,
@@ -402,8 +405,8 @@ class _CartPageState extends State<CartPage>
                 decoration: BoxDecoration(
                   color: _accent.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(14),
-                  border:
-                      Border.all(color: _accent.withOpacity(0.25), width: 1),
+                  border: Border.all(
+                      color: _accent.withOpacity(0.25), width: 1),
                 ),
                 child: Row(
                   children: [
@@ -471,6 +474,12 @@ class _CartPageState extends State<CartPage>
                             padding: EdgeInsets.only(right: 6),
                             child: Icon(Icons.send_rounded, size: 16),
                           ),
+                        if (_isCivil)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 6),
+                            child: Icon(Icons.arrow_forward_rounded,
+                                size: 16),
+                          ),
                         Text(
                           _ctaLabel,
                           style: const TextStyle(
@@ -497,18 +506,7 @@ class _CartPageState extends State<CartPage>
   // =========================================================
 
   Future<void> _onProceed(List<CartItem> items) async {
-    if (_isEnquiry) {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => EnquiryPage(
-            serviceName: widget.service,
-            cart: items,
-          ),
-        ),
-      );
-    } else if (_isCivil) {
-      // Civil goes to the standard BookingPage (swap for CivilBookingPage if you have one)
+    if (_isCivil) {
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -516,7 +514,17 @@ class _CartPageState extends State<CartPage>
             serviceName: widget.serviceName,
             cart: items,
             products: const [],
-            providerId: widget.providerId,
+            providerId: widget.providerId, // may be empty — that's fine
+          ),
+        ),
+      );
+    } else if (_isEnquiry) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EnquiryPage(
+            serviceName: widget.service,
+            cart: items,
           ),
         ),
       );
