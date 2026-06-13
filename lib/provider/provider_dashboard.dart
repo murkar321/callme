@@ -36,8 +36,6 @@ class _C {
 String _norm(String s) =>
     s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
 
-/// Returns true when two service-type strings refer to the same service.
-/// E.g. "Home Cleaning" == "homecleaning" == "home_cleaning"
 bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 
 // ═══════════════════════════════════════════════════════════════
@@ -63,31 +61,16 @@ class _BDPState extends State<BusinessDashboardPage> {
   final _db   = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  // manual tab — no TabController / no vsync needed
   int _tab = 0;
 
   late Stream<DocumentSnapshot<Map<String, dynamic>>> _providerSnap;
-
-  // ── Available jobs stream ──────────────────────────────────
-  // BUG FIX: We also need to pick up orders that were cancelled-by-provider
-  // and reopened (reopenForOthers == true).  Firestore can't express
-  // "status IN [pending, enquiry] OR reopenForOthers == true" in one query,
-  // so we fetch all non-completed, non-assigned orders and filter client-side.
-  // Simplest safe query: fetch everything and filter — OR use two merged streams.
-  // We use a broad query (no compound index) + client-side filter.
   late Stream<QuerySnapshot<Map<String, dynamic>>> _availStream;
-
-  // ── My jobs stream ─────────────────────────────────────────
-  // BUG FIX: Query ONLY by providerUserId so the doc is always found even
-  // after a cancel rewrite.  We also guard service type client-side so a
-  // provider who somehow ends up in a wrong-type order doesn't see it.
   late Stream<QuerySnapshot<Map<String, dynamic>>> _myStream;
 
   String get _uid => _auth.currentUser?.uid ?? '';
-
-  /// Normalised service type for this provider (used in every comparison).
   String get _svcNorm => _norm(widget.serviceType);
 
+  // FIX: Use plain int fields updated via safe setState, NOT postFrameCallback
   int _availCount = 0;
   int _myCount    = 0;
 
@@ -100,45 +83,34 @@ class _BDPState extends State<BusinessDashboardPage> {
         .doc(widget.providerId)
         .snapshots();
 
-    // ── Available jobs ─────────────────────────────────────────
-    // Broad query — no composite index required.
-    // isAssigned == false covers both fresh orders and reopened-cancelled ones.
     _availStream = _db
         .collection('orders')
         .where('isAssigned', isEqualTo: false)
         .snapshots();
 
-    // ── My jobs ────────────────────────────────────────────────
-    // providerUserId is NEVER deleted (even on cancel) so this always finds
-    // every order this provider has ever touched.
     _myStream = _db
         .collection('orders')
         .where('providerUserId', isEqualTo: _uid)
         .snapshots();
   }
 
-  // ─── tab helpers ──────────────────────────────────────────────
   void _goTab(int i) {
     if (mounted && _tab != i) setState(() => _tab = i);
   }
 
+  // FIX: Safe count setters — only call setState if mounted and value changed
   void _setAvail(int c) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _availCount != c) setState(() => _availCount = c);
-    });
+    if (mounted && _availCount != c) setState(() => _availCount = c);
   }
 
   void _setMy(int c) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _myCount != c) setState(() => _myCount = c);
-    });
+    if (mounted && _myCount != c) setState(() => _myCount = c);
   }
 
   // ═══════════════════════════════════════════════════════════════
   // FIRESTORE ACTIONS
   // ═══════════════════════════════════════════════════════════════
 
-  // ── Accept (FCFS transaction) ──────────────────────────────────
   Future<void> _accept(String id, Map<String, dynamic> data) async {
     final custId = (data['userId'] ?? '').toString();
     final ref    = _db.collection('orders').doc(id);
@@ -147,24 +119,23 @@ class _BDPState extends State<BusinessDashboardPage> {
         final snap = await tx.get(ref);
         if (!snap.exists) throw Exception('not_found');
         final cur = snap.data()!;
-        // Re-check inside transaction: must still be unassigned and open
         if (cur['isAssigned'] == true) throw Exception('taken');
-        final st = (cur['status'] ?? '').toString().toLowerCase();
+        final st       = (cur['status'] ?? '').toString().toLowerCase();
         final reopened = cur['reopenForOthers'] == true;
-        final isOpen = st == 'pending' || st == 'enquiry' || reopened;
+        final isOpen   = st == 'pending' || st == 'enquiry' || reopened;
         if (!isOpen) throw Exception('taken');
 
         tx.update(ref, {
-          'providerId':       widget.providerId,
-          'providerUserId':   _uid,
-          'providerName':     widget.businessName,
-          'serviceType':      widget.serviceType,
-          'status':           'accepted',
-          'isAssigned':       true,
-          'reopenForOthers':  false, // clear reopen flag
-          'acceptedAt':       FieldValue.serverTimestamp(),
-          'updatedAt':        FieldValue.serverTimestamp(),
-          'lastActionBy':     'provider',
+          'providerId':      widget.providerId,
+          'providerUserId':  _uid,
+          'providerName':    widget.businessName,
+          'serviceType':     widget.serviceType,
+          'status':          'accepted',
+          'isAssigned':      true,
+          'reopenForOthers': false,
+          'acceptedAt':      FieldValue.serverTimestamp(),
+          'updatedAt':       FieldValue.serverTimestamp(),
+          'lastActionBy':    'provider',
         });
       });
       if (!mounted) return;
@@ -188,7 +159,6 @@ class _BDPState extends State<BusinessDashboardPage> {
     }
   }
 
-  // ── Decline ────────────────────────────────────────────────────
   Future<void> _decline(String id, String note, Map<String, dynamic> data) async {
     final custId = (data['userId'] ?? '').toString();
     try {
@@ -210,7 +180,6 @@ class _BDPState extends State<BusinessDashboardPage> {
     }
   }
 
-  // ── Complete ────────────────────────────────────────────────────
   Future<void> _complete(String id, Map<String, dynamic> data) async {
     final custId = (data['userId'] ?? '').toString();
     try {
@@ -235,13 +204,6 @@ class _BDPState extends State<BusinessDashboardPage> {
     }
   }
 
-  // ── Cancel accepted job ────────────────────────────────────────
-  // DESIGN:
-  //   • status        → 'cancelled'   (user sees cancelled, NOT pending)
-  //   • isAssigned    → false         (other providers can pick it up)
-  //   • reopenForOthers → true        (available-tab picks this back up)
-  //   • providerUserId is KEPT        (My Jobs stream still finds the doc)
-  //   • declinedBy   += [_uid]        (this provider won't see it again)
   Future<void> _cancel(String id, String note, Map<String, dynamic> data) async {
     final custId = (data['userId'] ?? '').toString();
     try {
@@ -249,7 +211,6 @@ class _BDPState extends State<BusinessDashboardPage> {
         'status':             'cancelled',
         'isAssigned':         false,
         'reopenForOthers':    true,
-        // DO NOT remove providerUserId — My Jobs stream depends on it
         'providerCancelNote': note.isEmpty ? 'Provider cancelled' : note,
         'cancelledBy':        'provider',
         'cancelledAt':        FieldValue.serverTimestamp(),
@@ -272,7 +233,6 @@ class _BDPState extends State<BusinessDashboardPage> {
     }
   }
 
-  // ── Notify helper ──────────────────────────────────────────────
   void _notify(String uid, String orderId, String title, String body, String type) {
     if (uid.isEmpty) return;
     OrderService.notifyUser(
@@ -287,19 +247,19 @@ class _BDPState extends State<BusinessDashboardPage> {
 
   Future<void> _showDecline(String id, Map<String, dynamic> data) async {
     final ctrl = TextEditingController();
-    bool ok = false;
+    bool   ok     = false;
     String reason = '';
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => _Dialog(
-        title: 'Decline Job',
-        subtitle: 'Order stays open for other providers.',
-        hint: 'Reason (optional)...',
-        btnLabel: 'Decline',
-        btnColor: _C.orange,
+        title:     'Decline Job',
+        subtitle:  'Order stays open for other providers.',
+        hint:      'Reason (optional)...',
+        btnLabel:  'Decline',
+        btnColor:  _C.orange,
         keepLabel: 'Keep',
-        ctrl: ctrl,
+        ctrl:      ctrl,
         onConfirm: () { ok = true; reason = ctrl.text.trim(); Navigator.pop(ctx); },
         onKeep:    () => Navigator.pop(ctx),
       ),
@@ -311,19 +271,19 @@ class _BDPState extends State<BusinessDashboardPage> {
 
   Future<void> _showCancel(String id, Map<String, dynamic> data) async {
     final ctrl = TextEditingController();
-    bool ok = false;
+    bool   ok     = false;
     String reason = '';
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => _Dialog(
-        title: 'Cancel Job',
-        subtitle: 'Order will reopen for other providers.',
-        hint: 'Reason (shown to customer)...',
-        btnLabel: 'Cancel Job',
-        btnColor: _C.red,
+        title:     'Cancel Job',
+        subtitle:  'Order will reopen for other providers.',
+        hint:      'Reason (shown to customer)...',
+        btnLabel:  'Cancel Job',
+        btnColor:  _C.red,
         keepLabel: 'Keep Job',
-        ctrl: ctrl,
+        ctrl:      ctrl,
         onConfirm: () { ok = true; reason = ctrl.text.trim(); Navigator.pop(ctx); },
         onKeep:    () => Navigator.pop(ctx),
       ),
@@ -357,25 +317,32 @@ class _BDPState extends State<BusinessDashboardPage> {
 
   // ═══════════════════════════════════════════════════════════════
   // BUILD
-  // IndexedStack keeps both tabs alive → no lifecycle errors.
+  // FIX: StreamBuilder only wraps the body content, not the entire Scaffold.
+  //      This prevents the _dependents.isEmpty assertion by keeping the
+  //      Scaffold alive regardless of stream state.
   // ═══════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: _providerSnap,
-      builder: (_, snap) {
-        if (!snap.hasData) {
-          return const Scaffold(
-            backgroundColor: _C.bg,
-            body: Center(child: CircularProgressIndicator(color: _C.indigo)),
-          );
-        }
-        final prov = snap.data?.data() ?? {};
-        if (prov['status'] != 'approved') return _PendingScreen();
+    return Scaffold(
+      backgroundColor: _C.bg,
+      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: _providerSnap,
+        builder: (ctx, snap) {
+          // Loading state
+          if (!snap.hasData) {
+            return const Center(
+              child: CircularProgressIndicator(color: _C.indigo),
+            );
+          }
 
-        return Scaffold(
-          backgroundColor: _C.bg,
-          body: Column(children: [
+          final prov = snap.data?.data() ?? {};
+
+          // FIX: Pending screen rendered as body content, not a new Scaffold
+          if (prov['status'] != 'approved') {
+            return const _PendingBody();
+          }
+
+          return Column(children: [
             _Header(
               businessName: widget.businessName,
               serviceType:  widget.serviceType,
@@ -392,7 +359,6 @@ class _BDPState extends State<BusinessDashboardPage> {
               child: IndexedStack(
                 index: _tab,
                 children: [
-                  // ── Tab 0: Available ─────────────────────────
                   _AvailTab(
                     stream:      _availStream,
                     myUid:       _uid,
@@ -402,7 +368,6 @@ class _BDPState extends State<BusinessDashboardPage> {
                     onAccept:    _accept,
                     onDecline:   _showDecline,
                   ),
-                  // ── Tab 1: My Jobs ───────────────────────────
                   _MyTab(
                     stream:      _myStream,
                     myUid:       _uid,
@@ -415,29 +380,21 @@ class _BDPState extends State<BusinessDashboardPage> {
                 ],
               ),
             ),
-          ]),
-        );
-      },
+          ]);
+        },
+      ),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════════════
-// AVAILABLE TAB
-//
-// BUG FIXES applied here:
-//   1. Service-type filter: only show orders whose serviceType matches
-//      this provider's serviceType (normalised comparison).
-//   2. Reopen support: orders with reopenForOthers==true and
-//      status=='cancelled' ARE shown (provider cancelled, now re-open).
-//   3. Decline filter: skip orders where this provider is in declinedBy.
-//   4. FCFS sort: oldest order first.
+// AVAILABLE JOBS TAB
 // ═══════════════════════════════════════════════════════════════
 class _AvailTab extends StatelessWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
-  final String svcNorm;     // normalised service type of THIS provider
+  final String svcNorm;
   final String myUid;
-  final String serviceType; // display label
+  final String serviceType;
   final void Function(int) onCount;
   final Future<void> Function(String, Map<String, dynamic>) onAccept;
   final Future<void> Function(String, Map<String, dynamic>) onDecline;
@@ -461,38 +418,23 @@ class _AvailTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator(color: _C.indigo));
         }
 
-        final raw = snap.data?.docs ?? [];
-
-        // ── Client-side filter ────────────────────────────────
+        final raw  = snap.data?.docs ?? [];
         final docs = raw.where((d) {
-          final m         = d.data();
-          final st        = (m['status'] ?? '').toString().toLowerCase();
-          final reopened  = m['reopenForOthers'] == true;
-          final assigned  = m['isAssigned'] == true;
-
-          // Must not be already taken
+          final m        = d.data();
+          final st       = (m['status'] ?? '').toString().toLowerCase();
+          final reopened = m['reopenForOthers'] == true;
+          final assigned = m['isAssigned'] == true;
           if (assigned) return false;
-
-          // Allowed statuses:
-          //   • pending / enquiry  → normal new order
-          //   • cancelled + reopenForOthers==true → provider cancelled, reopen
           final isOpen = st == 'pending' || st == 'enquiry'
               || (st == 'cancelled' && reopened);
           if (!isOpen) return false;
-
-          // ── SERVICE TYPE MATCH (THE CORE FIX) ──────────────
-          // Only show orders that belong to THIS provider's service type.
           final orderSvc = (m['serviceType'] ?? '').toString();
           if (!_svcEq(orderSvc, svcNorm)) return false;
-
-          // Skip if this provider already declined or cancelled this order
           final declined = (m['declinedBy'] as List?) ?? [];
           if (declined.contains(myUid)) return false;
-
           return true;
         }).toList();
 
-        // FCFS: oldest order first
         docs.sort((a, b) {
           final at = (a.data()['createdAt'] as Timestamp?)
               ?.millisecondsSinceEpoch ?? 0;
@@ -501,7 +443,10 @@ class _AvailTab extends StatelessWidget {
           return at.compareTo(bt);
         });
 
-        WidgetsBinding.instance.addPostFrameCallback((_) => onCount(docs.length));
+        // FIX: Direct call instead of addPostFrameCallback — safe here because
+        // _setAvail guards with mounted check and only calls setState if value changed.
+        // Wrapping in a microtask avoids calling setState during build.
+        Future.microtask(() => onCount(docs.length));
 
         if (docs.isEmpty) {
           return _Empty(
@@ -534,19 +479,12 @@ class _AvailTab extends StatelessWidget {
 
 // ═══════════════════════════════════════════════════════════════
 // MY JOBS TAB
-//
-// BUG FIXES applied here:
-//   1. Service-type guard: even though the Firestore query finds all orders
-//      with providerUserId==uid, we guard against edge-case docs from a
-//      different service type (e.g. if the provider changed type).
-//   2. Active count: only 'accepted' docs count as active.
-//   3. Sort: accepted → completed → cancelled; newest-first within group.
 // ═══════════════════════════════════════════════════════════════
 class _MyTab extends StatelessWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
   final String myUid;
-  final String svcNorm;     // normalised service type
-  final String serviceType; // display label
+  final String svcNorm;
+  final String serviceType;
   final void Function(int) onCount;
   final Future<void> Function(String, Map<String, dynamic>) onComplete;
   final Future<void> Function(String, Map<String, dynamic>) onCancel;
@@ -570,18 +508,15 @@ class _MyTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator(color: _C.indigo));
         }
 
-        // ── Service-type guard (keeps list clean if edge-case docs exist) ──
         final docs = (snap.data?.docs ?? [])
             .where((d) {
               final orderSvc = (d.data()['serviceType'] ?? '').toString();
-              // Allow empty serviceType (legacy docs) to avoid hiding real jobs
               if (orderSvc.isEmpty) return true;
               return _svcEq(orderSvc, svcNorm);
             })
             .toList()
             .cast<QueryDocumentSnapshot<Map<String, dynamic>>>();
 
-        // Sort: accepted → completed → cancelled; newest-first within group
         const ord = {'accepted': 0, 'completed': 1, 'cancelled': 2, 'pending': 3};
         docs.sort((a, b) {
           final as_ = (a.data()['status'] ?? '').toString().toLowerCase();
@@ -601,7 +536,8 @@ class _MyTab extends StatelessWidget {
                 (d.data()['status'] ?? '').toString().toLowerCase() == 'accepted')
             .length;
 
-        WidgetsBinding.instance.addPostFrameCallback((_) => onCount(active));
+        // FIX: microtask instead of addPostFrameCallback
+        Future.microtask(() => onCount(active));
 
         if (docs.isEmpty) {
           return _Empty(
@@ -681,7 +617,6 @@ class _Card extends StatelessWidget {
     'cancelled': Icons.cancel_rounded,
   };
 
-  // ── safe field readers ─────────────────────────────────────
   String _s(dynamic v, [String fb = '']) =>
       (v?.toString() ?? '').trim().isEmpty ? fb : v.toString().trim();
 
@@ -772,8 +707,6 @@ class _Card extends StatelessWidget {
     return [];
   }
 
-  /// For a cancelled+reopened card shown in the Available tab, display
-  /// a friendlier "Reopened" status label instead of "CANCELLED".
   String _displayStatus(String raw) {
     if (raw == 'cancelled' && data['reopenForOthers'] == true) return 'reopened';
     return raw;
@@ -784,8 +717,7 @@ class _Card extends StatelessWidget {
     final rawStatus  = (data['status'] ?? 'pending').toString().toLowerCase();
     final dispStatus = _displayStatus(rawStatus);
 
-    // Colour/icon lookup: reopened uses orange palette
-    final sc   = dispStatus == 'reopened' ? _C.orange  : (_col[rawStatus] ?? _C.indigo);
+    final sc   = dispStatus == 'reopened' ? _C.orange    : (_col[rawStatus] ?? _C.indigo);
     final soft = dispStatus == 'reopened' ? _C.orangeSft : (_bg[rawStatus]  ?? _C.indigoSft);
     final icon = dispStatus == 'reopened'
         ? Icons.refresh_rounded
@@ -822,7 +754,7 @@ class _Card extends StatelessWidget {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-          // ── Status stripe ────────────────────────────────────
+          // Status stripe
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -838,9 +770,9 @@ class _Card extends StatelessWidget {
               Text(
                 dispStatus.toUpperCase(),
                 style: TextStyle(
-                  color:       sc,
-                  fontWeight:  FontWeight.w800,
-                  fontSize:    11,
+                  color:         sc,
+                  fontWeight:    FontWeight.w800,
+                  fontSize:      11,
                   letterSpacing: 1,
                 ),
               ),
@@ -848,18 +780,16 @@ class _Card extends StatelessWidget {
               if (dateLbl.isNotEmpty) ...[
                 const Icon(Icons.access_time_rounded, size: 11, color: _C.sub),
                 const SizedBox(width: 4),
-                Text(dateLbl,
-                    style: const TextStyle(color: _C.sub, fontSize: 11)),
+                Text(dateLbl, style: const TextStyle(color: _C.sub, fontSize: 11)),
               ],
             ]),
           ),
 
-          // ── Body ─────────────────────────────────────────────
+          // Body
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-              // Customer row
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 _Avatar(name: name),
                 const SizedBox(width: 12),
@@ -872,7 +802,6 @@ class _Card extends StatelessWidget {
                   Text(serviceType,
                       style: const TextStyle(color: _C.sub, fontSize: 12)),
                 ])),
-                // Amount badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                   decoration: BoxDecoration(
@@ -892,11 +821,9 @@ class _Card extends StatelessWidget {
               const Divider(height: 1, color: _C.divider),
               const SizedBox(height: 12),
 
-              // Services list
               if (svcList.isNotEmpty)
                 _Row(icon: Icons.miscellaneous_services_rounded,
                     value: svcList.join(', '), ic: _C.indigo, bg: _C.indigoSft),
-
               if (phone.isNotEmpty)
                 _Row(icon: Icons.phone_rounded,
                     value: phone, ic: _C.indigo, bg: _C.indigoSft),
@@ -910,7 +837,6 @@ class _Card extends StatelessWidget {
                 _Row(icon: Icons.notes_rounded,
                     value: note, ic: _C.orange, bg: _C.orangeSft),
 
-              // Cancellation note (My Jobs tab, cancelled status)
               if (rawStatus == 'cancelled' && cancelNote.isNotEmpty &&
                   mode == _Mode.mine) ...[
                 const SizedBox(height: 10),
@@ -935,7 +861,6 @@ class _Card extends StatelessWidget {
 
               const SizedBox(height: 14),
 
-              // ── Action buttons ──────────────────────────────
               if (mode == _Mode.avail)
                 Row(children: [
                   Expanded(child: _Btn(
@@ -986,7 +911,7 @@ class _Card extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SMALL WIDGETS  (unchanged from original)
+// SMALL WIDGETS
 // ═══════════════════════════════════════════════════════════════
 class _Pill extends StatelessWidget {
   final IconData icon;
@@ -1048,11 +973,11 @@ class _Row extends StatelessWidget {
 }
 
 class _Btn extends StatelessWidget {
-  final String       label;
-  final IconData     icon;
-  final Color        bg;
-  final Color        fg;
-  final bool         outlined;
+  final String        label;
+  final IconData      icon;
+  final Color         bg;
+  final Color         fg;
+  final bool          outlined;
   final VoidCallback? onTap;
   const _Btn({
     required this.label, required this.icon,
@@ -1072,9 +997,8 @@ class _Btn extends StatelessWidget {
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(icon, color: fg, size: 15),
         const SizedBox(width: 6),
-        Text(label,
-            style: TextStyle(
-                color: fg, fontWeight: FontWeight.w700, fontSize: 13)),
+        Text(label, style: TextStyle(
+            color: fg, fontWeight: FontWeight.w700, fontSize: 13)),
       ]),
     ),
   );
@@ -1151,56 +1075,85 @@ class _Empty extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PENDING SCREEN
+// PENDING BODY  — FIX: plain widget, NOT a Scaffold
+// Renders inside the parent Scaffold's body so there's no
+// nested-Scaffold / inherited-widget dependency conflict.
 // ═══════════════════════════════════════════════════════════════
-class _PendingScreen extends StatelessWidget {
+class _PendingBody extends StatelessWidget {
+  const _PendingBody();
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: _C.bg,
-    appBar: AppBar(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      leading: const BackButton(color: _C.text),
-      title: const Text('Dashboard',
-          style: TextStyle(color: _C.text, fontWeight: FontWeight.w700)),
-    ),
-    body: Center(child: Padding(padding: const EdgeInsets.all(32),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-            padding: const EdgeInsets.all(32),
-            decoration: const BoxDecoration(
-                color: _C.indigoSft, shape: BoxShape.circle),
-            child: const Icon(Icons.hourglass_top_rounded,
-                size: 52, color: _C.indigo)),
-        const SizedBox(height: 28),
-        const Text('Pending Approval', style: TextStyle(
-            fontSize: 24, fontWeight: FontWeight.w700, color: _C.text)),
-        const SizedBox(height: 10),
-        const Text("Your account is under review.\nYou'll be notified once approved.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: _C.sub, fontSize: 14, height: 1.6)),
-        const SizedBox(height: 28),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: BoxDecoration(
-              color: _C.orangeSft,
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: _C.orange.withOpacity(.3))),
-          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.circle, color: _C.orange, size: 9),
-            SizedBox(width: 10),
-            Text('Status: Under Review', style: TextStyle(
-                color: _C.orange, fontWeight: FontWeight.w600, fontSize: 13)),
+  Widget build(BuildContext context) {
+    return Column(children: [
+      // Minimal top bar (no AppBar widget to avoid Scaffold dependency)
+      SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(children: [
+            const BackButton(color: _C.text),
+            const SizedBox(width: 4),
+            const Text('Dashboard',
+                style: TextStyle(
+                    color: _C.text,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18)),
           ]),
         ),
-      ]),
-    )),
-  );
+      ),
+      const Divider(height: 1, color: _C.divider),
+      Expanded(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: const BoxDecoration(
+                      color: _C.indigoSft, shape: BoxShape.circle),
+                  child: const Icon(Icons.hourglass_top_rounded,
+                      size: 52, color: _C.indigo)),
+              const SizedBox(height: 28),
+              const Text('Pending Approval',
+                  style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: _C.text)),
+              const SizedBox(height: 10),
+              const Text(
+                  "Your account is under review.\nYou'll be notified once approved.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: _C.sub, fontSize: 14, height: 1.6)),
+              const SizedBox(height: 28),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                    color: _C.orangeSft,
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(
+                        color: _C.orange.withOpacity(.3))),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.circle, color: _C.orange, size: 9),
+                  SizedBox(width: 10),
+                  Text('Status: Under Review',
+                      style: TextStyle(
+                          color: _C.orange,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13)),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    ]);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
-// HEADER  (manual animated tab buttons)
+// HEADER
 // ═══════════════════════════════════════════════════════════════
 class _Header extends StatelessWidget {
   final String businessName, serviceType, providerId;
@@ -1224,7 +1177,6 @@ class _Header extends StatelessWidget {
       child: SafeArea(bottom: false, child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
         const SizedBox(height: 12),
-
         Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(children: [
             Container(
@@ -1241,7 +1193,9 @@ class _Header extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: _C.text)),
               const SizedBox(height: 3),
               Row(children: [
                 Container(width: 7, height: 7,
@@ -1264,9 +1218,7 @@ class _Header extends StatelessWidget {
             ),
           ]),
         ),
-
         const SizedBox(height: 16),
-
         Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(children: [
             _Chip(label: 'Available',   count: availCount,
@@ -1276,9 +1228,7 @@ class _Header extends StatelessWidget {
                 color: _C.green, bg: _C.greenSft),
           ]),
         ),
-
         const SizedBox(height: 16),
-
         Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Container(
             height: 46,
@@ -1293,7 +1243,6 @@ class _Header extends StatelessWidget {
             ]),
           ),
         ),
-
         const SizedBox(height: 8),
       ])),
     );
@@ -1317,9 +1266,9 @@ class _TabBtn extends StatelessWidget {
           borderRadius: BorderRadius.circular(11),
           boxShadow: active
               ? [BoxShadow(
-                  color: Colors.black.withOpacity(0.07),
+                  color:      Colors.black.withOpacity(0.07),
                   blurRadius: 8,
-                  offset: const Offset(0, 2))]
+                  offset:     const Offset(0, 2))]
               : [],
         ),
         child: Center(child: Text(label, style: TextStyle(
@@ -1382,61 +1331,70 @@ class _Dialog extends StatelessWidget {
   Widget build(BuildContext context) => Dialog(
     backgroundColor: Colors.white,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-    child: Padding(padding: const EdgeInsets.all(24),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: btnColor.withOpacity(.1),
-                borderRadius: BorderRadius.circular(14)),
-            child: Icon(Icons.info_outline_rounded, color: btnColor, size: 26)),
-        const SizedBox(height: 14),
-        Text(title, style: const TextStyle(
-            fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
-        const SizedBox(height: 4),
-        Text(subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: _C.sub, fontSize: 13)),
-        const SizedBox(height: 16),
-        TextField(
-          controller: ctrl,
-          maxLines: 3,
-          decoration: InputDecoration(
-            hintText:  hint,
-            hintStyle: const TextStyle(color: _C.sub, fontSize: 13),
-            filled:    true,
-            fillColor: const Color(0xFFF7F8FC),
-            border:    OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide:   BorderSide.none),
-          ),
+    child: ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: btnColor.withOpacity(.1),
+                    borderRadius: BorderRadius.circular(14)),
+                child: Icon(Icons.info_outline_rounded,
+                    color: btnColor, size: 26)),
+            const SizedBox(height: 14),
+            Text(title, style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
+            const SizedBox(height: 4),
+            Text(subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _C.sub, fontSize: 13)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctrl,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText:  hint,
+                hintStyle: const TextStyle(color: _C.sub, fontSize: 13),
+                filled:    true,
+                fillColor: const Color(0xFFF7F8FC),
+                border:    OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide:   BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(children: [
+              Expanded(child: OutlinedButton(
+                onPressed: onKeep,
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    side: const BorderSide(color: _C.divider),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12))),
+                child: Text(keepLabel,
+                    style: const TextStyle(color: _C.sub)),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: ElevatedButton(
+                onPressed: onConfirm,
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: btnColor,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12))),
+                child: Text(btnLabel, style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w700)),
+              )),
+            ]),
+          ]),
         ),
-        const SizedBox(height: 18),
-        Row(children: [
-          Expanded(child: OutlinedButton(
-            onPressed: onKeep,
-            style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                side: const BorderSide(color: _C.divider),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12))),
-            child: Text(keepLabel,
-                style: const TextStyle(color: _C.sub)),
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: ElevatedButton(
-            onPressed: onConfirm,
-            style: ElevatedButton.styleFrom(
-                backgroundColor: btnColor,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12))),
-            child: Text(btnLabel, style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
-          )),
-        ]),
-      ]),
+      ),
     ),
   );
 }

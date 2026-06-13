@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -49,6 +50,7 @@ class _BusinessPageState extends State<BusinessPage>
 
   // ── Stagger animation ─────────────────────────────
   late AnimationController _listController;
+  StreamSubscription<RemoteMessage>? _fcmSubscription;
 
   // ── Categories ────────────────────────────────────
   static const List<ServiceCategoryStyle> businessCategories = [
@@ -124,6 +126,7 @@ class _BusinessPageState extends State<BusinessPage>
 
   @override
   void dispose() {
+    _fcmSubscription?.cancel();
     _listController.dispose();
     super.dispose();
   }
@@ -151,11 +154,15 @@ class _BusinessPageState extends State<BusinessPage>
         }
       });
 
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      _fcmSubscription =
+          FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        if (!mounted) return;
+
         if (message.notification != null) {
           _showSnack(
-              message.notification?.title ?? "New Notification",
-              isSuccess: true);
+            message.notification?.title ?? "New Notification",
+            isSuccess: true,
+          );
         }
       });
     } catch (e) {
@@ -191,7 +198,12 @@ class _BusinessPageState extends State<BusinessPage>
   }
 
   void _showSnack(String msg, {bool isSuccess = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    messenger.showSnackBar(
       SnackBar(
         content: Row(children: [
           Icon(

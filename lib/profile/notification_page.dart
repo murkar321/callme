@@ -29,7 +29,6 @@ class _NotificationPageState extends State<NotificationPage> {
   Future<void> _markAsRead(DocumentSnapshot doc) async {
     final data = doc.data() as Map<String, dynamic>;
     if (data['read'] == true) return;
-
     await doc.reference.update({'read': true});
   }
 
@@ -43,37 +42,16 @@ class _NotificationPageState extends State<NotificationPage> {
         .get();
 
     final batch = FirebaseFirestore.instance.batch();
-
     for (final doc in snap.docs) {
       batch.update(doc.reference, {'read': true});
     }
-
     await batch.commit();
 
     _showSnack('${snap.docs.length} notifications marked as read');
   }
 
   Future<void> _deleteNotification(DocumentSnapshot doc) async {
-    final backup = doc.data() as Map<String, dynamic>;
-
     await doc.reference.delete();
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Notification deleted'),
-        action: SnackBarAction(
-          label: 'UNDO',
-          onPressed: () async {
-            await FirebaseFirestore.instance
-                .collection('notifications')
-                .doc(doc.id)
-                .set(backup);
-          },
-        ),
-      ),
-    );
   }
 
   Future<void> _deleteAllNotifications() async {
@@ -107,11 +85,9 @@ class _NotificationPageState extends State<NotificationPage> {
         .get();
 
     final batch = FirebaseFirestore.instance.batch();
-
     for (final doc in snap.docs) {
       batch.delete(doc.reference);
     }
-
     await batch.commit();
 
     _showSnack('${snap.docs.length} notifications deleted');
@@ -134,25 +110,13 @@ class _NotificationPageState extends State<NotificationPage> {
   ({IconData icon, Color color}) _style(String? type) {
     switch (type) {
       case 'provider_registered':
-        return (
-          icon: Icons.store_mall_directory_outlined,
-          color: Colors.orange,
-        );
+        return (icon: Icons.store_mall_directory_outlined, color: Colors.orange);
       case 'registration_approved':
-        return (
-          icon: Icons.verified_outlined,
-          color: Colors.green,
-        );
+        return (icon: Icons.verified_outlined, color: Colors.green);
       case 'registration_rejected':
-        return (
-          icon: Icons.block_outlined,
-          color: Colors.red,
-        );
+        return (icon: Icons.block_outlined, color: Colors.red);
       default:
-        return (
-          icon: Icons.notifications_active_outlined,
-          color: Colors.indigo,
-        );
+        return (icon: Icons.notifications_active_outlined, color: Colors.indigo);
     }
   }
 
@@ -179,7 +143,6 @@ class _NotificationPageState extends State<NotificationPage> {
             stream: unreadStream,
             builder: (context, snapshot) {
               final unread = snapshot.data ?? 0;
-
               return IconButton(
                 onPressed: unread > 0 ? _markAllAsRead : null,
                 icon: Badge(
@@ -204,15 +167,11 @@ class _NotificationPageState extends State<NotificationPage> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return const Center(
-              child: Text('Failed to load notifications'),
-            );
+            return const Center(child: Text('Failed to load notifications'));
           }
 
           if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           final docs = snapshot.data!.docs;
@@ -245,10 +204,7 @@ class _NotificationPageState extends State<NotificationPage> {
                   color: Colors.red,
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 20),
-                  child: const Icon(
-                    Icons.delete_outline,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.delete_outline, color: Colors.white),
                 ),
                 onDismissed: (_) => _deleteNotification(doc),
                 child: ListTile(
@@ -266,13 +222,11 @@ class _NotificationPageState extends State<NotificationPage> {
                         ),
                         actions: [
                           TextButton(
-                            onPressed: () =>
-                                Navigator.pop(context, false),
+                            onPressed: () => Navigator.pop(context, false),
                             child: const Text('Cancel'),
                           ),
                           FilledButton(
-                            onPressed: () =>
-                                Navigator.pop(context, true),
+                            onPressed: () => Navigator.pop(context, true),
                             child: const Text('Delete'),
                           ),
                         ],
@@ -293,9 +247,7 @@ class _NotificationPageState extends State<NotificationPage> {
                         child: Text(
                           data['title'] ?? '',
                           style: TextStyle(
-                            fontWeight: isRead
-                                ? FontWeight.w400
-                                : FontWeight.bold,
+                            fontWeight: isRead ? FontWeight.w400 : FontWeight.bold,
                           ),
                         ),
                       ),

@@ -62,27 +62,35 @@ const List<HotelData> hotels = [
       {'path': 'assets/kingsland.jpg', 'label': 'Dining'},
     ],
   ),
+  HotelData(
+    name: "Alexon Hotel",
+    city: "Virar",
+    location:
+        "Near Arnala Beach, Virar West, Palghar, Maharashtra 401303",
+    providerId: "hotel_002",
+    image: "assets/alexon.jpg",
+    price: 700,
+    originalPrice: 900,
+    discount: 20,
+    rating: 4.2,
+    facilities: [
+      "Junior Suites",
+      "Deluxe Suites",
+      "Family Suites",
+      "Executive Suites",
+      "Mini Suites",
+    ],
+    description:
+        "Alexon Hotel is a modern hotel offering comfortable stay, family rooms and convenient amenities.",
+    images: [
+     {'path': 'assets/alexonr.jpg', 'label': 'Hotel View'},
+      {'path': 'assets/alxhalls.jpg', 'label': 'Hall View'},
+      {'path': 'assets/alxroom.jpg',     'label': 'Rooms'},
+      {'path': 'assets/alexon.jpg',     'label': 'Hotel View'},
+      {'path': 'assets/alxhall.jpg',     'label': 'Wedding Hall'},
+    ],
+  ),
 
-  /// 2 — Add your second hotel like this:
-  // HotelData(
-  //   name: "Second Hotel Name",
-  //   city: "Virar",
-  //   location: "...",
-  //   providerId: "hotel_002",
-  //   image: "assets/hotel2_cover.jpg",
-  //   price: 1200,
-  //   originalPrice: 1500,
-  //   discount: 20,
-  //   rating: 4.5,
-  //   facilities: ["Deluxe Rooms", "Conference Hall", "Restaurant"],
-  //   description: "...",
-  //   images: [
-  //     {'path': 'assets/hotel2_front.jpg',  'label': 'Hotel View'},
-  //     {'path': 'assets/hotel2_room.jpg',   'label': 'Room View'},
-  //     {'path': 'assets/hotel2_lobby.jpg',  'label': 'Lobby'},
-  //     {'path': 'assets/hotel2_dining.jpg', 'label': 'Dining'},
-  //   ],
-  // ),
 ];
 
 /// ================= HELPERS =================

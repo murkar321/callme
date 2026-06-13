@@ -69,7 +69,7 @@ const List<Resort> resorts = [
   Resort(
     name: "Alexon Resort",
     city: "Virar",
-    location: "Arnala Beach, Virar West, Palghar, Maharashtra 401303",
+    location: "Virar West, Palghar, Maharashtra 401303",
     providerId: "resort_002",
     image: "assets/alexon.jpg",
     price: 700,
@@ -85,10 +85,13 @@ const List<Resort> resorts = [
     description:
         "Alexon Resort is a peaceful resort near Arnala Beach offering relaxing stay, family rooms and comfortable amenities.",
     images: [
-      {'path': 'assets/waterpark.jpeg', 'label': 'Water Park'},
-      {'path': 'assets/rpool.jpeg',     'label': 'Resort Pool'},
-      {'path': 'assets/lunch.jpeg',     'label': 'Lunch'},
-      {'path': 'assets/raindance.jpeg', 'label': 'Rain Dance'},
+      {'path': 'assets/alexonr.jpg', 'label': 'Resort View'},
+      {'path': 'assets/alxhalls.jpg', 'label': 'Hall View'},
+      {'path': 'assets/alwater.jpg', 'label': 'Water Park'},
+      {'path': 'assets/alxroom.jpg',     'label': 'Rooms'},
+      {'path': 'assets/alexon.jpg',     'label': 'Resort View'},
+      {'path': 'assets/alxhall.jpg',     'label': 'Wedding Hall'},
+      
     ],
   ),
 ];
