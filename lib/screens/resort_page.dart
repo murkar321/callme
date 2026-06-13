@@ -52,7 +52,7 @@ class _ResortPageState
     /// ================= FILTERED RESORTS =================
     final List<Resort> filteredResorts =
 
-        resortList.where((resort) {
+        resorts.where((resort) {
 
       final searchText =
           searchController.text

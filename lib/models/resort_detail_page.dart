@@ -18,13 +18,8 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   final PageController _pageController = PageController();
   int _currentImageIndex = 0;
 
-  /// All resort gallery images with labels
-  final List<Map<String, String>> _galleryImages = [
-    {'path': 'assets/waterpark.jpeg', 'label': 'Water Park'},
-    {'path': 'assets/rpool.jpeg',     'label': 'Resort Pool'},
-    {'path': 'assets/lunch.jpeg',     'label': 'Lunch'},
-    {'path': 'assets/raindance.jpeg','label': 'Rain Dance'},
-  ];
+  // ✅ Reads from the resort model — works for every resort automatically
+  List<Map<String, String>> get _galleryImages => widget.resort.images;
 
   @override
   void dispose() {
@@ -39,7 +34,6 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
 
-      /// ================= APP BAR =================
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
@@ -53,7 +47,6 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
         ),
       ),
 
-      /// ================= BODY =================
       body: SingleChildScrollView(
         padding: const EdgeInsets.only(bottom: 110),
         child: Column(
@@ -64,37 +57,28 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
             Stack(
               children: [
 
-                /// PAGE VIEW
                 SizedBox(
                   height: 300,
                   child: PageView.builder(
                     controller: _pageController,
                     itemCount: _galleryImages.length,
-                    onPageChanged: (index) {
-                      setState(() => _currentImageIndex = index);
-                    },
+                    onPageChanged: (index) =>
+                        setState(() => _currentImageIndex = index),
                     itemBuilder: (context, index) {
                       return Stack(
                         fit: StackFit.expand,
                         children: [
 
-                          /// IMAGE
                           Image.asset(
                             _galleryImages[index]['path']!,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) {
-                              return Container(
-                                color: Colors.grey.shade200,
-                                child: Icon(
-                                  Icons.image,
-                                  size: 60,
-                                  color: Colors.grey.shade400,
-                                ),
-                              );
-                            },
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.grey.shade200,
+                              child: Icon(Icons.image,
+                                  size: 60, color: Colors.grey.shade400),
+                            ),
                           ),
 
-                          /// OVERLAY
                           Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
@@ -108,15 +92,12 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                             ),
                           ),
 
-                          /// IMAGE LABEL
                           Positioned(
                             left: 16,
                             bottom: 52,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
+                                  horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
                                 color: Colors.black.withOpacity(0.45),
                                 borderRadius: BorderRadius.circular(20),
@@ -144,9 +125,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                     right: 18,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
+                          horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.red,
                         borderRadius: BorderRadius.circular(30),
@@ -162,7 +141,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                     ),
                   ),
 
-                /// RESORT TITLE
+                /// RESORT TITLE OVERLAY
                 Positioned(
                   left: 18,
                   right: 18,
@@ -224,11 +203,8 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                             color: Colors.black.withOpacity(0.35),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
-                            Icons.chevron_left,
-                            color: Colors.white,
-                            size: 22,
-                          ),
+                          child: const Icon(Icons.chevron_left,
+                              color: Colors.white, size: 22),
                         ),
                       ),
                     ),
@@ -253,11 +229,8 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                             color: Colors.black.withOpacity(0.35),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
-                            Icons.chevron_right,
-                            color: Colors.white,
-                            size: 22,
-                          ),
+                          child: const Icon(Icons.chevron_right,
+                              color: Colors.white, size: 22),
                         ),
                       ),
                     ),
@@ -269,7 +242,8 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
             Container(
               height: 72,
               color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: _galleryImages.length,
@@ -277,20 +251,20 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                 itemBuilder: (context, index) {
                   final isSelected = _currentImageIndex == index;
                   return GestureDetector(
-                    onTap: () {
-                      _pageController.animateToPage(
-                        index,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    },
+                    onTap: () => _pageController.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    ),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       width: 80,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: isSelected ? Colors.blue : Colors.transparent,
+                          color: isSelected
+                              ? Colors.blue
+                              : Colors.transparent,
                           width: 2.5,
                         ),
                       ),
@@ -301,11 +275,8 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             color: Colors.grey.shade200,
-                            child: Icon(
-                              Icons.image,
-                              size: 24,
-                              color: Colors.grey.shade400,
-                            ),
+                            child: Icon(Icons.image,
+                                size: 24, color: Colors.grey.shade400),
                           ),
                         ),
                       ),
@@ -325,61 +296,48 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                   /// ================= LOCATION + RATING =================
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
+                        horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 8,
-                        ),
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 8),
                       ],
                     ),
                     child: Row(
                       children: [
-                        /// LOCATION
                         Expanded(
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.location_on,
-                                color: Colors.red,
-                                size: 20,
-                              ),
+                              const Icon(Icons.location_on,
+                                  color: Colors.red, size: 20),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  resort.city,
-                                  maxLines: 1,
+                                  resort.location,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500),
                                 ),
                               ),
                             ],
                           ),
                         ),
-
-                        /// RATING
+                        const SizedBox(width: 12),
                         Row(
                           children: [
-                            const Icon(
-                              Icons.star,
-                              color: Colors.orange,
-                              size: 20,
-                            ),
+                            const Icon(Icons.star,
+                                color: Colors.orange, size: 20),
                             const SizedBox(width: 4),
                             Text(
                               resort.rating.toString(),
                               style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15),
                             ),
                           ],
                         ),
@@ -398,9 +356,8 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                        ),
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10),
                       ],
                     ),
                     child: Row(
@@ -418,11 +375,9 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                         const Padding(
                           padding: EdgeInsets.only(bottom: 6),
                           child: Text(
-                            "/ night",
+                            "/ person",
                             style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 15,
-                            ),
+                                color: Colors.grey, fontSize: 15),
                           ),
                         ),
                         const Spacer(),
@@ -457,19 +412,14 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                     children: resort.facilities.map((f) {
                       return Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
+                            horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
                           color: Colors.blue.shade50,
                           borderRadius: BorderRadius.circular(30),
                         ),
-                        child: Text(
-                          f,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        child: Text(f,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w500)),
                       );
                     }).toList(),
                   ),
@@ -494,24 +444,22 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 8,
-                        ),
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 8),
                       ],
                     ),
                     child: Text(
                       resort.description,
                       style: TextStyle(
-                        fontSize: 15,
-                        color: Colors.grey.shade800,
-                        height: 1.6,
-                      ),
+                          fontSize: 15,
+                          color: Colors.grey.shade800,
+                          height: 1.6),
                     ),
                   ),
 
                   const SizedBox(height: 24),
 
-                  /// ================= RULES & TIMING =================
+                  /// ================= TIMINGS & RULES =================
                   _sectionTitle("Resort Timings & Rules"),
                   const SizedBox(height: 12),
                   _buildTimingCard(),
@@ -535,35 +483,31 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                 offset: const Offset(0, -2),
               ),
             ],
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(24),
-            ),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SizedBox(
             height: 56,
             child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ResortBookingPage(resort: widget.resort),
-                  ),
-                );
-              },
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      ResortBookingPage(resort: widget.resort),
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 elevation: 0,
                 backgroundColor: Colors.green,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
+                    borderRadius: BorderRadius.circular(18)),
               ),
               child: const Text(
                 "Book Now",
                 style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white),
               ),
             ),
           ),
@@ -575,12 +519,12 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   /// ================= HIGHLIGHTS GRID =================
   Widget _buildHighlightsGrid() {
     final highlights = [
-      {'icon': Icons.pool,           'label': 'Swimming Pool',    'sub': 'Olympic size'},
-      {'icon': Icons.waves,          'label': 'Water Park',       'sub': 'Slides & rides'},
-      {'icon': Icons.restaurant,     'label': 'Multi-Cuisine',    'sub': 'Lunch included'},
-      {'icon': Icons.music_note,     'label': 'Rain Dance',       'sub': 'DJ & music'},
-      {'icon': Icons.nightlife,      'label': 'Evening Events',   'sub': 'Live shows'},
-      {'icon': Icons.spa,            'label': 'Spa & Wellness',   'sub': 'Relax & rejuvenate'},
+      {'icon': Icons.pool,         'label': 'Swimming Pool',  'sub': 'Olympic size'},
+      {'icon': Icons.waves,        'label': 'Water Park',     'sub': 'Slides & rides'},
+      {'icon': Icons.restaurant,   'label': 'Multi-Cuisine',  'sub': 'Lunch included'},
+      {'icon': Icons.music_note,   'label': 'Rain Dance',     'sub': 'DJ & music'},
+      {'icon': Icons.nightlife,    'label': 'Evening Events', 'sub': 'Live shows'},
+      {'icon': Icons.spa,          'label': 'Spa & Wellness', 'sub': 'Relax & rejuvenate'},
     ];
 
     return GridView.builder(
@@ -601,9 +545,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 6,
-              ),
+                  color: Colors.black.withOpacity(0.04), blurRadius: 6),
             ],
           ),
           child: Column(
@@ -616,29 +558,22 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                   color: Colors.blue.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  item['icon'] as IconData,
-                  color: Colors.blue.shade700,
-                  size: 22,
-                ),
+                child: Icon(item['icon'] as IconData,
+                    color: Colors.blue.shade700, size: 22),
               ),
               const SizedBox(height: 8),
               Text(
                 item['label'] as String,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+                    fontSize: 12, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
               Text(
                 item['sub'] as String,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey.shade500,
-                ),
+                style:
+                    TextStyle(fontSize: 10, color: Colors.grey.shade500),
               ),
             ],
           ),
@@ -650,12 +585,12 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   /// ================= INCLUSIONS LIST =================
   Widget _buildInclusionsList() {
     final inclusions = [
-      {'icon': Icons.check_circle, 'text': 'Unlimited Water Park access all day'},
-      {'icon': Icons.check_circle, 'text': 'Complimentary lunch (multi-cuisine buffet)'},
-      {'icon': Icons.check_circle, 'text': 'Rain Dance session with DJ'},
-      {'icon': Icons.check_circle, 'text': 'Free use of Resort Pool & jacuzzi'},
-      {'icon': Icons.check_circle, 'text': 'Welcome drink on arrival'},
-      {'icon': Icons.check_circle, 'text': 'Complimentary locker & changing room'},
+      'Unlimited Water Park access all day',
+      'Complimentary lunch (multi-cuisine buffet)',
+      'Rain Dance session with DJ',
+      'Free use of Resort Pool & jacuzzi',
+      'Welcome drink on arrival',
+      'Complimentary locker & changing room',
     ];
 
     return Container(
@@ -665,30 +600,23 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-          ),
+              color: Colors.black.withOpacity(0.04), blurRadius: 8),
         ],
       ),
       child: Column(
-        children: inclusions.map((item) {
+        children: inclusions.map((text) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 7),
             child: Row(
               children: [
-                Icon(
-                  item['icon'] as IconData,
-                  color: Colors.green.shade600,
-                  size: 20,
-                ),
+                Icon(Icons.check_circle,
+                    color: Colors.green.shade600, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    item['text'] as String,
+                    text,
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade800,
-                    ),
+                        fontSize: 14, color: Colors.grey.shade800),
                   ),
                 ),
               ],
@@ -702,11 +630,11 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   /// ================= TIMING CARD =================
   Widget _buildTimingCard() {
     final timings = [
-      {'icon': Icons.login,        'label': 'Check-in',   'value': '10:00 AM'},
-      {'icon': Icons.logout,       'label': 'Check-out',  'value': '06:00 PM'},
-      {'icon': Icons.restaurant,   'label': 'Lunch',      'value': '12:30 PM – 3:00 PM'},
-      {'icon': Icons.waves,        'label': 'Water Park', 'value': '10:00 AM – 5:30 PM'},
-      {'icon': Icons.music_note,   'label': 'Rain Dance', 'value': '2:00 PM – 4:00 PM'},
+      {'icon': Icons.login,      'label': 'Check-in',   'value': '10:00 AM'},
+      {'icon': Icons.logout,     'label': 'Check-out',  'value': '06:00 PM'},
+      {'icon': Icons.restaurant, 'label': 'Lunch',      'value': '12:30 PM – 3:00 PM'},
+      {'icon': Icons.waves,      'label': 'Water Park', 'value': '10:00 AM – 5:30 PM'},
+      {'icon': Icons.music_note, 'label': 'Rain Dance', 'value': '2:00 PM – 4:00 PM'},
     ];
 
     final rules = [
@@ -724,44 +652,34 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-          ),
+              color: Colors.black.withOpacity(0.04), blurRadius: 8),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          /// TIMINGS
           ...timings.map((item) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Row(
                 children: [
-                  Icon(
-                    item['icon'] as IconData,
-                    color: Colors.blue.shade600,
-                    size: 18,
-                  ),
+                  Icon(item['icon'] as IconData,
+                      color: Colors.blue.shade600, size: 18),
                   const SizedBox(width: 10),
                   SizedBox(
                     width: 100,
                     child: Text(
                       item['label'] as String,
                       style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                          fontSize: 13, fontWeight: FontWeight.w600),
                     ),
                   ),
                   Expanded(
                     child: Text(
                       item['value'] as String,
                       style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade700,
-                      ),
+                          fontSize: 13, color: Colors.grey.shade700),
                     ),
                   ),
                 ],
@@ -771,43 +689,34 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
 
           const Divider(height: 24),
 
-          /// RULES HEADING
           Row(
             children: [
-              Icon(Icons.info_outline, color: Colors.orange.shade600, size: 18),
+              Icon(Icons.info_outline,
+                  color: Colors.orange.shade600, size: 18),
               const SizedBox(width: 8),
               const Text(
                 "Important Rules",
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
+                    fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(height: 10),
 
-          /// RULES
           ...rules.map((rule) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "• ",
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.orange,
-                    ),
-                  ),
+                  const Text("• ",
+                      style:
+                          TextStyle(fontSize: 15, color: Colors.orange)),
                   Expanded(
                     child: Text(
                       rule,
                       style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade700,
-                      ),
+                          fontSize: 13, color: Colors.grey.shade700),
                     ),
                   ),
                 ],
@@ -823,10 +732,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-      ),
+      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
     );
   }
 }

@@ -1,318 +1,106 @@
-class HotelRoom {
-  final String id;
-  final String category;
-  final String hotelName;
+/// ================= MODEL =================
+class HotelData {
+  final String name;
   final String city;
-  final String address;
-  final int price;
-  final int discount;
-  final String tagline;
+  final String location;
   final String image;
-
-  final List<String> features;
+  final int price;
+  final int originalPrice;
+  final int discount;
+  final double rating;
   final List<String> facilities;
-  final String suitableFor;
   final String description;
+  final String providerId;
 
-  HotelRoom({
-    required this.id,
-    required this.category,
-    required this.hotelName,
+  // ✅ Per-hotel gallery images for the detail page
+  final List<Map<String, String>> images;
+
+  const HotelData({
+    required this.name,
     required this.city,
-    required this.address,
-    required this.price,
-    required this.discount,
-    required this.tagline,
+    required this.location,
     required this.image,
-    required this.features,
+    required this.price,
+    required this.originalPrice,
+    required this.discount,
+    required this.rating,
     required this.facilities,
-    required this.suitableFor,
     required this.description,
+    required this.providerId,
+    required this.images,
   });
-
-  String get name => hotelName;
-
-  String get location => "${city}, ${address}";
 }
 
-/// MAIN HOTEL DATA
-List<HotelRoom> hotels = [
-  HotelRoom(
-    category: "Junior Suite",
-    hotelName: "Palm Residency",
-    city: "Mumbai",
-    image: "assets/ocean.jfif",
-    address: "Linking Road, Khar West, Mumbai, Maharashtra 400052",
-    price: 2500,
-    discount: 10,
-    tagline: "Compact Luxury with Comfort",
-    features: [
-      "Queen Size Bed",
-      "Air Conditioning",
-      "Free Wi-Fi",
-      "Smart TV",
-      "Work Desk",
-    ],
-    facilities: [
-      "24/7 Room Service",
-      "Daily Housekeeping",
-      "Free Parking",
-    ],
-    suitableFor: "Couples and Solo Travelers",
-    description:
-        "A cozy and modern room designed for comfort with all essential amenities for a relaxing stay.",
-    id: '1',
-  ),
-  HotelRoom(
-    category: "Executive Suite",
-    hotelName: "Palm Residency",
-    city: "Pune",
-    image: "assets/hillview.jfif",
-    address: "Linking Road, Khar West, Mumbai, Maharashtra 400052",
-    price: 4000,
-    discount: 15,
-    tagline: "Work Smart, Stay Smart",
-    features: [
-      "King Size Bed",
-      "Dedicated Workspace",
-      "High-Speed Wi-Fi",
-      "Mini Bar",
-      "City View",
-    ],
-    facilities: [
-      "Business Support Services",
-      "24/7 Room Service",
-      "Laundry Service",
-    ],
-    suitableFor: "Business Travelers",
-    description:
-        "Spacious suite with premium workspace and modern facilities, perfect for work and relaxation.",
-    id: '2',
-  ),
-  HotelRoom(
-    category: "Family Suite",
-    hotelName: "Palm Residency",
-    city: "Goa",
-    image: "assets/beachside.jfif",
-    address: "Linking Road, Khar West, Mumbai, Maharashtra 400052",
-    price: 6000,
+/// ================= HOTEL DATA =================
+const List<HotelData> hotels = [
+
+  /// 1 — Kingsland
+  HotelData(
+    name: "KINGSLAND VIDYA BANQUETS & ROOMS",
+    city: "Virar",
+    location:
+        "Vidya Plaza, 90 Ft Road, near Bank of Baroda, Virar East, Palghar, Maharashtra 401303",
+    providerId: "hotel_001",
+    image: "assets/kingsland.jpg",
+    price: 700,
+    originalPrice: 900,
     discount: 20,
-    tagline: "Where Family Feels at Home",
-    features: [
-      "2 Double Beds",
-      "Large Living Area",
-      "Kids Friendly Space",
-      "Free Wi-Fi",
-      "Storage Space",
-    ],
+    rating: 4.2,
     facilities: [
-      "Free Breakfast",
-      "Housekeeping",
-      "Extra Bed Available",
+      "Junior Suites",
+      "Deluxe Suites",
+      "Family Suites",
+      "Executive Suites",
+      "Mini Suites",
     ],
-    suitableFor: "Families and Groups",
     description:
-        "A spacious suite designed for families with comfort, space, and convenience.",
-    id: '3',
+        "KINGSLAND VIDYA BANQUETS & ROOMS is a modern hotel offering comfortable stay, family rooms and convenient amenities.",
+    images: [
+      {'path': 'assets/kingsland.jpg', 'label': 'Hotel View'},
+      {'path': 'assets/kingsland.jpg', 'label': 'Room View'},
+      {'path': 'assets/kingsland.jpg', 'label': 'Lobby'},
+      {'path': 'assets/kingsland.jpg', 'label': 'Dining'},
+    ],
   ),
-  HotelRoom(
-    category: "Deluxe Suite",
-    hotelName: "Palm Residency",
-    city: "Delhi",
-    image: "assets/rajhans.jfif",
-    address: "Linking Road, Khar West, Mumbai, Maharashtra 400052",
-    price: 7500,
-    discount: 25,
-    tagline: "Luxury Redefined",
-    features: [
-      "King Size Bed",
-      "Jacuzzi / Bathtub",
-      "Premium Interiors",
-      "Balcony View",
-      "Smart TV",
-    ],
-    facilities: [
-      "24/7 Room Service",
-      "Private Dining Option",
-      "Laundry Service",
-    ],
-    suitableFor: "Luxury Stay",
-    description:
-        "Experience premium luxury with elegant interiors and top-class amenities.",
-    id: '4',
-  ),
-  HotelRoom(
-    category: "Mini Suite",
-    hotelName: "Palm Residency",
-    city: "Banglore",
-    image: "assets/lakeview.jfif",
-    address: "Linking Road, Khar West, Mumbai, Maharashtra 400052",
-    price: 1800,
-    discount: 5,
-    tagline: "Affordable Comfort for Everyone",
-    features: [
-      "Double Bed",
-      "Air Conditioning",
-      "Free Wi-Fi",
-      "TV",
-      "Basic Amenities",
-    ],
-    facilities: [
-      "Room Service",
-      "Housekeeping",
-    ],
-    suitableFor: "Budget Travelers",
-    description:
-        "A simple and affordable room with all basic facilities for a comfortable stay.",
-    id: '5',
-  ),
-  HotelRoom(
-    category: "Junior Suite",
-    hotelName: "Palm Residency",
-    city: "Goa",
-    image: "assets/ocean.jfif",
-    address: "Linking Road, Khar West, Mumbai, Maharashtra 400052",
-    price: 2500,
-    discount: 10,
-    tagline: "Compact Luxury with Comfort",
-    features: [
-      "Queen Size Bed",
-      "Air Conditioning",
-      "Free Wi-Fi",
-      "Smart TV",
-      "Work Desk",
-    ],
-    facilities: [
-      "24/7 Room Service",
-      "Daily Housekeeping",
-      "Free Parking",
-    ],
-    suitableFor: "Couples and Solo Travelers",
-    description:
-        "A cozy and modern room designed for comfort with all essential amenities for a relaxing stay.",
-    id: '1',
-  ),
-  HotelRoom(
-    category: "Executive Suite",
-    hotelName: "Palm Residency",
-    city: "Mumbai",
-    image: "assets/hillview.jfif",
-    address: "Linking Road, Khar West, Mumbai, Maharashtra 400052",
-    price: 4000,
-    discount: 15,
-    tagline: "Work Smart, Stay Smart",
-    features: [
-      "King Size Bed",
-      "Dedicated Workspace",
-      "High-Speed Wi-Fi",
-      "Mini Bar",
-      "City View",
-    ],
-    facilities: [
-      "Business Support Services",
-      "24/7 Room Service",
-      "Laundry Service",
-    ],
-    suitableFor: "Business Travelers",
-    description:
-        "Spacious suite with premium workspace and modern facilities, perfect for work and relaxation.",
-    id: '2',
-  ),
-  HotelRoom(
-    category: "Family Suite",
-    hotelName: "Palm Residency",
-    city: "Banglore",
-    image: "assets/beachside.jfif",
-    address: "Linking Road, Khar West, Mumbai, Maharashtra 400052",
-    price: 6000,
-    discount: 20,
-    tagline: "Where Family Feels at Home",
-    features: [
-      "2 Double Beds",
-      "Large Living Area",
-      "Kids Friendly Space",
-      "Free Wi-Fi",
-      "Storage Space",
-    ],
-    facilities: [
-      "Free Breakfast",
-      "Housekeeping",
-      "Extra Bed Available",
-    ],
-    suitableFor: "Families and Groups",
-    description:
-        "A spacious suite designed for families with comfort, space, and convenience.",
-    id: '3',
-  ),
-  HotelRoom(
-    category: "Deluxe Suite",
-    hotelName: "Palm Residency",
-    city: "Pune",
-    image: "assets/rajhans.jfif",
-    address: "Linking Road, Khar West, Mumbai, Maharashtra 400052",
-    price: 7500,
-    discount: 25,
-    tagline: "Luxury Redefined",
-    features: [
-      "King Size Bed",
-      "Jacuzzi / Bathtub",
-      "Premium Interiors",
-      "Balcony View",
-      "Smart TV",
-    ],
-    facilities: [
-      "24/7 Room Service",
-      "Private Dining Option",
-      "Laundry Service",
-    ],
-    suitableFor: "Luxury Stay",
-    description:
-        "Experience premium luxury with elegant interiors and top-class amenities.",
-    id: '4',
-  ),
-  HotelRoom(
-    category: "Mini Suite",
-    hotelName: "Palm Residency",
-    city: "Delhi",
-    image: "assets/lakeview.jfif",
-    address: "Linking Road, Khar West, Mumbai, Maharashtra 400052",
-    price: 1800,
-    discount: 5,
-    tagline: "Affordable Comfort for Everyone",
-    features: [
-      "Double Bed",
-      "Air Conditioning",
-      "Free Wi-Fi",
-      "TV",
-      "Basic Amenities",
-    ],
-    facilities: [
-      "Room Service",
-      "Housekeeping",
-    ],
-    suitableFor: "Budget Travelers",
-    description:
-        "A simple and affordable room with all basic facilities for a comfortable stay.",
-    id: '5',
-  ),
+
+  /// 2 — Add your second hotel like this:
+  // HotelData(
+  //   name: "Second Hotel Name",
+  //   city: "Virar",
+  //   location: "...",
+  //   providerId: "hotel_002",
+  //   image: "assets/hotel2_cover.jpg",
+  //   price: 1200,
+  //   originalPrice: 1500,
+  //   discount: 20,
+  //   rating: 4.5,
+  //   facilities: ["Deluxe Rooms", "Conference Hall", "Restaurant"],
+  //   description: "...",
+  //   images: [
+  //     {'path': 'assets/hotel2_front.jpg',  'label': 'Hotel View'},
+  //     {'path': 'assets/hotel2_room.jpg',   'label': 'Room View'},
+  //     {'path': 'assets/hotel2_lobby.jpg',  'label': 'Lobby'},
+  //     {'path': 'assets/hotel2_dining.jpg', 'label': 'Dining'},
+  //   ],
+  // ),
 ];
 
-/// FILTER BY CATEGORY + CITY
-List<HotelRoom> filterHotels({
-  required String category,
-  required String city,
-}) {
-  return hotels.where((hotel) {
-    return hotel.category == category && hotel.city == city;
-  }).toList();
+/// ================= HELPERS =================
+
+List<HotelData> getHotelsByCity(String city) {
+  return hotels
+      .where((h) => h.city.toLowerCase() == city.toLowerCase())
+      .toList();
 }
 
-/// OPTIONAL: FILTER ONLY BY CITY
-List<HotelRoom> getByCity(String city) {
-  return hotels.where((hotel) => hotel.city == city).toList();
+List<HotelData> sortByPriceLowHigh(List<HotelData> list) {
+  final sorted = [...list];
+  sorted.sort((a, b) => a.price.compareTo(b.price));
+  return sorted;
 }
 
-/// OPTIONAL: FILTER ONLY BY CATEGORY
-List<HotelRoom> getByCategory(String category) {
-  return hotels.where((hotel) => hotel.category == category).toList();
+List<HotelData> sortByRating(List<HotelData> list) {
+  final sorted = [...list];
+  sorted.sort((a, b) => b.rating.compareTo(a.rating));
+  return sorted;
 }

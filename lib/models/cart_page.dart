@@ -6,11 +6,20 @@ import '../bookings/salon_booking_page.dart';
 import '../bookings/enquiry_page.dart';
 import '../bookings/civil_book_page.dart';
 
+// Services that use EnquiryPage (no booking, no payment).
 const _enquiryServices = {'Education'};
 
 class CartPage extends StatefulWidget {
-  final String service;       // cart key  e.g. "Civil", "Salon"
-  final String serviceName;   // display   e.g. "Civil Contract Services"
+  /// Short service key — used as cart key AND passed to booking pages as
+  /// [serviceName] so Firestore queries use the right normalized value
+  /// (e.g. "civil", "salon"). This must match the provider's serviceType field.
+  final String service;
+
+  /// Human-readable display label shown in the UI (e.g. "Civil Contract Services").
+  final String serviceName;
+
+  /// Provider ID resolved by the caller screen (may be empty — booking pages
+  /// will self-resolve if needed).
   final String providerId;
 
   const CartPage({
@@ -69,8 +78,13 @@ class _CartPageState extends State<CartPage>
     }
   }
 
-  bool get _isEnquiry  => _enquiryServices.contains(widget.service);
-  bool get _isCivil    => widget.service == 'Civil';
+  bool get _isEnquiry => _enquiryServices.contains(widget.service);
+
+  // Civil uses CivilBookingPage (enquiry flow, no payment).
+  bool get _isCivil => widget.service == 'Civil';
+
+  // Salon uses SalonBookingPage (payment flow with home/salon popup).
+  bool get _isSalon => widget.service == 'Salon';
 
   String get _ctaLabel {
     if (_isEnquiry) return 'Send Enquiry';
@@ -78,9 +92,9 @@ class _CartPageState extends State<CartPage>
     return 'Book Now';
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  BUILD
-  // ─────────────────────────────────────────────────────────────────────────
+  // =========================================================
+  // BUILD
+  // =========================================================
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +181,7 @@ class _CartPageState extends State<CartPage>
             ),
           ),
 
-          if (_isEnquiry && count > 0)
+          if ((_isEnquiry || _isCivil) && count > 0)
             Container(
               margin: const EdgeInsets.only(right: 8),
               padding:
@@ -294,7 +308,7 @@ class _CartPageState extends State<CartPage>
                       _badge(visitLabel),
                     ],
 
-                    if (_isEnquiry) ...[
+                    if (_isEnquiry || _isCivil) ...[
                       const SizedBox(height: 6),
                       _badge('Enquiry item', color: _accent),
                     ],
@@ -396,7 +410,8 @@ class _CartPageState extends State<CartPage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_isEnquiry) ...[
+            // Enquiry notice for Education and Civil
+            if (_isEnquiry || _isCivil) ...[
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.only(bottom: 12),
@@ -469,16 +484,10 @@ class _CartPageState extends State<CartPage>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (_isEnquiry)
+                        if (_isEnquiry || _isCivil)
                           const Padding(
                             padding: EdgeInsets.only(right: 6),
                             child: Icon(Icons.send_rounded, size: 16),
-                          ),
-                        if (_isCivil)
-                          const Padding(
-                            padding: EdgeInsets.only(right: 6),
-                            child: Icon(Icons.arrow_forward_rounded,
-                                size: 16),
                           ),
                         Text(
                           _ctaLabel,
@@ -507,18 +516,26 @@ class _CartPageState extends State<CartPage>
 
   Future<void> _onProceed(List<CartItem> items) async {
     if (_isCivil) {
+      // ── Civil: enquiry flow, no payment ──────────────────────────────────
+      // Pass widget.service (short key = "Civil") as serviceName so the
+      // booking page normalises it to "civil" and matches Firestore correctly.
+      // Also pass providerId as initialProviderId so the lookup is skipped
+      // entirely when the caller already resolved the provider.
       await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => CivilBookingPage(
-            serviceName: widget.serviceName,
-            cart: items,
-            products: const [],
-            providerId: widget.providerId, // may be empty — that's fine
+            serviceName:       widget.service,       // "Civil" → normalised to "civil"
+            cart:              items,
+            products:          const [],
+            initialProviderId: widget.providerId.isNotEmpty
+                ? widget.providerId
+                : null, providerId: '',
           ),
         ),
       );
     } else if (_isEnquiry) {
+      // ── Education (and any future enquiry-only service) ───────────────────
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -528,25 +545,35 @@ class _CartPageState extends State<CartPage>
           ),
         ),
       );
-    } else if (widget.service == 'Salon') {
+    } else if (_isSalon) {
+      // ── Salon: payment flow with home/salon visit popup ───────────────────
+      // Pass providerId as initialProviderId so SalonBookingPage skips the
+      // provider lookup when the caller already has the ID.
       await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => SalonBookingPage(
-            cartItems: items,
-            providerId: widget.providerId,
+            cartItems:         items,
+            providerId:        widget.providerId,    // kept for backwards compat
+            initialProviderId: widget.providerId.isNotEmpty
+                ? widget.providerId
+                : null,
           ),
         ),
       );
     } else {
+      // ── All other services: universal BookingPage ─────────────────────────
       await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => BookingPage(
-            serviceName: widget.serviceName,
-            cart: items,
-            products: const [],
-            providerId: widget.providerId,
+            serviceName:       widget.service,       // short key for Firestore match
+            cart:              items,
+            products:          const [],
+            providerId:        widget.providerId,
+            initialProviderId: widget.providerId.isNotEmpty
+                ? widget.providerId
+                : null,
           ),
         ),
       );

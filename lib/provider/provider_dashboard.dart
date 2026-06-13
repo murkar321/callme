@@ -6,10 +6,9 @@ import 'package:intl/intl.dart';
 import 'provider_profile_page.dart';
 import '../provider/order_service.dart';
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // DESIGN TOKENS
-// ══════════════════════════════════════════════════════════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
 class _C {
   static const bg        = Color(0xFFF7F8FC);
   static const indigo    = Color(0xFF5C6BC0);
@@ -22,15 +21,28 @@ class _C {
   static const orangeSft = Color(0xFFFFF3E0);
   static const blue      = Color(0xFF1565C0);
   static const blueSft   = Color(0xFFE3F2FD);
+  static const amber     = Color(0xFFF59E0B);
+  static const amberSft  = Color(0xFFFFFBEB);
+  static const grey      = Color(0xFF6B7280);
+  static const greySft   = Color(0xFFF3F4F6);
   static const text      = Color(0xFF212121);
-  static const textSub   = Color(0xFF757575);
+  static const sub       = Color(0xFF757575);
   static const divider   = Color(0xFFF0F0F0);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// PAGE
-// ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+String _norm(String s) =>
+    s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
 
+/// Returns true when two service-type strings refer to the same service.
+/// E.g. "Home Cleaning" == "homecleaning" == "home_cleaning"
+bool _svcEq(String a, String b) => _norm(a) == _norm(b);
+
+// ═══════════════════════════════════════════════════════════════
+// PAGE
+// ═══════════════════════════════════════════════════════════════
 class BusinessDashboardPage extends StatefulWidget {
   final String providerId;
   final String businessName;
@@ -44,892 +56,754 @@ class BusinessDashboardPage extends StatefulWidget {
   });
 
   @override
-  State<BusinessDashboardPage> createState() => _BusinessDashboardPageState();
+  State<BusinessDashboardPage> createState() => _BDPState();
 }
 
-class _BusinessDashboardPageState extends State<BusinessDashboardPage>
-    with SingleTickerProviderStateMixin {
-
+class _BDPState extends State<BusinessDashboardPage> {
   final _db   = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  late final TabController _tab;
+  // manual tab — no TabController / no vsync needed
+  int _tab = 0;
 
-  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _providerStream;
-  late final Stream<QuerySnapshot<Map<String, dynamic>>>    _availableStream;
-  late final Stream<QuerySnapshot<Map<String, dynamic>>>    _myJobsStream;
+  late Stream<DocumentSnapshot<Map<String, dynamic>>> _providerSnap;
 
-  // FIX 1: Match serviceType flexibly — store both raw and normalised forms
-  // so we can query Firestore with multiple possible casings/values.
-  String get _svcRaw   => widget.serviceType.trim();
-  String get _svcLower => _svcRaw.toLowerCase();
+  // ── Available jobs stream ──────────────────────────────────
+  // BUG FIX: We also need to pick up orders that were cancelled-by-provider
+  // and reopened (reopenForOthers == true).  Firestore can't express
+  // "status IN [pending, enquiry] OR reopenForOthers == true" in one query,
+  // so we fetch all non-completed, non-assigned orders and filter client-side.
+  // Simplest safe query: fetch everything and filter — OR use two merged streams.
+  // We use a broad query (no compound index) + client-side filter.
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _availStream;
 
-  // Build a list of all plausible stored variants so we cover:
-  //   "education", "Education", "EDUCATION", "salon", "Salon", etc.
-  List<String> get _svcVariants {
-    final lower = _svcLower;
-    final upper = lower.toUpperCase();
-    final title = lower[0].toUpperCase() + lower.substring(1);
-    return {_svcRaw, lower, upper, title}.toList();
-  }
+  // ── My jobs stream ─────────────────────────────────────────
+  // BUG FIX: Query ONLY by providerUserId so the doc is always found even
+  // after a cancel rewrite.  We also guard service type client-side so a
+  // provider who somehow ends up in a wrong-type order doesn't see it.
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _myStream;
 
-  String get _myUid => _auth.currentUser?.uid ?? '';
+  String get _uid => _auth.currentUser?.uid ?? '';
 
-  int _availableCount = 0;
-  int _myJobsCount    = 0;
+  /// Normalised service type for this provider (used in every comparison).
+  String get _svcNorm => _norm(widget.serviceType);
+
+  int _availCount = 0;
+  int _myCount    = 0;
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
-    _initStreams();
-  }
 
-  void _initStreams() {
-    _providerStream = _db
+    _providerSnap = _db
         .collection('providers')
         .doc(widget.providerId)
         .snapshots();
 
-    // ── FIX 2: Available jobs ─────────────────────────────────────────────
-    // Removed the strict isEqualTo serviceType filter from Firestore because
-    // casing mismatches (e.g. "Education" vs "education") silently drop rows.
-    // We instead fetch ALL pending/unassigned orders and filter client-side
-    // with case-insensitive comparison — much more robust.
-    //
-    // Also removed isAssigned == false from the compound query because some
-    // providers (e.g. education) store orders without that field, which means
-    // Firestore returns nothing. We filter isAssigned client-side too.
-    _availableStream = _db
+    // ── Available jobs ─────────────────────────────────────────
+    // Broad query — no composite index required.
+    // isAssigned == false covers both fresh orders and reopened-cancelled ones.
+    _availStream = _db
         .collection('orders')
-        .where('status', whereIn: ['pending', 'enquiry'])
-        .orderBy('createdAt', descending: true)
-        .limit(100)
+        .where('isAssigned', isEqualTo: false)
         .snapshots();
 
-    // ── My jobs ───────────────────────────────────────────────────────────
-    _myJobsStream = _db
+    // ── My jobs ────────────────────────────────────────────────
+    // providerUserId is NEVER deleted (even on cancel) so this always finds
+    // every order this provider has ever touched.
+    _myStream = _db
         .collection('orders')
-        .where('providerUserId', isEqualTo: _myUid)
-        .where('isAssigned', isEqualTo: true)
+        .where('providerUserId', isEqualTo: _uid)
         .snapshots();
   }
 
-  @override
-  void dispose() {
-    _tab.dispose();
-    super.dispose();
+  // ─── tab helpers ──────────────────────────────────────────────
+  void _goTab(int i) {
+    if (mounted && _tab != i) setState(() => _tab = i);
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  void _setAvail(int c) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _availCount != c) setState(() => _availCount = c);
+    });
+  }
+
+  void _setMy(int c) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _myCount != c) setState(() => _myCount = c);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // FIRESTORE ACTIONS
-  // ══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════
 
-  Future<void> _acceptOrder(String orderId, Map<String, dynamic> data) async {
-    final customerId = (data['userId'] ?? '').toString();
+  // ── Accept (FCFS transaction) ──────────────────────────────────
+  Future<void> _accept(String id, Map<String, dynamic> data) async {
+    final custId = (data['userId'] ?? '').toString();
+    final ref    = _db.collection('orders').doc(id);
     try {
-      await _db.collection('orders').doc(orderId).update({
-        'providerId':     widget.providerId,
-        'providerUserId': _myUid,
-        'acceptedByUid':  _myUid,
-        'providerName':   widget.businessName,
-        'serviceType':    _svcLower, // normalise on write so future reads are consistent
-        'status':         'accepted',
-        'isAssigned':     true,
-        'acceptedAt':     FieldValue.serverTimestamp(),
-        'updatedAt':      FieldValue.serverTimestamp(),
+      await _db.runTransaction((tx) async {
+        final snap = await tx.get(ref);
+        if (!snap.exists) throw Exception('not_found');
+        final cur = snap.data()!;
+        // Re-check inside transaction: must still be unassigned and open
+        if (cur['isAssigned'] == true) throw Exception('taken');
+        final st = (cur['status'] ?? '').toString().toLowerCase();
+        final reopened = cur['reopenForOthers'] == true;
+        final isOpen = st == 'pending' || st == 'enquiry' || reopened;
+        if (!isOpen) throw Exception('taken');
+
+        tx.update(ref, {
+          'providerId':       widget.providerId,
+          'providerUserId':   _uid,
+          'providerName':     widget.businessName,
+          'serviceType':      widget.serviceType,
+          'status':           'accepted',
+          'isAssigned':       true,
+          'reopenForOthers':  false, // clear reopen flag
+          'acceptedAt':       FieldValue.serverTimestamp(),
+          'updatedAt':        FieldValue.serverTimestamp(),
+          'lastActionBy':     'provider',
+        });
       });
-
-      // FIX 3: Notify the customer that their order was accepted
-      if (customerId.isNotEmpty) {
-        await OrderService.notifyUser(
-          userId:  customerId,
-          orderId: orderId,
-          title:   '✅ Provider Found!',
-          body:    '${widget.businessName} has accepted your ${widget.serviceType} booking.',
-          type:    'booking_accepted',
-        );
+      if (!mounted) return;
+      _notify(custId, id, '✅ Provider Found!',
+          '${widget.businessName} accepted your ${widget.serviceType} booking.',
+          'booking_accepted');
+      if (!mounted) return;
+      _goTab(1);
+      _snack('Job accepted! Moved to My Jobs.', _C.green, Icons.check_circle_rounded);
+    } on Exception catch (e) {
+      if (!mounted) return;
+      final m = e.toString();
+      if (m.contains('taken')) {
+        _snack('Already accepted by another provider.', _C.orange, Icons.info_outline_rounded);
+      } else if (m.contains('not_found')) {
+        _snack('Order no longer exists.', _C.red, Icons.error_outline);
+      } else {
+        debugPrint('[accept] $e');
+        _snack('Accept failed — try again.', _C.red, Icons.error_outline);
       }
-
-      _tab.animateTo(1);
-      _snack('Job accepted and moved to My Jobs', _C.green, Icons.check_circle_rounded);
-    } catch (e) {
-      debugPrint('[_acceptOrder] error: $e');
-      _snack('Accept failed — please try again', _C.red, Icons.error_outline);
     }
   }
 
-  Future<void> _declineAvailable(
-      String orderId, String note, Map<String, dynamic> data) async {
-    final customerId = (data['userId'] ?? '').toString();
+  // ── Decline ────────────────────────────────────────────────────
+  Future<void> _decline(String id, String note, Map<String, dynamic> data) async {
+    final custId = (data['userId'] ?? '').toString();
     try {
-      await _db.collection('orders').doc(orderId).update({
-        'declinedBy':         FieldValue.arrayUnion([_myUid]),
-        'providerCancelNote': note.isEmpty ? 'Provider declined' : note,
-        'lastActionBy':       'provider',
-        'updatedAt':          FieldValue.serverTimestamp(),
+      await _db.collection('orders').doc(id).update({
+        'declinedBy':  FieldValue.arrayUnion([_uid]),
+        'declineNote': note.isEmpty ? 'Provider declined' : note,
+        'updatedAt':   FieldValue.serverTimestamp(),
       });
-
-      if (customerId.isNotEmpty) {
-        await OrderService.notifyUser(
-          userId:  customerId,
-          orderId: orderId,
-          title:   '🔄 Finding Another Provider',
-          body:    "A provider was unavailable. We're finding another for you.",
-          type:    'booking_rejected',
-        );
-      }
-
-      _snack('Order declined.', _C.orange, Icons.thumb_down_rounded);
+      if (!mounted) return;
+      _notify(custId, id, '🔄 Finding Another Provider',
+          "A provider was unavailable. Finding another for you.",
+          'booking_declined');
+      if (!mounted) return;
+      _snack('Declined — order stays open for others.', _C.orange, Icons.thumb_down_rounded);
     } catch (e) {
-      debugPrint('[_declineAvailable] error: $e');
+      if (!mounted) return;
+      debugPrint('[decline] $e');
       _snack('Could not decline. Try again.', _C.red, Icons.error_rounded);
     }
   }
 
-  Future<void> _completeOrder(String orderId, Map<String, dynamic> data) async {
-    final customerId = (data['userId'] ?? '').toString();
+  // ── Complete ────────────────────────────────────────────────────
+  Future<void> _complete(String id, Map<String, dynamic> data) async {
+    final custId = (data['userId'] ?? '').toString();
     try {
-      await _db.collection('orders').doc(orderId).update({
+      await _db.collection('orders').doc(id).update({
         'status':       'completed',
         'isCompleted':  true,
+        'isAssigned':   false,
         'completedAt':  FieldValue.serverTimestamp(),
         'updatedAt':    FieldValue.serverTimestamp(),
         'lastActionBy': 'provider',
       });
-
-      if (customerId.isNotEmpty) {
-        await OrderService.notifyUser(
-          userId:  customerId,
-          orderId: orderId,
-          title:   '✅ Service Completed',
-          body:    'Your ${widget.serviceType} service by ${widget.businessName} is complete.',
-          type:    'booking_completed',
-        );
-      }
-
+      if (!mounted) return;
+      _notify(custId, id, '✅ Service Completed',
+          'Your ${widget.serviceType} service by ${widget.businessName} is complete!',
+          'booking_completed');
+      if (!mounted) return;
       _snack('Marked as completed!', _C.green, Icons.verified_rounded);
     } catch (e) {
-      debugPrint('[_completeOrder] error: $e');
+      if (!mounted) return;
+      debugPrint('[complete] $e');
       _snack('Could not complete. Try again.', _C.red, Icons.error_rounded);
     }
   }
 
-  Future<void> _cancelAccepted(
-      String orderId, String note, Map<String, dynamic> data) async {
-    final customerId = (data['userId'] ?? '').toString();
+  // ── Cancel accepted job ────────────────────────────────────────
+  // DESIGN:
+  //   • status        → 'cancelled'   (user sees cancelled, NOT pending)
+  //   • isAssigned    → false         (other providers can pick it up)
+  //   • reopenForOthers → true        (available-tab picks this back up)
+  //   • providerUserId is KEPT        (My Jobs stream still finds the doc)
+  //   • declinedBy   += [_uid]        (this provider won't see it again)
+  Future<void> _cancel(String id, String note, Map<String, dynamic> data) async {
+    final custId = (data['userId'] ?? '').toString();
     try {
-      await _db.collection('orders').doc(orderId).update({
-        'status':              'cancelled',
-        'providerCancelNote':  note.isEmpty ? 'Provider cancelled' : note,
-        'cancelledBy':         'provider',
-        'cancelledAt':         FieldValue.serverTimestamp(),
-        'isAssigned':          false,
-        'acceptedByUid':       FieldValue.delete(),
-        'providerId':          FieldValue.delete(),
-        'providerUserId':      FieldValue.delete(),
-        'assignedProviderUid': FieldValue.delete(),
-        'providerName':        FieldValue.delete(),
-        'provider':            FieldValue.delete(),
-        'updatedAt':           FieldValue.serverTimestamp(),
-        'lastActionBy':        'provider',
+      await _db.collection('orders').doc(id).update({
+        'status':             'cancelled',
+        'isAssigned':         false,
+        'reopenForOthers':    true,
+        // DO NOT remove providerUserId — My Jobs stream depends on it
+        'providerCancelNote': note.isEmpty ? 'Provider cancelled' : note,
+        'cancelledBy':        'provider',
+        'cancelledAt':        FieldValue.serverTimestamp(),
+        'updatedAt':          FieldValue.serverTimestamp(),
+        'lastActionBy':       'provider',
+        'declinedBy':         FieldValue.arrayUnion([_uid]),
       });
-
-      if (customerId.isNotEmpty) {
-        await OrderService.notifyUser(
-          userId:  customerId,
-          orderId: orderId,
-          title:   '❌ Booking Cancelled',
-          body:    '${widget.businessName} cancelled your booking. '
-                   'Reason: ${note.isEmpty ? "Not specified" : note}',
-          type:    'booking_cancelled',
-        );
-      }
-
-      _snack('Order cancelled.', _C.orange, Icons.cancel_rounded);
+      if (!mounted) return;
+      _notify(custId, id, '❌ Provider Cancelled',
+          '${widget.businessName} cancelled. '
+          'Reason: ${note.isEmpty ? "Not specified" : note}. '
+          'Finding another provider.',
+          'booking_cancelled');
+      if (!mounted) return;
+      _snack('Job cancelled — order reopened for others.', _C.orange, Icons.cancel_rounded);
     } catch (e) {
-      debugPrint('[_cancelAccepted] error: $e');
+      if (!mounted) return;
+      debugPrint('[cancel] $e');
       _snack('Could not cancel. Try again.', _C.red, Icons.error_rounded);
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  // ── Notify helper ──────────────────────────────────────────────
+  void _notify(String uid, String orderId, String title, String body, String type) {
+    if (uid.isEmpty) return;
+    OrderService.notifyUser(
+      userId: uid, orderId: orderId,
+      title: title, body: body, type: type,
+    ).catchError((e) => debugPrint('[notify] $e'));
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // DIALOGS
-  // ══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════
 
-  Future<void> _showDeclineDialog(String id, Map<String, dynamic> data) async {
+  Future<void> _showDecline(String id, Map<String, dynamic> data) async {
     final ctrl = TextEditingController();
-    await showDialog(
+    bool ok = false;
+    String reason = '';
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => _ReasonDialog(
-        title:     'Decline Job',
-        subtitle:  'Optionally tell the customer why.',
-        hint:      'Reason for declining...',
-        btnLabel:  'Decline',
-        btnColor:  _C.orange,
+      barrierDismissible: false,
+      builder: (ctx) => _Dialog(
+        title: 'Decline Job',
+        subtitle: 'Order stays open for other providers.',
+        hint: 'Reason (optional)...',
+        btnLabel: 'Decline',
+        btnColor: _C.orange,
         keepLabel: 'Keep',
-        ctrl:      ctrl,
-        onConfirm: () async {
-          Navigator.pop(ctx);
-          await _declineAvailable(id, ctrl.text.trim(), data);
-        },
+        ctrl: ctrl,
+        onConfirm: () { ok = true; reason = ctrl.text.trim(); Navigator.pop(ctx); },
+        onKeep:    () => Navigator.pop(ctx),
       ),
     );
     ctrl.dispose();
+    if (!mounted || !ok) return;
+    await _decline(id, reason, data);
   }
 
-  Future<void> _showCancelDialog(String id, Map<String, dynamic> data) async {
+  Future<void> _showCancel(String id, Map<String, dynamic> data) async {
     final ctrl = TextEditingController();
-    await showDialog(
+    bool ok = false;
+    String reason = '';
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => _ReasonDialog(
-        title:     'Cancel Job',
-        subtitle:  "Tell the customer why you're cancelling.",
-        hint:      'Cancellation reason...',
-        btnLabel:  'Cancel Job',
-        btnColor:  _C.red,
+      barrierDismissible: false,
+      builder: (ctx) => _Dialog(
+        title: 'Cancel Job',
+        subtitle: 'Order will reopen for other providers.',
+        hint: 'Reason (shown to customer)...',
+        btnLabel: 'Cancel Job',
+        btnColor: _C.red,
         keepLabel: 'Keep Job',
-        ctrl:      ctrl,
-        onConfirm: () async {
-          Navigator.pop(ctx);
-          await _cancelAccepted(id, ctrl.text.trim(), data);
-        },
+        ctrl: ctrl,
+        onConfirm: () { ok = true; reason = ctrl.text.trim(); Navigator.pop(ctx); },
+        onKeep:    () => Navigator.pop(ctx),
       ),
     );
     ctrl.dispose();
+    if (!mounted || !ok) return;
+    await _cancel(id, reason, data);
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════
   // SNACK
-  // ══════════════════════════════════════════════════════════════════════════
-
+  // ═══════════════════════════════════════════════════════════════
   void _snack(String msg, Color color, IconData icon) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [
-        Icon(icon, color: Colors.white, size: 18),
-        const SizedBox(width: 10),
-        Expanded(child: Text(msg,
-            style: const TextStyle(fontWeight: FontWeight.w600))),
-      ]),
-      backgroundColor: color,
-      behavior:        SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      margin:          const EdgeInsets.all(16),
-    ));
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Row(children: [
+          Icon(icon, color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Expanded(child: Text(msg,
+              style: const TextStyle(fontWeight: FontWeight.w600))),
+        ]),
+        backgroundColor: color,
+        behavior:  SnackBarBehavior.floating,
+        shape:     RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        margin:    const EdgeInsets.all(16),
+        duration:  const Duration(seconds: 3),
+      ));
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════
   // BUILD
-  // ══════════════════════════════════════════════════════════════════════════
-
+  // IndexedStack keeps both tabs alive → no lifecycle errors.
+  // ═══════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: _providerStream,
-      builder: (ctx, snap) {
+      stream: _providerSnap,
+      builder: (_, snap) {
         if (!snap.hasData) {
           return const Scaffold(
             backgroundColor: _C.bg,
             body: Center(child: CircularProgressIndicator(color: _C.indigo)),
           );
         }
-
-        final provider = snap.data?.data() ?? {};
-        if (provider['status'] != 'approved') return _PendingScaffold();
+        final prov = snap.data?.data() ?? {};
+        if (prov['status'] != 'approved') return _PendingScreen();
 
         return Scaffold(
           backgroundColor: _C.bg,
-          body: NestedScrollView(
-            headerSliverBuilder: (_, __) => [
-              SliverToBoxAdapter(child: _DashHeader(
-                businessName:   widget.businessName,
-                serviceType:    widget.serviceType,
-                providerId:     widget.providerId,
-                tabController:  _tab,
-                availableCount: _availableCount,
-                myJobsCount:    _myJobsCount,
-                onProfile:      () => Navigator.push(
-                  context,
+          body: Column(children: [
+            _Header(
+              businessName: widget.businessName,
+              serviceType:  widget.serviceType,
+              providerId:   widget.providerId,
+              tab:          _tab,
+              availCount:   _availCount,
+              myCount:      _myCount,
+              onTab:        _goTab,
+              onProfile: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) =>
-                      ProviderProfilePage(providerId: widget.providerId)),
-                ),
-              )),
-            ],
-            body: TabBarView(
-              controller: _tab,
-              children: [
-                _JobsList(
-                  stream:       _availableStream,
-                  isAvailable:  true,
-                  myUid:        _myUid,
-                  // FIX 4: pass all serviceType variants for client-side matching
-                  svcVariants:  _svcVariants,
-                  onCount: (c) {
-                    if (_availableCount != c) setState(() => _availableCount = c);
-                  },
-                  onAccept:     _acceptOrder,
-                  onDecline:    _showDeclineDialog,
-                  serviceType:  widget.serviceType,
-                  businessName: widget.businessName,
-                ),
-                _JobsList(
-                  stream:       _myJobsStream,
-                  isAvailable:  false,
-                  myUid:        _myUid,
-                  svcVariants:  _svcVariants,
-                  onCount: (c) {
-                    if (_myJobsCount != c) setState(() => _myJobsCount = c);
-                  },
-                  onComplete: _completeOrder,
-                  onCancel:   _showCancelDialog,
-                  serviceType:  widget.serviceType,
-                  businessName: widget.businessName,
-                ),
-              ],
+                      ProviderProfilePage(providerId: widget.providerId))),
             ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// PENDING SCAFFOLD
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _PendingScaffold extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _C.bg,
-      appBar: AppBar(
-        backgroundColor:  Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation:        0,
-        leading:          BackButton(color: _C.text),
-        title: const Text('Dashboard',
-            style: TextStyle(color: _C.text, fontWeight: FontWeight.w700)),
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              padding: const EdgeInsets.all(32),
-              decoration: const BoxDecoration(
-                  color: _C.indigoSft, shape: BoxShape.circle),
-              child: const Icon(Icons.hourglass_top_rounded,
-                  size: 52, color: _C.indigo),
-            ),
-            const SizedBox(height: 28),
-            const Text('Pending Approval',
-                style: TextStyle(
-                    fontSize:   24,
-                    fontWeight: FontWeight.w700,
-                    color:      _C.text)),
-            const SizedBox(height: 10),
-            const Text(
-              "Your account is under review.\nYou'll be notified once approved.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: _C.textSub, fontSize: 14, height: 1.6),
-            ),
-            const SizedBox(height: 28),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color:        _C.orangeSft,
-                borderRadius: BorderRadius.circular(30),
-                border:       Border.all(color: _C.orange.withOpacity(.3)),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                Icon(Icons.circle, color: _C.orange, size: 9),
-                SizedBox(width: 10),
-                Text('Status: Under Review',
-                    style: TextStyle(
-                        color:      _C.orange,
-                        fontWeight: FontWeight.w600,
-                        fontSize:   13)),
-              ]),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// DASHBOARD HEADER
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _DashHeader extends StatelessWidget {
-  final String        businessName;
-  final String        serviceType;
-  final String        providerId;
-  final TabController tabController;
-  final int           availableCount;
-  final int           myJobsCount;
-  final VoidCallback  onProfile;
-
-  const _DashHeader({
-    required this.businessName,
-    required this.serviceType,
-    required this.providerId,
-    required this.tabController,
-    required this.availableCount,
-    required this.myJobsCount,
-    required this.onProfile,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color:  Colors.white,
-        border: Border(bottom: BorderSide(color: _C.divider)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SizedBox(height: MediaQuery.of(context).padding.top + 12),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(children: [
-            Container(
-              width: 52, height: 52,
-              decoration: BoxDecoration(
-                color:        _C.indigoSft,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.storefront_rounded,
-                  color: _C.indigo, size: 26),
-            ),
-            const SizedBox(width: 14),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(businessName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize:   18,
-                        fontWeight: FontWeight.w700,
-                        color:      _C.text)),
-                const SizedBox(height: 3),
-                Row(children: [
-                  Container(width: 7, height: 7,
-                      decoration: const BoxDecoration(
-                          color: _C.green, shape: BoxShape.circle)),
-                  const SizedBox(width: 6),
-                  Text(serviceType,
-                      style: const TextStyle(
-                          color: _C.textSub, fontSize: 12)),
-                ]),
-              ],
-            )),
-            GestureDetector(
-              onTap: onProfile,
-              child: Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  color:        _C.indigoSft,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.person_rounded,
-                    color: _C.indigo, size: 22),
-              ),
-            ),
-          ]),
-        ),
-
-        const SizedBox(height: 16),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(children: [
-            _StatChip(
-                label: 'Available',
-                count: availableCount,
-                color: _C.indigo,
-                bg:    _C.indigoSft),
-            const SizedBox(width: 10),
-            _StatChip(
-                label: 'My Jobs',
-                count: myJobsCount,
-                color: _C.green,
-                bg:    _C.greenSft),
-          ]),
-        ),
-
-        const SizedBox(height: 16),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Container(
-            height: 46,
-            decoration: BoxDecoration(
-              color:        const Color(0xFFF0F2F8),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: TabBar(
-              controller:           tabController,
-              indicator: BoxDecoration(
-                color:        Colors.white,
-                borderRadius: BorderRadius.circular(11),
-                boxShadow: [
-                  BoxShadow(
-                    color:      Colors.black.withOpacity(0.07),
-                    blurRadius: 8,
-                    offset:     const Offset(0, 2),
+            Expanded(
+              child: IndexedStack(
+                index: _tab,
+                children: [
+                  // ── Tab 0: Available ─────────────────────────
+                  _AvailTab(
+                    stream:      _availStream,
+                    myUid:       _uid,
+                    svcNorm:     _svcNorm,
+                    serviceType: widget.serviceType,
+                    onCount:     _setAvail,
+                    onAccept:    _accept,
+                    onDecline:   _showDecline,
+                  ),
+                  // ── Tab 1: My Jobs ───────────────────────────
+                  _MyTab(
+                    stream:      _myStream,
+                    myUid:       _uid,
+                    svcNorm:     _svcNorm,
+                    serviceType: widget.serviceType,
+                    onCount:     _setMy,
+                    onComplete:  _complete,
+                    onCancel:    _showCancel,
                   ),
                 ],
               ),
-              indicatorSize:        TabBarIndicatorSize.tab,
-              dividerColor:         Colors.transparent,
-              labelColor:           _C.indigo,
-              unselectedLabelColor: _C.textSub,
-              labelStyle: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 13),
-              tabs: const [
-                Tab(text: 'Available Jobs'),
-                Tab(text: 'My Jobs'),
-              ],
             ),
-          ),
-        ),
-        const SizedBox(height: 4),
-      ]),
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  final String label;
-  final int    count;
-  final Color  color;
-  final Color  bg;
-
-  const _StatChip({
-    required this.label,
-    required this.count,
-    required this.color,
-    required this.bg,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color:        bg,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(children: [
-          Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(
-              color:        color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Center(
-              child: Text('$count',
-                  style: TextStyle(
-                      color:      color,
-                      fontWeight: FontWeight.w800,
-                      fontSize:   14)),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(label,
-              style: TextStyle(
-                  color:      color,
-                  fontSize:   12,
-                  fontWeight: FontWeight.w600)),
-        ]),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// JOBS LIST
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _JobsList extends StatefulWidget {
-  final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
-  final bool          isAvailable;
-  final String        myUid;
-  final String        serviceType;
-  final String        businessName;
-  final List<String>  svcVariants;
-  final void Function(int) onCount;
-
-  final Future<void> Function(String, Map<String, dynamic>)? onAccept;
-  final Future<void> Function(String, Map<String, dynamic>)? onDecline;
-  final Future<void> Function(String, Map<String, dynamic>)? onComplete;
-  final Future<void> Function(String, Map<String, dynamic>)? onCancel;
-
-  const _JobsList({
-    required this.stream,
-    required this.isAvailable,
-    required this.myUid,
-    required this.serviceType,
-    required this.businessName,
-    required this.svcVariants,
-    required this.onCount,
-    this.onAccept,
-    this.onDecline,
-    this.onComplete,
-    this.onCancel,
-  });
-
-  @override
-  State<_JobsList> createState() => _JobsListState();
-}
-
-class _JobsListState extends State<_JobsList>
-    with AutomaticKeepAliveClientMixin {
-
-  @override
-  bool get wantKeepAlive => true;
-
-  /// FIX 5: Case-insensitive service type matching.
-  /// Checks the stored serviceType field against all known variants.
-  bool _matchesServiceType(Map<String, dynamic> data) {
-    final stored = (data['serviceType'] ?? '').toString().trim().toLowerCase();
-    return widget.svcVariants
-        .any((v) => v.trim().toLowerCase() == stored);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: widget.stream,
-      builder: (ctx, snap) {
-        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(color: _C.indigo));
-        }
-
-        final allDocs = snap.data?.docs ?? [];
-
-        final docs = widget.isAvailable
-            ? allDocs.where((d) {
-                final m = d.data();
-                // FIX 6: client-side service type filter (case-insensitive)
-                if (!_matchesServiceType(m)) return false;
-
-                // FIX 7: treat missing isAssigned field as false (older orders)
-                final isAssigned = m['isAssigned'];
-                if (isAssigned == true) return false;
-
-                // Hide orders this provider already declined
-                final declinedBy = (m['declinedBy'] as List?) ?? [];
-                if (declinedBy.contains(widget.myUid)) return false;
-
-                return true;
-              }).toList()
-            : allDocs.where((d) {
-                final m  = d.data();
-                final st = (m['status'] ?? '').toString().toLowerCase();
-                return st != 'pending' && st != 'enquiry';
-              }).toList();
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) widget.onCount(docs.length);
-        });
-
-        if (docs.isEmpty) {
-          return _EmptyState(
-              isAvailable: widget.isAvailable,
-              serviceType: widget.serviceType);
-        }
-
-        return ListView.builder(
-          padding:               const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          itemCount:             docs.length,
-          addAutomaticKeepAlives: false,
-          addRepaintBoundaries:  true,
-          itemBuilder: (_, i) => _JobCard(
-            doc:          docs[i] as DocumentSnapshot<Map<String, dynamic>>,
-            isAvailable:  widget.isAvailable,
-            serviceType:  widget.serviceType,
-            businessName: widget.businessName,
-            onAccept:     widget.onAccept,
-            onDecline:    widget.onDecline,
-            onComplete:   widget.onComplete,
-            onCancel:     widget.onCancel,
-          ),
+          ]),
         );
       },
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// JOB CARD
-// ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// AVAILABLE TAB
+//
+// BUG FIXES applied here:
+//   1. Service-type filter: only show orders whose serviceType matches
+//      this provider's serviceType (normalised comparison).
+//   2. Reopen support: orders with reopenForOthers==true and
+//      status=='cancelled' ARE shown (provider cancelled, now re-open).
+//   3. Decline filter: skip orders where this provider is in declinedBy.
+//   4. FCFS sort: oldest order first.
+// ═══════════════════════════════════════════════════════════════
+class _AvailTab extends StatelessWidget {
+  final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
+  final String svcNorm;     // normalised service type of THIS provider
+  final String myUid;
+  final String serviceType; // display label
+  final void Function(int) onCount;
+  final Future<void> Function(String, Map<String, dynamic>) onAccept;
+  final Future<void> Function(String, Map<String, dynamic>) onDecline;
 
-class _JobCard extends StatelessWidget {
-  final DocumentSnapshot<Map<String, dynamic>> doc;
-  final bool        isAvailable;
-  final String      serviceType;
-  final String      businessName;
-  final Future<void> Function(String, Map<String, dynamic>)? onAccept;
-  final Future<void> Function(String, Map<String, dynamic>)? onDecline;
-  final Future<void> Function(String, Map<String, dynamic>)? onComplete;
-  final Future<void> Function(String, Map<String, dynamic>)? onCancel;
-
-  const _JobCard({
-    required this.doc,
-    required this.isAvailable,
+  const _AvailTab({
+    required this.stream,
+    required this.myUid,
+    required this.svcNorm,
     required this.serviceType,
-    required this.businessName,
+    required this.onCount,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: stream,
+      builder: (_, snap) {
+        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+          return const Center(child: CircularProgressIndicator(color: _C.indigo));
+        }
+
+        final raw = snap.data?.docs ?? [];
+
+        // ── Client-side filter ────────────────────────────────
+        final docs = raw.where((d) {
+          final m         = d.data();
+          final st        = (m['status'] ?? '').toString().toLowerCase();
+          final reopened  = m['reopenForOthers'] == true;
+          final assigned  = m['isAssigned'] == true;
+
+          // Must not be already taken
+          if (assigned) return false;
+
+          // Allowed statuses:
+          //   • pending / enquiry  → normal new order
+          //   • cancelled + reopenForOthers==true → provider cancelled, reopen
+          final isOpen = st == 'pending' || st == 'enquiry'
+              || (st == 'cancelled' && reopened);
+          if (!isOpen) return false;
+
+          // ── SERVICE TYPE MATCH (THE CORE FIX) ──────────────
+          // Only show orders that belong to THIS provider's service type.
+          final orderSvc = (m['serviceType'] ?? '').toString();
+          if (!_svcEq(orderSvc, svcNorm)) return false;
+
+          // Skip if this provider already declined or cancelled this order
+          final declined = (m['declinedBy'] as List?) ?? [];
+          if (declined.contains(myUid)) return false;
+
+          return true;
+        }).toList();
+
+        // FCFS: oldest order first
+        docs.sort((a, b) {
+          final at = (a.data()['createdAt'] as Timestamp?)
+              ?.millisecondsSinceEpoch ?? 0;
+          final bt = (b.data()['createdAt'] as Timestamp?)
+              ?.millisecondsSinceEpoch ?? 0;
+          return at.compareTo(bt);
+        });
+
+        WidgetsBinding.instance.addPostFrameCallback((_) => onCount(docs.length));
+
+        if (docs.isEmpty) {
+          return _Empty(
+            icon:  Icons.work_outline_rounded,
+            title: 'No Available Jobs',
+            msg:   'New $serviceType orders will appear here in real-time.',
+          );
+        }
+
+        return ListView.builder(
+          padding:   const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          itemCount: docs.length,
+          itemBuilder: (_, i) {
+            final doc  = docs[i] as DocumentSnapshot<Map<String, dynamic>>;
+            final data = doc.data()!;
+            return _Card(
+              doc:         doc,
+              data:        data,
+              mode:        _Mode.avail,
+              serviceType: serviceType,
+              onAccept:    () => onAccept(doc.id, data),
+              onDecline:   () => onDecline(doc.id, data),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MY JOBS TAB
+//
+// BUG FIXES applied here:
+//   1. Service-type guard: even though the Firestore query finds all orders
+//      with providerUserId==uid, we guard against edge-case docs from a
+//      different service type (e.g. if the provider changed type).
+//   2. Active count: only 'accepted' docs count as active.
+//   3. Sort: accepted → completed → cancelled; newest-first within group.
+// ═══════════════════════════════════════════════════════════════
+class _MyTab extends StatelessWidget {
+  final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
+  final String myUid;
+  final String svcNorm;     // normalised service type
+  final String serviceType; // display label
+  final void Function(int) onCount;
+  final Future<void> Function(String, Map<String, dynamic>) onComplete;
+  final Future<void> Function(String, Map<String, dynamic>) onCancel;
+
+  const _MyTab({
+    required this.stream,
+    required this.myUid,
+    required this.svcNorm,
+    required this.serviceType,
+    required this.onCount,
+    required this.onComplete,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: stream,
+      builder: (_, snap) {
+        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+          return const Center(child: CircularProgressIndicator(color: _C.indigo));
+        }
+
+        // ── Service-type guard (keeps list clean if edge-case docs exist) ──
+        final docs = (snap.data?.docs ?? [])
+            .where((d) {
+              final orderSvc = (d.data()['serviceType'] ?? '').toString();
+              // Allow empty serviceType (legacy docs) to avoid hiding real jobs
+              if (orderSvc.isEmpty) return true;
+              return _svcEq(orderSvc, svcNorm);
+            })
+            .toList()
+            .cast<QueryDocumentSnapshot<Map<String, dynamic>>>();
+
+        // Sort: accepted → completed → cancelled; newest-first within group
+        const ord = {'accepted': 0, 'completed': 1, 'cancelled': 2, 'pending': 3};
+        docs.sort((a, b) {
+          final as_ = (a.data()['status'] ?? '').toString().toLowerCase();
+          final bs  = (b.data()['status'] ?? '').toString().toLowerCase();
+          final ap  = ord[as_] ?? 4;
+          final bp  = ord[bs]  ?? 4;
+          if (ap != bp) return ap.compareTo(bp);
+          final at = (a.data()['createdAt'] as Timestamp?)
+              ?.millisecondsSinceEpoch ?? 0;
+          final bt = (b.data()['createdAt'] as Timestamp?)
+              ?.millisecondsSinceEpoch ?? 0;
+          return bt.compareTo(at);
+        });
+
+        final active = docs
+            .where((d) =>
+                (d.data()['status'] ?? '').toString().toLowerCase() == 'accepted')
+            .length;
+
+        WidgetsBinding.instance.addPostFrameCallback((_) => onCount(active));
+
+        if (docs.isEmpty) {
+          return _Empty(
+            icon:  Icons.assignment_outlined,
+            title: 'No Jobs Yet',
+            msg:   'Jobs you accept will appear here and update in real-time.',
+          );
+        }
+
+        return ListView.builder(
+          padding:   const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          itemCount: docs.length,
+          itemBuilder: (_, i) {
+            final doc    = docs[i];
+            final data   = doc.data();
+            final status = (data['status'] ?? '').toString().toLowerCase();
+            return _Card(
+              doc:         doc,
+              data:        data,
+              mode:        _Mode.mine,
+              serviceType: serviceType,
+              onComplete: status == 'accepted' ? () => onComplete(doc.id, data) : null,
+              onCancel:   status == 'accepted' ? () => onCancel(doc.id, data)   : null,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// JOB CARD
+// ═══════════════════════════════════════════════════════════════
+enum _Mode { avail, mine }
+
+class _Card extends StatelessWidget {
+  final DocumentSnapshot<Map<String, dynamic>> doc;
+  final Map<String, dynamic> data;
+  final _Mode         mode;
+  final String        serviceType;
+  final VoidCallback? onAccept;
+  final VoidCallback? onDecline;
+  final VoidCallback? onComplete;
+  final VoidCallback? onCancel;
+
+  const _Card({
+    required this.doc,
+    required this.data,
+    required this.mode,
+    required this.serviceType,
     this.onAccept,
     this.onDecline,
     this.onComplete,
     this.onCancel,
   });
 
-  Color    _sc(String s) => const {
+  static const _col = {
+    'pending':   _C.amber,
+    'enquiry':   _C.orange,
     'accepted':  _C.green,
     'completed': _C.blue,
-    'cancelled': _C.red,
-    'enquiry':   _C.orange,
-  }[s] ?? _C.indigo;
-
-  Color    _sf(String s) => const {
+    'cancelled': _C.grey,
+  };
+  static const _bg = {
+    'pending':   _C.amberSft,
+    'enquiry':   _C.orangeSft,
     'accepted':  _C.greenSft,
     'completed': _C.blueSft,
-    'cancelled': _C.redSft,
-    'enquiry':   _C.orangeSft,
-  }[s] ?? _C.indigoSft;
-
-  IconData _si(String s) => {
+    'cancelled': _C.greySft,
+  };
+  static const _ico = {
+    'pending':   Icons.schedule_rounded,
+    'enquiry':   Icons.help_rounded,
     'accepted':  Icons.check_circle_rounded,
     'completed': Icons.verified_rounded,
     'cancelled': Icons.cancel_rounded,
-    'enquiry':   Icons.help_rounded,
-  }[s] ?? Icons.schedule_rounded;
+  };
 
-  String _safeStr(dynamic v, [String fallback = '-']) =>
-      (v?.toString() ?? '').trim().isEmpty ? fallback : v.toString().trim();
+  // ── safe field readers ─────────────────────────────────────
+  String _s(dynamic v, [String fb = '']) =>
+      (v?.toString() ?? '').trim().isEmpty ? fb : v.toString().trim();
 
-  /// FIX 8: Robustly resolve customer name from multiple possible field names.
-  String _resolveCustomerName(Map<String, dynamic> data) {
-    for (final key in ['userName', 'customerName', 'name', 'displayName', 'fullName']) {
-      final v = _safeStr(data[key]);
-      if (v != '-') return v;
+  String _name() {
+    for (final k in ['userName', 'customerName', 'name', 'displayName', 'fullName']) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
     }
     return 'Customer';
   }
 
-  /// FIX 9: Robustly resolve phone from multiple possible field names.
-  String _resolvePhone(Map<String, dynamic> data) {
-    for (final key in ['phone', 'phoneNumber', 'mobile', 'contactPhone', 'customerPhone']) {
-      final v = _safeStr(data[key]);
-      if (v != '-') return v;
+  String _phone() {
+    for (final k in ['phone', 'phoneNumber', 'mobile', 'contactPhone']) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
     }
-    return '-';
+    return '';
   }
 
-  /// FIX 10: Robustly resolve address from multiple possible structures.
-  String _resolveAddress(Map<String, dynamic> data) {
-    // Try flat address fields first
-    for (final key in ['address', 'fullAddress', 'customerAddress']) {
-      final v = _safeStr(data[key]);
-      if (v != '-') return v;
+  String _addr() {
+    for (final k in ['address', 'fullAddress', 'customerAddress']) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
     }
-
-    // Try nested location map
-    final location = data['location'];
-    if (location is Map) {
-      for (final key in ['address', 'fullAddress', 'formattedAddress', 'name']) {
-        final v = _safeStr(location[key]);
-        if (v != '-') return v;
+    final loc = data['location'];
+    if (loc is Map) {
+      for (final k in ['address', 'fullAddress', 'formattedAddress', 'name']) {
+        final v = _s(loc[k]);
+        if (v.isNotEmpty) return v;
       }
-      // Build from components if broken into parts
-      final parts = [
-        _safeStr(location['street']),
-        _safeStr(location['area']),
-        _safeStr(location['city']),
-        _safeStr(location['state']),
-      ].where((p) => p != '-').toList();
-      if (parts.isNotEmpty) return parts.join(', ');
+      final pts = [loc['street'], loc['area'], loc['city'], loc['state']]
+          .map((e) => _s(e))
+          .where((e) => e.isNotEmpty)
+          .toList();
+      if (pts.isNotEmpty) return pts.join(', ');
     }
-
-    // Try nested address map
-    final addrMap = data['address'];
-    if (addrMap is Map) {
-      for (final key in ['full', 'formatted', 'line1', 'street']) {
-        final v = _safeStr(addrMap[key]);
-        if (v != '-') return v;
-      }
-    }
-
-    return '-';
+    return '';
   }
 
-  /// FIX 11: Robustly resolve scheduled time.
-  String _resolveSchedule(Map<String, dynamic> data) {
-    // Flat fields
-    for (final key in ['scheduledTime', 'scheduledDate', 'appointmentTime', 'bookingTime']) {
-      final v = _safeStr(data[key]);
-      if (v != '-') return v;
-    }
-
-    // Nested schedule map
-    final schedule = data['schedule'];
-    if (schedule is Map) {
-      for (final key in ['time', 'scheduledTime', 'date', 'dateTime', 'slot']) {
-        final v = _safeStr(schedule[key]);
-        if (v != '-') return v;
+  String _sched() {
+    final sc = data['schedule'];
+    if (sc is Map) {
+      final rawDate = sc['date'];
+      String dateStr = '';
+      if (rawDate is Timestamp) {
+        dateStr = DateFormat('dd MMM yyyy').format(rawDate.toDate());
+      } else {
+        dateStr = _s(rawDate);
       }
+      final timeStr = _s(sc['time']);
+      if (dateStr.isNotEmpty && timeStr.isNotEmpty) return '$dateStr • $timeStr';
+      if (dateStr.isNotEmpty) return dateStr;
+      if (timeStr.isNotEmpty) return timeStr;
     }
-
-    return '-';
+    for (final k in ['scheduledTime', 'scheduledDate', 'appointmentTime']) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
+    }
+    return '';
   }
 
-  /// FIX 12: Robustly resolve amount from multiple possible structures.
-  double _resolveAmount(Map<String, dynamic> data) {
-    // Try flat
-    for (final key in ['totalAmount', 'amount', 'price', 'total', 'cost']) {
-      final v = data[key];
+  double _amt() {
+    for (final k in ['totalAmount', 'amount', 'price', 'total', 'cost']) {
+      final v = data[k];
       if (v is num) return v.toDouble();
     }
-    // Try nested payment map
-    final payment = data['payment'];
-    if (payment is Map) {
-      for (final key in ['totalAmount', 'amount', 'total', 'price']) {
-        final v = payment[key];
+    final pay = data['payment'];
+    if (pay is Map) {
+      for (final k in ['totalAmount', 'amount', 'total', 'price']) {
+        final v = pay[k];
         if (v is num) return v.toDouble();
       }
     }
-    return 0.0;
+    return 0;
+  }
+
+  String _note() {
+    for (final k in ['note', 'notes', 'description', 'specialRequest']) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
+    }
+    return '';
+  }
+
+  List<String> _services() {
+    final sv = data['services'];
+    if (sv is List) return sv.map((e) => e.toString()).toList();
+    return [];
+  }
+
+  /// For a cancelled+reopened card shown in the Available tab, display
+  /// a friendlier "Reopened" status label instead of "CANCELLED".
+  String _displayStatus(String raw) {
+    if (raw == 'cancelled' && data['reopenForOthers'] == true) return 'reopened';
+    return raw;
   }
 
   @override
   Widget build(BuildContext context) {
-    final data   = doc.data()!;
-    final status = (data['status'] ?? 'pending').toString().toLowerCase();
+    final rawStatus  = (data['status'] ?? 'pending').toString().toLowerCase();
+    final dispStatus = _displayStatus(rawStatus);
+
+    // Colour/icon lookup: reopened uses orange palette
+    final sc   = dispStatus == 'reopened' ? _C.orange  : (_col[rawStatus] ?? _C.indigo);
+    final soft = dispStatus == 'reopened' ? _C.orangeSft : (_bg[rawStatus]  ?? _C.indigoSft);
+    final icon = dispStatus == 'reopened'
+        ? Icons.refresh_rounded
+        : (_ico[rawStatus] ?? Icons.schedule_rounded);
 
     final ts      = data['createdAt'] as Timestamp?;
-    final dateStr = ts != null
-        ? DateFormat('dd MMM • hh:mm a').format(ts.toDate()) : '-';
+    final dateLbl = ts != null
+        ? DateFormat('dd MMM • hh:mm a').format(ts.toDate())
+        : '';
 
-    // Use the robust resolvers
-    final customerName = _resolveCustomerName(data);
-    final phone        = _resolvePhone(data);
-    final address      = _resolveAddress(data);
-    final schedTime    = _resolveSchedule(data);
-    final amount       = _resolveAmount(data);
-    final note         = _safeStr(data['note'] ?? data['notes'] ?? data['description']);
-
-    final sc   = _sc(status);
-    final soft = _sf(status);
+    final name       = _name();
+    final phone      = _phone();
+    final addr       = _addr();
+    final sched      = _sched();
+    final amt        = _amt();
+    final note       = _note();
+    final svcList    = _services();
+    final cancelNote = _s(data['providerCancelNote'] ?? data['cancelReason']);
 
     return RepaintBoundary(
       child: Container(
@@ -948,7 +822,7 @@ class _JobCard extends StatelessWidget {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-          // ── Status stripe ────────────────────────────────────────────
+          // ── Status stripe ────────────────────────────────────
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -959,84 +833,57 @@ class _JobCard extends StatelessWidget {
               ),
             ),
             child: Row(children: [
-              Container(
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  color:        sc.withOpacity(.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(_si(status), color: sc, size: 13),
-              ),
+              _Pill(icon: icon, color: sc),
               const SizedBox(width: 8),
-              Text(status.toUpperCase(),
-                  style: TextStyle(
-                      color:         sc,
-                      fontWeight:    FontWeight.w700,
-                      fontSize:      11,
-                      letterSpacing: 1)),
+              Text(
+                dispStatus.toUpperCase(),
+                style: TextStyle(
+                  color:       sc,
+                  fontWeight:  FontWeight.w800,
+                  fontSize:    11,
+                  letterSpacing: 1,
+                ),
+              ),
               const Spacer(),
-              Icon(Icons.access_time_rounded, size: 11, color: _C.textSub),
-              const SizedBox(width: 4),
-              Text(dateStr,
-                  style: const TextStyle(color: _C.textSub, fontSize: 11)),
+              if (dateLbl.isNotEmpty) ...[
+                const Icon(Icons.access_time_rounded, size: 11, color: _C.sub),
+                const SizedBox(width: 4),
+                Text(dateLbl,
+                    style: const TextStyle(color: _C.sub, fontSize: 11)),
+              ],
             ]),
           ),
 
-          // ── Body ─────────────────────────────────────────────────────
+          // ── Body ─────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.all(14),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
               // Customer row
-              Row(children: [
-                Container(
-                  width: 46, height: 46,
-                  decoration: BoxDecoration(
-                      color: _C.indigoSft,
-                      borderRadius: BorderRadius.circular(13)),
-                  child: Center(
-                    child: Text(
-                      customerName.isNotEmpty
-                          ? customerName[0].toUpperCase() : 'C',
-                      style: const TextStyle(
-                          color:      _C.indigo,
-                          fontWeight: FontWeight.bold,
-                          fontSize:   20),
-                    ),
-                  ),
-                ),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _Avatar(name: name),
                 const SizedBox(width: 12),
                 Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(customerName,
-                        style: const TextStyle(
-                            fontSize:   15,
-                            fontWeight: FontWeight.w700,
-                            color:      _C.text)),
-                    const SizedBox(height: 2),
-                    Text(serviceType,
-                        style: const TextStyle(
-                            color: _C.textSub, fontSize: 12)),
-                  ],
-                )),
+                    crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700, color: _C.text)),
+                  const SizedBox(height: 2),
+                  Text(serviceType,
+                      style: const TextStyle(color: _C.sub, fontSize: 12)),
+                ])),
                 // Amount badge
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 11, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                   decoration: BoxDecoration(
-                    color:        _C.greenSft,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                      color: _C.greenSft,
+                      borderRadius: BorderRadius.circular(20)),
                   child: Text(
-                    amount == 0
+                    amt == 0
                         ? 'TBD'
-                        : '₹${amount % 1 == 0 ? amount.toInt() : amount.toStringAsFixed(2)}',
+                        : '₹${amt % 1 == 0 ? amt.toInt() : amt.toStringAsFixed(2)}',
                     style: const TextStyle(
-                        color:      _C.green,
-                        fontWeight: FontWeight.w700,
-                        fontSize:   13),
+                        color: _C.green, fontWeight: FontWeight.w700, fontSize: 13),
                   ),
                 ),
               ]),
@@ -1045,65 +892,91 @@ class _JobCard extends StatelessWidget {
               const Divider(height: 1, color: _C.divider),
               const SizedBox(height: 12),
 
-              _InfoRow(Icons.phone_rounded,        phone,     _C.indigo, _C.indigoSft),
-              const SizedBox(height: 8),
-              _InfoRow(Icons.location_on_rounded,  address,   _C.red,    _C.redSft),
-              const SizedBox(height: 8),
-              _InfoRow(Icons.schedule_rounded,     schedTime, _C.green,  _C.greenSft),
+              // Services list
+              if (svcList.isNotEmpty)
+                _Row(icon: Icons.miscellaneous_services_rounded,
+                    value: svcList.join(', '), ic: _C.indigo, bg: _C.indigoSft),
 
-              if (note.isNotEmpty && note != '-') ...[
-                const SizedBox(height: 8),
-                _InfoRow(Icons.notes_rounded, note, _C.orange, _C.orangeSft),
+              if (phone.isNotEmpty)
+                _Row(icon: Icons.phone_rounded,
+                    value: phone, ic: _C.indigo, bg: _C.indigoSft),
+              if (addr.isNotEmpty)
+                _Row(icon: Icons.location_on_rounded,
+                    value: addr, ic: _C.red, bg: _C.redSft),
+              if (sched.isNotEmpty)
+                _Row(icon: Icons.schedule_rounded,
+                    value: sched, ic: _C.green, bg: _C.greenSft),
+              if (note.isNotEmpty)
+                _Row(icon: Icons.notes_rounded,
+                    value: note, ic: _C.orange, bg: _C.orangeSft),
+
+              // Cancellation note (My Jobs tab, cancelled status)
+              if (rawStatus == 'cancelled' && cancelNote.isNotEmpty &&
+                  mode == _Mode.mine) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color:  _C.redSft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _C.red.withOpacity(.25)),
+                  ),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    const Icon(Icons.info_outline_rounded, color: _C.red, size: 15),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Reason: $cancelNote',
+                        style: const TextStyle(
+                            color: _C.red, fontSize: 12, height: 1.4))),
+                  ]),
+                ),
               ],
 
               const SizedBox(height: 14),
 
-              // ── Actions ────────────────────────────────────────────
-              if (status == 'pending' || status == 'enquiry')
+              // ── Action buttons ──────────────────────────────
+              if (mode == _Mode.avail)
                 Row(children: [
-                  Expanded(child: _ActionBtn(
-                    label: 'Accept',
-                    icon:  Icons.check_rounded,
-                    bg:    _C.indigo,
-                    fg:    Colors.white,
-                    onTap: () => onAccept?.call(doc.id, data),
-                  )),
+                  Expanded(child: _Btn(
+                      label: 'Accept',
+                      icon:  Icons.check_rounded,
+                      bg:    _C.indigo,
+                      fg:    Colors.white,
+                      onTap: onAccept)),
                   const SizedBox(width: 10),
-                  Expanded(child: _ActionBtn(
-                    label:    'Decline',
-                    icon:     Icons.close_rounded,
-                    bg:       _C.redSft,
-                    fg:       _C.red,
-                    outlined: true,
-                    onTap: () => onDecline?.call(doc.id, data),
-                  )),
-                ]),
-
-              if (status == 'accepted')
-                Row(children: [
-                  Expanded(child: _ActionBtn(
-                    label: 'Mark Complete',
-                    icon:  Icons.verified_rounded,
-                    bg:    _C.green,
-                    fg:    Colors.white,
-                    onTap: () => onComplete?.call(doc.id, data),
-                  )),
-                  const SizedBox(width: 10),
-                  _ActionIconBtn(
-                    icon:  Icons.close_rounded,
-                    color: _C.red,
-                    bg:    _C.redSft,
-                    onTap: () => onCancel?.call(doc.id, data),
-                  ),
-                ]),
-
-              if (status == 'completed')
-                _StatusBadge(Icons.verified_rounded,
-                    'Job Completed', _C.blue, _C.blueSft),
-
-              if (status == 'cancelled')
-                _StatusBadge(Icons.cancel_rounded,
-                    'Job Cancelled', _C.red, _C.redSft),
+                  Expanded(child: _Btn(
+                      label:    'Decline',
+                      icon:     Icons.close_rounded,
+                      bg:       _C.redSft,
+                      fg:       _C.red,
+                      outlined: true,
+                      onTap:    onDecline)),
+                ])
+              else ...[
+                if (rawStatus == 'accepted')
+                  Row(children: [
+                    Expanded(child: _Btn(
+                        label: 'Mark Complete',
+                        icon:  Icons.verified_rounded,
+                        bg:    _C.green,
+                        fg:    Colors.white,
+                        onTap: onComplete)),
+                    const SizedBox(width: 10),
+                    _IcoBtn(
+                        icon:  Icons.close_rounded,
+                        color: _C.red,
+                        bg:    _C.redSft,
+                        onTap: onCancel),
+                  ]),
+                if (rawStatus == 'completed')
+                  _Badge(Icons.verified_rounded,
+                      'Job Completed Successfully', _C.blue, _C.blueSft),
+                if (rawStatus == 'cancelled')
+                  _Badge(Icons.refresh_rounded,
+                      'Cancelled — Reopened for Other Providers',
+                      _C.orange, _C.orangeSft),
+              ],
             ]),
           ),
         ]),
@@ -1112,291 +985,458 @@ class _JobCard extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// SMALL STATELESS WIDGETS
-// ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// SMALL WIDGETS  (unchanged from original)
+// ═══════════════════════════════════════════════════════════════
+class _Pill extends StatelessWidget {
+  final IconData icon;
+  final Color    color;
+  const _Pill({required this.icon, required this.color});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(5),
+    decoration: BoxDecoration(
+        color: color.withOpacity(.15),
+        borderRadius: BorderRadius.circular(8)),
+    child: Icon(icon, color: color, size: 13),
+  );
+}
 
-class _InfoRow extends StatelessWidget {
+class _Avatar extends StatelessWidget {
+  final String name;
+  const _Avatar({required this.name});
+  @override
+  Widget build(BuildContext context) {
+    final l = name.isNotEmpty ? name.trimLeft()[0].toUpperCase() : 'C';
+    return Container(
+      width: 46, height: 46,
+      decoration: BoxDecoration(
+          color: _C.indigoSft, borderRadius: BorderRadius.circular(13)),
+      child: Center(child: Text(l, style: const TextStyle(
+          color: _C.indigo, fontWeight: FontWeight.bold, fontSize: 20))),
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
   final IconData icon;
   final String   value;
   final Color    ic;
   final Color    bg;
-
-  const _InfoRow(this.icon, this.value, this.ic, this.bg);
-
+  const _Row({required this.icon, required this.value,
+      required this.ic, required this.bg});
   @override
   Widget build(BuildContext context) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(9)),
-        child: Icon(icon, color: ic, size: 13),
-      ),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            value.isEmpty ? '-' : value,
-            style: const TextStyle(
-                fontSize: 13, color: _C.text, height: 1.4),
-          ),
-        ),
-      ),
-    ]);
-  }
-}
-
-class _ActionBtn extends StatelessWidget {
-  final String        label;
-  final IconData      icon;
-  final Color         bg;
-  final Color         fg;
-  final bool          outlined;
-  final VoidCallback? onTap;
-
-  const _ActionBtn({
-    required this.label,
-    required this.icon,
-    required this.bg,
-    required this.fg,
-    required this.onTap,
-    this.outlined = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color:        outlined ? Colors.transparent : bg,
-          border:       outlined ? Border.all(color: bg, width: 1.5) : null,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, color: fg, size: 15),
-          const SizedBox(width: 6),
-          Text(label,
-              style: TextStyle(
-                  color:      fg,
-                  fontWeight: FontWeight.w700,
-                  fontSize:   13)),
-        ]),
-      ),
-    );
-  }
-}
-
-class _ActionIconBtn extends StatelessWidget {
-  final IconData      icon;
-  final Color         color;
-  final Color         bg;
-  final VoidCallback? onTap;
-
-  const _ActionIconBtn({
-    required this.icon,
-    required this.color,
-    required this.bg,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 46, height: 46,
-        decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(12)),
-        child: Icon(icon, color: color, size: 20),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final IconData icon;
-  final String   label;
-  final Color    color;
-  final Color    bg;
-
-  const _StatusBadge(this.icon, this.label, this.color, this.bg);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width:   double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      decoration: BoxDecoration(
-          color: bg, borderRadius: BorderRadius.circular(12)),
-      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(icon, color: color, size: 15),
-        const SizedBox(width: 7),
-        Text(label,
-            style: TextStyle(
-                color:      color,
-                fontWeight: FontWeight.w700,
-                fontSize:   13)),
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+                color: bg, borderRadius: BorderRadius.circular(9)),
+            child: Icon(icon, color: ic, size: 13)),
+        const SizedBox(width: 10),
+        Expanded(child: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(value,
+                style: const TextStyle(
+                    fontSize: 13, color: _C.text, height: 1.4)))),
       ]),
     );
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  final bool   isAvailable;
-  final String serviceType;
+class _Btn extends StatelessWidget {
+  final String       label;
+  final IconData     icon;
+  final Color        bg;
+  final Color        fg;
+  final bool         outlined;
+  final VoidCallback? onTap;
+  const _Btn({
+    required this.label, required this.icon,
+    required this.bg,    required this.fg,
+    required this.onTap, this.outlined = false,
+  });
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color:  outlined ? Colors.transparent : bg,
+        border: outlined ? Border.all(color: bg, width: 1.5) : null,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, color: fg, size: 15),
+        const SizedBox(width: 6),
+        Text(label,
+            style: TextStyle(
+                color: fg, fontWeight: FontWeight.w700, fontSize: 13)),
+      ]),
+    ),
+  );
+}
 
-  const _EmptyState({
-    required this.isAvailable,
-    required this.serviceType,
+class _IcoBtn extends StatelessWidget {
+  final IconData      icon;
+  final Color         color;
+  final Color         bg;
+  final VoidCallback? onTap;
+  const _IcoBtn({
+    required this.icon,  required this.color,
+    required this.bg,    required this.onTap,
+  });
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 46, height: 46,
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Icon(icon, color: color, size: 20),
+    ),
+  );
+}
+
+class _Badge extends StatelessWidget {
+  final IconData icon;
+  final String   label;
+  final Color    color;
+  final Color    bg;
+  const _Badge(this.icon, this.label, this.color, this.bg);
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 11),
+    decoration: BoxDecoration(
+        color: bg, borderRadius: BorderRadius.circular(12)),
+    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Icon(icon, color: color, size: 15),
+      const SizedBox(width: 7),
+      Flexible(child: Text(label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              color: color, fontWeight: FontWeight.w700, fontSize: 13))),
+    ]),
+  );
+}
+
+class _Empty extends StatelessWidget {
+  final IconData icon;
+  final String   title;
+  final String   msg;
+  const _Empty({required this.icon, required this.title, required this.msg});
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(padding: const EdgeInsets.all(40),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+            padding: const EdgeInsets.all(28),
+            decoration: const BoxDecoration(
+                color: _C.indigoSft, shape: BoxShape.circle),
+            child: Icon(icon, size: 48, color: _C.indigo)),
+        const SizedBox(height: 20),
+        Text(title, style: const TextStyle(
+            fontSize: 21, fontWeight: FontWeight.w700, color: _C.text)),
+        const SizedBox(height: 8),
+        Text(msg, textAlign: TextAlign.center,
+            style: const TextStyle(
+                color: _C.sub, fontSize: 13, height: 1.6)),
+      ]),
+    ),
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PENDING SCREEN
+// ═══════════════════════════════════════════════════════════════
+class _PendingScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: _C.bg,
+    appBar: AppBar(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      leading: const BackButton(color: _C.text),
+      title: const Text('Dashboard',
+          style: TextStyle(color: _C.text, fontWeight: FontWeight.w700)),
+    ),
+    body: Center(child: Padding(padding: const EdgeInsets.all(32),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+            padding: const EdgeInsets.all(32),
+            decoration: const BoxDecoration(
+                color: _C.indigoSft, shape: BoxShape.circle),
+            child: const Icon(Icons.hourglass_top_rounded,
+                size: 52, color: _C.indigo)),
+        const SizedBox(height: 28),
+        const Text('Pending Approval', style: TextStyle(
+            fontSize: 24, fontWeight: FontWeight.w700, color: _C.text)),
+        const SizedBox(height: 10),
+        const Text("Your account is under review.\nYou'll be notified once approved.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _C.sub, fontSize: 14, height: 1.6)),
+        const SizedBox(height: 28),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+              color: _C.orangeSft,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: _C.orange.withOpacity(.3))),
+          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.circle, color: _C.orange, size: 9),
+            SizedBox(width: 10),
+            Text('Status: Under Review', style: TextStyle(
+                color: _C.orange, fontWeight: FontWeight.w600, fontSize: 13)),
+          ]),
+        ),
+      ]),
+    )),
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HEADER  (manual animated tab buttons)
+// ═══════════════════════════════════════════════════════════════
+class _Header extends StatelessWidget {
+  final String businessName, serviceType, providerId;
+  final int    tab, availCount, myCount;
+  final void Function(int) onTab;
+  final VoidCallback onProfile;
+
+  const _Header({
+    required this.businessName, required this.serviceType,
+    required this.providerId,   required this.tab,
+    required this.availCount,   required this.myCount,
+    required this.onTab,        required this.onProfile,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            padding: const EdgeInsets.all(28),
-            decoration: const BoxDecoration(
-                color: _C.indigoSft, shape: BoxShape.circle),
-            child: Icon(
-              isAvailable
-                  ? Icons.work_outline_rounded
-                  : Icons.assignment_outlined,
-              size:  48,
-              color: _C.indigo,
+    return Container(
+      decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: _C.divider))),
+      child: SafeArea(bottom: false, child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const SizedBox(height: 12),
+
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(children: [
+            Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                    color: _C.indigoSft,
+                    borderRadius: BorderRadius.circular(16)),
+                child: const Icon(Icons.storefront_rounded,
+                    color: _C.indigo, size: 26)),
+            const SizedBox(width: 14),
+            Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(businessName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
+              const SizedBox(height: 3),
+              Row(children: [
+                Container(width: 7, height: 7,
+                    decoration: const BoxDecoration(
+                        color: _C.green, shape: BoxShape.circle)),
+                const SizedBox(width: 6),
+                Text(serviceType,
+                    style: const TextStyle(color: _C.sub, fontSize: 12)),
+              ]),
+            ])),
+            GestureDetector(
+              onTap: onProfile,
+              child: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                      color: _C.indigoSft,
+                      borderRadius: BorderRadius.circular(14)),
+                  child: const Icon(Icons.person_rounded,
+                      color: _C.indigo, size: 22)),
             ),
+          ]),
+        ),
+
+        const SizedBox(height: 16),
+
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(children: [
+            _Chip(label: 'Available',   count: availCount,
+                color: _C.indigo, bg: _C.indigoSft),
+            const SizedBox(width: 10),
+            _Chip(label: 'Active Jobs', count: myCount,
+                color: _C.green, bg: _C.greenSft),
+          ]),
+        ),
+
+        const SizedBox(height: 16),
+
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            height: 46,
+            decoration: BoxDecoration(
+                color: const Color(0xFFF0F2F8),
+                borderRadius: BorderRadius.circular(14)),
+            child: Row(children: [
+              _TabBtn(label: 'Available Jobs',
+                  active: tab == 0, onTap: () => onTab(0)),
+              _TabBtn(label: 'My Jobs',
+                  active: tab == 1, onTap: () => onTab(1)),
+            ]),
           ),
-          const SizedBox(height: 20),
-          Text(
-            isAvailable ? 'No Available Jobs' : 'No Jobs Yet',
-            style: const TextStyle(
-                fontSize:   21,
-                fontWeight: FontWeight.w700,
-                color:      _C.text),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            isAvailable
-                ? 'New $serviceType orders will appear here.'
-                : 'Jobs you accept will show here.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: _C.textSub, fontSize: 13, height: 1.6),
-          ),
-        ]),
-      ),
+        ),
+
+        const SizedBox(height: 8),
+      ])),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+class _TabBtn extends StatelessWidget {
+  final String       label;
+  final bool         active;
+  final VoidCallback onTap;
+  const _TabBtn({required this.label, required this.active, required this.onTap});
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: active ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(11),
+          boxShadow: active
+              ? [BoxShadow(
+                  color: Colors.black.withOpacity(0.07),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2))]
+              : [],
+        ),
+        child: Center(child: Text(label, style: TextStyle(
+          color:      active ? _C.indigo : _C.sub,
+          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          fontSize:   13,
+        ))),
+      ),
+    ),
+  );
+}
+
+class _Chip extends StatelessWidget {
+  final String label;
+  final int    count;
+  final Color  color;
+  final Color  bg;
+  const _Chip({required this.label, required this.count,
+      required this.color, required this.bg});
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(14)),
+      child: Row(children: [
+        Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+                color: color.withOpacity(.15),
+                borderRadius: BorderRadius.circular(9)),
+            child: Center(child: Text('$count', style: TextStyle(
+                color: color, fontWeight: FontWeight.w800, fontSize: 14)))),
+        const SizedBox(width: 10),
+        Text(label, style: TextStyle(
+            color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+      ]),
+    ),
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // REASON DIALOG
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _ReasonDialog extends StatelessWidget {
-  final String               title;
-  final String               subtitle;
-  final String               hint;
-  final String               btnLabel;
-  final Color                btnColor;
-  final String               keepLabel;
+// ═══════════════════════════════════════════════════════════════
+class _Dialog extends StatelessWidget {
+  final String title, subtitle, hint, btnLabel, keepLabel;
+  final Color  btnColor;
   final TextEditingController ctrl;
-  final VoidCallback         onConfirm;
+  final VoidCallback onConfirm, onKeep;
 
-  const _ReasonDialog({
-    required this.title,
-    required this.subtitle,
-    required this.hint,
-    required this.btnLabel,
-    required this.btnColor,
-    required this.keepLabel,
-    required this.ctrl,
-    required this.onConfirm,
+  const _Dialog({
+    required this.title,     required this.subtitle,
+    required this.hint,      required this.btnLabel,
+    required this.keepLabel, required this.btnColor,
+    required this.ctrl,      required this.onConfirm,
+    required this.onKeep,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
+  Widget build(BuildContext context) => Dialog(
+    backgroundColor: Colors.white,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    child: Padding(padding: const EdgeInsets.all(24),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color:        btnColor.withOpacity(.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(Icons.info_outline_rounded,
-                color: btnColor, size: 26),
-          ),
-          const SizedBox(height: 14),
-          Text(title,
-              style: const TextStyle(
-                  fontSize:   18,
-                  fontWeight: FontWeight.w700,
-                  color:      _C.text)),
-          const SizedBox(height: 4),
-          Text(subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: _C.textSub, fontSize: 13)),
-          const SizedBox(height: 16),
-          TextField(
-            controller: ctrl,
-            maxLines:   3,
-            decoration: InputDecoration(
-              hintText:  hint,
-              hintStyle: const TextStyle(color: _C.textSub, fontSize: 13),
-              filled:    true,
-              fillColor: const Color(0xFFF7F8FC),
-              border: OutlineInputBorder(
+                color: btnColor.withOpacity(.1),
+                borderRadius: BorderRadius.circular(14)),
+            child: Icon(Icons.info_outline_rounded, color: btnColor, size: 26)),
+        const SizedBox(height: 14),
+        Text(title, style: const TextStyle(
+            fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
+        const SizedBox(height: 4),
+        Text(subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _C.sub, fontSize: 13)),
+        const SizedBox(height: 16),
+        TextField(
+          controller: ctrl,
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText:  hint,
+            hintStyle: const TextStyle(color: _C.sub, fontSize: 13),
+            filled:    true,
+            fillColor: const Color(0xFFF7F8FC),
+            border:    OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
-                borderSide:   BorderSide.none,
-              ),
-            ),
+                borderSide:   BorderSide.none),
           ),
-          const SizedBox(height: 18),
-          Row(children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  side:  const BorderSide(color: _C.divider),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text(keepLabel,
-                    style: const TextStyle(color: _C.textSub)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: onConfirm,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: btnColor,
-                  elevation:       0,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text(btnLabel,
-                    style: const TextStyle(
-                        color:      Colors.white,
-                        fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ]),
+        ),
+        const SizedBox(height: 18),
+        Row(children: [
+          Expanded(child: OutlinedButton(
+            onPressed: onKeep,
+            style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                side: const BorderSide(color: _C.divider),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12))),
+            child: Text(keepLabel,
+                style: const TextStyle(color: _C.sub)),
+          )),
+          const SizedBox(width: 12),
+          Expanded(child: ElevatedButton(
+            onPressed: onConfirm,
+            style: ElevatedButton.styleFrom(
+                backgroundColor: btnColor,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12))),
+            child: Text(btnLabel, style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w700)),
+          )),
         ]),
-      ),
-    );
-  }
+      ]),
+    ),
+  );
 }

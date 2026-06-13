@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -8,18 +9,21 @@ import 'package:callme/payment/payment_page.dart';
 import 'package:callme/screens/bottom_nav_page.dart';
 
 class HotelBookingPage extends StatefulWidget {
-  final HotelRoom hotel;
+  final HotelData hotel;
   final List<dynamic> products;
 
-  /// The providerId of the hotel — required so OrderService can fetch
-  /// providerName & providerUserId from Firestore and send FCM notifications.
+  /// Caller may pass a pre-resolved provider ID to skip the Firestore lookup.
+  final String? initialProviderId;
+
+  /// Legacy param — treated as initialProviderId when initialProviderId is null.
   final String providerId;
 
   const HotelBookingPage({
     super.key,
     required this.hotel,
     required this.products,
-    required this.providerId, // ← NEW: pass from the caller screen
+    this.providerId = '',
+    this.initialProviderId,
   });
 
   @override
@@ -28,41 +32,45 @@ class HotelBookingPage extends StatefulWidget {
 
 class _HotelBookingPageState extends State<HotelBookingPage>
     with SingleTickerProviderStateMixin {
-  final _nameController    = TextEditingController();
-  final _phoneController   = TextEditingController();
-  final _addressController = TextEditingController();
-  final _noteController    = TextEditingController();
+  final _nameController  = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _noteController  = TextEditingController();
 
   DateTime?  _selectedDate;
   TimeOfDay? _selectedTime;
 
-  bool _isLoading = false;
+  bool _isLoading         = false;
+  bool _isLoadingProvider = true;
+
+  String? _providerId;
+  String? _providerName;
+  String? _noProviderMessage;
 
   late final AnimationController _animController;
   late final Animation<double>    _fadeIn;
 
-  // ── Cart helpers ───────────────────────────────────────────
+  // ── Cart helpers ────────────────────────────────────────────────────────────
+
   List<CartItem> get _cartItems => Cart.getItems('Hotel');
 
   double get _totalAmount {
-    if (_cartItems.isNotEmpty) {
-      return Cart.getTotal('Hotel').toDouble();
-    }
-    // Single room — apply discount
+    if (_cartItems.isNotEmpty) return Cart.getTotal('Hotel').toDouble();
     final price    = widget.hotel.price.toDouble();
     final discount = widget.hotel.discount.toDouble();
     return price - (price * discount / 100);
   }
 
-  // ── Services list for OrderService ────────────────────────
+  /// Use the hotel name as the service label (category getter removed)
   List<String> get _servicesForOrder {
     if (_cartItems.isNotEmpty) {
-      return _cartItems
-          .map((e) => '${e.name} x${e.quantity}')
-          .toList();
+      return _cartItems.map((e) => '${e.name} x${e.quantity}').toList();
     }
-    return [widget.hotel.category];
+    return [widget.hotel.name]; // ✅ was widget.hotel.category
   }
+
+  // ==========================================================================
+  // INIT
+  // ==========================================================================
 
   @override
   void initState() {
@@ -71,11 +79,29 @@ class _HotelBookingPageState extends State<HotelBookingPage>
       vsync: this,
       duration: const Duration(milliseconds: 550),
     );
-    _fadeIn = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    );
+    _fadeIn = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty) {
+      final digits = user.phoneNumber!.replaceAll(RegExp(r'[^\d]'), '');
+      _phoneController.text =
+          digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+    }
+
+    final hint = widget.initialProviderId?.isNotEmpty == true
+        ? widget.initialProviderId
+        : widget.providerId.isNotEmpty
+            ? widget.providerId
+            : null;
+
+    if (hint != null) {
+      _providerId        = hint;
+      _isLoadingProvider = false;
+      _fetchProviderName(hint);
+    } else {
+      _loadProvider();
+    }
   }
 
   @override
@@ -83,14 +109,97 @@ class _HotelBookingPageState extends State<HotelBookingPage>
     _animController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
-    _addressController.dispose();
     _noteController.dispose();
     super.dispose();
   }
 
-  // ==========================================================
+  // ==========================================================================
+  // PROVIDER LOADER
+  // ==========================================================================
+
+  Future<void> _fetchProviderName(String id) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('providers')
+          .doc(id)
+          .get();
+      if (!mounted || !doc.exists) return;
+      final data     = doc.data()!;
+      final business = (data['business'] as Map<String, dynamic>?) ?? {};
+      setState(() {
+        _providerName =
+            (business['businessName'] ?? data['providerName'] ?? '').toString();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadProvider() async {
+    setState(() {
+      _isLoadingProvider = true;
+      _noProviderMessage = null;
+    });
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('providers')
+          .where('serviceType', isEqualTo: 'hotel')
+          .where('status', isEqualTo: 'approved')
+          .limit(1)
+          .get();
+
+      if (snap.docs.isNotEmpty) {
+        _setProvider(snap.docs.first.id, snap.docs.first.data());
+        return;
+      }
+
+      // Fallback: scan all approved
+      final allSnap = await FirebaseFirestore.instance
+          .collection('providers')
+          .where('status', isEqualTo: 'approved')
+          .get();
+
+      final match = allSnap.docs.where((doc) {
+        final st = (doc.data()['serviceType'] ?? '').toString().toLowerCase();
+        return st == 'hotel';
+      }).firstOrNull;
+
+      if (match != null) {
+        _setProvider(match.id, match.data());
+      } else {
+        if (mounted) {
+          setState(() {
+            _noProviderMessage =
+                'No approved hotel provider available yet.\nPlease try again later.';
+            _isLoadingProvider = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[HotelBookingPage] _loadProvider error: $e');
+      if (mounted) {
+        setState(() {
+          _noProviderMessage =
+              'Could not load provider. Check your connection and try again.';
+          _isLoadingProvider = false;
+        });
+      }
+    }
+  }
+
+  void _setProvider(String id, Map<String, dynamic> data) {
+    if (!mounted) return;
+    final business = (data['business'] as Map<String, dynamic>?) ?? {};
+    setState(() {
+      _providerId        = id;
+      _providerName      =
+          (business['businessName'] ?? data['providerName'] ?? '').toString();
+      _isLoadingProvider = false;
+    });
+    debugPrint('[HotelBookingPage] provider: $_providerName (id=$_providerId)');
+  }
+
+  // ==========================================================================
   // BUILD
-  // ==========================================================
+  // ==========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -102,39 +211,113 @@ class _HotelBookingPageState extends State<HotelBookingPage>
           child: Column(
             children: [
               Expanded(
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    _buildHeroHeader(),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          _buildHotelInfoCard(),
-                          const SizedBox(height: 16),
-                          _buildBookingSummary(),
-                          const SizedBox(height: 16),
-                          _buildScheduleCard(),
-                          const SizedBox(height: 16),
-                          _buildGuestCard(),
-                          const SizedBox(height: 120),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                child: _isLoadingProvider
+                    ? _buildLoadingState()
+                    : _noProviderMessage != null
+                        ? _buildNoProviderState()
+                        : _buildScrollBody(),
               ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: _buildBottomBar(),
+      bottomNavigationBar:
+          (!_isLoadingProvider && _noProviderMessage == null)
+              ? _buildBottomBar()
+              : null,
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
+  // LOADING / NO PROVIDER
+  // ==========================================================================
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(color: Colors.deepPurple),
+          const SizedBox(height: 16),
+          Text('Finding a hotel provider…',
+              style: TextStyle(color: Colors.grey.shade500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoProviderState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade100, shape: BoxShape.circle),
+              child: Icon(Icons.hotel_outlined,
+                  size: 52, color: Colors.grey.shade400),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _noProviderMessage ?? 'No provider available',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: Colors.grey.shade600, fontSize: 15, height: 1.6),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadProvider,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try Again'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // SCROLL BODY
+  // ==========================================================================
+
+  Widget _buildScrollBody() {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        _buildHeroHeader(),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _buildHotelInfoCard(),
+              const SizedBox(height: 16),
+              _buildBookingSummary(),
+              const SizedBox(height: 16),
+              _buildScheduleCard(),
+              const SizedBox(height: 16),
+              _buildGuestCard(),
+              const SizedBox(height: 120),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ==========================================================================
   // HERO HEADER
-  // ==========================================================
+  // ==========================================================================
 
   Widget _buildHeroHeader() {
     return Stack(
@@ -142,12 +325,8 @@ class _HotelBookingPageState extends State<HotelBookingPage>
         SizedBox(
           height: 260,
           width: double.infinity,
-          child: Image.asset(
-            widget.hotel.image,
-            fit: BoxFit.cover,
-          ),
+          child: Image.asset(widget.hotel.image, fit: BoxFit.cover),
         ),
-        // Gradient overlay for readability
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -155,7 +334,7 @@ class _HotelBookingPageState extends State<HotelBookingPage>
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withOpacity(0.35),
+                  Colors.black.withOpacity(0.45),
                   Colors.transparent,
                 ],
               ),
@@ -173,13 +352,41 @@ class _HotelBookingPageState extends State<HotelBookingPage>
             ),
           ),
         ),
-        // Hotel name overlay
+        if (_providerName != null && _providerName!.isNotEmpty)
+          Positioned(
+            top: 14,
+            right: 14,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.45),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.storefront_rounded,
+                      size: 12, color: Colors.white),
+                  const SizedBox(width: 5),
+                  Text(
+                    _providerName!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         Positioned(
           bottom: 16,
           left: 16,
           right: 16,
           child: Text(
-            widget.hotel.hotelName,
+            widget.hotel.name,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 24,
@@ -192,9 +399,9 @@ class _HotelBookingPageState extends State<HotelBookingPage>
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
   // HOTEL INFO CARD
-  // ==========================================================
+  // ==========================================================================
 
   Widget _buildHotelInfoCard() {
     return _card(
@@ -211,21 +418,22 @@ class _HotelBookingPageState extends State<HotelBookingPage>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  widget.hotel.category,
+                  widget.hotel.location,          // ✅ was widget.hotel.category
                   style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
+                      fontWeight: FontWeight.w600, fontSize: 15),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               if (widget.hotel.discount > 0) ...[
                 Text(
-                  '₹${widget.hotel.price.toStringAsFixed(0)}',
+                  '₹${widget.hotel.originalPrice}',   // ✅ show originalPrice struck through
                   style: const TextStyle(
                     decoration: TextDecoration.lineThrough,
                     color: Colors.grey,
@@ -233,12 +441,11 @@ class _HotelBookingPageState extends State<HotelBookingPage>
                   ),
                 ),
                 Text(
-                  '${widget.hotel.discount.toStringAsFixed(0)}% off',
+                  '${widget.hotel.discount}% off',
                   style: const TextStyle(
-                    color: Colors.green,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+                      color: Colors.green,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
                 ),
               ],
               Text(
@@ -256,27 +463,25 @@ class _HotelBookingPageState extends State<HotelBookingPage>
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
   // BOOKING SUMMARY
-  // ==========================================================
+  // ==========================================================================
 
   Widget _buildBookingSummary() {
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Booking Summary',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-          ),
+          const Text('Booking Summary',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
           const SizedBox(height: 12),
           if (_cartItems.isEmpty)
-            _summaryRow(widget.hotel.category, _totalAmount)
+            _summaryRow(widget.hotel.name, _totalAmount) // ✅ was widget.hotel.category
           else
             ..._cartItems.map(
               (e) => _summaryRow(
                 '${e.name} × ${e.quantity}',
-                (e.price * e.quantity) as double,
+                (e.price * e.quantity).toDouble(),
               ),
             ),
           const Divider(height: 20),
@@ -302,9 +507,9 @@ class _HotelBookingPageState extends State<HotelBookingPage>
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
   // SCHEDULE CARD
-  // ==========================================================
+  // ==========================================================================
 
   Widget _buildScheduleCard() {
     return _card(
@@ -318,8 +523,7 @@ class _HotelBookingPageState extends State<HotelBookingPage>
                 color: Colors.deepPurple.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.calendar_month,
-                  color: Colors.deepPurple),
+              child: const Icon(Icons.calendar_month, color: Colors.deepPurple),
             ),
             title: Text(
               _selectedDate == null
@@ -369,51 +573,47 @@ class _HotelBookingPageState extends State<HotelBookingPage>
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
   // GUEST DETAILS CARD
-  // ==========================================================
+  // ==========================================================================
 
   Widget _buildGuestCard() {
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Guest Details',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-          ),
+          const Text('Guest Details',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
           const SizedBox(height: 16),
-          _inputField(_nameController, 'Full Name', Icons.person),
+          _inputField(_nameController, 'Full Name', Icons.person_outline_rounded),
           const SizedBox(height: 12),
-          _inputField(_phoneController, 'Phone Number', Icons.phone,
+          _inputField(_phoneController, 'Phone Number', Icons.phone_outlined,
               keyboardType: TextInputType.phone),
           const SizedBox(height: 12),
-          _inputField(_addressController, 'Home Address', Icons.location_on,
-              maxLines: 3),
-          const SizedBox(height: 12),
-          _inputField(_noteController, 'Special Request (optional)',
-              Icons.notes,
-              maxLines: 3),
+          _inputField(
+            _noteController,
+            'Special Request (optional)',
+            Icons.notes_rounded,
+            maxLines: 3,
+          ),
         ],
       ),
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
   // BOTTOM BAR
-  // ==========================================================
+  // ==========================================================================
 
   Widget _buildBottomBar() {
+    final canBook = !_isLoading && _providerId != null;
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
-          BoxShadow(
-            blurRadius: 20,
-            color: Colors.black.withOpacity(0.07),
-          ),
+          BoxShadow(blurRadius: 20, color: Colors.black.withOpacity(0.07)),
         ],
       ),
       child: SafeArea(
@@ -424,10 +624,8 @@ class _HotelBookingPageState extends State<HotelBookingPage>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Total',
-                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
+                  const Text('Total',
+                      style: TextStyle(color: Colors.grey, fontSize: 13)),
                   Text(
                     '₹${_totalAmount.toStringAsFixed(0)}',
                     style: const TextStyle(
@@ -442,33 +640,26 @@ class _HotelBookingPageState extends State<HotelBookingPage>
             const SizedBox(width: 16),
             Expanded(
               child: ElevatedButton(
-                onPressed: _isLoading ? null : _continueToPayment,
+                onPressed: canBook ? _continueToPayment : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple,
                   foregroundColor: Colors.white,
                   disabledBackgroundColor:
-                      Colors.deepPurple.withOpacity(0.5),
+                      Colors.deepPurple.withOpacity(0.4),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
+                      borderRadius: BorderRadius.circular(18)),
                 ),
                 child: _isLoading
                     ? const SizedBox(
                         height: 22,
                         width: 22,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
+                            color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text(
-                        'Book Now',
+                    : const Text('Book Now',
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                            fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -477,56 +668,44 @@ class _HotelBookingPageState extends State<HotelBookingPage>
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
   // PAYMENT + ORDER FLOW
-  // ==========================================================
+  // ==========================================================================
 
   Future<void> _continueToPayment() async {
-    // ── Validation ──────────────────────────────────────────
     if (_nameController.text.trim().isEmpty ||
-        _phoneController.text.trim().isEmpty ||
-        _addressController.text.trim().isEmpty) {
-      _showPopup('Please fill all guest details', false);
+        _phoneController.text.trim().isEmpty) {
+      _showPopup('Please fill your name and phone number', false);
       return;
     }
-
     if (_selectedDate == null || _selectedTime == null) {
       _showPopup('Please select check-in date and time', false);
       return;
     }
-
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       _showPopup('Please log in first', false);
       return;
     }
-
-    if (widget.providerId.isEmpty) {
+    if (_providerId == null || _providerId!.isEmpty) {
       _showPopup('Hotel provider information missing. Please try again.', false);
       return;
     }
 
-    // ── Navigate to payment ─────────────────────────────────
     final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(
         builder: (_) => PaymentPage(
-          serviceName: 'Hotel Booking — ${widget.hotel.hotelName}',
+          serviceName: 'Hotel Booking — ${widget.hotel.name}',
           amount: _totalAmount.toInt(),
         ),
       ),
     );
 
-    // result == true  → online payment success
-    // result == 'offline' → cash/offline
     if (result != true && result != 'offline') return;
 
     setState(() => _isLoading = true);
-
     try {
-      // ── Place order via OrderService ────────────────────────
-      // OrderService resolves providerName & providerUserId from Firestore
-      // using providerId, so we only need to pass the ID here.
       await OrderService.placeOrder(
         serviceType:   'hotel',
         services:      _servicesForOrder,
@@ -536,21 +715,19 @@ class _HotelBookingPageState extends State<HotelBookingPage>
         email:         user.email ?? '',
         createdBy:     user.uid,
         createdByRole: 'user',
-        address:       _addressController.text.trim(),
+        address:       'Hotel — ${widget.hotel.name}, ${widget.hotel.city}',
         note:          _noteController.text.trim(),
         date:          _selectedDate!,
         time:          _selectedTime!.format(context),
         totalAmount:   _totalAmount,
         visitType:     'Hotel',
-        providerId:    widget.providerId,
+        providerId:    _providerId!,
         isEnquiry:     false,
-        providerName:  '', // resolved internally by OrderService
+        providerName:  _providerName ?? '',
       );
 
-      // ── Clear cart ──────────────────────────────────────────
       Cart.clear('Hotel');
 
-      // ── Success dialog ──────────────────────────────────────
       if (!mounted) return;
       _showPopup(
         result == 'offline'
@@ -573,16 +750,16 @@ class _HotelBookingPageState extends State<HotelBookingPage>
         (_) => false,
       );
     } catch (e) {
-      debugPrint('[HotelBooking] placeOrder error: $e');
+      debugPrint('[HotelBookingPage] placeOrder error: $e');
       _showPopup('Something went wrong. Please try again.', false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // ==========================================================
+  // ==========================================================================
   // DATE / TIME PICKERS
-  // ==========================================================
+  // ==========================================================================
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -614,9 +791,9 @@ class _HotelBookingPageState extends State<HotelBookingPage>
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
-  // ==========================================================
+  // ==========================================================================
   // POPUP
-  // ==========================================================
+  // ==========================================================================
 
   void _showPopup(String message, bool success) {
     if (!mounted) return;
@@ -628,9 +805,7 @@ class _HotelBookingPageState extends State<HotelBookingPage>
         child: Container(
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-          ),
+              color: Colors.white, borderRadius: BorderRadius.circular(28)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -644,9 +819,7 @@ class _HotelBookingPageState extends State<HotelBookingPage>
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  success
-                      ? Icons.check_circle_rounded
-                      : Icons.error_rounded,
+                  success ? Icons.check_circle_rounded : Icons.error_rounded,
                   color: success ? Colors.green : Colors.red,
                   size: 52,
                 ),
@@ -656,16 +829,13 @@ class _HotelBookingPageState extends State<HotelBookingPage>
                 message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
+                    fontSize: 17, fontWeight: FontWeight.bold),
               ),
             ],
           ),
         ),
       ),
     );
-
     if (!success) {
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted && Navigator.canPop(context)) Navigator.pop(context);
@@ -673,9 +843,9 @@ class _HotelBookingPageState extends State<HotelBookingPage>
     }
   }
 
-  // ==========================================================
+  // ==========================================================================
   // UI HELPERS
-  // ==========================================================
+  // ==========================================================================
 
   Widget _card({required Widget child}) => Container(
         padding: const EdgeInsets.all(18),
@@ -711,10 +881,8 @@ class _HotelBookingPageState extends State<HotelBookingPage>
           keyboardType: keyboardType,
           decoration: InputDecoration(
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 16,
-            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
             hintText: hint,
             hintStyle: TextStyle(color: Colors.grey.shade400),
             prefixIcon: Icon(icon, color: Colors.deepPurple),

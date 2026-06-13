@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/hotel_data.dart';
-import 'hotel_detail_page.dart';
-import '../models/hotel_card.dart';
+import '../widgets/hotel_card.dart';
 
 class HotelServicePage extends StatefulWidget {
   const HotelServicePage({super.key});
@@ -11,17 +10,8 @@ class HotelServicePage extends StatefulWidget {
 }
 
 class _HotelServicePageState extends State<HotelServicePage> {
-  int selectedCategoryIndex = 0;
-  int selectedCityIndex = 0;
-  String search = "";
-
-  final List<Map<String, Object>> categories = [
-    {"name": "Junior Suite", "icon": Icons.hotel},
-    {"name": "Executive Suite", "icon": Icons.apartment},
-    {"name": "Family Suite", "icon": Icons.family_restroom},
-    {"name": "Deluxe Suite", "icon": Icons.star},
-    {"name": "Mini Suite", "icon": Icons.king_bed},
-  ];
+  final TextEditingController searchController = TextEditingController();
+  String selectedCity = "All";
 
   List<String> get cities {
     final list = hotels.map((e) => e.city).toSet().toList();
@@ -29,183 +19,158 @@ class _HotelServicePageState extends State<HotelServicePage> {
     return ["All", ...list];
   }
 
-  List<HotelRoom> get filtered {
-    final category = categories[selectedCategoryIndex]["name"];
-    final city = cities[selectedCityIndex];
-
+  List<HotelData> get filtered {
+    final searchText = searchController.text.trim().toLowerCase();
     return hotels.where((hotel) {
-      final matchCategory = hotel.category == category;
-      final matchCity = city == "All" || hotel.city == city;
+      final matchCity = selectedCity == "All" || hotel.city == selectedCity;
       final matchSearch =
-          hotel.hotelName.toLowerCase().contains(search.toLowerCase()) ||
-              hotel.city.toLowerCase().contains(search.toLowerCase());
-
-      return matchCategory && matchCity && matchSearch;
+          hotel.name.toLowerCase().contains(searchText) ||
+          hotel.city.toLowerCase().contains(searchText);
+      return matchCity && matchSearch;
     }).toList();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width > 600;
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: const Text("Hotels"),
+        elevation: 0,
+        centerTitle: true,
+        backgroundColor: Colors.red,
+        title: const Text(
+          "Hotels",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
-      body: Column(
-        children: [
-          /// 🔍 SEARCH
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: TextField(
-              onChanged: (val) => setState(() => search = val),
-              decoration: InputDecoration(
-                hintText: "Search hotels...",
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+      body: SafeArea(
+        child: Column(
+          children: [
+
+            /// ── SEARCH BAR ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+              child: Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: searchController,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: "Search hotels or city...",
+                    hintStyle: TextStyle(color: Colors.grey.shade500),
+                    prefixIcon: const Icon(Icons.search),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                 ),
               ),
             ),
-          ),
 
-          /// 🌆 CITY FILTER
-          SizedBox(
-            height: 45,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              itemCount: cities.length,
-              itemBuilder: (context, index) {
-                final isSelected = selectedCityIndex == index;
-
-                return GestureDetector(
-                  onTap: () => setState(() => selectedCityIndex = index),
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.blue : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.blue),
-                    ),
-                    child: Text(
-                      cities[index],
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.blue,
+            /// ── CITY FILTER CHIPS ──
+            SizedBox(
+              height: 50,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                itemCount: cities.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  final city = cities[index];
+                  final isSelected = selectedCity == city;
+                  return GestureDetector(
+                    onTap: () => setState(() => selectedCity = city),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected ? Colors.red : Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(
+                          color:
+                              isSelected ? Colors.red : Colors.grey.shade300,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 6,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          city,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.black87,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
 
-          const SizedBox(height: 5),
+            const SizedBox(height: 10),
 
-          /// 🔥 MAIN
-          Expanded(
-            child: Row(
-              children: [
-                /// LEFT PANEL
-                Container(
-                  width: 90,
-                  color: Colors.grey.shade100,
-                  child: ListView.builder(
-                    itemCount: categories.length,
-                    itemBuilder: (context, index) {
-                      final isSelected = selectedCategoryIndex == index;
-
-                      return GestureDetector(
-                        onTap: () =>
-                            setState(() => selectedCategoryIndex = index),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          child: Column(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor:
-                                    isSelected ? Colors.blue : Colors.white,
-                                child: Icon(
-                                  categories[index]["icon"] as IconData,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.black54,
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                categories[index]["name"] as String,
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color:
-                                      isSelected ? Colors.blue : Colors.black,
-                                ),
-                              )
-                            ],
+            /// ── HOTEL LIST ──
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.hotel,
+                              size: 75, color: Colors.grey.shade400),
+                          const SizedBox(height: 14),
+                          Text(
+                            "No hotels available",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey.shade700,
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-                /// RIGHT GRID (FIXED)
-                Expanded(
-                  child: filtered.isEmpty
-                      ? const Center(child: Text("No hotels found"))
-                      : GridView.builder(
-                          padding: const EdgeInsets.all(10),
-                          itemCount: filtered.length,
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: isTablet ? 3 : 2,
-
-                            /// 🔥 MAIN FIX (NO OVERFLOW)
-                            mainAxisExtent: 240,
-
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
+                          const SizedBox(height: 6),
+                          Text(
+                            "Try another search or city",
+                            style: TextStyle(color: Colors.grey.shade600),
                           ),
-                          itemBuilder: (context, index) {
-                            final hotel = filtered[index];
-
-                            return HotelCard(
-                              hotel: hotel,
-                              onView: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        HotelDetailPage(hotel: hotel),
-                                  ),
-                                );
-                              },
-                              onBook: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        HotelDetailPage(hotel: hotel),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
-                ),
-              ],
+                        ],
+                      ),
+                    )
+                  : ListView.separated(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: 20, top: 4),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 2),
+                      itemBuilder: (context, index) {
+                        return HotelCard(hotel: filtered[index]);
+                      },
+                    ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -13,8 +13,10 @@ class Resort {
 
   final List<String> facilities;
   final String description;
-
   final String providerId;
+
+  // ✅ NEW — per-resort gallery images for the detail page
+  final List<Map<String, String>> images;
 
   const Resort({
     required this.name,
@@ -28,77 +30,85 @@ class Resort {
     required this.facilities,
     required this.description,
     required this.providerId,
+    required this.images,
   });
 }
 
-/// ================= ONLY VIRAR CITY =================
-const List<String> cities = [
-  "Virar",
-];
-
 /// ================= RESORT DATA =================
-const List<Resort> resortList = [
+const List<Resort> resorts = [
 
-  /// 1
+  /// 1 — Anand Resort
   Resort(
     name: "Anand Resort",
     city: "Virar",
-    location:
-        "Arnala Beach, Virar West, Palghar, Maharashtra 401303",
-
+    location: "Arnala Beach, Virar West, Palghar, Maharashtra 401303",
     providerId: "resort_001",
-
     image: "assets/anand.jpeg",
-
     price: 700,
     originalPrice: 900,
     discount: 20,
-
     rating: 4.2,
-
     facilities: [
       "Swimming Pool",
       "A/C Rooms",
       "Family Rooms",
       "Parking Facility",
     ],
-
     description:
         "Anand Resort is a peaceful resort near Arnala Beach offering relaxing stay, family rooms and comfortable amenities.",
+    images: [
+      {'path': 'assets/waterpark.jpeg', 'label': 'Water Park'},
+      {'path': 'assets/rpool.jpeg',     'label': 'Resort Pool'},
+      {'path': 'assets/lunch.jpeg',     'label': 'Lunch'},
+      {'path': 'assets/raindance.jpeg', 'label': 'Rain Dance'},
+    ],
+  ),
 
+
+   /// 2 — Alexon Resort
+  Resort(
+    name: "Alexon Resort",
+    city: "Virar",
+    location: "Arnala Beach, Virar West, Palghar, Maharashtra 401303",
+    providerId: "resort_002",
+    image: "assets/alexon.jpg",
+    price: 700,
+    originalPrice: 900,
+    discount: 20,
+    rating: 4.2,
+    facilities: [
+      "Swimming Pool",
+      "A/C Rooms",
+      "Family Rooms",
+      "Parking Facility",
+    ],
+    description:
+        "Alexon Resort is a peaceful resort near Arnala Beach offering relaxing stay, family rooms and comfortable amenities.",
+    images: [
+      {'path': 'assets/waterpark.jpeg', 'label': 'Water Park'},
+      {'path': 'assets/rpool.jpeg',     'label': 'Resort Pool'},
+      {'path': 'assets/lunch.jpeg',     'label': 'Lunch'},
+      {'path': 'assets/raindance.jpeg', 'label': 'Rain Dance'},
+    ],
   ),
 ];
 
 /// ================= HELPERS =================
 
 List<Resort> getResortsByCity(String city) {
-  return resortList
-      .where(
-        (resort) =>
-            resort.city.toLowerCase() ==
-            city.toLowerCase(),
-      )
+  return resorts
+      .where((r) => r.city.toLowerCase() == city.toLowerCase())
       .toList();
 }
 
-/// ================= SORT HELPERS =================
-
 List<Resort> sortByPriceLowHigh(List<Resort> list) {
   final sorted = [...list];
-
-  sorted.sort(
-    (a, b) => a.price.compareTo(b.price),
-  );
-
+  sorted.sort((a, b) => a.price.compareTo(b.price));
   return sorted;
 }
 
 List<Resort> sortByRating(List<Resort> list) {
   final sorted = [...list];
-
-  sorted.sort(
-    (a, b) => b.rating.compareTo(a.rating),
-  );
-
+  sorted.sort((a, b) => b.rating.compareTo(a.rating));
   return sorted;
 }

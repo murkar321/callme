@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,16 +10,21 @@ import '../screens/bottom_nav_page.dart';
 import '../payment/payment_page.dart';
 
 class SalonBookingPage extends StatefulWidget {
-  final List<dynamic> cartItems;
+  final List<CartItem> cartItems;
 
-  /// Pass the providerId of the salon whose services are in the cart.
-  /// Required so OrderService can fetch providerName & providerUserId from Firestore.
+  /// Caller may pass a pre-resolved provider ID so the Firestore lookup is
+  /// skipped entirely — same pattern as BookingPage / CivilBookingPage.
+  final String? initialProviderId;
+
+  /// Legacy param kept for backwards compat — treated as initialProviderId
+  /// when initialProviderId is null.
   final String providerId;
 
   const SalonBookingPage({
     super.key,
     required this.cartItems,
-    required this.providerId, // ← NEW: must be passed from the caller
+    this.providerId = '',
+    this.initialProviderId,
   });
 
   @override
@@ -32,18 +38,21 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   final _addressController = TextEditingController();
   final _noteController    = TextEditingController();
 
-  bool _isLoading         = false;
-  bool _isGettingLocation = false;
+  bool _isLoading          = false;
+  bool _isGettingLocation  = false;
+  bool _isLoadingProvider  = true;
+
+  // Provider resolved from Firestore
+  String? _providerId;
+  String? _providerName;
+  String? _noProviderMessage;
 
   late final AnimationController _animController;
   late final Animation<double>    _fadeIn;
 
-  // ── Visit-type helpers ─────────────────────────────────────
-  bool get _hasHome =>
-      widget.cartItems.any((e) => e.id.toString().contains('Home'));
-
-  bool get _hasSalon =>
-      widget.cartItems.any((e) => e.id.toString().contains('Salon'));
+  // ── Visit-type helpers ──────────────────────────────────────────────────
+  bool get _hasHome  => widget.cartItems.any((e) => e.id.toString().contains('Home'));
+  bool get _hasSalon => widget.cartItems.any((e) => !e.id.toString().contains('Home'));
 
   String get _visitType {
     if (_hasHome && _hasSalon) return 'Mixed';
@@ -51,20 +60,19 @@ class _SalonBookingPageState extends State<SalonBookingPage>
     return 'Salon';
   }
 
-  // ── Total ──────────────────────────────────────────────────
-  double get _totalAmount {
-    double total = 0;
-    for (final item in widget.cartItems) {
-      total += (item.price as num) * (item.quantity as num);
-    }
-    return total;
-  }
+  // ── Total ───────────────────────────────────────────────────────────────
+  double get _totalAmount => widget.cartItems.fold(
+      0.0, (sum, item) => sum + item.price * item.quantity);
 
-  // ── Services list for OrderService ────────────────────────
+  // ── Services list for OrderService ─────────────────────────────────────
   List<String> get _servicesForOrder => widget.cartItems
       .map((e) =>
           '${e.name} (${e.id.toString().contains("Home") ? "Home" : "Salon"}) x${e.quantity}')
       .toList();
+
+  // ==========================================================================
+  // INIT
+  // ==========================================================================
 
   @override
   void initState() {
@@ -75,6 +83,30 @@ class _SalonBookingPageState extends State<SalonBookingPage>
     );
     _fadeIn = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
+
+    // Pre-fill phone from Firebase auth
+    final user = FirebaseAuth.instance.currentUser;
+    if (user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty) {
+      final digits = user.phoneNumber!.replaceAll(RegExp(r'[^\d]'), '');
+      _phoneController.text =
+          digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+    }
+    if (user?.email != null) _emailController.text = user!.email!;
+
+    // Provider resolution — same pattern as BookingPage
+    final hint = widget.initialProviderId?.isNotEmpty == true
+        ? widget.initialProviderId
+        : widget.providerId.isNotEmpty
+            ? widget.providerId
+            : null;
+
+    if (hint != null) {
+      _providerId        = hint;
+      _isLoadingProvider = false;
+      _fetchProviderName(hint);
+    } else {
+      _loadProvider();
+    }
   }
 
   @override
@@ -87,9 +119,94 @@ class _SalonBookingPageState extends State<SalonBookingPage>
     super.dispose();
   }
 
-  // ==========================================================
+  // ==========================================================================
+  // PROVIDER LOADER  (mirrors BookingPage exactly)
+  // ==========================================================================
+
+  Future<void> _fetchProviderName(String id) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('providers')
+          .doc(id)
+          .get();
+      if (!mounted || !doc.exists) return;
+      final data     = doc.data()!;
+      final business = (data['business'] as Map<String, dynamic>?) ?? {};
+      setState(() {
+        _providerName = (business['businessName'] ?? data['providerName'] ?? '')
+            .toString();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadProvider() async {
+    setState(() {
+      _isLoadingProvider = true;
+      _noProviderMessage = null;
+    });
+    try {
+      // Query by serviceType: "salon"
+      final snap = await FirebaseFirestore.instance
+          .collection('providers')
+          .where('serviceType', isEqualTo: 'salon')
+          .where('status', isEqualTo: 'approved')
+          .limit(1)
+          .get();
+
+      if (snap.docs.isNotEmpty) {
+        _setProvider(snap.docs.first.id, snap.docs.first.data());
+        return;
+      }
+
+      // Fallback: scan all approved providers
+      final allSnap = await FirebaseFirestore.instance
+          .collection('providers')
+          .where('status', isEqualTo: 'approved')
+          .get();
+
+      final match = allSnap.docs.where((doc) {
+        final st = (doc.data()['serviceType'] ?? '').toString().toLowerCase();
+        return st == 'salon';
+      }).firstOrNull;
+
+      if (match != null) {
+        _setProvider(match.id, match.data());
+      } else {
+        if (mounted) {
+          setState(() {
+            _noProviderMessage =
+                'No approved salon provider available yet.\nPlease try again later.';
+            _isLoadingProvider = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[SalonBookingPage] _loadProvider error: $e');
+      if (mounted) {
+        setState(() {
+          _noProviderMessage =
+              'Could not load a provider. Check your connection and try again.';
+          _isLoadingProvider = false;
+        });
+      }
+    }
+  }
+
+  void _setProvider(String id, Map<String, dynamic> data) {
+    if (!mounted) return;
+    final business = (data['business'] as Map<String, dynamic>?) ?? {};
+    setState(() {
+      _providerId        = id;
+      _providerName      = (business['businessName'] ?? data['providerName'] ?? '')
+          .toString();
+      _isLoadingProvider = false;
+    });
+    debugPrint('[SalonBookingPage] provider: $_providerName (id=$_providerId)');
+  }
+
+  // ==========================================================================
   // BUILD
-  // ==========================================================
+  // ==========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -102,32 +219,106 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             children: [
               _buildHeader(),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-                  children: [
-                    _sectionTitle('Selected Services'),
-                    _buildServicesCard(),
-                    const SizedBox(height: 20),
-                    _sectionTitle('Appointment Type'),
-                    _buildVisitTypeCard(),
-                    const SizedBox(height: 20),
-                    _sectionTitle('Your Details'),
-                    _buildDetailsCard(),
-                    const SizedBox(height: 120),
-                  ],
-                ),
+                child: _isLoadingProvider
+                    ? _buildLoadingState()
+                    : _noProviderMessage != null
+                        ? _buildNoProviderState()
+                        : _buildScrollBody(),
               ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: _buildBottomBar(),
+      bottomNavigationBar:
+          (!_isLoadingProvider && _noProviderMessage == null)
+              ? _buildBottomBar()
+              : null,
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
+  // LOADING / NO PROVIDER STATES
+  // ==========================================================================
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(color: Color(0xFFB38BFA)),
+          const SizedBox(height: 16),
+          Text('Finding a salon provider…',
+              style: TextStyle(color: Colors.grey.shade500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoProviderState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade100, shape: BoxShape.circle),
+              child: Icon(Icons.store_mall_directory_outlined,
+                  size: 52, color: Colors.grey.shade400),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _noProviderMessage ?? 'No provider available',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: Colors.grey.shade600, fontSize: 15, height: 1.6),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadProvider,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB38BFA),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try Again'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // SCROLL BODY
+  // ==========================================================================
+
+  Widget _buildScrollBody() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      children: [
+        _sectionTitle('Selected Services'),
+        _buildServicesCard(),
+        const SizedBox(height: 20),
+        _sectionTitle('Appointment Type'),
+        _buildVisitTypeCard(),
+        const SizedBox(height: 20),
+        _sectionTitle('Your Details'),
+        _buildDetailsCard(),
+        const SizedBox(height: 120),
+      ],
+    );
+  }
+
+  // ==========================================================================
   // HEADER
-  // ==========================================================
+  // ==========================================================================
 
   Widget _buildHeader() {
     return Container(
@@ -142,16 +333,46 @@ class _SalonBookingPageState extends State<SalonBookingPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(14),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.arrow_back, color: Colors.white),
+                ),
               ),
-              child: const Icon(Icons.arrow_back, color: Colors.white),
-            ),
+              const Spacer(),
+              if (_providerName != null && _providerName!.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.storefront_rounded,
+                          size: 12, color: Colors.white),
+                      const SizedBox(width: 5),
+                      Text(
+                        _providerName!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 24),
           const Text(
@@ -172,9 +393,9 @@ class _SalonBookingPageState extends State<SalonBookingPage>
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
   // SERVICES CARD
-  // ==========================================================
+  // ==========================================================================
 
   Widget _buildServicesCard() {
     return _card(
@@ -209,17 +430,13 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                       Text(
                         item.name,
                         style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                            fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '${isHome ? "Home Visit" : "Salon Visit"} • Qty ${item.quantity}',
                         style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 13,
-                        ),
+                            color: Colors.grey.shade600, fontSize: 13),
                       ),
                     ],
                   ),
@@ -227,9 +444,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 Text(
                   '₹${(item.price * item.quantity).toStringAsFixed(0)}',
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                      fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ],
             ),
@@ -239,43 +454,43 @@ class _SalonBookingPageState extends State<SalonBookingPage>
     );
   }
 
-  // ==========================================================
-  // VISIT TYPE CARD
-  // ==========================================================
+  // ==========================================================================
+  // VISIT TYPE CARD  (home/salon popup — kept exactly as original)
+  // ==========================================================================
 
   Widget _buildVisitTypeCard() {
     return _card(
       child: Row(
         children: [
-          _visitChip(Icons.home, 'Home', _hasHome),
+          _visitChip(Icons.home_rounded, 'Home', _hasHome),
           const SizedBox(width: 12),
-          _visitChip(Icons.store, 'Salon', _hasSalon),
+          _visitChip(Icons.store_rounded, 'Salon', _hasSalon),
         ],
       ),
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
   // DETAILS CARD
-  // ==========================================================
+  // ==========================================================================
 
   Widget _buildDetailsCard() {
     return _card(
       child: Column(
         children: [
-          _input(_phoneController, 'Phone Number', Icons.phone,
+          _input(_phoneController, 'Phone Number', Icons.phone_outlined,
               keyboardType: TextInputType.phone),
           const SizedBox(height: 16),
-          _input(_emailController, 'Email Address', Icons.email,
+          _input(_emailController, 'Email Address', Icons.email_outlined,
               keyboardType: TextInputType.emailAddress),
           const SizedBox(height: 16),
 
-          // Address only shown for home-visit items
+          // Address shown only for home-visit items
           if (_hasHome) ...[
             _input(
               _addressController,
               'Home Address',
-              Icons.location_on,
+              Icons.location_on_outlined,
               maxLines: 3,
             ),
             const SizedBox(height: 12),
@@ -298,16 +513,12 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                         height: 18,
                         width: 18,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
+                            color: Colors.white, strokeWidth: 2),
                       )
-                    : const Icon(Icons.my_location),
-                label: Text(
-                  _isGettingLocation
-                      ? 'Getting Location…'
-                      : 'Use Current Location',
-                ),
+                    : const Icon(Icons.my_location_rounded),
+                label: Text(_isGettingLocation
+                    ? 'Getting Location…'
+                    : 'Use Current Location'),
               ),
             ),
             const SizedBox(height: 16),
@@ -316,7 +527,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
           _input(
             _noteController,
             'Additional Note (optional)',
-            Icons.notes,
+            Icons.notes_rounded,
             maxLines: 3,
           ),
         ],
@@ -324,22 +535,20 @@ class _SalonBookingPageState extends State<SalonBookingPage>
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
   // BOTTOM BAR
-  // ==========================================================
+  // ==========================================================================
 
   Widget _buildBottomBar() {
+    final canPay = !_isLoading && _providerId != null;
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
-            blurRadius: 20,
-            color: Colors.black.withOpacity(0.07),
-          ),
+              blurRadius: 20, color: Colors.black.withOpacity(0.07)),
         ],
       ),
       child: SafeArea(
@@ -350,16 +559,12 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'Total Amount',
-                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
+                  const Text('Total Amount',
+                      style: TextStyle(color: Colors.grey, fontSize: 13)),
                   Text(
                     '₹${_totalAmount.toStringAsFixed(0)}',
                     style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                        fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -367,33 +572,26 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             const SizedBox(width: 16),
             Expanded(
               child: ElevatedButton(
-                onPressed: _isLoading ? null : _continueToPayment,
+                onPressed: canPay ? _continueToPayment : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFB38BFA),
                   foregroundColor: Colors.white,
                   disabledBackgroundColor:
-                      const Color(0xFFB38BFA).withOpacity(0.5),
+                      const Color(0xFFB38BFA).withOpacity(0.4),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
+                      borderRadius: BorderRadius.circular(18)),
                 ),
                 child: _isLoading
                     ? const SizedBox(
                         height: 22,
                         width: 22,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
+                            color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text(
-                        'Proceed To Pay',
+                    : const Text('Proceed To Pay',
                         style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                            fontSize: 15, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -402,38 +600,33 @@ class _SalonBookingPageState extends State<SalonBookingPage>
     );
   }
 
-  // ==========================================================
+  // ==========================================================================
   // PAYMENT FLOW
-  // ==========================================================
+  // ==========================================================================
 
   Future<void> _continueToPayment() async {
-    // ── Validation ──────────────────────────────────────────
-    final phone = _phoneController.text.trim();
-    final email = _emailController.text.trim();
+    final phone   = _phoneController.text.trim();
+    final email   = _emailController.text.trim();
     final address = _addressController.text.trim();
 
     if (phone.isEmpty || email.isEmpty) {
       _showPopup('Please fill phone and email', false);
       return;
     }
-
     if (_hasHome && address.isEmpty) {
       _showPopup('Home address is required for home-visit services', false);
       return;
     }
-
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       _showPopup('Please log in first', false);
       return;
     }
-
-    if (widget.providerId.isEmpty) {
+    if (_providerId == null || _providerId!.isEmpty) {
       _showPopup('Provider information missing. Please try again.', false);
       return;
     }
 
-    // ── Navigate to payment ─────────────────────────────────
     final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(
@@ -444,16 +637,10 @@ class _SalonBookingPageState extends State<SalonBookingPage>
       ),
     );
 
-    // result == true  → online payment success
-    // result == 'offline' → cash/offline payment
     if (result != true && result != 'offline') return;
 
     setState(() => _isLoading = true);
-
     try {
-      // ── Place order via OrderService ────────────────────────
-      // OrderService.placeOrder fetches providerName & providerUserId
-      // from Firestore internally using providerId — no need to pass them here.
       await OrderService.placeOrder(
         serviceType:   'salon',
         services:      _servicesForOrder,
@@ -469,31 +656,21 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         time:          TimeOfDay.now().format(context),
         totalAmount:   _totalAmount,
         visitType:     _visitType,
-        providerId:    widget.providerId,
+        providerId:    _providerId!,
         isEnquiry:     false,
-        // providerName and providerUserId are resolved inside OrderService
-        // from the providerId — the named params below satisfy the signature
-        // only if your OrderService still exposes them externally.
-        // Remove the two lines below if your OrderService signature
-        // no longer includes them (the version provided doesn't need them).
-        providerName:  '',   // resolved internally by OrderService
+        providerName:  _providerName ?? '',
       );
 
-      // ── Clear cart ──────────────────────────────────────────
       Cart.clear('Salon');
 
-      // ── Success popup ───────────────────────────────────────
       _showPopup(
-        result == 'offline'
-            ? 'Booking Placed Successfully!'
-            : 'Payment Successful!',
+        result == 'offline' ? 'Booking Placed Successfully!' : 'Payment Successful!',
         true,
       );
 
       await Future.delayed(const Duration(seconds: 2));
       if (!mounted) return;
 
-      // ── Navigate home ───────────────────────────────────────
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -505,16 +682,16 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         (_) => false,
       );
     } catch (e) {
-      debugPrint('[SalonBooking] placeOrder error: $e');
+      debugPrint('[SalonBookingPage] placeOrder error: $e');
       _showPopup('Something went wrong. Please try again.', false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // ==========================================================
+  // ==========================================================================
   // LOCATION
-  // ==========================================================
+  // ==========================================================================
 
   Future<void> _getCurrentLocation() async {
     setState(() => _isGettingLocation = true);
@@ -524,7 +701,6 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         _showPopup('Location services are disabled', false);
         return;
       }
-
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -534,16 +710,10 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         _showPopup('Location permission denied', false);
         return;
       }
-
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
+          desiredAccuracy: LocationAccuracy.high);
       final placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-
+          position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         final p = placemarks.first;
         _addressController.text =
@@ -553,16 +723,16 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 .trim();
       }
     } catch (e) {
-      debugPrint('[SalonBooking] location error: $e');
+      debugPrint('[SalonBookingPage] location error: $e');
       _showPopup('Could not fetch location: $e', false);
     } finally {
       if (mounted) setState(() => _isGettingLocation = false);
     }
   }
 
-  // ==========================================================
-  // POPUP
-  // ==========================================================
+  // ==========================================================================
+  // POPUP  (kept exactly as original)
+  // ==========================================================================
 
   void _showPopup(String message, bool success) {
     if (!mounted) return;
@@ -574,9 +744,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         child: Container(
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-          ),
+              color: Colors.white, borderRadius: BorderRadius.circular(28)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -600,35 +768,27 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
+                    fontSize: 17, fontWeight: FontWeight.bold),
               ),
             ],
           ),
         ),
       ),
     );
-
-    if (success) return; // success dialog is dismissed manually after delay
+    if (success) return;
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted && Navigator.canPop(context)) Navigator.pop(context);
     });
   }
 
-  // ==========================================================
+  // ==========================================================================
   // UI HELPERS
-  // ==========================================================
+  // ==========================================================================
 
   Widget _sectionTitle(String title) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
-        child: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        child: Text(title,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
       );
 
   Widget _card({required Widget child}) => Container(
@@ -653,8 +813,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
           decoration: BoxDecoration(
             gradient: active
                 ? const LinearGradient(
-                    colors: [Color(0xFFB38BFA), Color(0xFFE8A0BF)],
-                  )
+                    colors: [Color(0xFFB38BFA), Color(0xFFE8A0BF)])
                 : null,
             color: active ? null : Colors.grey.shade200,
             borderRadius: BorderRadius.circular(20),
@@ -695,10 +854,8 @@ class _SalonBookingPageState extends State<SalonBookingPage>
           keyboardType: keyboardType,
           decoration: InputDecoration(
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 18,
-            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             hintText: hint,
             hintStyle: TextStyle(color: Colors.grey.shade400),
             prefixIcon: Icon(icon, color: const Color(0xFFB38BFA)),
