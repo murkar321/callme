@@ -13,16 +13,30 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
-import 'package:google_maps_flutter/google_maps_flutter.dart'
-    show LatLng; // only LatLng needed here; full map is in MapPickerPage
+import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 import 'package:callme/screens/map_picker_page.dart';
 
 import 'package:intl/intl.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _kAccent     = Color(0xFF5B4FCF);
+const _kAccentSoft = Color(0xFF7B6FE8);
+const _kBg         = Color(0xFFF4F3FB);
+const _kCard       = Colors.white;
+const _kSuccess    = Color(0xFF34C759);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOKING PAGE
+// ─────────────────────────────────────────────────────────────────────────────
+
 class BookingPage extends StatefulWidget {
-  final String serviceName;
+  final String          serviceName;
   final ServiceProduct? product;
   final List<CartItem>? cart;
+  final String?         initialProviderId;
 
   const BookingPage({
     super.key,
@@ -34,87 +48,70 @@ class BookingPage extends StatefulWidget {
     required String providerId,
   });
 
-  final String? initialProviderId;
-
   @override
   State<BookingPage> createState() => _BookingPageState();
 }
 
 class _BookingPageState extends State<BookingPage>
     with TickerProviderStateMixin {
-  // =========================================================
-  // CONTROLLERS
-  // =========================================================
 
-  final _nameController    = TextEditingController();
-  final _phoneController   = TextEditingController();
-  final _addressController = TextEditingController();
-  final _noteController    = TextEditingController();
+  // ── Controllers ──────────────────────────────────────────────────────────
+  final _nameCtrl    = TextEditingController();
+  final _phoneCtrl   = TextEditingController();
+  final _addressCtrl = TextEditingController();
+  final _noteCtrl    = TextEditingController();
+  final _phoneFocus  = FocusNode();
+  final _scrollCtrl  = ScrollController();
 
-  final _phoneFocus = FocusNode();
-
-  DateTime?  _selectedDate;
-  TimeOfDay? _selectedTime;
+  // ── State ─────────────────────────────────────────────────────────────────
+  DateTime?  _date;
+  TimeOfDay? _time;
 
   bool _isLoading         = false;
   bool _isSuccess         = false;
   bool _isGettingLocation = false;
   bool _isLoadingProvider = true;
+  bool _phoneComplete     = false;
+  bool _summaryExpanded   = true;
 
-  // Keeps the LatLng chosen from the map picker so it can be attached to the
-  // order if needed later (currently stored as address string).
   LatLng? _pickedLatLng;
+  String  _bookingId = '';
 
-  String _bookingId = '';
-
-  // Provider resolved from Firestore
   String? _providerId;
   String? _providerName;
   String? _noProviderMessage;
 
-  // Adaptive reveal: schedule + summary shown after phone is filled
-  bool _phoneComplete = false;
-
-  // Animation controllers
+  // ── Animations ────────────────────────────────────────────────────────────
   late final AnimationController _pageAnim;
   late final AnimationController _revealAnim;
   late final Animation<double>   _pageFade;
   late final Animation<Offset>   _revealSlide;
   late final Animation<double>   _revealFade;
 
-  static const _accent  = Color(0xFF6A5AE0);
-  static const _accent2 = Color(0xFF8F7CFF);
-
-  // =========================================================
-  // INIT
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
+  // LIFECYCLE
+  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
 
-    _pageAnim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _revealAnim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 450),
-    );
+    _pageAnim   = AnimationController(vsync: this,
+        duration: const Duration(milliseconds: 520));
+    _revealAnim = AnimationController(vsync: this,
+        duration: const Duration(milliseconds: 480));
 
-    _pageFade = CurvedAnimation(parent: _pageAnim, curve: Curves.easeOut);
+    _pageFade    = CurvedAnimation(parent: _pageAnim,   curve: Curves.easeOut);
     _revealSlide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
+      begin: const Offset(0, 0.1),
+      end:   Offset.zero,
     ).animate(CurvedAnimation(parent: _revealAnim, curve: Curves.easeOutCubic));
-    _revealFade = CurvedAnimation(parent: _revealAnim, curve: Curves.easeOut);
+    _revealFade  = CurvedAnimation(parent: _revealAnim, curve: Curves.easeOut);
 
     _pageAnim.forward();
+    _phoneCtrl.addListener(_onPhoneChanged);
 
-    _phoneController.addListener(_onPhoneChanged);
-
-    if (widget.initialProviderId != null &&
-        widget.initialProviderId!.isNotEmpty) {
+    if (widget.initialProviderId?.isNotEmpty == true) {
       _providerId        = widget.initialProviderId;
       _isLoadingProvider = false;
       _fetchProviderName(widget.initialProviderId!);
@@ -124,14 +121,10 @@ class _BookingPageState extends State<BookingPage>
   }
 
   void _onPhoneChanged() {
-    final complete = _phoneController.text.trim().length >= 10;
-    if (complete != _phoneComplete) {
-      setState(() => _phoneComplete = complete);
-      if (complete) {
-        _revealAnim.forward();
-      } else {
-        _revealAnim.reverse();
-      }
+    final done = _phoneCtrl.text.trim().length >= 10;
+    if (done != _phoneComplete) {
+      setState(() => _phoneComplete = done);
+      done ? _revealAnim.forward() : _revealAnim.reverse();
     }
   }
 
@@ -139,194 +132,267 @@ class _BookingPageState extends State<BookingPage>
   void dispose() {
     _pageAnim.dispose();
     _revealAnim.dispose();
-    _phoneController.removeListener(_onPhoneChanged);
-    _nameController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
-    _noteController.dispose();
+    _phoneCtrl.removeListener(_onPhoneChanged);
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _addressCtrl.dispose();
+    _noteCtrl.dispose();
     _phoneFocus.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
-  // =========================================================
-  // PROVIDER LOADER
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
+  // PROVIDER
+  // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _fetchProviderName(String id) async {
     try {
       final doc = await FirebaseFirestore.instance
-          .collection('providers')
-          .doc(id)
-          .get();
+          .collection('providers').doc(id).get();
       if (!mounted || !doc.exists) return;
-      final data     = doc.data()!;
-      final business = (data['business'] as Map<String, dynamic>?) ?? {};
-      setState(() {
-        _providerName = (business['businessName'] ??
-                data['providerName'] ?? '')
-            .toString();
-      });
+      final d = doc.data()!;
+      final b = (d['business'] as Map<String, dynamic>?) ?? {};
+      setState(() => _providerName =
+          (b['businessName'] ?? d['providerName'] ?? '').toString());
     } catch (_) {}
   }
 
   Future<void> _loadProvider() async {
-    setState(() {
-      _isLoadingProvider = true;
-      _noProviderMessage = null;
-    });
+    setState(() { _isLoadingProvider = true; _noProviderMessage = null; });
     try {
-      final normalised = widget.serviceName.trim().toLowerCase();
-
+      final norm = widget.serviceName.trim().toLowerCase();
       final snap = await FirebaseFirestore.instance
           .collection('providers')
-          .where('serviceType', isEqualTo: normalised)
-          .where('status', isEqualTo: 'approved')
-          .limit(1)
-          .get();
+          .where('serviceType', isEqualTo: norm)
+          .where('status',      isEqualTo: 'approved')
+          .limit(1).get();
 
       if (snap.docs.isNotEmpty) {
         _setProvider(snap.docs.first.id, snap.docs.first.data());
         return;
       }
 
-      final allSnap = await FirebaseFirestore.instance
+      final all = await FirebaseFirestore.instance
           .collection('providers')
-          .where('status', isEqualTo: 'approved')
-          .get();
-
-      final match = allSnap.docs.where((doc) {
-        final st =
-            (doc.data()['serviceType'] ?? '').toString().toLowerCase();
-        return st == normalised;
-      }).firstOrNull;
+          .where('status', isEqualTo: 'approved').get();
+      final match = all.docs.where((d) =>
+          (d.data()['serviceType'] ?? '').toString().toLowerCase() == norm
+      ).firstOrNull;
 
       if (match != null) {
         _setProvider(match.id, match.data());
       } else {
-        if (mounted) {
-          setState(() {
-            _noProviderMessage =
-                'No approved provider available for "${widget.serviceName}" yet.\n'
-                'Please try again later.';
-            _isLoadingProvider = false;
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('[BookingPage] _loadProvider error: $e');
-      if (mounted) {
-        setState(() {
+        if (mounted) setState(() {
           _noProviderMessage =
-              'Could not load a provider. Check your connection and try again.';
+              'No approved provider for "${widget.serviceName}" yet.\nTry again later.';
           _isLoadingProvider = false;
         });
       }
+    } catch (e) {
+      if (mounted) setState(() {
+        _noProviderMessage = 'Could not load provider. Check your connection.';
+        _isLoadingProvider = false;
+      });
     }
   }
 
-  void _setProvider(String id, Map<String, dynamic> data) {
+  void _setProvider(String id, Map<String, dynamic> d) {
     if (!mounted) return;
-    final business = (data['business'] as Map<String, dynamic>?) ?? {};
+    final b = (d['business'] as Map<String, dynamic>?) ?? {};
     setState(() {
       _providerId        = id;
-      _providerName      = (business['businessName'] ??
-              data['providerName'] ?? '')
-          .toString();
+      _providerName      =
+          (b['businessName'] ?? d['providerName'] ?? '').toString();
       _isLoadingProvider = false;
     });
-    debugPrint('[BookingPage] provider: $_providerName (id=$_providerId)');
   }
 
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
   // CART / TOTAL
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
 
   List<CartItem> get _cartItems {
-    if (widget.cart != null && widget.cart!.isNotEmpty) return widget.cart!;
+    if (widget.cart?.isNotEmpty == true) return widget.cart!;
     return Cart.getItems(widget.serviceName);
   }
 
   bool get _isCart   => _cartItems.isNotEmpty;
   bool get _isSingle => widget.product != null;
 
-  double get _total {
-    if (_isCart) {
-      return _cartItems.fold(
-          0.0, (sum, item) => sum + item.price * item.quantity);
-    }
-    if (_isSingle) return widget.product!.calculatedFinalPrice.toDouble();
-    return 0.0;
-  }
+  // FIX: explicit .toDouble() so the fold always returns double
+  double get _total => _isCart
+      ? _cartItems.fold(
+          0.0, (s, i) => s + (i.price * i.quantity).toDouble())
+      : _isSingle
+          ? widget.product!.calculatedFinalPrice.toDouble()
+          : 0.0;
 
   List<String> get _servicesForOrder => _isCart
       ? _cartItems.map((e) => '${e.name} x${e.quantity}').toList()
       : [widget.product?.name ?? widget.serviceName];
 
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
   // BUILD
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F1F8),
-      body: _isSuccess ? _buildSuccessView() : _buildMainView(),
-      bottomNavigationBar: _isSuccess ? null : _buildBottomBar(),
-    );
-  }
-
-  // =========================================================
-  // MAIN VIEW
-  // =========================================================
-
-  Widget _buildMainView() {
-    return SafeArea(
-      child: FadeTransition(
-        opacity: _pageFade,
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: _isLoadingProvider
-                  ? _buildLoadingState()
-                  : _noProviderMessage != null
-                      ? _buildNoProviderState()
-                      : _buildScrollBody(),
-            ),
-          ],
-        ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: _kBg,
+        body: _isSuccess ? _buildSuccessView() : _buildMainView(),
+        bottomNavigationBar: _isSuccess ? null : _buildBottomBar(),
       ),
     );
   }
 
-  Widget _buildLoadingState() {
-    return Center(
+  // ─────────────────────────────────────────────────────────────────────────
+  // MAIN VIEW
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildMainView() {
+    return FadeTransition(
+      opacity: _pageFade,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(color: _accent),
-          const SizedBox(height: 16),
-          Text(
-            'Finding a provider…',
-            style: TextStyle(color: Colors.grey.shade500),
+          _buildHeader(),
+          Expanded(
+            child: _isLoadingProvider
+                ? _buildLoadingState()
+                : _noProviderMessage != null
+                    ? _buildNoProviderState()
+                    : _buildBody(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildScrollBody() {
+  // ─────────────────────────────────────────────────────────────────────────
+  // HEADER  (safe-area aware)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildHeader() {
+    final top = MediaQuery.of(context).padding.top;
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, top + 14, 20, 22),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_kAccent, _kAccentSoft],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+      ),
+      child: Row(
+        children: [
+          _circleBtn(
+            icon:  Icons.arrow_back_ios_new_rounded,
+            onTap: () => Navigator.pop(context),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Book Service',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3)),
+                const SizedBox(height: 2),
+                Text(widget.serviceName,
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 13),
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          if (_providerName?.isNotEmpty == true)
+            _providerChip(_providerName!),
+        ],
+      ),
+    );
+  }
+
+  Widget _circleBtn(
+      {required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40, height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: Colors.white, size: 18),
+      ),
+    );
+  }
+
+  Widget _providerChip(String name) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.storefront_rounded,
+              color: Colors.white, size: 13),
+          const SizedBox(width: 5),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 90),
+            child: Text(name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // BODY
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildBody() {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+      controller: _scrollCtrl,
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
       children: [
-        // ── Step 1: Your Details ──────────────────────────────
-        _stepLabel('1', 'Your Details'),
+
+        // ── SERVICES SUMMARY (always visible, collapsible) ──────────────
+        _ServicesSummaryCard(
+          cartItems:   _isCart ? _cartItems : null,
+          productName: _isSingle
+              ? (widget.product?.name ?? widget.serviceName)
+              : null,
+          total:       _total,
+          expanded:    _summaryExpanded,
+          onToggle:    () =>
+              setState(() => _summaryExpanded = !_summaryExpanded),
+        ),
+
+        const SizedBox(height: 20),
+
+        // ── STEP 1 ──────────────────────────────────────────────────────
+        _StepHeader(number: 1, label: 'Your Details'),
         const SizedBox(height: 10),
         _buildDetailsCard(),
 
-        // ── Steps 2 & 3 revealed after phone is complete ─────
+        // ── STEPS 2 & 3 revealed after phone is complete ────────────────
         AnimatedSize(
-          duration: const Duration(milliseconds: 350),
+          duration: const Duration(milliseconds: 380),
           curve: Curves.easeOutCubic,
           child: _phoneComplete
               ? SlideTransition(
@@ -336,18 +402,14 @@ class _BookingPageState extends State<BookingPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── Step 2: Schedule ──────────────────
-                        const SizedBox(height: 20),
-                        _stepLabel('2', 'Schedule'),
+                        const SizedBox(height: 24),
+                        _StepHeader(number: 2, label: 'Schedule'),
                         const SizedBox(height: 10),
                         _buildDateTimeRow(),
-
-                        // ── Step 3: Booking Summary ───────────
-                        const SizedBox(height: 20),
-                        _stepLabel('3', 'Booking Summary'),
+                        const SizedBox(height: 24),
+                        _StepHeader(number: 3, label: 'Additional Note'),
                         const SizedBox(height: 10),
-                        _buildSummaryCard(),
-                        const SizedBox(height: 20),
+                        _buildNoteCard(),
                       ],
                     ),
                   ),
@@ -355,724 +417,345 @@ class _BookingPageState extends State<BookingPage>
               : const SizedBox.shrink(),
         ),
 
-        const SizedBox(height: 80),
+        const SizedBox(height: 120),
       ],
     );
   }
 
-  // =========================================================
-  // HEADER
-  // =========================================================
-
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_accent, _accent2],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  padding: const EdgeInsets.all(9),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.arrow_back,
-                      color: Colors.white, size: 20),
-                ),
-              ),
-              const Spacer(),
-              if (_providerName != null && _providerName!.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.storefront_rounded,
-                          size: 12, color: Colors.white),
-                      const SizedBox(width: 5),
-                      Text(
-                        _providerName!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          const Text(
-            'Book Service',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            widget.serviceName,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.85),
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // =========================================================
-  // NO PROVIDER STATE
-  // =========================================================
-
-  Widget _buildNoProviderState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.store_mall_directory_outlined,
-                  size: 52, color: Colors.grey.shade400),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              _noProviderMessage ?? 'No provider available',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 15,
-                height: 1.6,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadProvider,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _accent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 24, vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-              ),
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try Again'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // =========================================================
-  // STEP LABEL
-  // =========================================================
-
-  Widget _stepLabel(String number, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 28,
-          height: 28,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(colors: [_accent, _accent2]),
-            shape: BoxShape.circle,
-          ),
-          child: Text(
-            number,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // =========================================================
-  // DETAILS CARD  (Step 1)
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
+  // STEP 1 — Details card
+  // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildDetailsCard() {
-    return _card(
+    return _Card(
       child: Column(
         children: [
-          _field(
-            controller: _nameController,
-            hint: 'Full Name',
+          _Field(
+            controller: _nameCtrl,
+            hint: 'Full name',
             icon: Icons.person_outline_rounded,
+            onChanged: (_) => setState(() {}),
           ),
-          const SizedBox(height: 14),
-
-          _field(
-            controller: _phoneController,
-            hint: 'Mobile Number (10 digits)',
+          const SizedBox(height: 12),
+          _Field(
+            controller: _phoneCtrl,
+            hint: 'Mobile number',
             icon: Icons.phone_outlined,
             keyboard: TextInputType.phone,
             focusNode: _phoneFocus,
-            inputFormatters: [
+            formatters: [
               FilteringTextInputFormatter.digitsOnly,
               LengthLimitingTextInputFormatter(10),
             ],
             suffix: _phoneComplete
                 ? const Icon(Icons.check_circle_rounded,
-                    color: Colors.green, size: 20)
+                    color: _kSuccess, size: 20)
                 : null,
           ),
-
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            child: !_phoneComplete
-                ? Padding(
-                    key: const ValueKey('hint'),
-                    padding: const EdgeInsets.only(top: 8, left: 4),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline,
-                            size: 13, color: Colors.grey.shade400),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Enter 10-digit phone to continue',
-                          style: TextStyle(
-                            color: Colors.grey.shade400,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : const SizedBox.shrink(key: ValueKey('no-hint')),
-          ),
-
-          const SizedBox(height: 14),
-
-          _field(
-            controller: _addressController,
-            hint: 'Full Address',
+          if (!_phoneComplete) ...[
+            const SizedBox(height: 6),
+            _hintRow('Enter 10-digit number to unlock schedule'),
+          ],
+          const SizedBox(height: 12),
+          _Field(
+            controller: _addressCtrl,
+            hint: 'Full address',
             icon: Icons.location_on_outlined,
             maxLines: 3,
+            onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
-
-          // ── Location buttons row ──────────────────────────
           Row(
             children: [
-              // GPS button
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed:
-                      _isGettingLocation ? null : _getCurrentLocation,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _accent,
-                    side: const BorderSide(color: _accent, width: 1.4),
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  icon: _isGettingLocation
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(
-                              color: _accent, strokeWidth: 2),
-                        )
-                      : const Icon(Icons.my_location_rounded, size: 18),
-                  label: Text(
-                    _isGettingLocation ? 'Detecting…' : 'GPS',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
+                child: _OutlineBtn(
+                  icon:    _isGettingLocation ? null : Icons.my_location_rounded,
+                  label:   _isGettingLocation ? 'Detecting…' : 'Use GPS',
+                  loading: _isGettingLocation,
+                  onTap:   _isGettingLocation ? null : _getCurrentLocation,
                 ),
               ),
               const SizedBox(width: 10),
-              // Map picker button
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _openMapPicker,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _accent,
-                    side: const BorderSide(color: _accent, width: 1.4),
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  icon: const Icon(Icons.map_outlined, size: 18),
-                  label: const Text(
-                    'Pick on Map',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
+                child: _OutlineBtn(
+                  icon:  Icons.map_outlined,
+                  label: 'Pick on Map',
+                  onTap: _openMapPicker,
                 ),
               ),
             ],
-          ),
-
-          const SizedBox(height: 14),
-
-          _field(
-            controller: _noteController,
-            hint: 'Additional note (optional)',
-            icon: Icons.notes_rounded,
-            maxLines: 3,
           ),
         ],
       ),
     );
   }
 
-  // =========================================================
-  // DATE TIME ROW  (Step 2)
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
+  // STEP 2 — Date + Time
+  // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildDateTimeRow() {
     return Row(
       children: [
         Expanded(
-          child: _pickerTile(
-            icon: Icons.calendar_month_rounded,
-            label: 'Check-in Date',
-            value: _selectedDate == null
-                ? 'Tap to select'
-                : DateFormat('dd MMM yyyy').format(_selectedDate!),
-            selected: _selectedDate != null,
-            onTap: _pickDate,
+          child: _PickerTile(
+            icon:     Icons.calendar_month_rounded,
+            label:    'Date',
+            value:    _date == null
+                ? 'Tap to pick'
+                : DateFormat('dd MMM yyyy').format(_date!),
+            selected: _date != null,
+            onTap:    _pickDate,
           ),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 12),
         Expanded(
-          child: _pickerTile(
-            icon: Icons.access_time_rounded,
-            label: 'Preferred Time',
-            value: _selectedTime == null
-                ? 'Tap to select'
-                : _selectedTime!.format(context),
-            selected: _selectedTime != null,
-            onTap: _pickTime,
+          child: _PickerTile(
+            icon:     Icons.access_time_rounded,
+            label:    'Time',
+            value:    _time == null ? 'Tap to pick' : _time!.format(context),
+            selected: _time != null,
+            onTap:    _pickTime,
           ),
         ),
       ],
     );
   }
 
-  Widget _pickerTile({
-    required IconData icon,
-    required String label,
-    required String value,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: selected ? _accent.withOpacity(0.06) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected
-                ? _accent.withOpacity(0.5)
-                : Colors.grey.shade200,
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              blurRadius: 12,
-              color: Colors.black.withOpacity(0.04),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: selected
-                    ? _accent.withOpacity(0.12)
-                    : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon,
-                  color: selected ? _accent : Colors.grey.shade500,
-                  size: 18),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                color: selected ? _accent : Colors.grey.shade400,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
+  // ─────────────────────────────────────────────────────────────────────────
+  // STEP 3 — Note
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildNoteCard() {
+    return _Card(
+      child: _Field(
+        controller: _noteCtrl,
+        hint: 'Any special request? (optional)',
+        icon: Icons.notes_rounded,
+        maxLines: 3,
       ),
     );
   }
 
-  // =========================================================
-  // SUMMARY CARD  (Step 3)
-  // =========================================================
-
-  Widget _buildSummaryCard() {
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ..._buildServiceItems(),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
-            child: Divider(height: 1),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Total',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [_accent, _accent2],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '₹${_total.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildServiceItems() {
-    if (_isCart) {
-      return _cartItems
-          .map((item) => _ServiceRow(
-                name:  item.name,
-                qty:   item.quantity,
-                price: (item.price * item.quantity).toDouble(),
-              ))
-          .toList();
-    }
-    return [
-      _ServiceRow(
-        name:  widget.product?.name ?? widget.serviceName,
-        qty:   1,
-        price: _total,
-      ),
-    ];
-  }
-
-  // =========================================================
-  // BOTTOM BAR
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
+  // BOTTOM BAR  (safe-area aware)
+  // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildBottomBar() {
+    final bottom     = MediaQuery.of(context).padding.bottom;
     final canProceed =
         !_isLoading && !_isLoadingProvider && _providerId != null;
 
+    final step1Done = _nameCtrl.text.trim().isNotEmpty &&
+        _phoneComplete &&
+        _addressCtrl.text.trim().isNotEmpty;
+    final step2Done = _date != null && _time != null;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(24)),
+      padding: EdgeInsets.fromLTRB(16, 14, 16, 14 + bottom),
+      decoration: const BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
+            color: Color(0x12000000),
             blurRadius: 20,
-            color: Colors.black.withOpacity(0.07),
+            offset: Offset(0, -4),
           ),
         ],
       ),
-      child: SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ProgressRow(step1: _phoneComplete, step2: step1Done && step2Done),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed:
+                  (canProceed && _phoneComplete) ? _validateAndPay : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor:         _kAccent,
+                disabledBackgroundColor: const Color(0xFFD0CBEE),
+                foregroundColor:         Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 22, height: 22,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2.5))
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('Proceed to Payment',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text('₹${_total.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14)),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SUCCESS VIEW
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildSuccessView() {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    final top    = MediaQuery.of(context).padding.top;
+    return Container(
+      padding: EdgeInsets.fromLTRB(32, top + 32, 32, bottom + 32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 110, height: 110,
+            decoration: BoxDecoration(
+              color: _kSuccess.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check_rounded,
+                color: _kSuccess, size: 60),
+          ),
+          const SizedBox(height: 28),
+          const Text('All Done!',
+              style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5)),
+          const SizedBox(height: 8),
+          Text(
+            'Your booking has been confirmed.\n'
+            'We\'ll notify you once the provider accepts.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: Colors.grey.shade500, fontSize: 14, height: 1.6),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0EEF9),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.confirmation_number_outlined,
+                    size: 15, color: _kAccent),
+                const SizedBox(width: 6),
+                Text('ID: $_bookingId',
+                    style: const TextStyle(
+                        color: _kAccent,
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 40),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: _goHome,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kAccent,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
+              ),
+              child: const Text('Back to Home',
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LOADING / NO-PROVIDER
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildLoadingState() => const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildStepProgress(),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: canProceed && _phoneComplete
-                    ? _validateAndPay
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _accent,
-                  disabledBackgroundColor: Colors.grey.shade300,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  elevation: 0,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2.5),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            'Proceed to Payment',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              '₹${_total.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
+            CircularProgressIndicator(color: _kAccent),
+            SizedBox(height: 16),
+            Text('Finding a provider…',
+                style: TextStyle(color: Colors.grey)),
           ],
         ),
-      ),
-    );
-  }
+      );
 
-  Widget _buildStepProgress() {
-    final step1 = _nameController.text.isNotEmpty &&
-        _phoneComplete &&
-        _addressController.text.isNotEmpty;
-    final step2 = _selectedDate != null && _selectedTime != null;
-
-    return Row(
-      children: [
-        _progressDot(done: _phoneComplete, label: 'Details'),
-        _progressLine(done: _phoneComplete),
-        _progressDot(done: step1 && step2, label: 'Schedule'),
-        _progressLine(done: step1 && step2),
-        _progressDot(done: false, label: 'Payment'),
-      ],
-    );
-  }
-
-  Widget _progressDot({required bool done, required String label}) {
-    return Expanded(
-      child: Column(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: done ? _accent : Colors.grey.shade300,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: done ? _accent : Colors.grey.shade400,
-              fontWeight: done ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _progressLine({required bool done}) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      height: 2,
-      width: 32,
-      color: done ? _accent : Colors.grey.shade200,
-    );
-  }
-
-  // =========================================================
-  // SUCCESS VIEW
-  // =========================================================
-
-  Widget _buildSuccessView() {
-    return SafeArea(
-      child: Center(
+  Widget _buildNoProviderState() => Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_rounded,
-                    color: Colors.green, size: 72),
-              ),
-              const SizedBox(height: 28),
-              const Text(
-                'Booking Confirmed!',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 6),
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(20),
+                  shape: BoxShape.circle,
                 ),
-                child: Text(
-                  'ID: $_bookingId',
+                child: Icon(Icons.store_mall_directory_outlined,
+                    size: 52, color: Colors.grey.shade400),
+              ),
+              const SizedBox(height: 20),
+              Text(_noProviderMessage ?? 'No provider available',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Your provider has been notified and will confirm shortly.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey.shade500,
-                  fontSize: 14,
-                  height: 1.6,
-                ),
-              ),
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _goHome,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _accent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18)),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Done',
-                    style: TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.bold),
-                  ),
+                      color: Colors.grey.shade600,
+                      fontSize: 15,
+                      height: 1.6)),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _loadProvider,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Try Again'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kAccent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
 
-  void _goHome() {
-    final user = FirebaseAuth.instance.currentUser;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => BottomNavPage(
-          userPhone: user?.phoneNumber ?? _phoneController.text,
-          userEmail: user?.email ?? '',
-        ),
-      ),
-      (_) => false,
-    );
-  }
-
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
   // PICKERS
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -1082,12 +765,12 @@ class _BookingPageState extends State<BookingPage>
       lastDate: DateTime(2100),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: _accent),
+          colorScheme: const ColorScheme.light(primary: _kAccent),
         ),
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+    if (picked != null) setState(() => _date = picked);
   }
 
   Future<void> _pickTime() async {
@@ -1096,65 +779,55 @@ class _BookingPageState extends State<BookingPage>
       initialTime: TimeOfDay.now(),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: _accent),
+          colorScheme: const ColorScheme.light(primary: _kAccent),
         ),
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _selectedTime = picked);
+    if (picked != null) setState(() => _time = picked);
   }
 
-  // =========================================================
-  // GPS LOCATION
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
+  // GPS
+  // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _getCurrentLocation() async {
     setState(() => _isGettingLocation = true);
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) throw Exception('Location services are disabled');
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw Exception('Location services disabled');
       }
-      if (permission == LocationPermission.deniedForever) {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.deniedForever) {
         throw Exception(
-            'Location permission permanently denied. Enable it in Settings.');
+            'Location permission denied permanently. Enable in Settings.');
       }
-
-      final position = await Geolocator.getCurrentPosition(
+      final pos = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
-      final placemarks = await placemarkFromCoordinates(
-          position.latitude, position.longitude);
-      final place = placemarks.first;
-
+      final places =
+          await placemarkFromCoordinates(pos.latitude, pos.longitude);
+      final p = places.first;
       if (!mounted) return;
-      _addressController.text =
-          '${place.street ?? ''}, ${place.locality ?? ''}, '
-          '${place.administrativeArea ?? ''} ${place.postalCode ?? ''}'
+      _addressCtrl.text =
+          '${p.street ?? ''}, ${p.locality ?? ''}, '
+          '${p.administrativeArea ?? ''} ${p.postalCode ?? ''}'
               .replaceAll(RegExp(r',\s*,'), ',')
               .trim();
-
-      setState(() {
-        _pickedLatLng = LatLng(position.latitude, position.longitude);
-      });
+      setState(() => _pickedLatLng = LatLng(pos.latitude, pos.longitude));
     } catch (e) {
-      if (!mounted) return;
-      _showSnack('$e');
+      if (mounted) _showSnack('$e');
     } finally {
       if (mounted) setState(() => _isGettingLocation = false);
     }
   }
 
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
   // MAP PICKER
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
 
-  /// Opens [MapPickerPage] (Google Maps). The user searches or drags the
-  /// map, then taps "Save address". The result's fullAddress + optional
-  /// addressDetails are written into [_addressController] and the LatLng is
-  /// stored in [_pickedLatLng].
   Future<void> _openMapPicker() async {
     final result = await Navigator.push<MapPickerResult>(
       context,
@@ -1163,46 +836,36 @@ class _BookingPageState extends State<BookingPage>
         builder: (_) => MapPickerPage(initialLatLng: _pickedLatLng),
       ),
     );
-
     if (result == null || !mounted) return;
-
     setState(() => _pickedLatLng = result.latLng);
-
-    // Compose address: full address + optional flat/floor details
     final details = result.addressDetails.isNotEmpty
         ? '${result.addressDetails}, ${result.fullAddress}'
         : result.fullAddress;
-    _addressController.text = details;
+    _addressCtrl.text = details;
   }
 
-  // =========================================================
-  // VALIDATE + PAY
-  // =========================================================
+  // ─────────────────────────────────────────────────────────────────────────
+  // VALIDATE + PAY + SAVE
+  // ─────────────────────────────────────────────────────────────────────────
 
   void _validateAndPay() {
     if (_providerId == null || _providerId!.isEmpty) {
-      _showSnack('No provider available for this service.');
-      return;
+      _showSnack('No provider available for this service.'); return;
     }
-    if (_nameController.text.trim().isEmpty) {
-      _showSnack('Please enter your name.');
-      return;
+    if (_nameCtrl.text.trim().isEmpty) {
+      _showSnack('Please enter your name.'); return;
     }
-    if (_phoneController.text.trim().length < 10) {
-      _showSnack('Please enter a valid 10-digit phone number.');
-      return;
+    if (_phoneCtrl.text.trim().length < 10) {
+      _showSnack('Enter a valid 10-digit number.'); return;
     }
-    if (_addressController.text.trim().isEmpty) {
-      _showSnack('Please enter your address.');
-      return;
+    if (_addressCtrl.text.trim().isEmpty) {
+      _showSnack('Please enter your address.'); return;
     }
-    if (_selectedDate == null || _selectedTime == null) {
-      _showSnack('Please select your preferred date and time.');
-      return;
+    if (_date == null || _time == null) {
+      _showSnack('Please pick a date and time.'); return;
     }
     if (_total <= 0) {
-      _showSnack('No services selected. Please go back and add a service.');
-      return;
+      _showSnack('No services selected. Go back and add a service.'); return;
     }
     _pay();
   }
@@ -1217,147 +880,244 @@ class _BookingPageState extends State<BookingPage>
         ),
       ),
     );
-
     if (!mounted) return;
-
-    final paid = result != null && result != false;
-    if (paid) {
+    if (result != null && result != false) {
       await _save();
     } else {
       _showSnack('Payment was not completed. Please try again.');
     }
   }
 
-  // =========================================================
-  // SAVE
-  // =========================================================
-
   Future<void> _save() async {
     setState(() => _isLoading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('User not logged in');
-
-      final docRef = await OrderService.placeOrder(
+      if (user == null) throw Exception('Not logged in');
+      final ref = await OrderService.placeOrder(
         serviceType:   widget.serviceName.trim().toLowerCase(),
         services:      _servicesForOrder,
         userId:        user.uid,
-        userName:      _nameController.text.trim(),
-        phone:         _phoneController.text.trim(),
+        userName:      _nameCtrl.text.trim(),
+        phone:         _phoneCtrl.text.trim(),
         email:         user.email ?? '',
-        address:       _addressController.text.trim(),
-        note:          _noteController.text.trim(),
-        date:          _selectedDate!,
-        time:          _selectedTime!.format(context),
+        address:       _addressCtrl.text.trim(),
+        note:          _noteCtrl.text.trim(),
+        date:          _date!,
+        time:          _time!.format(context),
         totalAmount:   _total,
         createdBy:     user.uid,
         createdByRole: 'user',
         providerId:    _providerId!,
         providerName:  _providerName ?? '',
-        // Pass lat/lng if your OrderService supports it (optional).
-        // latitude:   _pickedLatLng?.latitude,
-        // longitude:  _pickedLatLng?.longitude,
       );
-
       if (!mounted) return;
       setState(() {
-        _bookingId = docRef.id;
+        _bookingId = ref.id;
         _isSuccess = true;
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint('[BookingPage] save error: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
       _showSnack('Could not save booking: $e');
     }
   }
 
-  // =========================================================
-  // UI HELPERS
-  // =========================================================
-
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+  void _goHome() {
+    final user = FirebaseAuth.instance.currentUser;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BottomNavPage(
+          userPhone: user?.phoneNumber ?? _phoneCtrl.text,
+          userEmail: user?.email ?? '',
+        ),
       ),
+      (_) => false,
     );
   }
 
-  Widget _card({required Widget child}) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-              color: Colors.black.withOpacity(0.05),
-            ),
-          ],
-        ),
-        child: child,
-      );
+  // ─────────────────────────────────────────────────────────────────────────
+  // UI HELPERS
+  // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _field({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    TextInputType keyboard = TextInputType.text,
-    int maxLines = 1,
-    FocusNode? focusNode,
-    List<TextInputFormatter>? inputFormatters,
-    Widget? suffix,
-  }) =>
-      Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFF5F6FC),
-          borderRadius: BorderRadius.circular(16),
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+    ));
+  }
+
+  Widget _hintRow(String text) {
+    return Row(
+      children: [
+        Icon(Icons.info_outline, size: 13, color: Colors.grey.shade400),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(text,
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
         ),
-        child: TextField(
-          controller: controller,
-          keyboardType: keyboard,
-          maxLines: maxLines,
-          focusNode: focusNode,
-          inputFormatters: inputFormatters,
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            hintText: hint,
-            hintStyle:
-                TextStyle(color: Colors.grey.shade400, fontSize: 14),
-            prefixIcon: Icon(icon, color: _accent, size: 20),
-            suffixIcon: suffix != null
-                ? Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: suffix,
-                  )
-                : null,
-            suffixIconConstraints:
-                const BoxConstraints(minWidth: 0, minHeight: 0),
-          ),
-        ),
-      );
+      ],
+    );
+  }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SERVICES SUMMARY CARD
+// ─────────────────────────────────────────────────────────────────────────────
 
-// =========================================================
-// SERVICE ROW WIDGET
-// =========================================================
+class _ServicesSummaryCard extends StatelessWidget {
+  final List<CartItem>? cartItems;
+  final String?         productName;
+  final double          total;
+  final bool            expanded;
+  final VoidCallback    onToggle;
 
-class _ServiceRow extends StatelessWidget {
+  const _ServicesSummaryCard({
+    required this.total,
+    required this.expanded,
+    required this.onToggle,
+    this.cartItems,
+    this.productName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasItems = cartItems != null && cartItems!.isNotEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF5B4FCF), Color(0xFF7B6FE8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF5B4FCF).withOpacity(0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.receipt_long_rounded,
+                      color: Colors.white70, size: 20),
+                  const SizedBox(width: 10),
+                  const Text('Your Services',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('₹${total.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15)),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedRotation(
+                    turns: expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    child: const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Expandable list
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            child: expanded
+                ? Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.12),
+                      borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(20)),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      children: [
+                        const Divider(color: Colors.white24, height: 1),
+                        const SizedBox(height: 12),
+                        if (hasItems)
+                          // FIX: (item.price * item.quantity) is int * int = int.
+                          // Cast to double so _SummaryRow receives a num (double).
+                          ...cartItems!.map((item) => _SummaryRow(
+                                name:  item.name,
+                                qty:   item.quantity,
+                                price: (item.price * item.quantity).toDouble(),
+                              ))
+                        else if (productName != null)
+                          _SummaryRow(
+                            name:  productName!,
+                            qty:   1,
+                            price: total, // already double
+                          ),
+                        const SizedBox(height: 6),
+                        const Divider(color: Colors.white24, height: 1),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Total',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600)),
+                            Text('₹${total.toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUMMARY ROW
+// FIX: price type changed from `double` → `num`
+//      This accepts both int and double without any cast at call sites.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SummaryRow extends StatelessWidget {
   final String name;
-  final int qty;
-  final double price;
+  final int    qty;
+  final num    price; // ← KEY FIX: was `double`, now `num`
 
-  const _ServiceRow({
+  const _SummaryRow({
     required this.name,
     required this.qty,
     required this.price,
@@ -1366,52 +1126,329 @@ class _ServiceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6A5AE0), Color(0xFF8F7CFF)],
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.miscellaneous_services_rounded,
-                color: Colors.white, size: 18),
+            width: 6, height: 6,
+            decoration: const BoxDecoration(
+                color: Colors.white54, shape: BoxShape.circle),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                Text(
-                  'Qty: $qty',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+            child: Text(name,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                overflow: TextOverflow.ellipsis),
+          ),
+          Text('x$qty',
+              style: const TextStyle(color: Colors.white60, fontSize: 12)),
+          const SizedBox(width: 12),
+          Text('₹${price.toStringAsFixed(0)}',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP HEADER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StepHeader extends StatelessWidget {
+  final int    number;
+  final String label;
+
+  const _StepHeader({required this.number, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 28, height: 28,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(colors: [_kAccent, _kAccentSoft]),
+            shape: BoxShape.circle,
+          ),
+          child: Text('$number',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold)),
+        ),
+        const SizedBox(width: 10),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2)),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROGRESS ROW
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ProgressRow extends StatelessWidget {
+  final bool step1;
+  final bool step2;
+
+  const _ProgressRow({required this.step1, required this.step2});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _dot(done: step1, label: 'Details'),
+        _line(done: step1),
+        _dot(done: step2, label: 'Schedule'),
+        _line(done: step2),
+        _dot(done: false, label: 'Payment'),
+      ],
+    );
+  }
+
+  Widget _dot({required bool done, required String label}) {
+    return Expanded(
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            width: 10, height: 10,
+            decoration: BoxDecoration(
+              color: done ? _kAccent : const Color(0xFFDDDAF5),
+              shape: BoxShape.circle,
             ),
           ),
-          Text(
-            '₹${price.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
+          const SizedBox(height: 4),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10,
+                  color: done ? _kAccent : Colors.grey.shade400,
+                  fontWeight: done ? FontWeight.w600 : FontWeight.normal)),
+        ],
+      ),
+    );
+  }
+
+  Widget _line({required bool done}) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      height: 2, width: 36,
+      color: done ? _kAccent : const Color(0xFFE8E6F7),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PICKER TILE
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PickerTile extends StatelessWidget {
+  final IconData     icon;
+  final String       label;
+  final String       value;
+  final bool         selected;
+  final VoidCallback onTap;
+
+  const _PickerTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected ? _kAccent.withOpacity(0.06) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected
+                ? _kAccent.withOpacity(0.5)
+                : Colors.grey.shade200,
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(blurRadius: 10,
+                color: Colors.black.withOpacity(0.04)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: selected
+                    ? _kAccent.withOpacity(0.12)
+                    : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon,
+                  color: selected ? _kAccent : Colors.grey.shade400,
+                  size: 18),
             ),
+            const SizedBox(height: 12),
+            Text(label,
+                style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 4),
+            Text(value,
+                style: TextStyle(
+                    color: selected ? _kAccent : Colors.grey.shade400,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CARD WRAPPER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Card extends StatelessWidget {
+  final Widget child;
+
+  const _Card({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.05),
           ),
         ],
       ),
+      child: child,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIELD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Field extends StatelessWidget {
+  final TextEditingController        controller;
+  final String                       hint;
+  final IconData                     icon;
+  final TextInputType                keyboard;
+  final int                          maxLines;
+  final FocusNode?                   focusNode;
+  final List<TextInputFormatter>?    formatters;
+  final Widget?                      suffix;
+  final ValueChanged<String>?        onChanged;
+
+  const _Field({
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    this.keyboard  = TextInputType.text,
+    this.maxLines  = 1,
+    this.focusNode,
+    this.formatters,
+    this.suffix,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F2FB),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: TextField(
+        controller:      controller,
+        keyboardType:    keyboard,
+        maxLines:        maxLines,
+        focusNode:       focusNode,
+        inputFormatters: formatters,
+        onChanged:       onChanged,
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          hintText: hint,
+          hintStyle:
+              TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          prefixIcon: Icon(icon, color: _kAccent, size: 20),
+          suffixIcon: suffix != null
+              ? Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: suffix)
+              : null,
+          suffixIconConstraints:
+              const BoxConstraints(minWidth: 0, minHeight: 0),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OUTLINE BUTTON
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _OutlineBtn extends StatelessWidget {
+  final IconData?     icon;
+  final String        label;
+  final bool          loading;
+  final VoidCallback? onTap;
+
+  const _OutlineBtn({
+    required this.label,
+    this.icon,
+    this.loading = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _kAccent,
+        side: const BorderSide(color: _kAccent, width: 1.4),
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14)),
+      ),
+      icon: loading
+          ? const SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(
+                  color: _kAccent, strokeWidth: 2))
+          : Icon(icon, size: 17),
+      label: Text(label,
+          style: const TextStyle(
+              fontWeight: FontWeight.w600, fontSize: 13)),
     );
   }
 }

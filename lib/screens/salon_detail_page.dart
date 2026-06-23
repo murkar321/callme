@@ -23,13 +23,18 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
   /// UNIQUE IDS
   String _id(String type) => "${widget.service.id}_$type";
 
-  int _qty(String type) =>
-      Cart.getQuantity(_id(type), serviceName);
+  int _qty(String type) => Cart.getQuantity(_id(type), serviceName);
 
   int get totalQty => _qty("Home") + _qty("Salon");
 
   @override
   Widget build(BuildContext context) {
+    /// Bottom system navigation bar height (handles gesture bar & button nav)
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    /// Total height of the floating bottom bar + safe area
+    final double bottomBarHeight = 84 + bottomPadding;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F4FA),
 
@@ -298,7 +303,10 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                         ),
                       ),
 
-                      const SizedBox(height: 100),
+                      /// ── BOTTOM CLEARANCE ──────────────────────────────────
+                      /// Ensures content scrolls above the floating bottom bar
+                      /// (bar height 84 + safe area + 16px breathing room)
+                      SizedBox(height: bottomBarHeight + 16),
                     ],
                   ),
                 ),
@@ -310,12 +318,25 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
           Positioned(
             left: 16,
             right: 16,
-            bottom: 16,
+            bottom: 0,                           // ← anchored to screen edge
             child: Container(
-              padding: const EdgeInsets.all(14),
+              /// ── SAFE AREA AWARE PADDING ───────────────────────────────────
+              /// Adds dynamic padding so the bar content sits above the
+              /// system navigation bar (gesture strip or 3-button nav).
+              padding: EdgeInsets.fromLTRB(
+                14,
+                14,
+                14,
+                14 + bottomPadding,              // ← key fix
+              ),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(22),
+                  topRight: Radius.circular(22),
+                  bottomLeft: Radius.circular(22),
+                  bottomRight: Radius.circular(22),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.08),
@@ -335,8 +356,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size(0, 55),
                           shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                         onPressed: () {
@@ -346,7 +366,8 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                               builder: (_) => CartPage(
                                 service: serviceName,
                                 serviceName: serviceName,
-                                cart: Cart.getItems(serviceName), providerId: '',
+                                cart: Cart.getItems(serviceName),
+                                providerId: '',
                               ),
                             ),
                           ).then((_) => refresh());
@@ -358,29 +379,23 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                       ),
                     ),
 
-                  if (totalQty > 0)
-                    const SizedBox(width: 12),
+                  if (totalQty > 0) const SizedBox(width: 12),
 
                   /// BOOK BUTTON
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            const Color(0xFFAE91BA),
+                        backgroundColor: const Color(0xFFAE91BA),
                         elevation: 0,
                         minimumSize: const Size(0, 55),
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      onPressed: () =>
-                          _showBookingPopup(context),
+                      onPressed: () => _showBookingPopup(context),
                       child: Text(
-                        totalQty == 0
-                            ? "Book Appointment"
-                            : "Add More",
+                        totalQty == 0 ? "Book Appointment" : "Add More",
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -409,194 +424,180 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
   }
 
   /// ================= CENTER BOOKING POPUP =================
-void _showBookingPopup(BuildContext context) {
-  final size = MediaQuery.of(context).size;
+  void _showBookingPopup(BuildContext context) {
+    final size = MediaQuery.of(context).size;
 
-  showGeneralDialog(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: "Booking",
-    barrierColor: Colors.black.withOpacity(0.55),
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Booking",
+      barrierColor: Colors.black.withOpacity(0.55),
 
-    transitionDuration: const Duration(milliseconds: 300),
+      transitionDuration: const Duration(milliseconds: 300),
 
-    pageBuilder: (context, animation, secondaryAnimation) {
-      return Center(
-        child: Material(
-          color: Colors.transparent,
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
 
-          child: Container(
-            width: size.width * 0.88,
+            child: Container(
+              width: size.width * 0.88,
 
-            constraints: BoxConstraints(
-              maxWidth: 420,
-              maxHeight: size.height * 0.75,
-            ),
+              constraints: BoxConstraints(
+                maxWidth: 420,
+                maxHeight: size.height * 0.75,
+              ),
 
-            padding: const EdgeInsets.all(22),
+              padding: const EdgeInsets.all(22),
 
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(30),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
 
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
 
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
 
-                  /// CLOSE BUTTON
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(30),
-                      onTap: () => Navigator.pop(context),
+                    /// CLOSE BUTTON
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(30),
+                        onTap: () => Navigator.pop(context),
 
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.close_rounded,
-                          size: 22,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 22,
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 6),
+                    const SizedBox(height: 6),
 
-                  /// ICON
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFAE91BA)
-                          .withOpacity(0.12),
-                      shape: BoxShape.circle,
+                    /// ICON
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFAE91BA).withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.content_cut_rounded,
+                        color: Color(0xFFAE91BA),
+                        size: 40,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.content_cut_rounded,
-                      color: Color(0xFFAE91BA),
-                      size: 40,
+
+                    const SizedBox(height: 18),
+
+                    /// TITLE
+                    const Text(
+                      "Choose Appointment",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 18),
+                    const SizedBox(height: 10),
 
-                  /// TITLE
-                  const Text(
-                    "Choose Appointment",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                    /// SUBTITLE
+                    Text(
+                      "Select your preferred service experience",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 15,
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 10),
+                    const SizedBox(height: 28),
 
-                  /// SUBTITLE
-                  Text(
-                    "Select your preferred service experience",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 15,
+                    /// HOME APPOINTMENT
+                    _appointmentCard(
+                      icon: Icons.home_rounded,
+                      title: "Home Appointment",
+                      subtitle: "Professional visits your home",
+                      color: Colors.purple,
+                      onTap: () {
+                        Cart.addSalon(
+                          id: _id("Home"),
+                          name: widget.service.name,
+                          price: widget.service.finalPrice,
+                          category: widget.service.category,
+                          visitType: "Home",
+                          image: widget.service.image,
+                        );
+
+                        Navigator.pop(context);
+                        refresh();
+                        _showSnack("Added to Cart (Home)");
+                      },
                     ),
-                  ),
 
-                  const SizedBox(height: 28),
+                    const SizedBox(height: 18),
 
-                  /// HOME APPOINTMENT
-                  _appointmentCard(
-                    icon: Icons.home_rounded,
-                    title: "Home Appointment",
-                    subtitle:
-                        "Professional visits your home",
-                    color: Colors.purple,
-                    onTap: () {
-                      Cart.addSalon(
-                        id: _id("Home"),
-                        name: widget.service.name,
-                        price: widget.service.finalPrice,
-                        category: widget.service.category,
-                        visitType: "Home",
-                        image: widget.service.image,
-                      );
+                    /// SALON APPOINTMENT
+                    _appointmentCard(
+                      icon: Icons.storefront_rounded,
+                      title: "Salon Visit",
+                      subtitle: "Visit salon for premium experience",
+                      color: Colors.green,
+                      onTap: () {
+                        Cart.addSalon(
+                          id: _id("Salon"),
+                          name: widget.service.name,
+                          price: widget.service.finalPrice,
+                          category: widget.service.category,
+                          visitType: "Salon",
+                          image: widget.service.image,
+                        );
 
-                      Navigator.pop(context);
+                        Navigator.pop(context);
+                        refresh();
+                        _showSnack("Added to Cart (Salon)");
+                      },
+                    ),
 
-                      refresh();
-
-                      _showSnack(
-                        "Added to Cart (Home)",
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  /// SALON APPOINTMENT
-                  _appointmentCard(
-                    icon: Icons.storefront_rounded,
-                    title: "Salon Visit",
-                    subtitle:
-                        "Visit salon for premium experience",
-                    color: Colors.green,
-                    onTap: () {
-                      Cart.addSalon(
-                        id: _id("Salon"),
-                        name: widget.service.name,
-                        price: widget.service.finalPrice,
-                        category: widget.service.category,
-                        visitType: "Salon",
-                        image: widget.service.image,
-                      );
-
-                      Navigator.pop(context);
-
-                      refresh();
-
-                      _showSnack(
-                        "Added to Cart (Salon)",
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 12),
-                ],
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      );
-    },
+        );
+      },
 
-    /// ANIMATION
-    transitionBuilder:
-        (context, animation, secondaryAnimation, child) {
-      return Transform.scale(
-        scale: Curves.easeOutBack.transform(
-          animation.value,
-        ),
-        child: Opacity(
-          opacity: animation.value,
-          child: child,
-        ),
-      );
-    },
-  );
-}
+      /// ANIMATION
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return Transform.scale(
+          scale: Curves.easeOutBack.transform(animation.value),
+          child: Opacity(
+            opacity: animation.value,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
 
   /// ================= APPOINTMENT CARD =================
   Widget _appointmentCard({
@@ -636,8 +637,7 @@ void _showBookingPopup(BuildContext context) {
             /// TEXT
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,

@@ -4,6 +4,10 @@ import '../models/cart.dart';
 import '../models/cart_page.dart';
 import '../widgets/salon_service_card.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SALON PAGE  – Android-safe, adaptive layout
+// ─────────────────────────────────────────────────────────────────────────────
+
 class SalonPage extends StatefulWidget {
   const SalonPage({super.key, required String providerId});
 
@@ -12,7 +16,7 @@ class SalonPage extends StatefulWidget {
 }
 
 class _SalonPageState extends State<SalonPage> {
-  final Color primaryColor = const Color(0xFFAE91BA);
+  static const _theme = Color(0xFFAE91BA);
 
   int selectedIndex = 0;
 
@@ -22,224 +26,218 @@ class _SalonPageState extends State<SalonPage> {
   Widget build(BuildContext context) {
     final categories = salonCategories;
 
-    /// ✅ SAFETY FIX: prevent index crash / empty render
     if (categories.isEmpty) {
       return const Scaffold(
-        body: Center(child: Text("No categories found")),
-      );
+          body: Center(child: Text('No categories found')));
     }
 
-    if (selectedIndex >= categories.length) {
-      selectedIndex = 0;
-    }
+    if (selectedIndex >= categories.length) selectedIndex = 0;
 
     final selectedCategory = categories[selectedIndex];
-
-    final services = salonServices
-        .where((s) => s.category == selectedCategory)
-        .toList();
+    final services =
+        salonServices.where((s) => s.category == selectedCategory).toList();
 
     final totalItems =
-        Cart.getItems("Salon").fold(0, (sum, i) => sum + i.quantity);
-
-    final totalAmount = Cart.getTotal("Salon");
+        Cart.getItems('Salon').fold(0, (sum, i) => sum + i.quantity);
+    final totalAmount = Cart.getTotal('Salon');
+    final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
-      backgroundColor: const Color(0xffF5F6FA),
-
-      /// ================= APPBAR =================
+      backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
-        title: const Text("Salon Services"),
+        title: const Text('Salon Services',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
         centerTitle: true,
-        backgroundColor: primaryColor,
+        backgroundColor: _theme,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          if (totalItems > 0)
-            Stack(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.shopping_cart),
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const CartPage(
-                          service: "Salon",
-                          serviceName: "Salon",
-                          cart: [], providerId: '',
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: GestureDetector(
+              onTap: totalItems > 0
+                  ? () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CartPage(
+                            service: 'Salon',
+                            serviceName: 'Salon',
+                            cart: Cart.getItems('Salon'),
+                            providerId: '',
+                          ),
+                        ),
+                      );
+                      refresh();
+                    }
+                  : null,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.shopping_cart_outlined,
+                      color: Colors.white, size: 26),
+                  if (totalItems > 0)
+                    Positioned(
+                      top: -6, right: -6,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                            color: Colors.red, shape: BoxShape.circle),
+                        constraints: const BoxConstraints(
+                            minWidth: 18, minHeight: 18),
+                        child: Text(
+                          totalItems > 99 ? '99+' : '$totalItems',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
                         ),
                       ),
-                    );
-                    refresh();
-                  },
-                ),
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: CircleAvatar(
-                    radius: 8,
-                    backgroundColor: Colors.red,
-                    child: Text(
-                      totalItems.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                      ),
                     ),
-                  ),
-                )
-              ],
-            )
+                ],
+              ),
+            ),
+          ),
         ],
       ),
 
-      /// ================= BODY =================
-      body: SafeArea(
-        child: Row(
-          children: [
+      body: Row(
+        children: [
+          // ── Left: category rail ─────────────────────────────────────────
+          Container(
+            width: 90,
+            color: Colors.white,
+            child: ListView.builder(
+              padding: const EdgeInsets.only(top: 6),
+              itemCount: categories.length,
+              itemBuilder: (_, index) {
+                final category = categories[index];
+                final isSelected = selectedIndex == index;
+                final firstItem = salonServices
+                    .where((s) => s.category == category)
+                    .toList();
+                final image = firstItem.isNotEmpty
+                    ? firstItem.first.image
+                    : 'assets/salon.png';
 
-            /// LEFT CATEGORY
-            Container(
-              width: 95,
-              color: Colors.grey.shade100,
-              child: ListView.builder(
-                itemCount: categories.length,
-                itemBuilder: (context, index) {
-                  final category = categories[index];
-                  final isSelected = selectedIndex == index;
-
-                  final firstItem = salonServices
-                      .where((s) => s.category == category)
-                      .toList();
-
-                  final image = firstItem.isNotEmpty
-                      ? firstItem.first.image
-                      : "assets/salon.png";
-
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        selectedIndex = index;
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Colors.white
-                            : Colors.transparent,
-                        border: Border(
-                          left: BorderSide(
-                            color: isSelected
-                                ? primaryColor
-                                : Colors.transparent,
-                            width: 4,
-                          ),
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          CircleAvatar(
+                return GestureDetector(
+                  onTap: () => setState(() => selectedIndex = index),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor:
+                              isSelected ? _theme : Colors.grey.shade200,
+                          child: CircleAvatar(
                             radius: 24,
                             backgroundImage: AssetImage(image),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            category,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isSelected
-                                  ? primaryColor
-                                  : Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            /// RIGHT SERVICES
-            Expanded(
-              child: services.isEmpty
-                  ? const Center(
-                      child: Text(
-                        "No services available in this category",
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 14,
                         ),
-                      ),
-                    )
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(
-                        12,
-                        12,
-                        12,
-                        totalItems > 0 ? 90 : 12,
-                      ),
-                      itemCount: services.length,
-                      itemBuilder: (context, index) {
-                        return SalonServiceCard(
-                          service: services[index],
-                          onUpdate: refresh,
-                        );
-                      },
+                        const SizedBox(height: 5),
+                        Text(
+                          category,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? _theme : Colors.black87,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                );
+              },
             ),
-          ],
-        ),
+          ),
+
+          // ── Right: services list ────────────────────────────────────────
+          Expanded(
+            child: services.isEmpty
+                ? const Center(
+                    child: Text('No services in this category',
+                        style: TextStyle(color: Colors.grey, fontSize: 14)),
+                  )
+                : ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    // Extra bottom padding = cart bar (68) + nav bar inset
+                    padding: EdgeInsets.fromLTRB(
+                        8, 8, 8, totalItems > 0 ? 68 + bottomPad + 10 : 10),
+                    itemCount: services.length,
+                    itemBuilder: (_, index) => SalonServiceCard(
+                      service: services[index],
+                      onUpdate: refresh,
+                    ),
+                  ),
+          ),
+        ],
       ),
 
-      /// ================= BOTTOM CART =================
+      // ── Bottom cart bar — SafeArea handles nav bar ──────────────────────
       bottomNavigationBar: totalItems == 0
           ? null
           : SafeArea(
-              child: InkWell(
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const CartPage(
-                        service: "Salon",
-                        serviceName: "Salon",
-                        cart: [], providerId: '',
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _theme,
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withOpacity(0.12),
+                        blurRadius: 8,
+                        offset: const Offset(0, -2)),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$totalItems item${totalItems == 1 ? '' : 's'} • ₹$totalAmount',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600),
                       ),
                     ),
-                  );
-                  refresh();
-                },
-                child: Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: primaryColor,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "$totalItems items",
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      Text(
-                        "₹$totalAmount  View Cart →",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 40,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: _theme,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30)),
                         ),
-                      )
-                    ],
-                  ),
+                        onPressed: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CartPage(
+                                service: 'Salon',
+                                serviceName: 'Salon',
+                                cart: Cart.getItems('Salon'),
+                                providerId: '',
+                              ),
+                            ),
+                          );
+                          refresh();
+                        },
+                        child: const Text('View Cart',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
