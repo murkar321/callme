@@ -15,8 +15,8 @@ import 'package:callme/provider/provider_dashboard.dart';
 class ServiceCategoryStyle {
   final String name;
   final IconData icon;
-  final Color iconColor;      // only the icon gets colour
-  final Color iconBg;         // soft tinted circle behind icon
+  final Color iconColor;
+  final Color iconBg;
 
   const ServiceCategoryStyle({
     required this.name,
@@ -27,7 +27,7 @@ class ServiceCategoryStyle {
 }
 
 // =====================================================
-// PAGE
+// BUSINESS PAGE
 // =====================================================
 
 class BusinessPage extends StatefulWidget {
@@ -114,12 +114,10 @@ class _BusinessPageState extends State<BusinessPage>
   @override
   void initState() {
     super.initState();
-
     _listController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
     )..forward();
-
     _getLocation();
     _setupFCM();
   }
@@ -136,7 +134,6 @@ class _BusinessPageState extends State<BusinessPage>
     try {
       await FirebaseMessaging.instance.requestPermission(
           alert: true, badge: true, sound: true);
-
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null && user != null) {
         await firestore
@@ -144,7 +141,6 @@ class _BusinessPageState extends State<BusinessPage>
             .doc(user!.email?.toLowerCase())
             .set({"fcmToken": token}, SetOptions(merge: true));
       }
-
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
         if (user != null) {
           await firestore
@@ -153,11 +149,9 @@ class _BusinessPageState extends State<BusinessPage>
               .set({"fcmToken": newToken}, SetOptions(merge: true));
         }
       });
-
       _fcmSubscription =
           FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         if (!mounted) return;
-
         if (message.notification != null) {
           _showSnack(
             message.notification?.title ?? "New Notification",
@@ -173,9 +167,17 @@ class _BusinessPageState extends State<BusinessPage>
   // ── Location ──────────────────────────────────────
   Future<void> _getLocation() async {
     try {
-      await Geolocator.requestPermission();
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() => loadingLocation = false);
+        return;
+      }
       final pos = await Geolocator.getCurrentPosition(
-          timeLimit: const Duration(seconds: 6));
+          timeLimit: const Duration(seconds: 8));
       final marks =
           await placemarkFromCoordinates(pos.latitude, pos.longitude);
       if (!mounted) return;
@@ -197,29 +199,36 @@ class _BusinessPageState extends State<BusinessPage>
     return normalize(name);
   }
 
-  void _showSnack(String msg, {bool isSuccess = false}) {
+  void _showSnack(String msg, {bool isSuccess = false, bool isError = false}) {
     if (!mounted) return;
-
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
-
+    messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
         content: Row(children: [
           Icon(
-            isSuccess ? Icons.check_circle_outline : Icons.info_outline,
+            isError
+                ? Icons.error_outline
+                : isSuccess
+                    ? Icons.check_circle_outline
+                    : Icons.info_outline,
             color: Colors.white,
             size: 18,
           ),
           const SizedBox(width: 8),
           Expanded(child: Text(msg)),
         ]),
-        backgroundColor:
-            isSuccess ? const Color(0xFF388E3C) : const Color(0xFF37474F),
+        backgroundColor: isError
+            ? const Color(0xFFD84315)
+            : isSuccess
+                ? const Color(0xFF388E3C)
+                : const Color(0xFF37474F),
         behavior: SnackBarBehavior.floating,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -227,9 +236,8 @@ class _BusinessPageState extends State<BusinessPage>
   // ── Tap handler ───────────────────────────────────
   void _handleTap(
       ServiceCategoryStyle service, Map<String, dynamic>? provider) {
-    final serviceType = _getServiceType(service.name);
     if (user == null) {
-      _showSnack("Please login first");
+      _showSnack("Please login first to continue", isError: true);
       return;
     }
     if (provider == null) {
@@ -238,20 +246,21 @@ class _BusinessPageState extends State<BusinessPage>
     }
     final status = provider['status'] ?? "pending";
     if (status == "pending") {
-      _showSnack("⏳ Your application is under review");
+      _showSnack("⏳ Your application is under review. Please wait.");
       return;
     }
     if (status == "rejected") {
       _showRejectedDialog(
-          service, provider['rejectReason'] ?? "No reason provided");
+          service, provider['rejectReason'] ?? "No reason provided.");
       return;
     }
     if (status == "approved") {
+      final serviceType = _getServiceType(service.name);
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => BusinessDashboardPage(
-            providerId: provider['providerId'],
+            providerId: provider['providerId'] ?? '',
             businessName:
                 provider['business']?['businessName'] ?? "My Business",
             serviceType: serviceType,
@@ -266,8 +275,8 @@ class _BusinessPageState extends State<BusinessPage>
     showDialog(
       context: context,
       builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: Colors.white,
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -286,8 +295,8 @@ class _BusinessPageState extends State<BusinessPage>
               ),
               const SizedBox(height: 16),
               const Text("Application Rejected",
-                  style: TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w700)),
+                  style:
+                      TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               Text(reason,
                   textAlign: TextAlign.center,
@@ -303,8 +312,7 @@ class _BusinessPageState extends State<BusinessPage>
                         side: const BorderSide(color: Color(0xFFE0E0E0)),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 13),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
                       ),
                       child: const Text("Cancel",
                           style: TextStyle(color: Color(0xFF424242))),
@@ -323,8 +331,7 @@ class _BusinessPageState extends State<BusinessPage>
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 13),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
                       ),
                       child: const Text("Reapply"),
                     ),
@@ -342,16 +349,15 @@ class _BusinessPageState extends State<BusinessPage>
   void _showProviderTypeSelector(ServiceCategoryStyle service) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.vertical(top: Radius.circular(24))),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       backgroundColor: Colors.white,
       builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // handle
             Container(
               width: 40,
               height: 4,
@@ -361,8 +367,6 @@ class _BusinessPageState extends State<BusinessPage>
               ),
             ),
             const SizedBox(height: 20),
-
-            // Header row
             Row(
               children: [
                 Container(
@@ -372,8 +376,8 @@ class _BusinessPageState extends State<BusinessPage>
                     color: service.iconBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(service.icon,
-                      color: service.iconColor, size: 22),
+                  child:
+                      Icon(service.icon, color: service.iconColor, size: 22),
                 ),
                 const SizedBox(width: 14),
                 Column(
@@ -393,18 +397,16 @@ class _BusinessPageState extends State<BusinessPage>
                 ),
               ],
             ),
-
             const SizedBox(height: 8),
             const Divider(height: 28),
-
-            _typeTile(service, "Individual",
-                Icons.person_rounded, const Color(0xFF5C6BC0)),
+            _typeTile(service, "Individual", Icons.person_rounded,
+                const Color(0xFF5C6BC0)),
             const SizedBox(height: 8),
-            _typeTile(service, "Agency",
-                Icons.groups_rounded, const Color(0xFF00897B)),
+            _typeTile(service, "Agency", Icons.groups_rounded,
+                const Color(0xFF00897B)),
             const SizedBox(height: 8),
-            _typeTile(service, "Business",
-                Icons.business_rounded, const Color(0xFFF57C00)),
+            _typeTile(service, "Business", Icons.business_rounded,
+                const Color(0xFFF57C00)),
           ],
         ),
       ),
@@ -431,8 +433,7 @@ class _BusinessPageState extends State<BusinessPage>
           );
         },
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             border: Border.all(color: const Color(0xFFF0F0F0)),
             borderRadius: BorderRadius.circular(14),
@@ -473,7 +474,6 @@ class _BusinessPageState extends State<BusinessPage>
       backgroundColor: const Color(0xFFF7F8FC),
       body: CustomScrollView(
         slivers: [
-          // ── App Bar ──────────────────────────────────
           SliverAppBar(
             expandedHeight: 160,
             pinned: true,
@@ -494,12 +494,11 @@ class _BusinessPageState extends State<BusinessPage>
             ),
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(1),
-              child: Container(
-                  height: 1, color: const Color(0xFFF0F0F0)),
+              child:
+                  Container(height: 1, color: const Color(0xFFF0F0F0)),
             ),
           ),
 
-          // ── Section label ─────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
@@ -536,7 +535,6 @@ class _BusinessPageState extends State<BusinessPage>
             ),
           ),
 
-          // ── Grid ─────────────────────────────────────
           if (user == null)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -554,22 +552,17 @@ class _BusinessPageState extends State<BusinessPage>
                   if (providerSnap.hasData) {
                     for (var doc in providerSnap.data!.docs) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final type =
-                          normalize(data['serviceType'] ?? "");
-                      providerMap[type] = data;
+                      final type = normalize(data['serviceType'] ?? "");
+                      providerMap[type] = {...data, 'providerId': doc.id};
                     }
                   }
-
                   return StreamBuilder<QuerySnapshot>(
                     stream: firestore
                         .collection("orders")
-                        .where("providerUserId",
-                            isEqualTo: user!.uid)
-                        .where("status", whereIn: [
-                      "pending",
-                      "accepted",
-                      "ongoing"
-                    ]).snapshots(),
+                        .where("providerUserId", isEqualTo: user!.uid)
+                        .where("status",
+                            whereIn: ["pending", "accepted", "ongoing"])
+                        .snapshots(),
                     builder: (context, orderSnap) {
                       final Map<String, int> orderCountMap = {};
                       if (orderSnap.hasData) {
@@ -587,19 +580,17 @@ class _BusinessPageState extends State<BusinessPage>
                             const EdgeInsets.fromLTRB(16, 0, 16, 32),
                         child: GridView.builder(
                           shrinkWrap: true,
-                          physics:
-                              const NeverScrollableScrollPhysics(),
+                          physics: const NeverScrollableScrollPhysics(),
                           itemCount: businessCategories.length,
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount:
-                                size.width < 600 ? 2 : 3,
+                            crossAxisCount: size.width < 600 ? 2 : 3,
                             crossAxisSpacing: 12,
                             mainAxisSpacing: 12,
                             childAspectRatio: 1.05,
                           ),
-                          itemBuilder: (_, i) => _buildCard(
-                              i, providerMap, orderCountMap),
+                          itemBuilder: (_, i) =>
+                              _buildCard(i, providerMap, orderCountMap),
                         ),
                       );
                     },
@@ -612,7 +603,6 @@ class _BusinessPageState extends State<BusinessPage>
     );
   }
 
-  // ── Header ────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       color: Colors.white,
@@ -622,7 +612,6 @@ class _BusinessPageState extends State<BusinessPage>
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Location chip
           AnimatedContainer(
             duration: const Duration(milliseconds: 400),
             padding:
@@ -672,7 +661,6 @@ class _BusinessPageState extends State<BusinessPage>
     );
   }
 
-  // ── Grid sliver (no-user fallback) ────────────────
   SliverGrid _buildGridSliver(
     Map<String, Map<String, dynamic>> providerMap,
     Map<String, int> orderCountMap,
@@ -692,7 +680,6 @@ class _BusinessPageState extends State<BusinessPage>
     );
   }
 
-  // ── Card ──────────────────────────────────────────
   Widget _buildCard(
     int i,
     Map<String, Map<String, dynamic>> providerMap,
@@ -704,7 +691,6 @@ class _BusinessPageState extends State<BusinessPage>
     final count = orderCountMap[serviceType] ?? 0;
     final status = provider?['status'];
 
-    // Stagger-in animation
     final delay = i * 0.05;
     final animation = CurvedAnimation(
       parent: _listController,
@@ -738,13 +724,11 @@ class _BusinessPageState extends State<BusinessPage>
           ),
           child: Stack(
             children: [
-              // Main content
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Icon circle
                     Container(
                       width: 50,
                       height: 50,
@@ -752,15 +736,10 @@ class _BusinessPageState extends State<BusinessPage>
                         color: category.iconBg,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Icon(
-                        category.icon,
-                        color: category.iconColor,
-                        size: 26,
-                      ),
+                      child: Icon(category.icon,
+                          color: category.iconColor, size: 26),
                     ),
-
                     const Spacer(),
-
                     Text(
                       category.name,
                       style: const TextStyle(
@@ -772,10 +751,7 @@ class _BusinessPageState extends State<BusinessPage>
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-
                     const SizedBox(height: 6),
-
-                    // Status pill
                     if (status != null)
                       _statusPill(status)
                     else
@@ -797,8 +773,6 @@ class _BusinessPageState extends State<BusinessPage>
                   ],
                 ),
               ),
-
-              // Order badge (top-right)
               if (count > 0)
                 Positioned(
                   top: 10,
@@ -829,7 +803,6 @@ class _BusinessPageState extends State<BusinessPage>
     );
   }
 
-  // ── Status pill ───────────────────────────────────
   Widget _statusPill(String status) {
     late Color color;
     late Color bg;
@@ -876,10 +849,7 @@ class _BusinessPageState extends State<BusinessPage>
           Text(
             label,
             style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
+                color: color, fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ],
       ),

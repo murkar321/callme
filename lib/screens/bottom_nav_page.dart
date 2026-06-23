@@ -1,5 +1,4 @@
-
-
+import 'package:callme/profile/notification_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,15 +6,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home_page.dart';
 import 'myorders_page.dart';
 import 'package:callme/profile/account_page.dart';
+import 'package:callme/profile/notification_router.dart';
 import 'package:callme/provider/business_page.dart';
 import 'package:callme/Admin/admin_dashboard.dart';
 
-// Admin email fallback — only used if Firestore role field is absent
 const String _kAdminEmail = 'allinonecallme@gmail.com';
 
 class BottomNavPage extends StatefulWidget {
-  // Kept in signature so existing routes that pass these don't break,
-  // but the values are ignored — data comes from FirebaseAuth directly.
   final String userPhone;
   final String userEmail;
 
@@ -34,19 +31,29 @@ class _BottomNavPageState extends State<BottomNavPage> {
   bool _isAdmin = false;
   bool _loading = true;
 
+  // Screens are built exactly ONCE after the role check and never rebuilt.
+  // Rebuilding them would create new widget instances with new keys each time,
+  // which is the primary cause of "Duplicate GlobalKeys" crashes.
+  late final List<Widget> _screens;
+
+  // Guard so _checkRole can never run twice (e.g. hot-restart edge cases).
+  bool _roleChecked = false;
+
   @override
   void initState() {
     super.initState();
     _checkRole();
   }
 
-  // ── Determine role then stop loading ───────────────────────────────────────
   Future<void> _checkRole() async {
+    if (_roleChecked) return;
+    _roleChecked = true;
+
     final user = FirebaseAuth.instance.currentUser;
     bool admin = false;
 
     if (user != null) {
-      // Primary: check Firestore users/{uid}.role
+      // 1. Check Firestore role field first.
       try {
         final doc = await FirebaseFirestore.instance
             .collection('users')
@@ -54,48 +61,43 @@ class _BottomNavPageState extends State<BottomNavPage> {
             .get();
         final role = doc.data()?['role'] as String?;
         admin = role == 'admin';
-      } catch (_) {
-        // Firestore unavailable — fall through to email check
+      } catch (e) {
+        debugPrint('[BottomNav] Firestore role check failed: $e');
       }
 
-      // Fallback: email match
+      // 2. Fallback: check email.
       if (!admin) {
         admin =
             user.email?.toLowerCase().trim() == _kAdminEmail.toLowerCase();
       }
     }
 
-    debugPrint('[BottomNav] uid=${user?.uid} isAdmin=$admin');
+    debugPrint('[BottomNav] uid=${user?.uid}  isAdmin=$admin');
 
-    if (mounted) {
-      setState(() {
-        _isAdmin = admin;
-        _loading = false;
-        // Clamp index in case a previous session left it out of range
-        _currentIndex = _currentIndex.clamp(0, _tabCount - 1);
-      });
-    }
-  }
+    // Build the screen list ONCE, before setState, so no screen is ever
+    // recreated. All screens are held in a `late final` field.
+    final phone = user?.phoneNumber ?? widget.userPhone;
 
-  // ── How many tabs are currently shown ──────────────────────────────────────
-  int get _tabCount => _isAdmin ? 5 : 4;
-
-  // ── Build screen list ───────────────────────────────────────────────────────
-  List<Widget> get _screens {
-    final user = FirebaseAuth.instance.currentUser;
-    final phone = user?.phoneNumber ?? '';
-
-    return [
+    _screens = [
       const HomePage(),
       const BusinessPage(),
       MyOrdersPage(phone: phone),
-      AccountPage(),
-      if (_isAdmin) AdminDashboard(),
+      const AccountPage(),
+      if (admin) const AdminDashboard(),
     ];
+
+    // Guard against the widget being disposed while the async gap was open.
+    if (!mounted) return;
+
+    setState(() {
+      _isAdmin = admin;
+      _loading = false;
+      // Clamp in case index is out-of-range after admin tab appears/disappears.
+      _currentIndex = _currentIndex.clamp(0, _screens.length - 1);
+    });
   }
 
-  // ── Build nav items ─────────────────────────────────────────────────────────
-  List<BottomNavigationBarItem> get _items => [
+  List<BottomNavigationBarItem> get _navItems => [
         const BottomNavigationBarItem(
           icon: Icon(Icons.home_outlined),
           activeIcon: Icon(Icons.home),
@@ -124,9 +126,18 @@ class _BottomNavPageState extends State<BottomNavPage> {
           ),
       ];
 
-  // ─────────────────────────────────────────────────────────────────────────
+  void _openNotifications() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NotificationPage(onNotificationTap: routeNotification),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Show a plain loader while the role check is in flight.
+    // This Scaffold has no key so it cannot conflict with anything.
     if (_loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -134,28 +145,91 @@ class _BottomNavPageState extends State<BottomNavPage> {
     }
 
     final colorScheme = Theme.of(context).colorScheme;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
 
-    return StreamBuilder<User?>(
-      // Rebuilds nav if the user signs in or out mid-session
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        return Scaffold(
-          body: IndexedStack(
+    return Scaffold(
+      // IndexedStack keeps every tab alive (preserves scroll / state) without
+      // recreating widgets when switching tabs — critical for avoiding
+      // deactivated-ancestor errors.
+      //
+      // Wrapped in a Stack so a notification bell can float above every
+      // tab without needing to touch each tab's own AppBar/layout — none
+      // of the individual screens (HomePage, BusinessPage, etc.) need to
+      // change for this to work.
+      body: Stack(
+        children: [
+          IndexedStack(
             index: _currentIndex,
             children: _screens,
           ),
-          bottomNavigationBar: BottomNavigationBar(
-            type: BottomNavigationBarType.fixed,
-            currentIndex: _currentIndex,
-            selectedItemColor: colorScheme.primary,
-            unselectedItemColor: colorScheme.onSurfaceVariant,
-            backgroundColor: colorScheme.surface,
-            elevation: 8,
-            onTap: (index) => setState(() => _currentIndex = index),
-            items: _items,
-          ),
-        );
-      },
+          if (uid != null)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              right: 12,
+              child: _NotificationBell(
+                uid: uid,
+                onTap: _openNotifications,
+              ),
+            ),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _currentIndex,
+        selectedItemColor: colorScheme.primary,
+        unselectedItemColor: colorScheme.onSurfaceVariant,
+        backgroundColor: colorScheme.surface,
+        elevation: 8,
+        onTap: (index) {
+          if (index != _currentIndex) {
+            setState(() => _currentIndex = index);
+          }
+        },
+        items: _navItems,
+      ),
+    );
+  }
+}
+
+/// Floating bell icon showing a live unread-notification count.
+/// Sits above whichever tab is currently visible.
+class _NotificationBell extends StatelessWidget {
+  final String uid;
+  final VoidCallback onTap;
+
+  const _NotificationBell({
+    required this.uid,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final unreadStream = FirebaseFirestore.instance
+        .collection('notifications')
+        .where('receiverId', isEqualTo: uid)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((snap) => snap.docs.length);
+
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      shape: const CircleBorder(),
+      elevation: 3,
+      child: StreamBuilder<int>(
+        stream: unreadStream,
+        builder: (context, snapshot) {
+          final unread = snapshot.data ?? 0;
+          return IconButton(
+            tooltip: 'Notifications',
+            onPressed: onTap,
+            icon: Badge(
+              isLabelVisible: unread > 0,
+              label: Text('$unread'),
+              child: const Icon(Icons.notifications_outlined),
+            ),
+          );
+        },
+      ),
     );
   }
 }

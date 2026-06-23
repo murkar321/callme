@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -33,6 +34,9 @@ class SalonBookingPage extends StatefulWidget {
 
 class _SalonBookingPageState extends State<SalonBookingPage>
     with SingleTickerProviderStateMixin {
+  final _formKey = GlobalKey<FormState>();
+  AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
+
   final _phoneController   = TextEditingController();
   final _emailController   = TextEditingController();
   final _addressController = TextEditingController();
@@ -205,34 +209,52 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   }
 
   // ==========================================================================
+  // RESPONSIVE HELPERS
+  // ==========================================================================
+
+  // Base reference width (standard phone). Scale factor clamped so very
+  // small or very large screens (tablets) don't blow up the UI.
+  double _scale(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final factor = width / 390.0; // iPhone 13 / common Android baseline
+    return factor.clamp(0.85, 1.25);
+  }
+
+  double _sp(BuildContext context, double value) => value * _scale(context);
+
+  // ==========================================================================
   // BUILD
   // ==========================================================================
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeIn,
-          child: Column(
-            children: [
-              _buildHeader(),
-              Expanded(
-                child: _isLoadingProvider
-                    ? _buildLoadingState()
-                    : _noProviderMessage != null
-                        ? _buildNoProviderState()
-                        : _buildScrollBody(),
-              ),
-            ],
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF6F7FB),
+        resizeToAvoidBottomInset: true,
+        body: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeIn,
+            child: Column(
+              children: [
+                _buildHeader(context),
+                Expanded(
+                  child: _isLoadingProvider
+                      ? _buildLoadingState(context)
+                      : _noProviderMessage != null
+                          ? _buildNoProviderState(context)
+                          : _buildScrollBody(context),
+                ),
+              ],
+            ),
           ),
         ),
+        bottomNavigationBar:
+            (!_isLoadingProvider && _noProviderMessage == null)
+                ? _buildBottomBar(context)
+                : null,
       ),
-      bottomNavigationBar:
-          (!_isLoadingProvider && _noProviderMessage == null)
-              ? _buildBottomBar()
-              : null,
     );
   }
 
@@ -240,54 +262,59 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   // LOADING / NO PROVIDER STATES
   // ==========================================================================
 
-  Widget _buildLoadingState() {
+  Widget _buildLoadingState(BuildContext context) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const CircularProgressIndicator(color: Color(0xFFB38BFA)),
-          const SizedBox(height: 16),
+          SizedBox(height: _sp(context, 16)),
           Text('Finding a salon provider…',
-              style: TextStyle(color: Colors.grey.shade500)),
+              style: TextStyle(
+                  color: Colors.grey.shade500,
+                  fontSize: _sp(context, 14))),
         ],
       ),
     );
   }
 
-  Widget _buildNoProviderState() {
+  Widget _buildNoProviderState(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(_sp(context, 32)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(_sp(context, 24)),
               decoration: BoxDecoration(
                   color: Colors.grey.shade100, shape: BoxShape.circle),
               child: Icon(Icons.store_mall_directory_outlined,
-                  size: 52, color: Colors.grey.shade400),
+                  size: _sp(context, 52), color: Colors.grey.shade400),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: _sp(context, 20)),
             Text(
               _noProviderMessage ?? 'No provider available',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: Colors.grey.shade600, fontSize: 15, height: 1.6),
+                  color: Colors.grey.shade600,
+                  fontSize: _sp(context, 15),
+                  height: 1.6),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: _sp(context, 24)),
             ElevatedButton.icon(
               onPressed: _loadProvider,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFB38BFA),
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding: EdgeInsets.symmetric(
+                    horizontal: _sp(context, 24), vertical: _sp(context, 14)),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
               icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Try Again'),
+              label: Text('Try Again',
+                  style: TextStyle(fontSize: _sp(context, 14))),
             ),
           ],
         ),
@@ -299,20 +326,29 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   // SCROLL BODY
   // ==========================================================================
 
-  Widget _buildScrollBody() {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-      children: [
-        _sectionTitle('Selected Services'),
-        _buildServicesCard(),
-        const SizedBox(height: 20),
-        _sectionTitle('Appointment Type'),
-        _buildVisitTypeCard(),
-        const SizedBox(height: 20),
-        _sectionTitle('Your Details'),
-        _buildDetailsCard(),
-        const SizedBox(height: 120),
-      ],
+  Widget _buildScrollBody(BuildContext context) {
+    return Form(
+      key: _formKey,
+      autovalidateMode: _autovalidateMode,
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+          _sp(context, 20),
+          _sp(context, 20),
+          _sp(context, 20),
+          _sp(context, 20),
+        ),
+        children: [
+          _sectionTitle(context, 'Selected Services'),
+          _buildServicesCard(context),
+          SizedBox(height: _sp(context, 20)),
+          _sectionTitle(context, 'Appointment Type'),
+          _buildVisitTypeCard(context),
+          SizedBox(height: _sp(context, 20)),
+          _sectionTitle(context, 'Your Details'),
+          _buildDetailsCard(context),
+          SizedBox(height: _sp(context, 120)),
+        ],
+      ),
     );
   }
 
@@ -320,10 +356,10 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   // HEADER
   // ==========================================================================
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(_sp(context, 24)),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFFB38BFA), Color(0xFFE8A0BF)],
@@ -338,55 +374,63 @@ class _SalonBookingPageState extends State<SalonBookingPage>
               GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: EdgeInsets.all(_sp(context, 10)),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.arrow_back, color: Colors.white),
+                  child: Icon(Icons.arrow_back,
+                      color: Colors.white, size: _sp(context, 22)),
                 ),
               ),
               const Spacer(),
               if (_providerName != null && _providerName!.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.storefront_rounded,
-                          size: 12, color: Colors.white),
-                      const SizedBox(width: 5),
-                      Text(
-                        _providerName!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                Flexible(
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: _sp(context, 12), vertical: _sp(context, 6)),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.storefront_rounded,
+                            size: _sp(context, 12), color: Colors.white),
+                        SizedBox(width: _sp(context, 5)),
+                        Flexible(
+                          child: Text(
+                            _providerName!,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: _sp(context, 12),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 24),
-          const Text(
+          SizedBox(height: _sp(context, 24)),
+          Text(
             'Salon Booking',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 30,
+              fontSize: _sp(context, 30),
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: _sp(context, 6)),
           Text(
             '${widget.cartItems.length} service${widget.cartItems.length == 1 ? '' : 's'} selected',
-            style: TextStyle(color: Colors.white.withOpacity(0.9)),
+            style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: _sp(context, 14)),
           ),
         ],
       ),
@@ -397,14 +441,15 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   // SERVICES CARD
   // ==========================================================================
 
-  Widget _buildServicesCard() {
+  Widget _buildServicesCard(BuildContext context) {
     return _card(
+      context: context,
       child: Column(
         children: widget.cartItems.map<Widget>((item) {
           final isHome = item.id.toString().contains('Home');
           return Container(
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.all(14),
+            margin: EdgeInsets.only(bottom: _sp(context, 14)),
+            padding: EdgeInsets.all(_sp(context, 14)),
             decoration: BoxDecoration(
               color: const Color(0xFFF8F9FD),
               borderRadius: BorderRadius.circular(20),
@@ -412,39 +457,44 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             child: Row(
               children: [
                 Container(
-                  height: 54,
-                  width: 54,
+                  height: _sp(context, 54),
+                  width: _sp(context, 54),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFFB38BFA), Color(0xFFE8A0BF)],
                     ),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Icon(Icons.content_cut, color: Colors.white),
+                  child: Icon(Icons.content_cut,
+                      color: Colors.white, size: _sp(context, 24)),
                 ),
-                const SizedBox(width: 14),
+                SizedBox(width: _sp(context, 14)),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         item.name,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 15),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: _sp(context, 15)),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: _sp(context, 4)),
                       Text(
                         '${isHome ? "Home Visit" : "Salon Visit"} • Qty ${item.quantity}',
                         style: TextStyle(
-                            color: Colors.grey.shade600, fontSize: 13),
+                            color: Colors.grey.shade600,
+                            fontSize: _sp(context, 13)),
                       ),
                     ],
                   ),
                 ),
+                SizedBox(width: _sp(context, 8)),
                 Text(
                   '₹${(item.price * item.quantity).toStringAsFixed(0)}',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: _sp(context, 16)),
                 ),
               ],
             ),
@@ -455,16 +505,17 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   }
 
   // ==========================================================================
-  // VISIT TYPE CARD  (home/salon popup — kept exactly as original)
+  // VISIT TYPE CARD  (home/salon indicator)
   // ==========================================================================
 
-  Widget _buildVisitTypeCard() {
+  Widget _buildVisitTypeCard(BuildContext context) {
     return _card(
+      context: context,
       child: Row(
         children: [
-          _visitChip(Icons.home_rounded, 'Home', _hasHome),
-          const SizedBox(width: 12),
-          _visitChip(Icons.store_rounded, 'Salon', _hasSalon),
+          _visitChip(context, Icons.home_rounded, 'Home', _hasHome),
+          SizedBox(width: _sp(context, 12)),
+          _visitChip(context, Icons.store_rounded, 'Salon', _hasSalon),
         ],
       ),
     );
@@ -474,26 +525,71 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   // DETAILS CARD
   // ==========================================================================
 
-  Widget _buildDetailsCard() {
+  Widget _buildDetailsCard(BuildContext context) {
     return _card(
+      context: context,
       child: Column(
         children: [
-          _input(_phoneController, 'Phone Number', Icons.phone_outlined,
-              keyboardType: TextInputType.phone),
-          const SizedBox(height: 16),
-          _input(_emailController, 'Email Address', Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress),
-          const SizedBox(height: 16),
+          _input(
+            context,
+            controller: _phoneController,
+            hint: 'Phone Number',
+            icon: Icons.phone_outlined,
+            keyboardType: TextInputType.phone,
+            maxLength: 10,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+            ],
+            validator: (value) {
+              final v = (value ?? '').trim();
+              if (v.isEmpty) return 'Phone number is required';
+              if (v.length != 10) return 'Enter a valid 10-digit phone number';
+              if (!RegExp(r'^[6-9]\d{9}$').hasMatch(v)) {
+                return 'Enter a valid Indian mobile number';
+              }
+              return null;
+            },
+          ),
+          SizedBox(height: _sp(context, 16)),
+          _input(
+            context,
+            controller: _emailController,
+            hint: 'Email Address',
+            icon: Icons.email_outlined,
+            keyboardType: TextInputType.emailAddress,
+            validator: (value) {
+              final v = (value ?? '').trim();
+              if (v.isEmpty) return 'Email is required';
+              final emailRegex =
+                  RegExp(r'^[\w\.\-]+@([\w\-]+\.)+[\w\-]{2,4}$');
+              if (!emailRegex.hasMatch(v)) {
+                return 'Enter a valid email address';
+              }
+              return null;
+            },
+          ),
+          SizedBox(height: _sp(context, 16)),
 
           // Address shown only for home-visit items
           if (_hasHome) ...[
             _input(
-              _addressController,
-              'Home Address',
-              Icons.location_on_outlined,
+              context,
+              controller: _addressController,
+              hint: 'Home Address',
+              icon: Icons.location_on_outlined,
               maxLines: 3,
+              validator: (value) {
+                final v = (value ?? '').trim();
+                if (v.isEmpty) {
+                  return 'Home address is required for home-visit services';
+                }
+                if (v.length < 8) {
+                  return 'Please enter a more complete address';
+                }
+                return null;
+              },
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: _sp(context, 12)),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -501,7 +597,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFB38BFA),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: EdgeInsets.symmetric(vertical: _sp(context, 16)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
@@ -509,25 +605,29 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                       const Color(0xFFB38BFA).withOpacity(0.6),
                 ),
                 icon: _isGettingLocation
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
+                    ? SizedBox(
+                        height: _sp(context, 18),
+                        width: _sp(context, 18),
+                        child: const CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2),
                       )
-                    : const Icon(Icons.my_location_rounded),
-                label: Text(_isGettingLocation
-                    ? 'Getting Location…'
-                    : 'Use Current Location'),
+                    : Icon(Icons.my_location_rounded, size: _sp(context, 20)),
+                label: Text(
+                  _isGettingLocation
+                      ? 'Getting Location…'
+                      : 'Use Current Location',
+                  style: TextStyle(fontSize: _sp(context, 14)),
+                ),
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: _sp(context, 16)),
           ],
 
           _input(
-            _noteController,
-            'Additional Note (optional)',
-            Icons.notes_rounded,
+            context,
+            controller: _noteController,
+            hint: 'Additional Note (optional)',
+            icon: Icons.notes_rounded,
             maxLines: 3,
           ),
         ],
@@ -539,16 +639,16 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   // BOTTOM BAR
   // ==========================================================================
 
-  Widget _buildBottomBar() {
+  Widget _buildBottomBar(BuildContext context) {
     final canPay = !_isLoading && _providerId != null;
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+      padding: EdgeInsets.fromLTRB(
+          _sp(context, 18), _sp(context, 16), _sp(context, 18), 0),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
-          BoxShadow(
-              blurRadius: 20, color: Colors.black.withOpacity(0.07)),
+          BoxShadow(blurRadius: 20, color: Colors.black.withOpacity(0.07)),
         ],
       ),
       child: SafeArea(
@@ -559,17 +659,19 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Total Amount',
-                      style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  Text('Total Amount',
+                      style: TextStyle(
+                          color: Colors.grey, fontSize: _sp(context, 13))),
                   Text(
                     '₹${_totalAmount.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        fontSize: _sp(context, 24),
+                        fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: _sp(context, 16)),
             Expanded(
               child: ElevatedButton(
                 onPressed: canPay ? _continueToPayment : null,
@@ -578,20 +680,21 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                   foregroundColor: Colors.white,
                   disabledBackgroundColor:
                       const Color(0xFFB38BFA).withOpacity(0.4),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: EdgeInsets.symmetric(vertical: _sp(context, 16)),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18)),
                 ),
                 child: _isLoading
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(
+                    ? SizedBox(
+                        height: _sp(context, 22),
+                        width: _sp(context, 22),
+                        child: const CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text('Proceed To Pay',
+                    : Text('Proceed To Pay',
                         style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold)),
+                            fontSize: _sp(context, 15),
+                            fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -605,18 +708,19 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   // ==========================================================================
 
   Future<void> _continueToPayment() async {
+    // Trigger form validation; enable autovalidate so further edits revalidate live.
+    setState(() => _autovalidateMode = AutovalidateMode.onUserInteraction);
+
+    final isValid = _formKey.currentState?.validate() ?? false;
+    if (!isValid) {
+      _showPopup('Please fix the highlighted fields', false);
+      return;
+    }
+
     final phone   = _phoneController.text.trim();
     final email   = _emailController.text.trim();
     final address = _addressController.text.trim();
 
-    if (phone.isEmpty || email.isEmpty) {
-      _showPopup('Please fill phone and email', false);
-      return;
-    }
-    if (_hasHome && address.isEmpty) {
-      _showPopup('Home address is required for home-visit services', false);
-      return;
-    }
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       _showPopup('Please log in first', false);
@@ -721,6 +825,8 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             '${p.administrativeArea ?? ''} ${p.postalCode ?? ''}'
                 .replaceAll(RegExp(r',\s*,'), ',')
                 .trim();
+        // Re-validate the address field now that it's been auto-filled.
+        _formKey.currentState?.validate();
       }
     } catch (e) {
       debugPrint('[SalonBookingPage] location error: $e');
@@ -742,15 +848,15 @@ class _SalonBookingPageState extends State<SalonBookingPage>
       builder: (_) => Dialog(
         backgroundColor: Colors.transparent,
         child: Container(
-          padding: const EdgeInsets.all(28),
+          padding: EdgeInsets.all(_sp(context, 28)),
           decoration: BoxDecoration(
               color: Colors.white, borderRadius: BorderRadius.circular(28)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                height: 80,
-                width: 80,
+                height: _sp(context, 80),
+                width: _sp(context, 80),
                 decoration: BoxDecoration(
                   color: success
                       ? Colors.green.withOpacity(0.1)
@@ -760,15 +866,15 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 child: Icon(
                   success ? Icons.check_circle_rounded : Icons.error_rounded,
                   color: success ? Colors.green : Colors.red,
-                  size: 52,
+                  size: _sp(context, 52),
                 ),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: _sp(context, 20)),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    fontSize: _sp(context, 17), fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -785,14 +891,16 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   // UI HELPERS
   // ==========================================================================
 
-  Widget _sectionTitle(String title) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
+  Widget _sectionTitle(BuildContext context, String title) => Padding(
+        padding: EdgeInsets.only(bottom: _sp(context, 10)),
         child: Text(title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                fontSize: _sp(context, 17), fontWeight: FontWeight.bold)),
       );
 
-  Widget _card({required Widget child}) => Container(
-        padding: const EdgeInsets.all(18),
+  Widget _card({required BuildContext context, required Widget child}) =>
+      Container(
+        padding: EdgeInsets.all(_sp(context, 18)),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(26),
@@ -807,9 +915,11 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         child: child,
       );
 
-  Widget _visitChip(IconData icon, String label, bool active) => Expanded(
+  Widget _visitChip(
+          BuildContext context, IconData icon, String label, bool active) =>
+      Expanded(
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: EdgeInsets.symmetric(vertical: _sp(context, 14)),
           decoration: BoxDecoration(
             gradient: active
                 ? const LinearGradient(
@@ -822,13 +932,15 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon,
-                  size: 18, color: active ? Colors.white : Colors.black54),
-              const SizedBox(width: 6),
+                  size: _sp(context, 18),
+                  color: active ? Colors.white : Colors.black54),
+              SizedBox(width: _sp(context, 6)),
               Text(
                 label,
                 style: TextStyle(
                   color: active ? Colors.white : Colors.black54,
                   fontWeight: FontWeight.w600,
+                  fontSize: _sp(context, 14),
                 ),
               ),
             ],
@@ -837,29 +949,57 @@ class _SalonBookingPageState extends State<SalonBookingPage>
       );
 
   Widget _input(
-    TextEditingController controller,
-    String hint,
-    IconData icon, {
+    BuildContext context, {
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
     int maxLines = 1,
+    int? maxLength,
     TextInputType keyboardType = TextInputType.text,
-  }) =>
-      Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8F9FD),
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      maxLength: maxLength,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      validator: validator,
+      style: TextStyle(fontSize: _sp(context, 15)),
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: const Color(0xFFF8F9FD),
+        counterText: '',
+        border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide.none,
         ),
-        child: TextField(
-          controller: controller,
-          maxLines: maxLines,
-          keyboardType: keyboardType,
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            prefixIcon: Icon(icon, color: const Color(0xFFB38BFA)),
-          ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide.none,
         ),
-      );
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(color: Color(0xFFB38BFA), width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.2),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+        ),
+        contentPadding: EdgeInsets.symmetric(
+            horizontal: _sp(context, 20), vertical: _sp(context, 18)),
+        hintText: hint,
+        hintStyle:
+            TextStyle(color: Colors.grey.shade400, fontSize: _sp(context, 15)),
+        prefixIcon: Icon(icon,
+            color: const Color(0xFFB38BFA), size: _sp(context, 22)),
+        errorStyle: TextStyle(fontSize: _sp(context, 12)),
+      ),
+    );
+  }
 }

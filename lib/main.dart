@@ -1,58 +1,71 @@
+import 'dart:async';
+
+import 'package:callme/profile/navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'firebase_options.dart';
 import 'profile/notification_service.dart';
+import 'profile/notification_router.dart';
 
 import 'screens/logo_page.dart';
 import 'login/signup_page.dart';
 import 'screens/home_page.dart';
 import 'screens/bottom_nav_page.dart';
 
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+// ─── IMPORTANT ────────────────────────────────────────────────────────────────
+// FirebaseMessaging.onBackgroundMessage() MUST receive a top-level, annotated
+// function. It is called in a separate Dart isolate, so it cannot be a closure
+// or a class method. The function lives in notification_service.dart and is
+// exported here via the import above.
+// ─────────────────────────────────────────────────────────────────────────────
 
 Future<void> main() async {
+  // ① Ensure Flutter engine is ready — required before ANY plugin call.
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── Firebase: safe init (handles hot-restart duplicate-app error) ──────────
-  // Firebase.apps.isEmpty check is not enough on hot restart because the
-  // native layer already has a live app while the Dart side lost state.
-  // Using a try/catch is the only reliable guard.
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    // [core/duplicate-app] is expected on hot-restart — safe to ignore.
-    // Any other error is re-thrown so it is visible during development.
-    if (!e.toString().contains('duplicate-app')) rethrow;
-    debugPrint('[MAIN] Firebase already initialised — skipping (hot-restart)');
-  }
-
-  // ── Register background handler BEFORE runApp ──────────────────────────────
-  // Must be top-level and registered here; any later registration is ignored.
+  // ② Register the background FCM handler BEFORE Firebase.initializeApp().
+  //    Flutter's FCM plugin hooks into native code during this call;
+  //    if you register after init the handler is never wired up on Android.
+  //    The function MUST be top-level and annotated @pragma('vm:entry-point').
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // ── Launch the UI immediately — no heavy work blocks the first frame ────────
-  runApp(const CallMeApp());
+  // ③ Wire up notification-tap routing before NotificationService.initialize()
+  //    so the listeners it creates already have a valid callback to call.
+  NotificationService.onNotificationTap = routeNotification;
 
-  // ── Initialise notifications AFTER the first frame is painted ──────────────
-  // addPostFrameCallback fires once the first frame is on screen, keeping
-  // startup smooth. The 500 ms extra delay lets the widget tree fully settle
-  // (avoids the Choreographer "skipped frames" warning).
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
-    await Future.delayed(const Duration(milliseconds: 500));
+  runZonedGuarded(() async {
+    // ④ Initialise Firebase.
     try {
-      await NotificationService().initialize();
-      debugPrint('[MAIN] NotificationService ready');
-    } catch (e) {
-      debugPrint('[MAIN] Notification init failed: $e');
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      ).timeout(const Duration(seconds: 10));
+    } catch (e, st) {
+      debugPrint('[MAIN] Firebase init error: $e');
+      debugPrint('$st');
+      // Continue — don't let a network/config issue block the UI forever.
     }
+
+    // ⑤ Initialise the notification service (permissions, channel, listeners).
+    try {
+      await NotificationService().initialize().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          debugPrint('[MAIN] NotificationService init timed out, continuing.');
+        },
+      );
+    } catch (e, st) {
+      debugPrint('[MAIN] NotificationService error: $e');
+      debugPrint('$st');
+    }
+
+    runApp(const CallMeApp());
+  }, (error, stack) {
+    debugPrint('[MAIN] Uncaught zone error: $error');
+    debugPrint('$stack');
   });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 class CallMeApp extends StatelessWidget {
   const CallMeApp({super.key});
@@ -63,17 +76,37 @@ class CallMeApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'CallMe',
-      theme: ThemeData(useMaterial3: true),
+
+      theme: ThemeData(
+        useMaterial3: true,
+      ),
+
       initialRoute: '/logo',
+
       routes: {
         '/logo': (_) => const LogoPage(),
         '/signup': (_) => const SignupPage(),
         '/home': (_) => const HomePage(),
-        '/bottomnav': (_) => const BottomNavPage(
-              userPhone: '',
-              userEmail: '',
-            ),
       },
+
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case '/bottomnav':
+            final args =
+                settings.arguments as Map<String, dynamic>? ?? {};
+
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => BottomNavPage(
+                userPhone: args['userPhone']?.toString() ?? '',
+                userEmail: args['userEmail']?.toString() ?? '',
+              ),
+            );
+        }
+
+        return null;
+      },
+
       onUnknownRoute: (_) => MaterialPageRoute(
         builder: (_) => const LogoPage(),
       ),

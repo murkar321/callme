@@ -159,8 +159,17 @@ class _MapPickerPageState extends State<MapPickerPage>
   //  REVERSE GEOCODING
   // ──────────────────────────────────────────
 
+  String _fallbackAddress(LatLng latlng) {
+    return '${latlng.latitude.toStringAsFixed(6)}, ${latlng.longitude.toStringAsFixed(6)}';
+  }
+
   Future<void> _reverseGeocode(LatLng latlng) async {
-    if (mounted) setState(() => _addressLoading = true);
+    if (mounted) {
+      setState(() {
+        _addressLoading = true;
+        _pickedLatLng = latlng;
+      });
+    }
     try {
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/geocode/json'
@@ -218,6 +227,13 @@ class _MapPickerPageState extends State<MapPickerPage>
             _shortAddress = short.isNotEmpty ? short : 'Selected location';
             _fullAddress =
                 full.isNotEmpty ? full : result['formatted_address'] ?? '';
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _shortAddress = 'Selected location';
+            _fullAddress = _fallbackAddress(latlng);
           });
         }
       }
@@ -395,13 +411,18 @@ class _MapPickerPageState extends State<MapPickerPage>
   }
 
   void _confirmLocation() {
-    if (_pickedLatLng == null || _fullAddress.isEmpty) return;
+    if (_pickedLatLng == null) return;
+
+    final resolvedFullAddress =
+        _fullAddress.trim().isNotEmpty ? _fullAddress : _fallbackAddress(_pickedLatLng!);
+    final resolvedShortAddress =
+        _shortAddress.trim().isNotEmpty ? _shortAddress : 'Selected location';
     HapticFeedback.mediumImpact();
     Navigator.pop(
       context,
       MapPickerResult(
-        shortAddress: _shortAddress,
-        fullAddress: _fullAddress,
+        shortAddress: resolvedShortAddress,
+        fullAddress: resolvedFullAddress,
         addressDetails: _detailsController.text.trim(),
         latLng: _pickedLatLng!,
       ),
@@ -865,8 +886,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: (_fullAddress.isEmpty ||
-                                  _addressLoading)
+                          onPressed: (_pickedLatLng == null || _addressLoading)
                               ? null
                               : _confirmLocation,
                           style: ElevatedButton.styleFrom(

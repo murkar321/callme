@@ -5,10 +5,7 @@ import 'package:callme/models/cart_page.dart';
 import 'package:callme/bookings/booking_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LAUNDRY DETAIL PAGE
-// • ADD button → fabric-selection popup → adds to cart
-// • BOOK NOW button → goes to BookingPage with cart
-// • No prices in fabric popup (same as service page)
+// LAUNDRY DETAIL PAGE  – Android-safe, fully adaptive
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LaundryDetailPage extends StatefulWidget {
@@ -30,7 +27,6 @@ class LaundryDetailPage extends StatefulWidget {
 class _LaundryDetailPageState extends State<LaundryDetailPage> {
   static const _theme = Color(0xFFAE91BA);
 
-  // Fabric options — no price, just selection + qty
   static const List<String> _fabrics = [
     'Cotton', 'Silk', 'Wool', 'Denim', 'Polyester', 'Curtains', 'Shoes',
   ];
@@ -43,212 +39,195 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setModal) {
-          final totalPieces = qty.values.fold(0, (s, q) => s + q);
+      useSafeArea: false,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: StatefulBuilder(
+          builder: (ctx, setModal) {
+            final totalPieces = qty.values.fold(0, (s, q) => s + q);
+            final mq = MediaQuery.of(ctx);
+            final bottomPad = mq.viewPadding.bottom;
 
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.70,
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(28)),
-            ),
-            child: Column(
-              children: [
-                // Handle
-                Center(
-                  child: Container(
-                    width: 44, height: 5,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(10),
+            return Container(
+              constraints: BoxConstraints(maxHeight: mq.size.height * 0.68),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Handle
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Container(
+                      width: 44, height: 5,
+                      decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                // Header
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Choose Fabric & Qty',
-                            style: TextStyle(
-                                fontSize: 19,
-                                fontWeight: FontWeight.bold),
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Choose Fabric & Qty',
+                                  style: TextStyle(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 3),
+                              Text('Add multiple fabrics in one order',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade500)),
+                            ],
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Add multiple fabrics in one order',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade500),
-                          ),
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.pop(ctx),
-                      child: Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.close, size: 18),
-                      ),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx),
+                          child: Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                shape: BoxShape.circle),
+                            child: const Icon(Icons.close, size: 18),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 14),
+                  ),
+                  const SizedBox(height: 14),
 
-                // Fabric rows
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemCount: _fabrics.length,
-                    separatorBuilder: (_, __) =>
-                        Divider(height: 1, color: Colors.grey.shade100),
-                    itemBuilder: (_, i) {
-                      final name = _fabrics[i];
-                      final q = qty[name]!;
-                      final active = q > 0;
+                  // Fabric rows — scrollable
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 4, horizontal: 18),
+                      itemCount: _fabrics.length,
+                      separatorBuilder: (_, __) =>
+                          Divider(height: 1, color: Colors.grey.shade100),
+                      itemBuilder: (_, i) {
+                        final name = _fabrics[i];
+                        final q = qty[name]!;
+                        final active = q > 0;
 
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        margin: const EdgeInsets.symmetric(vertical: 5),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: active
-                              ? _theme.withOpacity(0.07)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          margin: const EdgeInsets.symmetric(vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
                             color: active
-                                ? _theme.withOpacity(0.5)
-                                : Colors.grey.shade200,
-                            width: 1.3,
+                                ? _theme.withOpacity(0.07)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: active
+                                  ? _theme.withOpacity(0.5)
+                                  : Colors.grey.shade200,
+                              width: 1.3,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(name,
+                                    style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600)),
+                              ),
+                              _QtyControl(
+                                qty: q,
+                                color: _theme,
+                                onDecrement: q > 0
+                                    ? () => setModal(() => qty[name] = q - 1)
+                                    : null,
+                                onIncrement: () =>
+                                    setModal(() => qty[name] = q + 1),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // Footer — clears Android nav bar
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(18, 10, 18, bottomPad + 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (totalPieces > 0) ...[
+                          Text(
+                            '$totalPieces piece${totalPieces == 1 ? '' : 's'} selected',
+                            style: TextStyle(
+                                fontSize: 13, color: Colors.grey.shade600),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: totalPieces == 0
+                                ? null
+                                : () {
+                                    for (final name in _fabrics) {
+                                      final q = qty[name]!;
+                                      if (q > 0) {
+                                        for (int i = 0; i < q; i++) {
+                                          Cart.addLaundry(
+                                            id: '${widget.product.id}_${name.toLowerCase()}',
+                                            name:
+                                                '${widget.product.name} ($name)',
+                                            price: widget
+                                                .product.calculatedFinalPrice,
+                                            category: widget.category,
+                                            image: widget.product.imagePath,
+                                          );
+                                        }
+                                      }
+                                    }
+                                    Navigator.pop(ctx);
+                                    setState(() {});
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _theme,
+                              disabledBackgroundColor: Colors.grey.shade200,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              totalPieces == 0
+                                  ? 'ADD TO CART'
+                                  : 'ADD $totalPieces ITEM${totalPieces == 1 ? '' : 'S'} TO CART',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15),
+                            ),
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                name,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            _QtyControl(
-                              qty: q,
-                              color: _theme,
-                              onDecrement: q > 0
-                                  ? () =>
-                                      setModal(() => qty[name] = q - 1)
-                                  : null,
-                              onIncrement: () =>
-                                  setModal(() => qty[name] = q + 1),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-                // Piece count
-                if (totalPieces > 0) ...[
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '$totalPieces piece${totalPieces == 1 ? '' : 's'} selected',
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.grey.shade600),
+                      ],
                     ),
                   ),
                 ],
-                const SizedBox(height: 12),
-
-                // ADD TO CART
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: totalPieces == 0
-                        ? null
-                        : () {
-                            for (final name in _fabrics) {
-                              final q = qty[name]!;
-                              if (q > 0) {
-                                for (int i = 0; i < q; i++) {
-                                  Cart.addLaundry(
-                                    id: '${widget.product.id}_${name.toLowerCase()}',
-                                    name: '${widget.product.name} ($name)',
-                                    price:
-                                        widget.product.calculatedFinalPrice,
-                                    category: widget.category,
-                                    image: widget.product.imagePath,
-                                  );
-                                }
-                              }
-                            }
-                            Navigator.pop(ctx);
-                            setState(() {});
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _theme,
-                      disabledBackgroundColor: Colors.grey.shade200,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      totalPieces == 0
-                          ? 'ADD TO CART'
-                          : 'ADD $totalPieces ITEM${totalPieces == 1 ? '' : 'S'} TO CART',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // VIEW CART
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _goToCart();
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: _theme, width: 1.4),
-                      foregroundColor: _theme,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: const Text('VIEW CART',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          );
-        },
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -287,15 +266,21 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
   @override
   Widget build(BuildContext context) {
     final cartCount = Cart.totalItems('Laundry');
+    // viewPadding.bottom = height of Android nav bar (gesture or button)
+    final navBarHeight = MediaQuery.of(context).viewPadding.bottom;
+    // Bottom bar total height: content (80) + nav bar inset
+    final bottomBarHeight = 80.0 + navBarHeight;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F4FA),
+      // extendBody lets content scroll under the floating bottom bar
+      extendBody: true,
       body: Stack(
         children: [
-          // ── Scrollable content ──────────────────────────────────────────
+          // ── Scrollable content ────────────────────────────────────────
           CustomScrollView(
             slivers: [
-              // App bar with hero image
+              // Hero app bar
               SliverAppBar(
                 expandedHeight: 300,
                 pinned: true,
@@ -305,8 +290,7 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Image.asset(widget.product.imagePath,
-                          fit: BoxFit.cover),
+                      Image.asset(widget.product.imagePath, fit: BoxFit.cover),
                       Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -320,9 +304,7 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                         ),
                       ),
                       Positioned(
-                        left: 20,
-                        right: 20,
-                        bottom: 28,
+                        left: 20, right: 20, bottom: 28,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -333,22 +315,17 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                                 color: Colors.white.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(30),
                               ),
-                              child: Text(
-                                widget.category,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600),
-                              ),
+                              child: Text(widget.category,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600)),
                             ),
                             const SizedBox(height: 10),
-                            Text(
-                              widget.product.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 26,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                            Text(widget.product.name,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
@@ -356,7 +333,6 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                   ),
                 ),
                 actions: [
-                  // Cart icon in app bar
                   Padding(
                     padding: const EdgeInsets.only(right: 12),
                     child: GestureDetector(
@@ -393,7 +369,7 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
 
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(18),
+                  padding: EdgeInsets.fromLTRB(18, 18, 18, bottomBarHeight + 18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -412,10 +388,9 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                                   Text(
                                     '₹${widget.product.calculatedFinalPrice}',
                                     style: const TextStyle(
-                                      fontSize: 30,
-                                      fontWeight: FontWeight.bold,
-                                      color: _theme,
-                                    ),
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.bold,
+                                        color: _theme),
                                   ),
                                 ],
                               ),
@@ -427,15 +402,14 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                                 decoration: BoxDecoration(
                                   color: Colors.green.shade50,
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                      color: Colors.green.shade200),
+                                  border:
+                                      Border.all(color: Colors.green.shade200),
                                 ),
                                 child: Text(
                                   '${widget.product.discount}% OFF',
                                   style: TextStyle(
-                                    color: Colors.green.shade700,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                      color: Colors.green.shade700,
+                                      fontWeight: FontWeight.bold),
                                 ),
                               ),
                           ],
@@ -446,11 +420,9 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                         const SizedBox(height: 18),
                         _sectionCard(
                           title: 'Description',
-                          child: Text(
-                            widget.product.description!,
-                            style: const TextStyle(
-                                fontSize: 15, height: 1.65),
-                          ),
+                          child: Text(widget.product.description!,
+                              style: const TextStyle(
+                                  fontSize: 15, height: 1.65)),
                         ),
                       ],
 
@@ -462,8 +434,7 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                             children:
                                 widget.product.safeIncludes.map((item) {
                               return Padding(
-                                padding:
-                                    const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.only(bottom: 12),
                                 child: Row(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
@@ -471,8 +442,7 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                                     Container(
                                       padding: const EdgeInsets.all(4),
                                       decoration: BoxDecoration(
-                                        color:
-                                            Colors.green.withOpacity(0.1),
+                                        color: Colors.green.withOpacity(0.1),
                                         shape: BoxShape.circle,
                                       ),
                                       child: const Icon(Icons.check,
@@ -482,8 +452,7 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                                     Expanded(
                                       child: Text(item,
                                           style: const TextStyle(
-                                              fontSize: 15,
-                                              height: 1.5)),
+                                              fontSize: 15, height: 1.5)),
                                     ),
                                   ],
                                 ),
@@ -502,9 +471,6 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                                   fontSize: 15, height: 1.65)),
                         ),
                       ],
-
-                      // Space for bottom bar
-                      const SizedBox(height: 120),
                     ],
                   ),
                 ),
@@ -512,16 +478,16 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
             ],
           ),
 
-          // ── Bottom bar ──────────────────────────────────────────────────
+          // ── Bottom action bar — floats above Android nav bar ──────────
           Positioned(
-            left: 16,
-            right: 16,
-            bottom: 16,
+            left: 0,
+            right: 0,
+            bottom: 0,
             child: Container(
-              padding: const EdgeInsets.all(14),
+              // Inner padding pushes content up; bottom padding clears nav bar
+              padding: EdgeInsets.fromLTRB(16, 12, 16, navBarHeight + 12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.09),
@@ -532,68 +498,64 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
               ),
               child: Row(
                 children: [
-                  // Price
+                  // Price column
                   Expanded(
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Starting from',
                             style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 12)),
+                                color: Colors.grey.shade500, fontSize: 12)),
                         const SizedBox(height: 3),
                         Text(
                           '₹${widget.product.calculatedFinalPrice}',
                           style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
+                              fontSize: 20, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                   ),
 
-                  // ADD button → fabric popup → cart
-                  Expanded(
+                  // ADD button
+                  SizedBox(
+                    height: 48,
                     child: ElevatedButton(
                       onPressed: _showFabricPopup,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
-                        minimumSize: const Size(0, 52),
                         elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 22),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
+                            borderRadius: BorderRadius.circular(14)),
                       ),
-                      child: const Text(
-                        'ADD',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15),
-                      ),
+                      child: const Text('ADD',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15)),
                     ),
                   ),
 
                   const SizedBox(width: 10),
 
-                  // BOOK NOW → booking page
-                  Expanded(
+                  // BOOK button
+                  SizedBox(
+                    height: 48,
                     child: ElevatedButton(
                       onPressed: _bookNow,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _theme,
-                        minimumSize: const Size(0, 52),
                         elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 22),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
+                            borderRadius: BorderRadius.circular(14)),
                       ),
-                      child: const Text(
-                        'BOOK',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15),
-                      ),
+                      child: const Text('BOOK',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15)),
                     ),
                   ),
                 ],
@@ -605,7 +567,7 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
     );
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // ── Card helpers ─────────────────────────────────────────────────────────────
   Widget _infoCard({required Widget child}) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(18),
@@ -650,7 +612,7 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QTY CONTROL  (shared between popup and any future reuse)
+// QTY CONTROL
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _QtyControl extends StatelessWidget {
@@ -672,11 +634,10 @@ class _QtyControl extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _Btn(
-          icon: Icons.remove,
-          color: color,
-          enabled: onDecrement != null,
-          onTap: onDecrement ?? () {},
-        ),
+            icon: Icons.remove,
+            color: color,
+            enabled: onDecrement != null,
+            onTap: onDecrement ?? () {}),
         SizedBox(
           width: 34,
           child: Text('$qty',
@@ -685,10 +646,7 @@ class _QtyControl extends StatelessWidget {
                   fontSize: 15, fontWeight: FontWeight.bold)),
         ),
         _Btn(
-            icon: Icons.add,
-            color: color,
-            enabled: true,
-            onTap: onIncrement),
+            icon: Icons.add, color: color, enabled: true, onTap: onIncrement),
       ],
     );
   }

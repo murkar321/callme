@@ -6,8 +6,7 @@ import '../data/laundary_data.dart';
 import '../data/service_product.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LAUNDRY SERVICE PAGE
-// Single file: no LaundryServiceCard needed — the card is built inline here.
+// LAUNDRY SERVICE PAGE  – Android-safe, adaptive layout
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LaundryServicePage extends StatefulWidget {
@@ -25,7 +24,6 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
 
   late String _selectedCategory;
 
-  // Fabric options — no price shown on this screen
   static const List<String> _fabrics = [
     'Cotton', 'Silk', 'Wool', 'Denim', 'Polyester',
   ];
@@ -36,7 +34,7 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
     _selectedCategory = _laundryData.keys.first;
   }
 
-  // ── Fabric popup (qty only, no price) ──────────────────────────────────────
+  // ── Fabric popup ────────────────────────────────────────────────────────────
   void _showFabricPopup(ServiceProduct product) {
     final Map<String, int> qty = {for (final f in _fabrics) f: 0};
 
@@ -44,196 +42,187 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setModal) {
-          final totalPieces =
-              qty.values.fold(0, (sum, q) => sum + q);
+      // useSafeArea keeps popup above Android nav bar automatically
+      useSafeArea: false,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: StatefulBuilder(
+          builder: (ctx, setModal) {
+            final totalPieces = qty.values.fold(0, (sum, q) => sum + q);
+            final mq = MediaQuery.of(ctx);
+            // Use viewInsets for keyboard + viewPadding for nav bar
+            final bottomPad = mq.viewPadding.bottom;
 
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.62,
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-            ),
-            child: Column(
-              children: [
-                // Handle
-                Center(
-                  child: Container(
-                    width: 44, height: 5,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(10),
+            return Container(
+              // Max 60% of screen; shrink on small screens
+              constraints: BoxConstraints(
+                maxHeight: mq.size.height * 0.60,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Handle
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Container(
+                      width: 44, height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 14),
+                  const SizedBox(height: 14),
 
-                // Header
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            product.name,
-                            style: const TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.bold),
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(product.name,
+                                  style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 2),
+                              Text('Select fabric & quantity',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade500)),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Select fabric & quantity',
-                            style: TextStyle(
-                              fontSize: 13, color: Colors.grey.shade500),
-                          ),
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.pop(ctx),
-                      child: Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.close, size: 18),
-                      ),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx),
+                          child: Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close, size: 18),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Divider(height: 1),
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(height: 1),
 
-                // Fabric list
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    itemCount: _fabrics.length,
-                    separatorBuilder: (_, __) =>
-                        Divider(height: 1, color: Colors.grey.shade100),
-                    itemBuilder: (_, i) {
-                      final name = _fabrics[i];
-                      final q = qty[name]!;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 12, horizontal: 2),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                name,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                  // Fabric list — scrollable
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 18),
+                      itemCount: _fabrics.length,
+                      separatorBuilder: (_, __) =>
+                          Divider(height: 1, color: Colors.grey.shade100),
+                      itemBuilder: (_, i) {
+                        final name = _fabrics[i];
+                        final q = qty[name]!;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(name,
+                                    style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600)),
+                              ),
+                              _QtyControl(
+                                qty: q,
+                                color: _theme,
+                                onDecrement: q > 0
+                                    ? () => setModal(() => qty[name] = q - 1)
+                                    : null,
+                                onIncrement: () =>
+                                    setModal(() => qty[name] = q + 1),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const Divider(height: 1),
+
+                  // Footer — padded above Android nav bar
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(18, 10, 18, bottomPad + 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (totalPieces > 0) ...[
+                          Text(
+                            '$totalPieces piece${totalPieces == 1 ? '' : 's'} selected',
+                            style: TextStyle(
+                                fontSize: 13, color: Colors.grey.shade600),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: totalPieces == 0
+                                ? null
+                                : () {
+                                    for (final name in _fabrics) {
+                                      final q = qty[name]!;
+                                      if (q > 0) {
+                                        for (int i = 0; i < q; i++) {
+                                          Cart.addLaundry(
+                                            id: '${product.id}_${name.toLowerCase()}',
+                                            name: '${product.name} ($name)',
+                                            price: product.calculatedFinalPrice,
+                                            category: _selectedCategory,
+                                            image: product.imagePath,
+                                          );
+                                        }
+                                      }
+                                    }
+                                    Navigator.pop(ctx);
+                                    setState(() {});
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _theme,
+                              disabledBackgroundColor: Colors.grey.shade200,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              totalPieces == 0
+                                  ? 'SELECT AT LEAST ONE'
+                                  : 'ADD $totalPieces ITEM${totalPieces == 1 ? '' : 'S'} TO CART',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
                               ),
                             ),
-                            _QtyControl(
-                              qty: q,
-                              color: _theme,
-                              onDecrement: q > 0
-                                  ? () => setModal(() => qty[name] = q - 1)
-                                  : null,
-                              onIncrement: () =>
-                                  setModal(() => qty[name] = q + 1),
-                            ),
-                          ],
+                          ),
                         ),
-                      );
-                    },
-                  ),
-                ),
-
-                const Divider(height: 1),
-                const SizedBox(height: 10),
-
-                // Piece count
-                if (totalPieces > 0)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '$totalPieces piece${totalPieces == 1 ? '' : 's'} selected',
-                      style: TextStyle(
-                        fontSize: 13, color: Colors.grey.shade600),
+                      ],
                     ),
                   ),
-                const SizedBox(height: 10),
-
-                // Add to cart
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: totalPieces == 0
-                        ? null
-                        : () {
-                            for (final name in _fabrics) {
-                              final q = qty[name]!;
-                              if (q > 0) {
-                                for (int i = 0; i < q; i++) {
-                                  Cart.addLaundry(
-                                    id: '${product.id}_${name.toLowerCase()}',
-                                    name: '${product.name} ($name)',
-                                    price: product.calculatedFinalPrice,
-                                    category: _selectedCategory,
-                                    image: product.imagePath,
-                                  );
-                                }
-                              }
-                            }
-                            Navigator.pop(ctx);
-                            setState(() {});
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _theme,
-                      disabledBackgroundColor: Colors.grey.shade200,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      totalPieces == 0
-                          ? 'SELECT AT LEAST ONE'
-                          : 'ADD $totalPieces ITEM${totalPieces == 1 ? '' : 'S'} TO CART',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // View cart
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _goToCart();
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: _theme, width: 1.4),
-                      foregroundColor: _theme,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: const Text(
-                      'VIEW CART',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          );
-        },
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -256,12 +245,15 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
   @override
   Widget build(BuildContext context) {
     final cartCount = Cart.totalItems('Laundry');
+    // Bottom padding: safe area (nav bar) + cart bar height if visible
+    final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
         title: const Text('Laundry',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            style:
+                TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: _theme,
         elevation: 0,
@@ -278,14 +270,13 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
                       color: Colors.white, size: 26),
                   if (cartCount > 0)
                     Positioned(
-                      top: -6,
-                      right: -6,
+                      top: -6, right: -6,
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: const BoxDecoration(
                             color: Colors.red, shape: BoxShape.circle),
-                        constraints: const BoxConstraints(
-                            minWidth: 18, minHeight: 18),
+                        constraints:
+                            const BoxConstraints(minWidth: 18, minHeight: 18),
                         child: Text(
                           cartCount > 99 ? '99+' : '$cartCount',
                           style: const TextStyle(
@@ -305,7 +296,7 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
 
       body: Row(
         children: [
-          // ── Left: category panel ──────────────────────────────────────────
+          // ── Left: category rail ───────────────────────────────────────
           Container(
             width: 88,
             color: Colors.white,
@@ -347,18 +338,19 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
             ),
           ),
 
-          // ── Right: product grid ───────────────────────────────────────────
+          // ── Right: product grid ───────────────────────────────────────
           Expanded(
             child: GridView.builder(
+              // Extra bottom padding = cart bar height (68) + nav bar inset
               padding: EdgeInsets.fromLTRB(
-                  10, 10, 10, cartCount > 0 ? 86 : 10),
+                  10, 10, 10, cartCount > 0 ? 68 + bottomPad + 10 : 10),
               itemCount: _laundryData[_selectedCategory]!.length,
               gridDelegate:
                   const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 mainAxisSpacing: 10,
                 crossAxisSpacing: 10,
-                mainAxisExtent: 242,
+                mainAxisExtent: 230,
               ),
               itemBuilder: (_, index) {
                 final product = _laundryData[_selectedCategory]![index];
@@ -383,18 +375,19 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
         ],
       ),
 
-      // ── Bottom cart bar ───────────────────────────────────────────────────
+      // ── Bottom cart bar — sits above Android nav bar via SafeArea ─────
       bottomNavigationBar: cartCount > 0
           ? SafeArea(
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   color: _theme,
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 6),
+                        color: Colors.black.withOpacity(0.12),
+                        blurRadius: 8,
+                        offset: const Offset(0, -2)),
                   ],
                 ),
                 child: Row(
@@ -403,8 +396,7 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
                       child: Text(
                         '$cartCount item${cartCount == 1 ? '' : 's'} in cart',
                         style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600),
+                            color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ),
                     SizedBox(
@@ -417,10 +409,10 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(30)),
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
                         ),
                         child: const Text('View Cart',
-                            style:
-                                TextStyle(fontWeight: FontWeight.bold)),
+                            style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],
@@ -433,7 +425,7 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INLINE PRODUCT CARD (replaces LaundryCard widget file)
+// INLINE PRODUCT CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _LaundryCard extends StatelessWidget {
@@ -457,19 +449,16 @@ class _LaundryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.grey.shade300, blurRadius: 5),
-        ],
+        boxShadow: [BoxShadow(color: Colors.grey.shade300, blurRadius: 5)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image
           Stack(
             children: [
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
                 child: AspectRatio(
                   aspectRatio: 5 / 3,
                   child: Image.asset(product.imagePath, fit: BoxFit.cover),
@@ -482,9 +471,8 @@ class _LaundryCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.orange,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                        color: Colors.orange,
+                        borderRadius: BorderRadius.circular(20)),
                     child: Text(product.badge!,
                         style: const TextStyle(
                             color: Colors.white,
@@ -494,102 +482,84 @@ class _LaundryCard extends StatelessWidget {
                 ),
             ],
           ),
-
-          // Info
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  product.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.bold),
-                ),
+                Text(product.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Text(
-                      '₹${product.calculatedFinalPrice}',
+                Row(children: [
+                  Text('₹${product.calculatedFinalPrice}',
                       style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(width: 6),
-                    if (product.discount != null && product.discount! > 0)
-                      Text(
-                        '${product.discount}% OFF',
+                          fontSize: 14, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 6),
+                  if (product.discount != null && product.discount! > 0)
+                    Text('${product.discount}% OFF',
                         style: const TextStyle(
                             fontSize: 10,
                             color: Colors.green,
-                            fontWeight: FontWeight.bold),
-                      ),
-                  ],
-                ),
+                            fontWeight: FontWeight.bold)),
+                ]),
                 const SizedBox(height: 3),
-                Row(
-                  children: [
-                    const Icon(Icons.star, size: 12, color: Colors.orange),
-                    const SizedBox(width: 2),
-                    Text(product.safeRating.toString(),
-                        style: const TextStyle(fontSize: 10)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        product.serviceTime,
+                Row(children: [
+                  const Icon(Icons.star, size: 12, color: Colors.orange),
+                  const SizedBox(width: 2),
+                  Text(product.safeRating.toString(),
+                      style: const TextStyle(fontSize: 10)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(product.serviceTime,
                         style: TextStyle(
                             fontSize: 10, color: Colors.grey.shade500),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ]),
                 const SizedBox(height: 8),
-
-                // Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 32,
-                        child: ElevatedButton(
-                          onPressed: onAdd,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _theme,
-                            padding: EdgeInsets.zero,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Text('ADD',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold)),
+                Row(children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 32,
+                      child: ElevatedButton(
+                        onPressed: onAdd,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _theme,
+                          padding: EdgeInsets.zero,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
+                        child: const Text('ADD',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold)),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: SizedBox(
-                        height: 32,
-                        child: OutlinedButton(
-                          onPressed: onView,
-                          style: OutlinedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            side: BorderSide(
-                                color: Colors.grey.shade300, width: 1.2),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Text('VIEW',
-                              style: TextStyle(fontSize: 12)),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: SizedBox(
+                      height: 32,
+                      child: OutlinedButton(
+                        onPressed: onView,
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          side: BorderSide(
+                              color: Colors.grey.shade300, width: 1.2),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
+                        child: const Text('VIEW',
+                            style: TextStyle(fontSize: 12)),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ]),
               ],
             ),
           ),
@@ -600,7 +570,7 @@ class _LaundryCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHARED QTY CONTROL WIDGET  (used by popup here & detail page)
+// QTY CONTROL
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _QtyControl extends StatelessWidget {
@@ -629,12 +599,10 @@ class _QtyControl extends StatelessWidget {
         ),
         SizedBox(
           width: 34,
-          child: Text(
-            '$qty',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                fontSize: 15, fontWeight: FontWeight.bold),
-          ),
+          child: Text('$qty',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.bold)),
         ),
         _Btn(icon: Icons.add, color: color, enabled: true, onTap: onIncrement),
       ],
@@ -666,13 +634,10 @@ class _Btn extends StatelessWidget {
           color: enabled ? color.withOpacity(0.15) : Colors.grey.shade100,
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          icon,
-          size: 15,
-          color: enabled ? color : Colors.grey.shade400,
-        ),
+        child: Icon(icon,
+            size: 15,
+            color: enabled ? color : Colors.grey.shade400),
       ),
     );
   }
 }
-

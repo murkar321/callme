@@ -11,7 +11,6 @@ class ApproveProvidersPage extends StatefulWidget {
 
 class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
-
   String search = "";
 
   // =====================================================
@@ -27,8 +26,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
   // =====================================================
   // SEND FCM HELPER
-  // Writes to fcm_queue — your Cloud Function picks
-  // this up and fires the actual FCM push.
   // =====================================================
 
   Future<void> _sendFcm({
@@ -36,7 +33,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     required String title,
     required String body,
     required String providerId,
-    required String type, // "approved" | "rejected"
+    required String userId,     // ✅ needed for fcm_queue rules
+    required String type,
     String? reason,
   }) async {
     if (token.trim().isEmpty) return;
@@ -46,6 +44,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       "title":      title,
       "body":       body,
       "providerId": providerId,
+      "userId":     userId,     // ✅ fcm_queue rule: userId == uid()
+      "receiverId": userId,     // ✅ fcm_queue rule: receiverId == uid()
       "type":       type,
       "createdAt":  FieldValue.serverTimestamp(),
       "sent":       false,
@@ -63,27 +63,48 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   // =====================================================
 
   Future<void> _saveNotification({
-    required String providerId,
+    required String userId,     // ✅ receiverId for notifications rules
     required String title,
     required String body,
     String? reason,
   }) async {
     final Map<String, dynamic> notification = {
-      "title":     title,
-      "body":      body,
-      "read":      false,
-      "createdAt": FieldValue.serverTimestamp(),
+      "title":      title,
+      "body":       body,
+      "read":       false,
+      "receiverId": userId,     // ✅ notifications rule: receiverId == uid()
+      "createdAt":  FieldValue.serverTimestamp(),
     };
 
     if (reason != null && reason.trim().isNotEmpty) {
       notification["reason"] = reason.trim();
     }
 
-    await firestore
-        .collection("providers")
-        .doc(providerId)
-        .collection("notifications")
-        .add(notification);
+    // ✅ Top-level notifications collection — subcollection isn't covered by rules
+    await firestore.collection("notifications").add(notification);
+  }
+
+  // =====================================================
+  // UPDATE USER ROLE HELPER
+  // =====================================================
+
+  Future<void> _updateUserRole(String userId, String role) async {
+    // users doc ID = email in your setup, so query by uid field
+    final userQuery = await firestore
+        .collection("users")
+        .where("uid", isEqualTo: userId)
+        .limit(1)
+        .get();
+
+    if (userQuery.docs.isNotEmpty) {
+      await userQuery.docs.first.reference.update({"role": role});
+    } else {
+      // Fallback: if uid field not stored, try doc ID = uid
+      await firestore
+          .collection("users")
+          .doc(userId)
+          .set({"role": role}, SetOptions(merge: true));
+    }
   }
 
   // =====================================================
@@ -92,10 +113,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
   Future<void> approveProvider(String providerId) async {
     try {
-      final providerDoc = await firestore
-          .collection("providers")
-          .doc(providerId)
-          .get();
+      final providerDoc =
+          await firestore.collection("providers").doc(providerId).get();
 
       if (!providerDoc.exists) return;
 
@@ -104,38 +123,46 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       final business  = (data["business"] as Map<String, dynamic>?) ?? {};
       final ownerName = (business["ownerName"] ?? "there").toString();
 
+      // ✅ Read userId (Firebase UID) stored inside the provider doc
+      final String userId = (data["userId"] ?? "").toString();
+      if (userId.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Error: Provider userId missing — cannot approve."),
+          ),
+        );
+        return;
+      }
+
       const String title = "🎉 Account Approved!";
       final String body  =
           "Congratulations $ownerName! Your provider account has been approved. You can now start receiving bookings.";
 
-      // 1 — Update provider status
-      await firestore
-          .collection("providers")
-          .doc(providerId)
-          .update({
+      // 1 — Update provider doc status
+      await firestore.collection("providers").doc(providerId).update({
         "status":    "approved",
         "isActive":  true,
         "updatedAt": FieldValue.serverTimestamp(),
       });
 
-      // 2 — In-app notification
-      await _saveNotification(
-        providerId: providerId,
-        title:      title,
-        body:       body,
-      );
+      // 2 — ✅ Set role: "provider" on users/{uid} so Firestore rules allow access
+      await _updateUserRole(userId, "provider");
 
-      // 3 — FCM push
+      // 3 — In-app notification
+      await _saveNotification(userId: userId, title: title, body: body);
+
+      // 4 — FCM push
       await _sendFcm(
         token:      fcmToken,
         title:      title,
         body:       body,
         providerId: providerId,
+        userId:     userId,
         type:       "approved",
       );
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior:        SnackBarBehavior.floating,
@@ -158,9 +185,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     } catch (e) {
       debugPrint("APPROVE ERROR: $e");
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
 
@@ -173,114 +199,92 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
     final bool? confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width:  64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color:        Colors.red.withOpacity(.10),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.close_rounded,
-                    color: Colors.red,
-                    size:  32,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width:  64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color:        Colors.red.withOpacity(.10),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(Icons.close_rounded,
+                    color: Colors.red, size: 32),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                "Reject Provider",
+                style:
+                    TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                "This provider will be notified with your reason.",
+                textAlign: TextAlign.center,
+                style:
+                    TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              ),
+              const SizedBox(height: 22),
+              TextField(
+                controller: reasonController,
+                maxLines:   4,
+                decoration: InputDecoration(
+                  hintText:  "Enter rejection reason (sent to provider)",
+                  filled:    true,
+                  fillColor: const Color(0xFFF5F7FB),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide:   BorderSide.none,
                   ),
                 ),
-
-                const SizedBox(height: 18),
-
-                const Text(
-                  "Reject Provider",
-                  style: TextStyle(
-                    fontSize:   22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                Text(
-                  "This provider will be notified with your reason.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color:    Colors.grey.shade600,
-                    fontSize: 13,
-                  ),
-                ),
-
-                const SizedBox(height: 22),
-
-                TextField(
-                  controller: reasonController,
-                  maxLines:   4,
-                  decoration: InputDecoration(
-                    hintText:  "Enter rejection reason (sent to provider)",
-                    filled:    true,
-                    fillColor: const Color(0xFFF5F7FB),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(18),
-                      borderSide:   BorderSide.none,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 22),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text("Cancel"),
+              ),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
                       ),
+                      child: const Text("Cancel"),
                     ),
-
-                    const SizedBox(width: 12),
-
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        style: ElevatedButton.styleFrom(
-                          elevation:       0,
-                          backgroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          "Reject",
-                          style: TextStyle(
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        elevation:       0,
+                        backgroundColor: Colors.red,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: const Text(
+                        "Reject",
+                        style: TextStyle(
                             color:      Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
 
     if (confirmed != true) return;
@@ -288,10 +292,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     final String reason = reasonController.text.trim();
 
     try {
-      final providerDoc = await firestore
-          .collection("providers")
-          .doc(providerId)
-          .get();
+      final providerDoc =
+          await firestore.collection("providers").doc(providerId).get();
 
       if (!providerDoc.exists) return;
 
@@ -300,57 +302,59 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       final business  = (data["business"] as Map<String, dynamic>?) ?? {};
       final ownerName = (business["ownerName"] ?? "there").toString();
 
+      // ✅ Read userId from provider doc
+      final String userId = (data["userId"] ?? "").toString();
+
       const String title = "Account Not Approved";
       final String body  = reason.isNotEmpty
           ? "Hi $ownerName, your provider account was not approved. Reason: $reason"
-          : "Hi $ownerName, your provider account was not approved at this time. Please contact support for more information.";
+          : "Hi $ownerName, your provider account was not approved at this time. Please contact support.";
 
-      // 1 — Update provider status
-      await firestore
-          .collection("providers")
-          .doc(providerId)
-          .update({
+      // 1 — Update provider doc status
+      await firestore.collection("providers").doc(providerId).update({
         "status":       "rejected",
         "isActive":     false,
         "rejectReason": reason,
         "updatedAt":    FieldValue.serverTimestamp(),
       });
 
-      // 2 — In-app notification
-      await _saveNotification(
-        providerId: providerId,
-        title:      title,
-        body:       body,
-        reason:     reason,
-      );
+      // 2 — ✅ Reset role to "user" so provider access is revoked in rules
+      if (userId.isNotEmpty) {
+        await _updateUserRole(userId, "user");
+      }
 
-      // 3 — FCM push
-      await _sendFcm(
-        token:      fcmToken,
-        title:      title,
-        body:       body,
-        providerId: providerId,
-        type:       "rejected",
-        reason:     reason,
-      );
+      // 3 — In-app notification
+      if (userId.isNotEmpty) {
+        await _saveNotification(
+            userId: userId, title: title, body: body, reason: reason);
+      }
+
+      // 4 — FCM push
+      if (userId.isNotEmpty) {
+        await _sendFcm(
+          token:      fcmToken,
+          title:      title,
+          body:       body,
+          providerId: providerId,
+          userId:     userId,
+          type:       "rejected",
+          reason:     reason,
+        );
+      }
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior:        SnackBarBehavior.floating,
           backgroundColor: Colors.red,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+              borderRadius: BorderRadius.circular(16)),
           content: Row(
             children: const [
               Icon(Icons.cancel_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
-              Text(
-                "Provider rejected & notified",
-                style: TextStyle(color: Colors.white),
-              ),
+              Text("Provider rejected & notified",
+                  style: TextStyle(color: Colors.white)),
             ],
           ),
         ),
@@ -358,9 +362,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     } catch (e) {
       debugPrint("REJECT ERROR: $e");
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
 
@@ -396,22 +399,23 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-
             if (snapshot.hasError) {
               return Center(child: Text("Error: ${snapshot.error}"));
             }
 
             final docs = snapshot.data?.docs ?? [];
-
             if (docs.isEmpty) return _emptyState();
 
-            // Search filter
             final filtered = docs.where((doc) {
               final data     = doc.data() as Map<String, dynamic>;
-              final business = (data['business'] as Map<String, dynamic>?) ?? {};
-              final bName    = (business['businessName'] ?? "").toString().toLowerCase();
-              final owner    = (business['ownerName']    ?? "").toString().toLowerCase();
-              final phone    = (business['phone']        ?? "").toString().toLowerCase();
+              final business =
+                  (data['business'] as Map<String, dynamic>?) ?? {};
+              final bName =
+                  (business['businessName'] ?? "").toString().toLowerCase();
+              final owner =
+                  (business['ownerName'] ?? "").toString().toLowerCase();
+              final phone =
+                  (business['phone'] ?? "").toString().toLowerCase();
               return bName.contains(search) ||
                   owner.contains(search) ||
                   phone.contains(search);
@@ -419,9 +423,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
             return Column(
               children: [
-
-                // ── HEADER ──────────────────────────────
-
+                // ── HEADER ──────────────────────────
                 Container(
                   padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
                   decoration: const BoxDecoration(
@@ -443,17 +445,13 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                             width:  54,
                             height: 54,
                             decoration: BoxDecoration(
-                              color:        Colors.white.withOpacity(.14),
+                              color: Colors.white.withOpacity(.14),
                               borderRadius: BorderRadius.circular(18),
                             ),
-                            child: const Icon(
-                              Icons.verified_user_rounded,
-                              color: Colors.white,
-                            ),
+                            child: const Icon(Icons.verified_user_rounded,
+                                color: Colors.white),
                           ),
-
                           const SizedBox(width: 14),
-
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -470,20 +468,16 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                                 Text(
                                   "${filtered.length} pending request${filtered.length == 1 ? '' : 's'}",
                                   style: const TextStyle(
-                                    color:    Colors.white70,
-                                    fontSize: 13,
-                                  ),
+                                      color: Colors.white70, fontSize: 13),
                                 ),
                               ],
                             ),
                           ),
-
-                          // Pending count badge
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 7),
                             decoration: BoxDecoration(
-                              color:        Colors.white.withOpacity(.20),
+                              color: Colors.white.withOpacity(.20),
                               borderRadius: BorderRadius.circular(30),
                             ),
                             child: Text(
@@ -497,10 +491,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 22),
-
-                      // Search bar
                       Container(
                         decoration: BoxDecoration(
                           color:        Colors.white,
@@ -510,10 +501,11 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                           onChanged: (v) =>
                               setState(() => search = v.toLowerCase()),
                           decoration: const InputDecoration(
-                            hintText:      "Search business, owner or phone",
-                            border:        InputBorder.none,
-                            prefixIcon:    Icon(Icons.search_rounded),
-                            contentPadding: EdgeInsets.symmetric(vertical: 17),
+                            hintText:       "Search business, owner or phone",
+                            border:         InputBorder.none,
+                            prefixIcon:     Icon(Icons.search_rounded),
+                            contentPadding:
+                                EdgeInsets.symmetric(vertical: 17),
                           ),
                         ),
                       ),
@@ -521,17 +513,15 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                   ),
                 ),
 
-                // ── LIST ───────────────────────────────
-
+                // ── LIST ────────────────────────────
                 Expanded(
                   child: filtered.isEmpty
                       ? _noMatch()
                       : ListView.builder(
                           padding:     const EdgeInsets.all(16),
                           itemCount:   filtered.length,
-                          itemBuilder: (_, index) {
-                            return _providerCard(filtered[index]);
-                          },
+                          itemBuilder: (_, i) =>
+                              _providerCard(filtered[i]),
                         ),
                 ),
               ],
@@ -548,9 +538,9 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
   Widget _providerCard(DocumentSnapshot doc) {
     final data       = doc.data() as Map<String, dynamic>;
-    final business   = (data['business']   as Map<String, dynamic>?) ?? {};
-    final bank       = (data['bank']       as Map<String, dynamic>?) ?? {};
-    final service    = (data['service']    as Map<String, dynamic>?) ?? {};
+    final business   = (data['business'] as Map<String, dynamic>?) ?? {};
+    final bank       = (data['bank']     as Map<String, dynamic>?) ?? {};
+    final service    = (data['service']  as Map<String, dynamic>?) ?? {};
     final categories = List.from(data['categories'] ?? []);
 
     final Timestamp? createdAt = data['createdAt'];
@@ -560,8 +550,11 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     final phone                = business['phone']        ?? "-";
     final email                = business['email']        ?? "-";
     final address              = business['address']      ?? "-";
-    final serviceType          = service['serviceType']   ?? data['serviceType'] ?? "-";
-    final providerType         = data['providerType']     ?? "Provider";
+    final serviceType =
+        service['serviceType'] ?? data['serviceType'] ?? "-";
+    final providerType = data['providerType'] ?? "Provider";
+    // ✅ Show UID so admin can verify the link to users collection
+    final userId = (data['userId'] ?? "-").toString();
 
     final String appliedDate = createdAt != null
         ? DateFormat('dd MMM yyyy').format(createdAt.toDate())
@@ -583,9 +576,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       ),
       child: Column(
         children: [
-
-          // ── TOP ROW ────────────────────────────────
-
+          // ── TOP ROW ──────────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -598,15 +589,10 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                   ),
                   borderRadius: BorderRadius.circular(22),
                 ),
-                child: Icon(
-                  getServiceIcon(serviceType),
-                  color: Colors.white,
-                  size:  34,
-                ),
+                child: Icon(getServiceIcon(serviceType),
+                    color: Colors.white, size: 34),
               ),
-
               const SizedBox(width: 14),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -616,23 +602,15 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize:   18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-
                     const SizedBox(height: 4),
-
                     Text(
                       ownerName,
                       style: TextStyle(
-                        color:    Colors.grey.shade600,
-                        fontSize: 14,
-                      ),
+                          color: Colors.grey.shade600, fontSize: 14),
                     ),
-
                     const SizedBox(height: 10),
-
                     Wrap(
                       spacing:    8,
                       runSpacing: 8,
@@ -650,8 +628,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
           const SizedBox(height: 18),
 
-          // ── INFO BOX ───────────────────────────────
-
+          // ── INFO BOX ──────────────────────────────
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -662,9 +639,11 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
               children: [
                 Row(
                   children: [
-                    Expanded(child: _compactInfo(Icons.phone_rounded, phone)),
+                    Expanded(
+                        child: _compactInfo(Icons.phone_rounded, phone)),
                     const SizedBox(width: 12),
-                    Expanded(child: _compactInfo(Icons.email_rounded, email)),
+                    Expanded(
+                        child: _compactInfo(Icons.email_rounded, email)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -674,7 +653,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                   children: [
                     Expanded(
                       child: _compactInfo(
-                          Icons.miscellaneous_services_rounded, serviceType),
+                          Icons.miscellaneous_services_rounded,
+                          serviceType),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -684,18 +664,19 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _compactInfo(
-                  Icons.account_balance_rounded,
-                  bank['accountHolder']?.toString() ?? "-",
-                ),
+                _compactInfo(Icons.account_balance_rounded,
+                    bank['accountHolder']?.toString() ?? "-"),
                 const SizedBox(height: 12),
-                _compactInfo(Icons.badge_rounded, providerId),
+                // ✅ Show UID to help admin debug mismatches
+                _compactInfo(Icons.fingerprint_rounded, "UID: $userId"),
+                const SizedBox(height: 12),
+                _compactInfo(
+                    Icons.badge_rounded, "Doc ID: $providerId"),
               ],
             ),
           ),
 
-          // ── CATEGORIES ─────────────────────────────
-
+          // ── CATEGORIES ───────────────────────────
           if (categories.isNotEmpty) ...[
             const SizedBox(height: 16),
             Align(
@@ -703,9 +684,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
               child: Text(
                 "Categories",
                 style: TextStyle(
-                  color:      Colors.grey.shade700,
-                  fontWeight: FontWeight.w600,
-                ),
+                    color:      Colors.grey.shade700,
+                    fontWeight: FontWeight.w600),
               ),
             ),
             const SizedBox(height: 10),
@@ -713,27 +693,23 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
               spacing:    8,
               runSpacing: 8,
               children: categories
-                  .map(
-                    (c) => _badge(
-                      c.toString(),
+                  .map((c) => _badge(c.toString(),
                       const Color(0xFF4F46E5),
-                      bg: const Color(0xFFEEF2FF),
-                    ),
-                  )
+                      bg: const Color(0xFFEEF2FF)))
                   .toList(),
             ),
           ],
 
           const SizedBox(height: 22),
 
-          // ── NOTIFICATION NOTE ──────────────────────
-
+          // ── NOTIFICATION NOTE ─────────────────────
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color:        const Color(0xFFF0FDF4),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF86EFAC)),
+              border:       Border.all(color: const Color(0xFF86EFAC)),
             ),
             child: Row(
               children: const [
@@ -744,9 +720,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                   child: Text(
                     "Provider will receive a push notification + in-app alert on your decision.",
                     style: TextStyle(
-                      color:    Color(0xFF15803D),
-                      fontSize: 12,
-                    ),
+                        color: Color(0xFF15803D), fontSize: 12),
                   ),
                 ),
               ],
@@ -755,51 +729,41 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
           const SizedBox(height: 16),
 
-          // ── ACTION BUTTONS ─────────────────────────
-
+          // ── ACTION BUTTONS ────────────────────────
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => rejectProvider(providerId),
                   icon:  const Icon(Icons.close_rounded, color: Colors.red),
-                  label: const Text(
-                    "Reject",
-                    style: TextStyle(
-                      color:      Colors.red,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  label: const Text("Reject",
+                      style: TextStyle(
+                          color:      Colors.red,
+                          fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     side:    const BorderSide(color: Colors.red),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                        borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
               ),
-
               const SizedBox(width: 14),
-
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () => approveProvider(providerId),
-                  icon:  const Icon(Icons.check_rounded, color: Colors.white),
-                  label: const Text(
-                    "Approve",
-                    style: TextStyle(
-                      color:      Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  icon:  const Icon(Icons.check_rounded,
+                      color: Colors.white),
+                  label: const Text("Approve",
+                      style: TextStyle(
+                          color:      Colors.white,
+                          fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
                     elevation:       0,
                     backgroundColor: const Color(0xFF16A34A),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                        borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
               ),
@@ -824,10 +788,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       child: Text(
         label,
         style: TextStyle(
-          color:      text,
-          fontWeight: FontWeight.bold,
-          fontSize:   11,
-        ),
+            color: text, fontWeight: FontWeight.bold, fontSize: 11),
       ),
     );
   }
@@ -846,7 +807,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
             color:        Colors.white,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(icon, size: 16, color: const Color(0xFF4F46E5)),
+          child:
+              Icon(icon, size: 16, color: const Color(0xFF4F46E5)),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -857,10 +819,9 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize:   13,
-                fontWeight: FontWeight.w600,
-                height:     1.4,
-              ),
+                  fontSize:   13,
+                  fontWeight: FontWeight.w600,
+                  height:     1.4),
             ),
           ),
         ),
@@ -884,22 +845,16 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
               color:        const Color(0xFFEEF2FF),
               borderRadius: BorderRadius.circular(30),
             ),
-            child: const Icon(
-              Icons.verified_user_rounded,
-              size:  44,
-              color: Color(0xFF4F46E5),
-            ),
+            child: const Icon(Icons.verified_user_rounded,
+                size: 44, color: Color(0xFF4F46E5)),
           ),
           const SizedBox(height: 20),
-          const Text(
-            "No Pending Providers",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
+          const Text("No Pending Providers",
+              style:
+                  TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text(
-            "All provider requests have been reviewed",
-            style: TextStyle(color: Colors.grey.shade600),
-          ),
+          Text("All provider requests have been reviewed",
+              style: TextStyle(color: Colors.grey.shade600)),
         ],
       ),
     );
@@ -914,15 +869,15 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.search_off_rounded, size: 52, color: Colors.grey.shade400),
+          Icon(Icons.search_off_rounded,
+              size: 52, color: Colors.grey.shade400),
           const SizedBox(height: 14),
           Text(
             "No Matching Providers",
             style: TextStyle(
-              color:      Colors.grey.shade700,
-              fontWeight: FontWeight.w600,
-              fontSize:   16,
-            ),
+                color:      Colors.grey.shade700,
+                fontWeight: FontWeight.w600,
+                fontSize:   16),
           ),
         ],
       ),

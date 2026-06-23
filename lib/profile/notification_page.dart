@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'package:callme/profile/notification_service.dart' show NotificationType;
+
 typedef NotificationTapCallback = void Function(Map<String, dynamic> data);
 
 class NotificationPage extends StatefulWidget {
@@ -107,13 +109,22 @@ class _NotificationPageState extends State<NotificationPage> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  // Distinct icon + color per notification type, using the shared
+  // NotificationType constants (instead of raw strings) so this can never
+  // silently drift out of sync with notification_service.dart.
   ({IconData icon, Color color}) _style(String? type) {
     switch (type) {
-      case 'provider_registered':
+      case NotificationType.newBooking:
+        return (icon: Icons.event_available_outlined, color: Colors.blue);
+      case NotificationType.bookingAccepted:
+        return (icon: Icons.check_circle_outline, color: Colors.green);
+      case NotificationType.bookingRejected:
+        return (icon: Icons.cancel_outlined, color: Colors.red);
+      case NotificationType.providerRegistered:
         return (icon: Icons.store_mall_directory_outlined, color: Colors.orange);
-      case 'registration_approved':
+      case NotificationType.registrationApproved:
         return (icon: Icons.verified_outlined, color: Colors.green);
-      case 'registration_rejected':
+      case NotificationType.registrationRejected:
         return (icon: Icons.block_outlined, color: Colors.red);
       default:
         return (icon: Icons.notifications_active_outlined, color: Colors.indigo);

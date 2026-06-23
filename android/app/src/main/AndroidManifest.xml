@@ -17,9 +17,10 @@
         android:label="callme">
 
         <!-- Firebase Notifications -->
-       <meta-data
-    android:name="com.google.firebase.messaging.default_notification_channel_id"
-    android:value="high_importance_channel_v2" />
+        <!-- Must match NotificationChannels.id in notification_service.dart -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="callme_high_v6" />
 
         <meta-data
             android:name="firebase_messaging_auto_init_enabled"
@@ -73,14 +74,14 @@
     </queries>
 
     <queries>
-  <intent>
-    <action android:name="android.intent.action.VIEW" />
-    <data android:scheme="https" />
-  </intent>
-  <intent>
-    <action android:name="android.intent.action.SENDTO" />
-    <data android:scheme="mailto" />
-  </intent>
-</queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+    </queries>
 
 </manifest>

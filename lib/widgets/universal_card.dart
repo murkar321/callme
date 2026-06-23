@@ -10,13 +10,10 @@ class UniversalServiceCard extends StatelessWidget {
   final String title;
   final String description;
   final double? rating;
-
   final int price;
   final Color primaryColor;
-
   final ServiceActionType actionType;
   final int quantity;
-
   final VoidCallback onView;
   final VoidCallback onPrimaryAction;
   final VoidCallback? onIncrease;
@@ -43,7 +40,7 @@ class UniversalServiceCard extends StatelessWidget {
     final width = MediaQuery.of(context).size.width;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -52,14 +49,13 @@ class UniversalServiceCard extends StatelessWidget {
             color: Colors.black.withOpacity(0.06),
             blurRadius: 8,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          /// IMAGE + CART BADGE
+          // ── Image + badge ───────────────────────────────────────────────
           Stack(
             children: [
               ClipRRect(
@@ -67,18 +63,16 @@ class UniversalServiceCard extends StatelessWidget {
                     const BorderRadius.vertical(top: Radius.circular(16)),
                 child: Image.asset(
                   image,
-                  height: width * 0.42,
+                  height: width * 0.40,
                   width: double.infinity,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
-                    height: width * 0.42,
+                    height: width * 0.40,
                     color: Colors.grey[200],
                     child: const Icon(Icons.image),
                   ),
                 ),
               ),
-
-              /// CART BADGE
               if (quantity > 0)
                 Positioned(
                   right: 10,
@@ -92,68 +86,72 @@ class UniversalServiceCard extends StatelessWidget {
                     child: Text(
                       quantity.toString(),
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
             ],
           ),
 
-          /// CONTENT
+          // ── Content ─────────────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Text(title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontWeight: FontWeight.w600, fontSize: 15)),
-
                 const SizedBox(height: 4),
-
                 Text(description,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-
                 const SizedBox(height: 6),
-
                 Row(
                   children: [
                     if (rating != null) ...[
                       const Icon(Icons.star, size: 14, color: Colors.orange),
                       const SizedBox(width: 4),
-                      Text(rating!.toStringAsFixed(1)),
+                      Text(rating!.toStringAsFixed(1),
+                          style: const TextStyle(fontSize: 12)),
                     ],
                     const Spacer(),
-                    Text("₹$price",
+                    Text('₹$price',
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 16)),
                   ],
                 ),
-
                 const SizedBox(height: 10),
 
+                // ── Buttons ────────────────────────────────────────────────
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: onView,
-                        child: const Text("View"),
+                      child: SizedBox(
+                        height: 36,
+                        child: OutlinedButton(
+                          onPressed: onView,
+                          style: OutlinedButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            side: BorderSide(
+                                color: Colors.grey.shade300, width: 1.2),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: const Text('VIEW',
+                              style: TextStyle(fontSize: 12)),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
-
-                    /// 🔥 FIXED OVERFLOW HERE
                     Expanded(
                       child: SizedBox(
-                        height: 40,
+                        height: 36,
                         child: _buildAction(),
                       ),
                     ),
@@ -161,7 +159,7 @@ class UniversalServiceCard extends StatelessWidget {
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
@@ -172,10 +170,20 @@ class UniversalServiceCard extends StatelessWidget {
       return quantity == 0
           ? ElevatedButton(
               onPressed: onIncrease,
-              child: const Text("ADD"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                elevation: 0,
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('ADD',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold)),
             )
           : Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
                 color: primaryColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
@@ -183,15 +191,14 @@ class UniversalServiceCard extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _smallButton(Icons.remove, onDecrease),
+                  _SmallBtn(icon: Icons.remove, color: primaryColor, onTap: onDecrease),
                   Flexible(
-                    child: Text(
-                      quantity.toString(),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                    child: Text(quantity.toString(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
                   ),
-                  _smallButton(Icons.add, onIncrease),
+                  _SmallBtn(icon: Icons.add, color: primaryColor, onTap: onIncrease),
                 ],
               ),
             );
@@ -199,20 +206,47 @@ class UniversalServiceCard extends StatelessWidget {
 
     return ElevatedButton(
       onPressed: onPrimaryAction,
-      child: const Text("ADD"),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primaryColor,
+        elevation: 0,
+        padding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10)),
+      ),
+      child: const Text('ADD',
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold)),
     );
   }
+}
 
-  /// 🔥 COMPACT BUTTON (Fix overflow)
-  Widget _smallButton(IconData icon, VoidCallback? onTap) {
-    return SizedBox(
-      width: 32,
-      height: 32,
-      child: IconButton(
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
-        onPressed: onTap,
-        icon: Icon(icon, size: 18),
+// ── Compact +/- button ──────────────────────────────────────────────────────
+
+class _SmallBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _SmallBtn({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.15),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 16, color: color),
       ),
     );
   }
