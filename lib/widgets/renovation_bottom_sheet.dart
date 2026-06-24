@@ -71,7 +71,6 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
   void _proceed() {
     if (selected.isEmpty) return;
 
-    // Build selected item names list to pass to booking page
     final selectedNames = selected.map((e) => e.name).toList();
 
     Navigator.pop(context);
@@ -79,6 +78,9 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
       context,
       MaterialPageRoute(
         builder: (_) => CivilBookingPage(
+          // ✅ serviceType is always 'civil' so provider lookup works
+          serviceType: 'civil',
+          // packageName is shown in the UI header / summary
           serviceName: widget.packageName,
           providerId: '',
           cart: [],
@@ -171,7 +173,6 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                     ],
                   ),
                 ),
-                // Worker illustration
                 SizedBox(
                   height: 80,
                   child: Image.asset(
@@ -331,7 +332,6 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
             ),
             child: Row(
               children: [
-                // Total
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,7 +359,6 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                   ),
                 ),
                 const SizedBox(width: 14),
-                // Proceed button
                 GestureDetector(
                   onTap: selected.isEmpty ? null : _proceed,
                   child: AnimatedContainer(

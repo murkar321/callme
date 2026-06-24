@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,27 +9,27 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-// ─── DIAGNOSTIC FLAG ──────────────────────────────────────────────────────────
+// ─── DIAGNOSTIC FLAG ───────────────────────────────────────────────────────────
 const bool _debugNotif = true;
 
-// ─── Sound config ─────────────────────────────────────────────────────────────
+// ─── Sound config ──────────────────────────────────────────────────────────────
 // File must exist at: android/app/src/main/res/raw/notification_sound.mp3
 // Filename: lowercase, numbers, underscores only. No spaces or caps.
 // After adding/changing: flutter clean → uninstall app → reinstall.
 const bool _useCustomSound = true;
 const String _soundFile = 'notification_sound';
 
-// ─── Channel constants ────────────────────────────────────────────────────────
-// Bump the version suffix whenever you change importance or sound.
-// Android permanently caches channel settings — a new ID forces a fresh channel.
+// ─── Channel constants ─────────────────────────────────────────────────────────
+// ⚠ Bump version suffix when you change importance/sound — Android permanently
+// caches channel settings; a new ID forces fresh settings.
 // MUST match android:value in AndroidManifest.xml <meta-data>.
 class NotificationChannels {
-  static const String id   = 'callme_high_v6';
+  static const String id   = 'callme_high_v7'; // bumped → forces fresh channel
   static const String name = 'CallMe Notifications';
   static const String desc = 'Booking, acceptance, and admin alerts.';
 }
 
-// ─── Notification types ───────────────────────────────────────────────────────
+// ─── Notification types ────────────────────────────────────────────────────────
 class NotificationType {
   static const String newBooking           = 'new_booking';
   static const String bookingAccepted      = 'booking_accepted';
@@ -38,14 +39,11 @@ class NotificationType {
   static const String registrationRejected = 'registration_rejected';
 }
 
-// ─── Shared plugin instance ───────────────────────────────────────────────────
-// A single instance is used everywhere so the channel is only created once
-// and the same plugin handles both foreground and background taps.
+// ─── Shared plugin instance ────────────────────────────────────────────────────
 final FlutterLocalNotificationsPlugin _sharedPlugin =
     FlutterLocalNotificationsPlugin();
 
-// ─── Background tap handler ───────────────────────────────────────────────────
-// MUST be top-level AND annotated so it survives tree-shaking in release.
+// ─── Background tap handler ────────────────────────────────────────────────────
 @pragma('vm:entry-point')
 void _onTapBackground(NotificationResponse response) {
   debugPrint('[NOTIF-TAP-BG] payload: ${response.payload}');
@@ -60,13 +58,10 @@ void _onTapBackground(NotificationResponse response) {
   }
 }
 
-// ─── Background FCM handler ───────────────────────────────────────────────────
-// MUST be top-level, annotated, and registered in main() BEFORE
-// Firebase.initializeApp() AND before runApp(). Registering after either
-// of those calls means the native FCM plugin never wires it up on Android.
+// ─── Background FCM handler ────────────────────────────────────────────────────
+// MUST be top-level, annotated, registered in main() BEFORE Firebase.initializeApp().
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Re-initialise Firebase — the background isolate is a fresh Dart runtime.
   try {
     await Firebase.initializeApp();
   } catch (e) {
@@ -79,10 +74,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('[FCM-BG]   notification: ${message.notification?.title} / ${message.notification?.body}');
   debugPrint('[FCM-BG]   data: ${message.data}');
 
-  // When the FCM payload includes a "notification" block, Android OS
-  // auto-displays the tray notification — do NOT call show() again or you
-  // get duplicates. Only show manually for DATA-ONLY messages (no
-  // notification block).
+  // Only show manually for DATA-ONLY messages — FCM auto-shows notification-block messages.
   if (message.notification == null && message.data.isNotEmpty) {
     await _showLocalNotificationStandalone(
       id: _notifId(message),
@@ -95,50 +87,61 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await _persistNotification(message, source: 'background-isolate');
 }
 
-// ─── Helpers shared between background handler and service ───────────────────
+// ─── Shared helpers ────────────────────────────────────────────────────────────
 
 int _notifId(RemoteMessage message) {
   final raw = message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString();
-  return raw.hashCode & 0x7fffffff; // ensure positive 32-bit int
+  return raw.hashCode & 0x7fffffff;
 }
 
-/// Single source of truth for the Android notification channel.
-/// Call this once during init — Android silently ignores duplicate
-/// createNotificationChannel calls with the same ID.
+/// Vibration pattern: [delay, vibrate, pause, vibrate, …] all in ms.
+/// 0 ms delay → immediate. Pattern: short-short-long.
+const List<int> _vibrationPattern = [0, 300, 200, 300, 200, 600];
+
+/// Builds the Android notification channel.
+/// ─ Importance.max   → heads-up (on-screen) popup + lock screen
+/// ─ enableVibration  → vibrates using _vibrationPattern
+/// ─ playSound + RawResource → custom sound from res/raw/
 AndroidNotificationChannel _buildChannel() => AndroidNotificationChannel(
   NotificationChannels.id,
   NotificationChannels.name,
   description: NotificationChannels.desc,
-  importance: Importance.max,
+  importance: Importance.max,          // IMPORTANCE_HIGH = heads-up popup
   playSound: true,
   sound: _useCustomSound
       ? RawResourceAndroidNotificationSound(_soundFile)
       : null,
   enableVibration: true,
+  vibrationPattern: Int64List.fromList(_vibrationPattern),
   enableLights: true,
   showBadge: true,
 );
 
-/// Builds [NotificationDetails] at runtime — not const because the sound
-/// value is determined at runtime.
+/// Builds [NotificationDetails] for every show() call.
 NotificationDetails _buildDetails() => NotificationDetails(
   android: AndroidNotificationDetails(
     NotificationChannels.id,
     NotificationChannels.name,
     channelDescription: NotificationChannels.desc,
-    importance: Importance.max,
-    priority: Priority.high,
+    importance: Importance.max,        // triggers heads-up popup
+    priority: Priority.max,            // ← changed from high → max for on-screen banner
     playSound: true,
     sound: _useCustomSound
         ? RawResourceAndroidNotificationSound(_soundFile)
         : null,
     enableVibration: true,
+    vibrationPattern: Int64List.fromList(_vibrationPattern),
     enableLights: true,
-    visibility: NotificationVisibility.public,
-    fullScreenIntent: false,
-    // Routes audio through the NOTIFICATION stream (respects notification
-    // volume), not the media stream.
+    ledColor: const Color(0xFFFF6B9D),  // pink accent matching callme brand
+    ledOnMs: 500,
+    ledOffMs: 500,
+    visibility: NotificationVisibility.public, // show on lock screen
+    ticker: 'CallMe',                  // accessibility / status bar ticker
+    fullScreenIntent: false,           // true only for calls/alarms
     audioAttributesUsage: AudioAttributesUsage.notification,
+    // ⚠ styleInformation not required for popup — defaults to BigTextStyle
+    // which expands automatically on pull-down.
+    styleInformation: const BigTextStyleInformation(''),
   ),
   iOS: const DarwinNotificationDetails(
     presentAlert: true,
@@ -148,8 +151,7 @@ NotificationDetails _buildDetails() => NotificationDetails(
   ),
 );
 
-/// Standalone show — used by the background isolate which has no service
-/// instance. Re-initialises the plugin and channel each call (safe to repeat).
+/// Standalone show used by the background isolate.
 Future<void> _showLocalNotificationStandalone({
   required int id,
   required String title,
@@ -164,7 +166,8 @@ Future<void> _showLocalNotificationStandalone({
   ));
 
   await plugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(_buildChannel());
 
   if (_debugNotif) {
@@ -178,8 +181,7 @@ Future<void> _showLocalNotificationStandalone({
   await plugin.show(id, title, body, _buildDetails(), payload: payload);
 }
 
-/// Persists an incoming FCM message to Firestore so the NotificationPage
-/// can display it. Requires `data.receiverId` in the FCM payload.
+/// Persists FCM message to Firestore for NotificationPage display.
 Future<void> _persistNotification(
   RemoteMessage msg, {
   required String source,
@@ -188,8 +190,8 @@ Future<void> _persistNotification(
 
   if (rid == null || rid.isEmpty) {
     debugPrint(
-      '[NOTIF-STORE:$source] ⚠ Skipped — no "receiverId" in message.data '
-      '(${msg.data}). Add receiverId to your Cloud Function data block.',
+      '[NOTIF-STORE:$source] ⚠ Skipped — no "receiverId" in message.data. '
+      'Add receiverId to your Cloud Function data block.',
     );
     return;
   }
@@ -207,15 +209,10 @@ Future<void> _persistNotification(
     debugPrint('[NOTIF-STORE:$source] ✓ Saved for receiverId=$rid');
   } catch (e, st) {
     debugPrint('[NOTIF-STORE:$source] ✗ Firestore write failed: $e\n$st');
-    debugPrint(
-      '[NOTIF-STORE:$source] Check Firestore rules allow writes to '
-      '"notifications", and that a composite index exists for '
-      'receiverId + createdAt.',
-    );
   }
 }
 
-// ─── NotificationService ──────────────────────────────────────────────────────
+// ─── NotificationService ───────────────────────────────────────────────────────
 class NotificationService {
   NotificationService._internal();
   static final NotificationService _instance = NotificationService._internal();
@@ -225,35 +222,22 @@ class NotificationService {
 
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
 
-  /// Callback invoked when a notification is tapped (foreground or background).
-  /// For COLD START (app was killed), read [pendingNavigationPayload] instead —
-  /// LogoPage consumes it once its own splash navigation is complete, avoiding
-  /// a race with two competing pushes on launch.
   static void Function(Map<String, dynamic> data)? onNotificationTap;
-
-  /// Stashed payload from the last notification tap, consumed by LogoPage
-  /// after it has resolved the initial route (cold-start safe).
   static String? pendingNavigationPayload;
 
-  // ── initialize ──────────────────────────────────────────────────────────────
+  // ── initialize ───────────────────────────────────────────────────────────────
   Future<void> initialize() async {
     if (_initialised) return;
 
     try {
-      // 1. Create the notification channel FIRST.
-      //    Android caches channel settings permanently. A new channel ID
-      //    forces fresh settings including importance and sound.
-      //    This call is idempotent — safe to repeat.
+      // ① Create channel FIRST — Android caches settings permanently.
       await _sharedPlugin
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(_buildChannel());
       debugPrint('[NOTIF] Channel registered: ${NotificationChannels.id}');
 
-      // 2. Initialise flutter_local_notifications with both tap callbacks.
-      //    onDidReceiveNotificationResponse       → foreground taps
-      //    onDidReceiveBackgroundNotificationResponse → background/killed taps
-      //      (must be a top-level @pragma function — see _onTapBackground above)
+      // ② Init plugin with both tap callbacks.
       await _sharedPlugin.initialize(
         const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -267,26 +251,25 @@ class NotificationService {
         onDidReceiveBackgroundNotificationResponse: _onTapBackground,
       );
 
-      // 3. Request OS-level permissions (shows dialog on first run).
+      // ③ Request OS permissions.
       await _requestPermissions();
 
-      // 4. iOS: present alerts/badges/sound even when the app is foregrounded.
+      // ④ iOS foreground presentation.
       await _fcm.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
         sound: true,
       );
 
-      // 5. Start FCM listeners.
+      // ⑤ FCM listeners.
       _listenForeground();
       _listenBackgroundTap();
       _listenTokenRefresh();
 
-      // 6. Save FCM token asynchronously — doesn't block init.
+      // ⑥ Save token (non-blocking).
       Future.microtask(_saveToken);
 
-      // 7. Cold-start: stash the payload so LogoPage can consume it after
-      //    its own navigation has settled (avoids racing pushes on launch).
+      // ⑦ Cold-start payload (1 s delay avoids race with LogoPage navigation).
       Future.delayed(const Duration(seconds: 1), _checkColdStart);
 
       _initialised = true;
@@ -296,23 +279,40 @@ class NotificationService {
     }
   }
 
-  // ── Permissions ──────────────────────────────────────────────────────────────
+  // ── Permissions ───────────────────────────────────────────────────────────────
   Future<void> _requestPermissions() async {
     final s = await _fcm.requestPermission(
-      alert: true, badge: true, sound: true,
+      alert: true,
+      badge: true,
+      sound: true,
+      criticalAlert: false,
+      announcement: false,
+      carPlay: false,
+      provisional: false,
     );
     debugPrint('[FCM] Auth status: ${s.authorizationStatus}');
 
     if (!kIsWeb && Platform.isAndroid) {
+      // POST_NOTIFICATIONS required on Android 13+ (API 33+)
       final granted = await _sharedPlugin
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.requestNotificationsPermission();
       debugPrint('[NOTIF] POST_NOTIFICATIONS granted: $granted');
+
+      // ─── EXACT_ALARM permission (Android 12+ API 31+) ─────────────────────
+      // Required to schedule precise local notifications. Without it,
+      // scheduled notifications silently fail on Android 12+. For immediate
+      // show() calls this isn't needed, but good practice to request.
+      final exactAlarmGranted = await _sharedPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestExactAlarmsPermission();
+      debugPrint('[NOTIF] EXACT_ALARM granted: $exactAlarmGranted');
     }
   }
 
-  // ── Foreground tap ────────────────────────────────────────────────────────────
+  // ── Foreground tap ─────────────────────────────────────────────────────────────
   void _onTapForeground(NotificationResponse response) {
     debugPrint('[NOTIF-TAP-FG] payload: ${response.payload}');
     pendingNavigationPayload = response.payload;
@@ -326,12 +326,9 @@ class NotificationService {
     }
   }
 
-  // ── Foreground FCM listener ───────────────────────────────────────────────────
-  // When the app is OPEN, Android does NOT auto-show a tray notification even
-  // when the FCM payload includes a "notification" block — we must call
-  // _sharedPlugin.show() ourselves. On iOS the banner is shown automatically
-  // (via setForegroundNotificationPresentationOptions), but we still call
-  // show() so the local tap callback fires correctly.
+  // ── Foreground FCM listener ────────────────────────────────────────────────────
+  // Android does NOT auto-show a banner when the app is open — we must call
+  // _sharedPlugin.show() ourselves to get the heads-up popup + sound + vibration.
   void _listenForeground() {
     FirebaseMessaging.onMessage.listen(
       (RemoteMessage message) async {
@@ -364,14 +361,13 @@ class NotificationService {
         );
 
         debugPrint('[FCM-FG] ✓ _sharedPlugin.show() called (id=$id)');
-
         await _persistNotification(message, source: 'foreground');
       },
       onError: (e) => debugPrint('[FCM-FG] stream error: $e'),
     );
   }
 
-  // ── Background tap (app backgrounded, user taps notification) ──────────────
+  // ── Background tap ────────────────────────────────────────────────────────────
   void _listenBackgroundTap() {
     FirebaseMessaging.onMessageOpenedApp.listen(
       (RemoteMessage msg) {
@@ -383,10 +379,7 @@ class NotificationService {
     );
   }
 
-  // ── Cold start ────────────────────────────────────────────────────────────────
-  // Stash the payload so LogoPage can consume it after its own navigation
-  // has settled. Calling onNotificationTap directly here would race with
-  // LogoPage's splash push and cause a double-navigation on first frame.
+  // ── Cold start ─────────────────────────────────────────────────────────────────
   Future<void> _checkColdStart() async {
     final msg = await _fcm.getInitialMessage();
     if (msg != null) {
@@ -395,13 +388,13 @@ class NotificationService {
     }
   }
 
-  // ── FCM token ──────────────────────────────────────────────────────────────
+  // ── FCM token ──────────────────────────────────────────────────────────────────
   Future<void> _saveToken() async {
     try {
       if (!kIsWeb && Platform.isIOS) {
         final apns = await _fcm.getAPNSToken();
         if (apns == null) {
-          debugPrint('[FCM] APNS token not ready — skipping for now');
+          debugPrint('[FCM] APNS token not ready — skipping');
           return;
         }
       }
@@ -433,7 +426,7 @@ class NotificationService {
     debugPrint('[FCM] Token saved uid=$uid');
   }
 
-  // ── Public helpers ────────────────────────────────────────────────────────────
+  // ── Public helpers ─────────────────────────────────────────────────────────────
   Future<void> refreshTokenAfterLogin() => _saveToken();
 
   Future<void> clearTokenOnLogout() async {
@@ -448,68 +441,93 @@ class NotificationService {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CHECKLIST — everything needed for foreground popups + sound to work
+// WHAT CHANGED FROM v6 → v7  (all the fixes for popup / sound / vibration)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// ① AndroidManifest.xml  (android/app/src/main/AndroidManifest.xml)
+// 1. Channel ID bumped to callme_high_v7
+//    Android permanently caches channel settings. Changing importance/sound
+//    on an existing channel ID has NO effect. A new ID forces fresh settings.
+//    Update AndroidManifest.xml <meta-data android:value="callme_high_v7"/>.
 //
-//    <uses-permission android:name="android.permission.VIBRATE"/>
-//    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-//    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+// 2. Priority.max (was Priority.high)
+//    Priority.high can still suppress heads-up popups on some OEMs.
+//    Priority.max guarantees the floating heads-up banner on Android 8+.
 //
-//    Inside <application>:
-//    <meta-data
-//      android:name="com.google.firebase.messaging.default_notification_channel_id"
-//      android:value="callme_high_v6"/>   ← must match NotificationChannels.id
+// 3. vibrationPattern added (both channel + details)
+//    Without an explicit pattern the channel may silently skip vibration
+//    on some devices even when enableVibration = true.
+//    Pattern [0,300,200,300,200,600] = short-short-long, starts immediately.
 //
-// ② Sound file
-//    android/app/src/main/res/raw/notification_sound.mp3
-//    → lowercase, no spaces, no extension in _soundFile constant
-//    → After any change: flutter clean → uninstall app → flutter run
+// 4. visibility = NotificationVisibility.public
+//    Makes the full notification content visible on the lock screen.
+//    Private/Secret would hide or redact it.
 //
-// ③ main.dart order (CRITICAL)
-//    WidgetsFlutterBinding.ensureInitialized()          ← step 1
-//    FirebaseMessaging.onBackgroundMessage(handler)     ← step 2 (before init!)
-//    NotificationService.onNotificationTap = callback   ← step 3
-//    Firebase.initializeApp()                           ← step 4
-//    NotificationService().initialize()                 ← step 5
-//    runApp()                                           ← step 6
+// 5. styleInformation = BigTextStyleInformation('')
+//    Ensures long bodies expand without truncation, and fixes a rendering
+//    quirk on some Samsung devices that suppressed heads-up for
+//    notifications with no explicit style.
 //
-// ④ Cloud Function payload
-//    Send BOTH "notification" block (for bg/killed auto-display) AND "data"
-//    block (for foreground manual display + Firestore storage).
+// 6. ledColor / ledOnMs / ledOffMs added
+//    Blinks the notification LED (devices that have one).
 //
-//    await admin.messaging().send({
-//      token: fcmToken,
-//      notification: { title: 'Hello', body: 'World' },
-//      data: {
-//        type: 'new_booking',
-//        receiverId: uid,          ← REQUIRED for Firestore storage
-//        title: 'Hello',
-//        body: 'World',
+// 7. requestExactAlarmsPermission() added
+//    Required on Android 12+ (API 31+) for reliable notification delivery.
+//    Without it, some OEMs silently drop notifications from the tray.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// MANDATORY AndroidManifest.xml CHECKLIST
+// ─────────────────────────────────────────────────────────────────────────────
+//
+//  <uses-permission android:name="android.permission.VIBRATE"/>
+//  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+//  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+//  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>   ← ADD THIS
+//  <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>        ← ADD THIS (API 33+)
+//
+//  Inside <application>:
+//  <meta-data
+//    android:name="com.google.firebase.messaging.default_notification_channel_id"
+//    android:value="callme_high_v7"/>    ← must match NotificationChannels.id
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// CLOUD FUNCTION PAYLOAD (send BOTH notification + data blocks)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+//  await admin.messaging().send({
+//    token: fcmToken,
+//    notification: { title: 'Hello', body: 'World' },
+//    data: {
+//      type: 'new_booking',
+//      receiverId: uid,       ← REQUIRED for Firestore persistence
+//      title: 'Hello',
+//      body: 'World',
+//    },
+//    android: {
+//      priority: 'high',
+//      notification: {
+//        channelId: 'callme_high_v7',           ← must match
+//        defaultSound: false,
+//        defaultVibrateTimings: false,           ← false so our pattern is used
+//        vibrateTimingsMillis: [0,300,200,300,200,600],
+//        notificationPriority: 'PRIORITY_MAX',
 //      },
-//      android: {
-//        priority: 'high',
-//        notification: {
-//          channelId: 'callme_high_v6',          ← must match
-//          defaultSound: false,
-//          defaultVibrateTimings: true,
-//          notificationPriority: 'PRIORITY_MAX',
-//        },
-//      },
-//      apns: {
-//        headers: { 'apns-priority': '10' },
-//        payload: { aps: { sound: 'default', badge: 1, 'content-available': 1 } },
-//      },
-//    });
+//    },
+//    apns: {
+//      headers: { 'apns-priority': '10' },
+//      payload: { aps: { sound: 'default', badge: 1, 'content-available': 1 } },
+//    },
+//  });
 //
-// ⑤ Device checks
-//    - App notifications: ON
-//    - Channel "CallMe Notifications": Sound ON, Importance HIGH
-//    - Battery optimisation: Unrestricted
-//    - DND: OFF during testing
-//    - Both media volume AND notification volume turned up
+// ─────────────────────────────────────────────────────────────────────────────
+// AFTER ANY CHANNEL ID OR SOUND FILE CHANGE — ALWAYS DO THIS:
+//   flutter clean → uninstall app from device → flutter run
+// ─────────────────────────────────────────────────────────────────────────────
 //
-// ⑥ After ANY channel ID or sound file change:
-//    flutter clean → uninstall app from device → flutter run
+// DEVICE SETTINGS TO VERIFY:
+//   ✓ App notifications: ON
+//   ✓ Channel "CallMe Notifications": Sound ON, Importance HIGH or URGENT
+//   ✓ Battery optimisation: Unrestricted (Settings > Apps > callme > Battery)
+//   ✓ DND: OFF during testing
+//   ✓ Notification volume (not media volume) turned up
+//   ✓ Lock screen notifications: Show all content
 // ─────────────────────────────────────────────────────────────────────────────

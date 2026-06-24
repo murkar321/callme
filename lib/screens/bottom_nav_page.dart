@@ -126,6 +126,10 @@ class _BottomNavPageState extends State<BottomNavPage> {
           ),
       ];
 
+  /// Returns true when the currently visible tab is the Admin dashboard.
+  bool get _isAdminTabActive =>
+      _isAdmin && _currentIndex == _screens.length - 1;
+
   void _openNotifications() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -162,7 +166,10 @@ class _BottomNavPageState extends State<BottomNavPage> {
             index: _currentIndex,
             children: _screens,
           ),
-          if (uid != null)
+
+          // Hide the floating bell on the Admin tab — AdminDashboard
+          // already has its own notification UI built in.
+          if (uid != null && !_isAdminTabActive)
             Positioned(
               top: MediaQuery.of(context).padding.top + 8,
               right: 12,
@@ -192,7 +199,7 @@ class _BottomNavPageState extends State<BottomNavPage> {
 }
 
 /// Floating bell icon showing a live unread-notification count.
-/// Sits above whichever tab is currently visible.
+/// Sits above whichever tab is currently visible (except Admin).
 class _NotificationBell extends StatelessWidget {
   final String uid;
   final VoidCallback onTap;

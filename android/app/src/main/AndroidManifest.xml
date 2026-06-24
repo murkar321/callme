@@ -9,7 +9,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.VIBRATE" /> 
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
 
     <application
         android:name="${applicationName}"
@@ -20,7 +22,7 @@
         <!-- Must match NotificationChannels.id in notification_service.dart -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="callme_high_v6" />
+            android:value="callme_high_v7" />
 
         <meta-data
             android:name="firebase_messaging_auto_init_enabled"
@@ -63,6 +65,8 @@
         <meta-data
             android:name="google_analytics_automatic_screen_reporting_enabled"
             android:value="true" />
+
+          
 
     </application>
 

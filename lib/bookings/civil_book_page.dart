@@ -17,7 +17,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 import 'package:intl/intl.dart';
 
 class CivilBookingPage extends StatefulWidget {
-  final String serviceName;
+  final String serviceName;   // Display name, e.g. "Standard Package"
+  final String serviceType;   // Firestore lookup key, e.g. "civil"
   final List<CartItem>? cart;
   final List<dynamic>? products;
   final List<String>? selectedRenovationItems;
@@ -26,6 +27,9 @@ class CivilBookingPage extends StatefulWidget {
   const CivilBookingPage({
     super.key,
     required this.serviceName,
+    // ✅ serviceType defaults to 'civil' so existing call-sites that don't
+    //    pass it (e.g. CartPage → CivilBookingPage) keep working unchanged.
+    this.serviceType = 'civil',
     this.cart,
     this.products,
     this.selectedRenovationItems,
@@ -138,33 +142,32 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     } catch (_) {}
   }
 
-  /// Generate every reasonable variant of the service name so we match
-  /// regardless of how the provider typed it in Firestore.
+  /// Build lookup variants from [widget.serviceType] (NOT serviceName).
+  /// For renovation packages this will always be 'civil', so all variants
+  /// of "civil" are produced — guaranteeing a match.
   List<String> _serviceVariants() {
-    final raw = widget.serviceName.trim();
+    final raw = widget.serviceType.trim();
     return <String>{
-      raw,                                       // "Basic Package"
-      raw.toLowerCase(),                         // "basic package"
-      raw.toUpperCase(),                         // "BASIC PACKAGE"
-      raw.toLowerCase().replaceAll(' ', '_'),    // "basic_package"
-      raw.toLowerCase().replaceAll(' ', '-'),    // "basic-package"
-      raw.toLowerCase().replaceAll(' ', ''),     // "basicpackage"
-      raw.replaceAll(' ', '_'),                  // "Basic_Package"
-      raw.replaceAll(' ', '-'),                  // "Basic-Package"
-      raw.split(' ').first,                      // "Basic"
-      raw.split(' ').first.toLowerCase(),        // "basic"
-      raw.split(' ').last,                       // "Package"
-      raw.split(' ').last.toLowerCase(),         // "package"
+      raw,
+      raw.toLowerCase(),
+      raw.toUpperCase(),
+      raw.toLowerCase().replaceAll(' ', '_'),
+      raw.toLowerCase().replaceAll(' ', '-'),
+      raw.toLowerCase().replaceAll(' ', ''),
+      raw.replaceAll(' ', '_'),
+      raw.replaceAll(' ', '-'),
+      raw.split(' ').first,
+      raw.split(' ').first.toLowerCase(),
+      raw.split(' ').last,
+      raw.split(' ').last.toLowerCase(),
     }.toList();
   }
 
   bool _isMatch(String storedType) {
-    final s        = storedType.trim();
-    final rawLower = widget.serviceName.trim().toLowerCase();
-    final sLower   = s.toLowerCase();
-    // Exact match on any variant
+    final s         = storedType.trim();
+    final rawLower  = widget.serviceType.trim().toLowerCase();
+    final sLower    = s.toLowerCase();
     if (_serviceVariants().any((v) => v.toLowerCase() == sLower)) return true;
-    // Partial / substring match as last resort
     return sLower.contains(rawLower) || rawLower.contains(sLower);
   }
 
@@ -174,7 +177,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
 
     try {
       final variants = _serviceVariants();
-      debugPrint('[Civil] searching variants: $variants');
+      debugPrint('[Civil] serviceType="${widget.serviceType}" → variants: $variants');
 
       // Pass 1 – exact Firestore query per variant, with approved status
       for (final v in variants) {
@@ -190,7 +193,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         }
       }
 
-      // Pass 2 – same but ignore status filter (handles "Approved", "active", missing)
+      // Pass 2 – same but ignore status filter
       for (final v in variants) {
         final snap = await FirebaseFirestore.instance
             .collection('providers')
@@ -230,16 +233,16 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         _setProvider(anyMatch.id, anyMatch.data()); return;
       }
 
-      // Nothing matched — show helpful debug message
+      // Nothing matched
       if (mounted) {
         final stored = allSnap.docs
             .map((d) => '"${d.data()['serviceType'] ?? '–'}"')
             .toSet().join(', ');
         setState(() {
           _noProviderMessage =
-              'No provider found for "${widget.serviceName}".\n'
+              'No Civil provider found.\n'
               'Types in DB: $stored\n'
-              'Check that a provider has registered and been approved for this service.';
+              'Check that a Civil provider has registered and been approved.';
           _isLoadingProvider = false;
         });
       }
@@ -377,7 +380,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         boxShadow: [BoxShadow(blurRadius: 14, offset: const Offset(0, 5), color: Colors.black.withOpacity(0.05))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Header
         Container(
           padding: EdgeInsets.all(isSmall ? 12 : 16),
           decoration: const BoxDecoration(
@@ -406,7 +408,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
             ),
           ]),
         ),
-        // Item rows
         Padding(
           padding: EdgeInsets.all(isSmall ? 10 : 14),
           child: Column(children: [
@@ -577,6 +578,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
             style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
         const SizedBox(height: 3),
         Row(children: [
+          // ✅ Show package name (serviceName) in header, not serviceType
           Flexible(child: Text(widget.serviceName, overflow: TextOverflow.ellipsis,
               style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13))),
           if (_hasCartItems) ...[
@@ -626,7 +628,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
 
   // ── Step label ────────────────────────────────────────────────────────────
   Widget _stepLabel(String number, String label) {
-    final isEmoji = number == '📋';
+    final isEmoji  = number == '📋';
     final isBullet = number == '•';
     return Row(children: [
       isEmoji
@@ -1115,7 +1117,8 @@ class _CivilBookingPageState extends State<CivilBookingPage>
               : [widget.serviceName];
 
       final docRef = await OrderService.placeOrder(
-        serviceType:   widget.serviceName.trim().toLowerCase(),
+        // ✅ Store serviceType ('civil') in Firestore, not the package name
+        serviceType:   widget.serviceType.trim().toLowerCase(),
         services:      servicesList,
         userId:        user?.uid ?? '',
         userName:      _nameController.text.trim(),
