@@ -16,7 +16,7 @@ class SalonPage extends StatefulWidget {
 }
 
 class _SalonPageState extends State<SalonPage> {
-  static const _theme = Color(0xFFAE91BA);
+  static const _theme = Color.fromARGB(255, 228, 33, 189);
 
   int selectedIndex = 0;
 

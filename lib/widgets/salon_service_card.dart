@@ -23,7 +23,7 @@ class SalonServiceCard extends StatefulWidget {
 }
 
 class _SalonServiceCardState extends State<SalonServiceCard> {
-  static const _theme = Color(0xFFAE91BA);
+  static const _theme = Color.fromARGB(255, 207, 16, 150);
 
   String _key(String visitType) => '${widget.service.id}_$visitType';
   int _getQty(String visitType) => Cart.getQuantity(_key(visitType), 'Salon');
