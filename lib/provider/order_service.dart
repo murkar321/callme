@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 
 // ============================================================
 // NOTIFICATION TYPE CONSTANTS
-// Use these everywhere — never raw strings.
 // ============================================================
 class NotificationType {
   static const String newBooking    = 'new_booking';
@@ -42,7 +41,6 @@ class OrderService {
 
   // ==========================================================
   // PLACE ORDER
-  // Saves the order and immediately notifies the provider.
   // ==========================================================
 
   static Future<DocumentReference> placeOrder({
@@ -71,17 +69,19 @@ class OrderService {
 
     required String providerId,
 
-    bool isEnquiry = false, required String providerName, Object? providerUserId,
+    bool isEnquiry = false,
+    required String providerName,
+    Object? providerUserId,
   }) async {
-    // Resolve provider details fresh from Firestore — never trust stale cache.
+    // Resolve provider details fresh from Firestore.
     final providerSnap =
         await _db.collection('providers').doc(providerId).get();
     final providerData = providerSnap.data() ?? {};
 
-    final String providerName =
+    final String resolvedProviderName =
         (providerData['businessName'] ?? providerData['name'] ?? '')
             .toString();
-    final String providerUserId =
+    final String resolvedProviderUserId =
         (providerData['userId'] ?? providerData['uid'] ?? '').toString();
 
     final orderId = generateOrderId(userName);
@@ -104,13 +104,13 @@ class OrderService {
       },
 
       'providerId': providerId,
-      'providerUserId': providerUserId,
-      'providerName': providerName,
+      'providerUserId': resolvedProviderUserId,
+      'providerName': resolvedProviderName,
 
       'provider': {
         'providerId': providerId,
-        'providerUserId': providerUserId,
-        'providerName': providerName,
+        'providerUserId': resolvedProviderUserId,
+        'providerName': resolvedProviderName,
       },
 
       'serviceType': normalizedServiceType,
@@ -147,16 +147,14 @@ class OrderService {
 
       'isEnquiry': isEnquiry,
 
-      // Status lifecycle:
-      // pending → accepted → completed
-      //         ↘ rejected (provider)
-      // pending → cancelled (user)
       'status': isEnquiry ? OrderStatus.enquiry : OrderStatus.pending,
       'isAssigned': false,
       'isCompleted': false,
 
-      'cancelReason': '',        // filled when provider rejects/cancels
-      'cancelledBy': '',         // 'user' | 'provider'
+      // Reason fields — always written as empty strings so reads never get null.
+      'declineReason': '',   // canonical field for reject / provider-cancel reason
+      'cancelReason': '',    // kept for backwards compat
+      'cancelledBy': '',     // 'user' | 'provider'
 
       'createdBy': createdBy,
       'createdByRole': createdByRole,
@@ -165,11 +163,10 @@ class OrderService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    // ── Notify provider: new booking arrived ──────────────────
     await _notifyProvider(
       providerId: providerId,
-      providerUserId: providerUserId,
-      providerName: providerName,
+      providerUserId: resolvedProviderUserId,
+      providerName: resolvedProviderName,
       orderId: orderId,
       serviceType: normalizedServiceType,
       userName: userName,
@@ -184,8 +181,6 @@ class OrderService {
 
   // ==========================================================
   // PROVIDER ACTIONS
-  // Call these from BusinessDashboardPage.
-  // Each one: updates order → notifies user.
   // ==========================================================
 
   /// Provider ACCEPTS the order.
@@ -213,6 +208,8 @@ class OrderService {
   }
 
   /// Provider REJECTS the order (with mandatory reason).
+  /// Writes to `declineReason` (canonical) AND legacy `cancelReason`
+  /// so both old and new clients can read the reason safely.
   static Future<void> rejectOrder({
     required String orderId,
     required String userId,
@@ -220,11 +217,14 @@ class OrderService {
     required String serviceType,
     required String reason,
   }) async {
+    final trimmedReason = reason.trim();
+
     await _db.collection('orders').doc(orderId).update({
       'status': OrderStatus.rejected,
-      'cancelReason': reason,
+      'declineReason': trimmedReason,   // canonical — new field
+      'cancelReason': trimmedReason,    // legacy fallback
       'cancelledBy': 'provider',
-      'providerCancelNote': reason,   // legacy field — keep for compatibility
+      'providerCancelNote': trimmedReason, // extra legacy compat
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
@@ -234,7 +234,7 @@ class OrderService {
       title: '❌ Booking Rejected',
       body:
           '$providerName has rejected your $serviceType booking. '
-          'Reason: $reason',
+          'Reason: $trimmedReason',
       type: NotificationType.rejected,
     );
   }
@@ -271,11 +271,14 @@ class OrderService {
     required String serviceType,
     required String reason,
   }) async {
+    final trimmedReason = reason.trim();
+
     await _db.collection('orders').doc(orderId).update({
       'status': OrderStatus.cancelled,
-      'cancelReason': reason,
+      'declineReason': trimmedReason,   // canonical
+      'cancelReason': trimmedReason,    // legacy
       'cancelledBy': 'provider',
-      'providerCancelNote': reason,
+      'providerCancelNote': trimmedReason,
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
@@ -285,14 +288,13 @@ class OrderService {
       title: '🚫 Booking Cancelled by Provider',
       body:
           '$providerName cancelled your $serviceType booking. '
-          'Reason: $reason',
+          'Reason: $trimmedReason',
       type: NotificationType.cancelled,
     );
   }
 
   // ==========================================================
   // USER CANCELS ORDER
-  // Call from MyOrdersPage cancel button.
   // ==========================================================
 
   static Future<void> userCancelOrder({
@@ -307,15 +309,13 @@ class OrderService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    // Also notify provider that user cancelled
     if (providerUserId.isNotEmpty) {
       await _sendNotification(
         receiverId: providerUserId,
         role: 'provider',
         orderId: orderId,
         title: '⚠️ Order Cancelled by User',
-        body:
-            '$userName has cancelled their $serviceType booking.',
+        body: '$userName has cancelled their $serviceType booking.',
         type: NotificationType.userCancelled,
       );
     }
@@ -358,7 +358,6 @@ class OrderService {
         type: NotificationType.newBooking,
       );
 
-      // FCM push queue
       final fcmToken =
           (providerData['fcmToken'] ?? '').toString().trim();
       if (fcmToken.isNotEmpty) {
@@ -407,7 +406,6 @@ class OrderService {
         type: type,
       );
 
-      // FCM push queue
       final userDoc =
           await _db.collection('users').doc(userId).get();
       final fcmToken =

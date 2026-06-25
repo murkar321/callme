@@ -1,6 +1,6 @@
 
 import 'package:callme/profile/navigation.dart';
-import 'package:callme/profile/notification_page.dart';
+import 'package:callme/provider/provider_dashboard.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -15,7 +15,7 @@ import '../screens/myorders_page.dart';
 // for that page instead, e.g.:
 //   import '../Admin/provider_approval_page.dart';
 //   ... ProviderApprovalPage()
-import '../Admin/admin_dashboard.dart';
+import '../Admin/approve_providers_page.dart';
 
 /// Single source of truth for "which screen opens when this notification
 /// is tapped" — used for foreground taps, background taps, and cold
@@ -57,7 +57,7 @@ void routeNotification(Map<String, dynamic> data) {
     case NotificationType.providerRegistered:
       // Admin needs to review the newly registered provider.
       navigator.push(
-        MaterialPageRoute(builder: (_) => const AdminDashboard()),
+        MaterialPageRoute(builder: (_) => const ApproveProvidersPage()),
       );
       break;
 
@@ -66,13 +66,13 @@ void routeNotification(Map<String, dynamic> data) {
       // No specific page given for these yet — falls back to the
       // notification list. Tell me where these should go and I'll wire it.
       navigator.push(
-        MaterialPageRoute(builder: (_) => const NotificationPage()),
+        MaterialPageRoute(builder: (_) => const BusinessDashboardPage(providerId: '', businessName: '', serviceType: '',)),
       );
       break;
 
     default:
       navigator.push(
-        MaterialPageRoute(builder: (_) => const NotificationPage()),
+        MaterialPageRoute(builder: (_) => const BusinessDashboardPage(providerId: '', businessName: '', serviceType: '',)),
       );
   }
 }

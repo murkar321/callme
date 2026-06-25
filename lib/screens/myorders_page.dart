@@ -36,8 +36,6 @@ class MyOrdersPage extends StatefulWidget {
 
 class _MyOrdersPageState extends State<MyOrdersPage> {
   // ── Stream ──────────────────────────────────────────────────
-  // No orderBy here — using only .where() avoids the composite
-  // index requirement. We sort the docs client-side instead.
   Stream<QuerySnapshot>? _ordersStream;
 
   @override
@@ -53,7 +51,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
     _ordersStream = FirebaseFirestore.instance
         .collection('orders')
         .where('userId', isEqualTo: user.uid)
-        .snapshots(); // no orderBy — sorted client-side below
+        .snapshots();
   }
 
   // ── Status config ────────────────────────────────────────────
@@ -126,6 +124,22 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
     return '-';
   }
 
+  // ── Resolve decline / cancel reason ─────────────────────────
+  // Priority: declineReason (canonical) → cancelReason (legacy)
+  //           → providerCancelNote (extra legacy) → ''
+  String _resolveReason(Map<String, dynamic> data) {
+    final fields = [
+      'declineReason',
+      'cancelReason',
+      'providerCancelNote',
+    ];
+    for (final field in fields) {
+      final val = (data[field] ?? '').toString().trim();
+      if (val.isNotEmpty) return val;
+    }
+    return '';
+  }
+
   // ── Cancel order ─────────────────────────────────────────────
   Future<void> _cancelOrder({
     required String orderId,
@@ -179,7 +193,8 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
           content: const Text('Order cancelled'),
           backgroundColor: Colors.grey.shade700,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -218,12 +233,12 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
 
   // ── Order card ───────────────────────────────────────────────
   Widget _orderCard(QueryDocumentSnapshot doc) {
-    final data           = doc.data() as Map<String, dynamic>;
-    final schedule       = (data['schedule'] as Map<String, dynamic>?) ?? {};
-    final location       = (data['location'] as Map<String, dynamic>?) ?? {};
-    final rawStatus      = (data['status'] ?? 'pending').toString();
-    final status         = rawStatus.toLowerCase();
-    final cfg            = _statusConfig(status);
+    final data        = doc.data() as Map<String, dynamic>;
+    final schedule    = (data['schedule'] as Map<String, dynamic>?) ?? {};
+    final location    = (data['location'] as Map<String, dynamic>?) ?? {};
+    final rawStatus   = (data['status'] ?? 'pending').toString();
+    final status      = rawStatus.toLowerCase();
+    final cfg         = _statusConfig(status);
 
     final services = (data['services'] as List?)
             ?.map((e) => e.toString())
@@ -234,15 +249,23 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
     final providerUserId = (data['providerUserId'] ?? '').toString();
     final userName       = (data['userName'] ?? '').toString();
     final serviceType    = (data['serviceType'] ?? 'Service').toString();
-    final cancelReason   = ((data['cancelReason'] ??
-                data['providerCancelNote'] ??
-                '') as String)
-        .trim();
     final cancelledBy    = (data['cancelledBy'] ?? '').toString();
 
-    final canCancel = status == 'pending' || status == 'accepted';
+    // ── Resolve reason — checks declineReason first (canonical),
+    //    then falls back to legacy fields.
+    final reason = _resolveReason(data);
+
+    final canCancel  = status == 'pending' || status == 'accepted';
     final showReason =
-        cancelReason.isNotEmpty && (status == 'rejected' || status == 'cancelled');
+        reason.isNotEmpty && (status == 'rejected' || status == 'cancelled');
+
+    // Label for the reason box header
+    String reasonLabel() {
+      if (status == 'rejected') return 'Rejection Reason';
+      if (cancelledBy == 'provider') return 'Cancelled by Provider';
+      if (cancelledBy == 'user') return 'Cancelled by You';
+      return 'Cancellation Reason';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -375,7 +398,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
                     'Provider: $providerName',
                   ),
 
-                // Rejection / cancellation reason
+                // ── Rejection / cancellation reason ──────────
                 if (showReason) ...[
                   const SizedBox(height: 14),
                   Container(
@@ -398,11 +421,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              status == 'rejected'
-                                  ? 'Rejection Reason'
-                                  : cancelledBy == 'provider'
-                                      ? 'Cancelled by Provider'
-                                      : 'Cancelled by You',
+                              reasonLabel(),
                               style: const TextStyle(
                                 color: Color(0xFFEF4444),
                                 fontWeight: FontWeight.bold,
@@ -413,7 +432,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          cancelReason,
+                          reason,
                           style: const TextStyle(
                             color: Color(0xFFB91C1C),
                             fontSize: 13,
@@ -493,7 +512,6 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
-    // Not logged in
     if (user == null) {
       return Scaffold(
         backgroundColor: const Color(0xFFF4F6FA),
@@ -509,7 +527,6 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
         stream: _ordersStream,
         builder: (context, snapshot) {
 
-          // Error
           if (snapshot.hasError) {
             return Center(
               child: Padding(
@@ -538,23 +555,25 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
             );
           }
 
-          // Loading
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           // Sort latest first client-side — no composite index needed
-          final orders = List<QueryDocumentSnapshot>.from(
-              snapshot.data?.docs ?? [])
-            ..sort((a, b) {
-              final aMs = (a.data() as Map<String, dynamic>)['createdAt'];
-              final bMs = (b.data() as Map<String, dynamic>)['createdAt'];
-              final aT = aMs is Timestamp ? aMs.millisecondsSinceEpoch : 0;
-              final bT = bMs is Timestamp ? bMs.millisecondsSinceEpoch : 0;
-              return bT.compareTo(aT);
-            });
+          final orders =
+              List<QueryDocumentSnapshot>.from(snapshot.data?.docs ?? [])
+                ..sort((a, b) {
+                  final aTs =
+                      (a.data() as Map<String, dynamic>)['createdAt'];
+                  final bTs =
+                      (b.data() as Map<String, dynamic>)['createdAt'];
+                  final aT =
+                      aTs is Timestamp ? aTs.millisecondsSinceEpoch : 0;
+                  final bT =
+                      bTs is Timestamp ? bTs.millisecondsSinceEpoch : 0;
+                  return bT.compareTo(aT);
+                });
 
-          // Empty
           if (orders.isEmpty) {
             return Center(
               child: Column(
@@ -565,8 +584,8 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
                   const SizedBox(height: 16),
                   const Text(
                     'No Orders Yet',
-                    style: TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -578,7 +597,6 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
             );
           }
 
-          // List (sorted latest-first client-side)
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             physics: const BouncingScrollPhysics(),
