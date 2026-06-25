@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -22,268 +23,197 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // =====================================================
-  // SERVICES
-  // =====================================================
-
   final AuthService _authService = AuthService();
-
-  // =====================================================
-  // FORM
-  // =====================================================
-
   final _formKey = GlobalKey<FormState>();
 
-  // =====================================================
-  // CONTROLLERS
-  // =====================================================
+  final _firstNameCtrl = TextEditingController();
+  final _lastNameCtrl  = TextEditingController();
+  final _emailCtrl     = TextEditingController();
+  final _phoneCtrl     = TextEditingController();
+  final _addressCtrl   = TextEditingController();
 
-  final firstNameController = TextEditingController();
-  final lastNameController  = TextEditingController();
-  final emailController     = TextEditingController();
-  final phoneController     = TextEditingController();
-  final addressController   = TextEditingController();
+  final _lastNameFocus = FocusNode();
+  final _phoneFocus    = FocusNode();
+  final _addressFocus  = FocusNode();
 
-  // =====================================================
-  // STATE
-  // =====================================================
-
-  bool   isLoading    = true;
-  bool   _isUploading = false;
+  bool   _isLoading      = true;
+  bool   _isSaving       = false;
+  bool   _isUploading    = false;
   double _uploadProgress = 0;
 
-  File?  imageFile;
-  String networkImage = "";
+  File?  _imageFile;
+  String _networkImage = '';   // URL from Firestore or Google
+  bool   _isDirty      = false;
 
-  String _collection = "users";
+  // ── Doc ID = email ──────────────────────────────────────────
+  String _docId(User user) => user.email!.toLowerCase().trim();
+  DocumentReference _userDoc(User user) =>
+      FirebaseFirestore.instance.collection('users').doc(_docId(user));
 
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
   // INIT
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    loadUserData();
-  }
-
-  // =====================================================
-  // LOAD USER DATA
-  // =====================================================
-
-  Future<void> loadUserData() async {
-    try {
-      final User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      if (mounted) setState(() => isLoading = true);
-
-      final docId = (user.email ?? "").trim().toLowerCase();
-
-      if (docId.isEmpty) {
-        showMsg("No email found on this account");
-        return;
-      }
-
-      // Prefill from Auth
-      emailController.text = user.email ?? "";
-      phoneController.text = user.phoneNumber ?? "";
-
-      final doc = await FirebaseFirestore.instance
-          .collection("users")
-          .doc(docId)
-          .get();
-
-      if (doc.exists) {
-        final data = doc.data()!;
-
-        firstNameController.text =
-            data["firstName"]?.toString() ?? "";
-        lastNameController.text =
-            data["lastName"]?.toString() ?? "";
-        addressController.text =
-            data["address"]?.toString() ?? "";
-
-        final storedEmail = data["email"]?.toString() ?? "";
-        if (storedEmail.isNotEmpty) emailController.text = storedEmail;
-
-        final storedPhone = data["phone"]?.toString() ?? "";
-        if (storedPhone.isNotEmpty) phoneController.text = storedPhone;
-
-        final storedPhoto = data["photo"]?.toString() ?? "";
-        if (storedPhoto.isNotEmpty) {
-          networkImage = storedPhoto;
-        }
-      }
-
-      if (mounted) setState(() {});
-    } catch (e) {
-      debugPrint("LOAD ERROR: $e");
-    } finally {
-      if (mounted) setState(() => isLoading = false);
+    _loadUserData();
+    for (final c in [_firstNameCtrl, _lastNameCtrl, _phoneCtrl, _addressCtrl]) {
+      c.addListener(() { if (mounted) setState(() => _isDirty = true); });
     }
   }
 
-  // =====================================================
-  // UPLOAD IMAGE — FIXED
-  // Uses UploadTask directly so we get a real
-  // TaskSnapshot with a working getDownloadURL().
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
+  // LOAD  — pre-fill photo from Google immediately, then Firestore
+  // ─────────────────────────────────────────────────────────────
 
-  Future<String?> _uploadProfilePhoto(File file) async {
+  Future<void> _loadUserData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      if (mounted) setState(() => _isLoading = true);
+
+      // ✅ Pre-fill from Firebase Auth immediately (no Firestore wait)
+      _emailCtrl.text = user.email ?? '';
+
+      // Use Google photo as default right away
+      if (user.photoURL != null && user.photoURL!.isNotEmpty) {
+        _networkImage = user.photoURL!;
+      }
+
+      // Split display name as fallback
+      final nameParts = (user.displayName ?? '').trim().split(' ');
+      _firstNameCtrl.text = nameParts.isNotEmpty ? nameParts.first : '';
+      _lastNameCtrl.text  = nameParts.length > 1
+          ? nameParts.sublist(1).join(' ')
+          : '';
+
+      // Then override with Firestore data if available
+      final doc = await _userDoc(user).get();
+      if (doc.exists) {
+        final d = doc.data()! as Map<String, dynamic>;
+
+        if ((d['firstName'] ?? '').toString().isNotEmpty)
+          _firstNameCtrl.text = d['firstName'];
+        if ((d['lastName'] ?? '').toString().isNotEmpty)
+          _lastNameCtrl.text = d['lastName'];
+        if ((d['phone'] ?? '').toString().isNotEmpty)
+          _phoneCtrl.text = d['phone'];
+        if ((d['address'] ?? '').toString().isNotEmpty)
+          _addressCtrl.text = d['address'];
+
+        // Prefer user-uploaded photo over Google photo
+        final storedPhoto = d['photo']?.toString() ?? '';
+        if (storedPhoto.isNotEmpty) _networkImage = storedPhoto;
+      }
+
+      _isDirty = false;
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('LOAD ERROR: $e');
+      _showSnack('Failed to load profile.', isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // UPLOAD PHOTO
+  // ─────────────────────────────────────────────────────────────
+
+  Future<String?> _uploadPhoto(File file) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return null;
 
-      // Build a safe storage path using uid (always available,
-      // never contains special chars — avoids email encoding issues)
-      final storagePath =
-          'profile_images/${user.uid}/profile.jpg';
+      final ref = FirebaseStorage.instance
+          .ref('profile_images/${user.uid}/profile.jpg');
 
-      final ref = FirebaseStorage.instance.ref(storagePath);
-
-      // Create the upload task
-      final UploadTask uploadTask = ref.putFile(
+      final task = ref.putFile(
         file,
-        SettableMetadata(
-          contentType: 'image/jpeg',
-          customMetadata: {
-            'uid':   user.uid,
-            'email': user.email ?? '',
-          },
-        ),
+        SettableMetadata(contentType: 'image/jpeg'),
       );
 
-      // Listen to progress so the UI spinner is accurate
-      uploadTask.snapshotEvents.listen((TaskSnapshot snap) {
+      task.snapshotEvents.listen((snap) {
         if (!mounted) return;
-        final progress =
-            snap.bytesTransferred / (snap.totalBytes == 0 ? 1 : snap.totalBytes);
-        setState(() => _uploadProgress = progress);
+        setState(() => _uploadProgress =
+            snap.bytesTransferred / (snap.totalBytes == 0 ? 1 : snap.totalBytes));
       });
 
-      // Await the task directly — this is the KEY fix.
-      // Do NOT use .whenComplete() — it returns void.
-      final TaskSnapshot snapshot = await uploadTask;
-
-      if (snapshot.state != TaskState.success) {
-        debugPrint("Upload state: ${snapshot.state}");
-        return null;
-      }
-
-      // Get the permanent download URL
-      final String downloadUrl = await snapshot.ref.getDownloadURL();
-      debugPrint("Upload success. URL: $downloadUrl");
-      return downloadUrl;
-    } on FirebaseException catch (e) {
-      debugPrint("FIREBASE STORAGE ERROR [${e.code}]: ${e.message}");
-      return null;
+      final snapshot = await task;
+      if (snapshot.state != TaskState.success) return null;
+      return await snapshot.ref.getDownloadURL();
     } catch (e) {
-      debugPrint("UPLOAD ERROR: $e");
+      debugPrint('UPLOAD ERROR: $e');
       return null;
     }
   }
 
-  // =====================================================
-  // SAVE PROFILE
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
+  // SAVE  — no pre-read, direct merge write = fast
+  // ─────────────────────────────────────────────────────────────
 
-  Future<void> saveProfile() async {
+  Future<void> _saveProfile() async {
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
     try {
-      final User? user = FirebaseAuth.instance.currentUser;
+      final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        showMsg("User not found. Please login again.");
+        _showSnack('Session expired. Please log in again.', isError: true);
         return;
       }
 
-      if (mounted) setState(() => isLoading = true);
+      if (mounted) setState(() => _isSaving = true);
 
-      final String email = (user.email ?? "").trim().toLowerCase();
-      if (email.isEmpty) {
-        showMsg("No email found on this account");
-        return;
-      }
+      // Upload photo if new one was picked
+      if (_imageFile != null) {
+        setState(() { _isUploading = true; _uploadProgress = 0; });
+        final url = await _uploadPhoto(_imageFile!);
+        setState(() => _isUploading = false);
 
-      // ── Step 1: Upload photo if a new one was picked ──
-      if (imageFile != null) {
-        if (mounted) {
-          setState(() {
-            _isUploading    = true;
-            _uploadProgress = 0;
-          });
-        }
-
-        final String? uploadedUrl =
-            await _uploadProfilePhoto(imageFile!);
-
-        if (mounted) setState(() => _isUploading = false);
-
-        if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-          networkImage = uploadedUrl;
-          imageFile    = null; // switch to network image
-          debugPrint("Photo saved to Firestore as: $networkImage");
+        if (url != null && url.isNotEmpty) {
+          _networkImage = url;
+          _imageFile    = null;
         } else {
-          showMsg(
-            "Photo upload failed. Check Firebase Storage rules.\n"
-            "Other profile details will still be saved.",
-          );
-          // Don't return — still save the rest of the profile
+          _showSnack('Photo upload failed. Other changes saved.', isError: true);
         }
       }
 
-      // ── Step 2: Update Firebase Auth display name ──
-      final String fullName =
-          "${firstNameController.text.trim()} "
-          "${lastNameController.text.trim()}".trim();
+      final fullName =
+          '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}'.trim();
 
-      await user.updateDisplayName(fullName);
+      // Update Firebase Auth in parallel with Firestore
+      await Future.wait([
+        user.updateDisplayName(fullName),
+        if (_networkImage.isNotEmpty) user.updatePhotoURL(_networkImage),
+      ]);
 
-      // Also update photoURL in Auth so it's consistent
-      if (networkImage.isNotEmpty) {
-        await user.updatePhotoURL(networkImage);
-      }
+      // ✅ Direct merge — no pre-read needed, fast single write
+      await _userDoc(user).set({
+        'uid':       user.uid,
+        'email':     _docId(user),
+        'firstName': _firstNameCtrl.text.trim(),
+        'lastName':  _lastNameCtrl.text.trim(),
+        'name':      fullName,
+        'phone':     _phoneCtrl.text.trim(),
+        'address':   _addressCtrl.text.trim(),
+        'photo':     _networkImage,
+        'updatedAt': FieldValue.serverTimestamp(),
+        // createdAt only set on first write via merge — won't overwrite
+      }, SetOptions(merge: true));
 
-      // ── Step 3: Build Firestore payload ──
-      final docRef = FirebaseFirestore.instance
-          .collection("users")
-          .doc(email);
-
-      final existingDoc = await docRef.get();
-
-      final Map<String, dynamic> payload = {
-        "userId":      email,
-        "firebaseUid": user.uid,
-        "firstName":   firstNameController.text.trim(),
-        "lastName":    lastNameController.text.trim(),
-        "name":        fullName,
-        "email":       emailController.text.trim(),
-        "phone":       phoneController.text.trim(),
-        "address":     addressController.text.trim(),
-        "photo":       networkImage,
-        "updatedAt":   FieldValue.serverTimestamp(),
-      };
-
-      // Only set createdAt on first write
-      if (!existingDoc.exists) {
-        payload["createdAt"] = FieldValue.serverTimestamp();
-      }
-
-      await docRef.set(payload, SetOptions(merge: true));
-
-      debugPrint("Firestore saved. photo field = $networkImage");
-
-      if (mounted) setState(() {}); // rebuild header card
-
-      showMsg("Profile updated successfully ✓");
+      _isDirty = false;
+      if (mounted) setState(() {});
+      _showSnack('Profile saved ✓');
     } catch (e) {
-      debugPrint("SAVE PROFILE ERROR: $e");
-      showMsg("Save failed: $e");
+      debugPrint('SAVE ERROR: $e');
+      _showSnack('Save failed. Please try again.', isError: true);
     } finally {
       if (mounted) {
         setState(() {
-          isLoading       = false;
+          _isSaving       = false;
           _isUploading    = false;
           _uploadProgress = 0;
         });
@@ -291,290 +221,405 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
   // PICK IMAGE
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
 
-  Future<void> pickImage() async {
+  Future<void> _pickImage() async {
     try {
-      final XFile? picked = await ImagePicker().pickImage(
+      final picked = await ImagePicker().pickImage(
         source:       ImageSource.gallery,
         imageQuality: 75,
         maxWidth:     800,
         maxHeight:    800,
       );
       if (picked != null && mounted) {
-        setState(() => imageFile = File(picked.path));
+        setState(() {
+          _imageFile = File(picked.path);
+          _isDirty   = true;
+        });
       }
     } catch (e) {
-      debugPrint("IMAGE PICK ERROR: $e");
-      showMsg("Could not open gallery");
+      _showSnack('Could not open gallery.', isError: true);
     }
   }
 
-  // =====================================================
-  // OPEN MAP
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
+  // MAP — reads full address from MapPickerResult
+  // ─────────────────────────────────────────────────────────────
 
-  Future<void> openMap() async {
+  Future<void> _openMap() async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MapPickerPage()),
     );
-    if (result != null && result is String && mounted) {
-      setState(() => addressController.text = result);
+
+    if (!mounted) return;
+
+    // ✅ Handles both MapPickerResult and plain String returns
+    if (result is MapPickerResult) {
+      final combined = [
+        result.addressDetails,
+        result.fullAddress,
+      ].where((s) => s.isNotEmpty).join(', ');
+
+      setState(() {
+        _addressCtrl.text = combined.isNotEmpty
+            ? combined
+            : result.shortAddress;
+        _isDirty = true;
+      });
+    } else if (result is String && result.isNotEmpty) {
+      setState(() {
+        _addressCtrl.text = result;
+        _isDirty          = true;
+      });
     }
   }
 
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
   // LOGOUT
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
 
-  Future<void> logout() async {
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title:   const Text('Log out?'),
+        content: const Text('You will be signed out of your account.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true),
+              child: const Text('Log out',
+                  style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
     try {
       await _authService.logout();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const LogoPage()),
-        (route) => false,
+        (_) => false,
       );
     } catch (e) {
-      debugPrint("LOGOUT ERROR: $e");
+      _showSnack('Logout failed. Try again.', isError: true);
     }
   }
 
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
   // SNACKBAR
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
 
-  void showMsg(String msg) {
+  void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior:      SnackBarBehavior.floating,
-        duration:      const Duration(seconds: 3),
-        content: Text(msg),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        Icon(isError ? Icons.error_outline : Icons.check_circle_outline,
+            color: Colors.white, size: 18),
+        const SizedBox(width: 8),
+        Expanded(child: Text(msg)),
+      ]),
+      backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
+      behavior:        SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      duration: const Duration(seconds: 3),
+    ));
   }
 
-  // =====================================================
-  // AVATAR IMAGE PROVIDER
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
+  // AVATAR
+  // ─────────────────────────────────────────────────────────────
 
-  ImageProvider _buildImageProvider() {
-    if (imageFile != null)       return FileImage(imageFile!);
-    if (networkImage.isNotEmpty) return NetworkImage(networkImage);
-    return const AssetImage("assets/user.jfif");
+  ImageProvider _avatarImage() {
+    if (_imageFile != null)       return FileImage(_imageFile!);
+    if (_networkImage.isNotEmpty) return NetworkImage(_networkImage);
+    return const AssetImage('assets/user.jfif');
   }
 
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
   // DISPOSE
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
 
   @override
   void dispose() {
-    firstNameController.dispose();
-    lastNameController.dispose();
-    emailController.dispose();
-    phoneController.dispose();
-    addressController.dispose();
+    _firstNameCtrl.dispose();
+    _lastNameCtrl.dispose();
+    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
+    _addressCtrl.dispose();
+    _lastNameFocus.dispose();
+    _phoneFocus.dispose();
+    _addressFocus.dispose();
     super.dispose();
   }
 
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
   // BUILD
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool   isTablet    = screenWidth > 700;
+    final mq       = MediaQuery.of(context);
+    final sw       = mq.size.width;
+    final isTablet = sw > 700;
+    final double sp = (sw / 390).clamp(0.85, 1.3);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FB),
-
       appBar: AppBar(
         elevation:       0,
         backgroundColor: Colors.transparent,
         centerTitle:     true,
-        title: const Text(
-          "My Profile",
-          style: TextStyle(
-            color:      Colors.black87,
-            fontWeight: FontWeight.bold,
+        title: const Text('My Profile',
+            style: TextStyle(
+                color: Color(0xFF111827),
+                fontWeight: FontWeight.w700,
+                fontSize: 18)),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: TextButton(
+              onPressed: _isDirty && !_isSaving ? _saveProfile : null,
+              child: Text('Save',
+                  style: TextStyle(
+                      color:      _isDirty ? Colors.indigo : Colors.grey,
+                      fontWeight: FontWeight.w700,
+                      fontSize:   15)),
+            ),
           ),
-        ),
+        ],
       ),
 
       body: Stack(
         children: [
-
-          // ── SCROLLABLE CONTENT ────────────────────
-
           SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: isTablet ? 28 : 16,
-                vertical:   16,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 850),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-
-                        // ── HEADER CARD ──────────────
-
-                        _buildHeaderCard(isTablet),
-
-                        const SizedBox(height: 24),
-
-                        // ── PERSONAL INFO ────────────
-
-                        _section(
-                          title: "Personal Information",
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      isTablet ? 28 : 16, 16,
+                      isTablet ? 28 : 16,
+                      40 + mq.viewPadding.bottom,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 850),
+                        child: Form(
+                          key: _formKey,
                           child: Column(
                             children: [
+                              _buildAvatarCard(isTablet, sp),
+                              const SizedBox(height: 24),
+                              _sectionCard(
+                                title: 'Personal Information',
+                                children: [
+                                  // First + Last name
+                                  isTablet
+                                      ? Row(children: [
+                                          Expanded(child: _field(
+                                            controller: _firstNameCtrl,
+                                            hint: 'First Name',
+                                            icon: Icons.person_outline,
+                                            sp: sp,
+                                            textCapitalization: TextCapitalization.words,
+                                            nextFocus: _lastNameFocus,
+                                            validator: _nameValidator,
+                                          )),
+                                          const SizedBox(width: 14),
+                                          Expanded(child: _field(
+                                            controller: _lastNameCtrl,
+                                            hint: 'Last Name',
+                                            icon: Icons.person,
+                                            sp: sp,
+                                            focusNode: _lastNameFocus,
+                                            nextFocus: _phoneFocus,
+                                            textCapitalization: TextCapitalization.words,
+                                            validator: _nameValidator,
+                                          )),
+                                        ])
+                                      : Column(children: [
+                                          _field(
+                                            controller: _firstNameCtrl,
+                                            hint: 'First Name',
+                                            icon: Icons.person_outline,
+                                            sp: sp,
+                                            textCapitalization: TextCapitalization.words,
+                                            nextFocus: _lastNameFocus,
+                                            validator: _nameValidator,
+                                          ),
+                                          _field(
+                                            controller: _lastNameCtrl,
+                                            hint: 'Last Name',
+                                            icon: Icons.person,
+                                            sp: sp,
+                                            focusNode: _lastNameFocus,
+                                            nextFocus: _phoneFocus,
+                                            textCapitalization: TextCapitalization.words,
+                                            validator: _nameValidator,
+                                          ),
+                                        ]),
 
-                              isTablet
-                                  ? Row(
-                                      children: [
-                                        Expanded(child: _field(firstNameController, "First Name", Icons.person)),
-                                        const SizedBox(width: 16),
-                                        Expanded(child: _field(lastNameController, "Last Name", Icons.person_outline)),
-                                      ],
-                                    )
-                                  : Column(
-                                      children: [
-                                        _field(firstNameController, "First Name", Icons.person),
-                                        _field(lastNameController,  "Last Name",  Icons.person_outline),
-                                      ],
+                                  // Email (read-only)
+                                  _field(
+                                    controller: _emailCtrl,
+                                    hint:     'Email',
+                                    icon:     Icons.email_outlined,
+                                    sp:       sp,
+                                    readOnly: true,
+                                    keyboard: TextInputType.emailAddress,
+                                  ),
+
+                                  // Phone
+                                  _field(
+                                    controller: _phoneCtrl,
+                                    hint:      'Phone Number',
+                                    icon:      Icons.phone_outlined,
+                                    sp:        sp,
+                                    focusNode: _phoneFocus,
+                                    nextFocus: _addressFocus,
+                                    keyboard:  TextInputType.phone,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      LengthLimitingTextInputFormatter(10),
+                                    ],
+                                    validator:  _phoneValidator,
+                                    prefixText: '+91 ',
+                                  ),
+
+                                  // Address — NOT required, auto-filled from map
+                                  _field(
+                                    controller:      _addressCtrl,
+                                    hint:            'Your Address',
+                                    icon:            Icons.location_on_outlined,
+                                    sp:              sp,
+                                    focusNode:       _addressFocus,
+                                    maxLines:        3,
+                                    required:        false,   // ✅ not compulsory
+                                    textInputAction: TextInputAction.done,
+                                  ),
+
+                                  // Map picker button
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      onPressed: _openMap,
+                                      icon:  const Icon(Icons.map_outlined, size: 16),
+                                      label: Text(
+                                        _addressCtrl.text.isEmpty
+                                            ? 'Pick address from map'
+                                            : 'Change address on map',
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.indigo,
+                                        side: BorderSide(color: Colors.indigo.shade200),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12)),
+                                        textStyle: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600),
+                                      ),
                                     ),
+                                  ),
+                                ],
+                              ),
 
-                              _field(emailController, "Email",        Icons.email,       readOnly: true),
-                              _field(phoneController, "Phone Number", Icons.phone,       keyboard: TextInputType.phone),
-                              _field(addressController, "Address",    Icons.location_on, maxLines: 3, required: false),
+                              const SizedBox(height: 24),
 
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton.icon(
-                                  onPressed: openMap,
-                                  icon:  const Icon(Icons.map),
-                                  label: const Text("Pick From Map"),
+                              // Save button
+                              SizedBox(
+                                width:  double.infinity,
+                                height: 54,
+                                child: ElevatedButton(
+                                  onPressed: (!_isDirty || _isSaving) ? null : _saveProfile,
+                                  style: ElevatedButton.styleFrom(
+                                    elevation:       0,
+                                    backgroundColor: Colors.indigo,
+                                    foregroundColor: Colors.white,
+                                    disabledBackgroundColor: Colors.indigo.withOpacity(0.4),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16)),
+                                  ),
+                                  child: _isSaving
+                                      ? const SizedBox(
+                                          width: 22, height: 22,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2.5, color: Colors.white))
+                                      : Text('Save Profile',
+                                          style: TextStyle(
+                                              fontSize:   15 * sp,
+                                              fontWeight: FontWeight.w700)),
+                                ),
+                              ),
+
+                              const SizedBox(height: 14),
+
+                              // Logout button
+                              SizedBox(
+                                width:  double.infinity,
+                                height: 54,
+                                child: OutlinedButton.icon(
+                                  onPressed: _logout,
+                                  icon:  const Icon(Icons.logout, size: 18),
+                                  label: Text('Log Out',
+                                      style: TextStyle(
+                                          fontSize:   15 * sp,
+                                          fontWeight: FontWeight.w700)),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                    side: BorderSide(color: Colors.red.shade200),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16)),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-
-                        const SizedBox(height: 28),
-
-                        // ── SAVE BUTTON ──────────────
-
-                        SizedBox(
-                          width:  double.infinity,
-                          height: 56,
-                          child: ElevatedButton.icon(
-                            onPressed: (isLoading || _isUploading)
-                                ? null
-                                : saveProfile,
-                            icon:  const Icon(Icons.save),
-                            label: const Text(
-                              "Save Profile",
-                              style: TextStyle(
-                                fontSize:   16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              elevation:       0,
-                              backgroundColor: Colors.indigo,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // ── LOGOUT BUTTON ────────────
-
-                        SizedBox(
-                          width:  double.infinity,
-                          height: 56,
-                          child: OutlinedButton.icon(
-                            onPressed: logout,
-                            icon:  const Icon(Icons.logout),
-                            label: const Text(
-                              "Logout",
-                              style: TextStyle(
-                                fontSize:   16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red,
-                              side: BorderSide(color: Colors.red.shade200),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 40),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ),
           ),
 
-          // ── LOADING OVERLAY ───────────────────────
-
-          if (isLoading)
+          // Upload overlay
+          if (_isUploading)
             Container(
-              color: Colors.black.withOpacity(0.25),
+              color: Colors.black.withOpacity(0.4),
               child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(color: Colors.white),
-                    if (_isUploading) ...[
+                child: Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Uploading photo…',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                       const SizedBox(height: 16),
-                      Text(
-                        "Uploading photo… "
-                        "${(_uploadProgress * 100).toStringAsFixed(0)}%",
-                        style: const TextStyle(
-                          color:      Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
                       SizedBox(
                         width: 200,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: LinearProgressIndicator(
                             value:           _uploadProgress,
-                            backgroundColor: Colors.white30,
-                            color:           Colors.white,
                             minHeight:       6,
+                            backgroundColor: Colors.grey.shade200,
+                            color:           Colors.indigo,
                           ),
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      Text('${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                              color: Colors.indigo, fontWeight: FontWeight.bold)),
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -583,181 +628,144 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // =====================================================
-  // HEADER CARD
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
+  // AVATAR CARD
+  // ─────────────────────────────────────────────────────────────
 
-  Widget _buildHeaderCard(bool isTablet) {
-    final double avatarRadius = isTablet ? 62 : 52;
-
+  Widget _buildAvatarCard(bool isTablet, double sp) {
+    final double r = isTablet ? 64 : 54;
     return Container(
       width:   double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF5B67F1), Color(0xFF7D89FF)],
-        ),
-        borderRadius: BorderRadius.circular(30),
+            colors: [Color(0xFF5B67F1), Color(0xFF7D89FF)]),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color:      Colors.indigo.withOpacity(0.2),
-            blurRadius: 18,
-            offset:     const Offset(0, 8),
-          ),
+              color:      Colors.indigo.withOpacity(0.22),
+              blurRadius: 20,
+              offset:     const Offset(0, 8)),
         ],
       ),
       child: Column(
         children: [
-
-          // ── AVATAR ────────────────────────────────
-
           Stack(
             clipBehavior: Clip.none,
             children: [
-
-              // White ring + avatar
               Container(
-                padding: const EdgeInsets.all(4),
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 3),
-                ),
+                    shape:  BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3)),
                 child: CircleAvatar(
-                  radius:          avatarRadius,
-                  backgroundImage: _buildImageProvider(),
+                  radius:          r,
+                  backgroundImage: _avatarImage(),
                   backgroundColor: const Color(0xFFEEF2FF),
                 ),
               ),
 
-              // Edit / upload spinner button
+              // Camera button
               Positioned(
-                bottom: 0,
-                right:  0,
+                bottom: 2, right: 2,
                 child: GestureDetector(
-                  onTap: (isLoading || _isUploading) ? null : pickImage,
+                  onTap: _isUploading ? null : _pickImage,
                   child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color:  Colors.white,
+                      shape:  BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF5B67F1), width: 2),
                     ),
                     child: _isUploading
                         ? SizedBox(
-                            width:  18,
-                            height: 18,
+                            width: 16, height: 16,
                             child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              value: _uploadProgress > 0
-                                  ? _uploadProgress
-                                  : null,
-                              color: Colors.indigo,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.camera_alt,
-                            size:  18,
-                            color: Colors.indigo,
-                          ),
+                                strokeWidth: 2,
+                                value: _uploadProgress > 0 ? _uploadProgress : null,
+                                color: Colors.indigo))
+                        : const Icon(Icons.camera_alt,
+                            size: 16, color: Colors.indigo),
                   ),
                 ),
               ),
 
-              // "New" badge — visible after picking but before saving
-              if (imageFile != null)
+              // "New" badge when local file picked
+              if (_imageFile != null)
                 Positioned(
-                  top:  0,
-                  left: 0,
+                  top: 0, left: 0,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
-                      color:        Colors.orange,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      "New",
-                      style: TextStyle(
-                        color:      Colors.white,
-                        fontSize:   10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                        color: Colors.orange,
+                        borderRadius: BorderRadius.circular(8)),
+                    child: const Text('New',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold)),
                   ),
                 ),
             ],
           ),
 
-          const SizedBox(height: 18),
-
-          // ── NAME ──────────────────────────────────
+          const SizedBox(height: 16),
 
           Text(
             () {
-              final n =
-                  "${firstNameController.text} ${lastNameController.text}"
-                      .trim();
-              return n.isEmpty ? "Your Name" : n;
+              final n = '${_firstNameCtrl.text} ${_lastNameCtrl.text}'.trim();
+              return n.isEmpty ? 'Your Name' : n;
             }(),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color:      Colors.white,
-              fontSize:   22,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 20 * sp,
+                fontWeight: FontWeight.w800),
           ),
 
-          const SizedBox(height: 6),
-
-          // ── PHONE OR EMAIL ────────────────────────
+          const SizedBox(height: 4),
 
           Text(
-            phoneController.text.isNotEmpty
-                ? phoneController.text
-                : emailController.text,
+            _emailCtrl.text.isNotEmpty ? _emailCtrl.text : 'email@example.com',
             style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
 
-          const SizedBox(height: 10),
-
-          // ── ACCOUNT TYPE BADGE ────────────────────
+          const SizedBox(height: 12),
 
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: BoxDecoration(
-              color:        Colors.white.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              _collection == "admins" ? "Admin Account" : "User Account",
-              style: const TextStyle(
-                color:      Colors.white,
-                fontSize:   12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+                color: Colors.white.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(20)),
+            child: const Text('User Account',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
           ),
         ],
       ),
     );
   }
 
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
   // SECTION CARD
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
 
-  Widget _section({required String title, required Widget child}) {
+  Widget _sectionCard({
+    required String title,
+    required List<Widget> children,
+  }) {
     return Container(
       width:   double.infinity,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color:        Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color:      Colors.black.withOpacity(0.05),
-            blurRadius: 14,
-            offset:     const Offset(0, 6),
-          ),
+              color:      Colors.black.withOpacity(0.05),
+              blurRadius: 14,
+              offset:     const Offset(0, 5)),
         ],
       ),
       child: Column(
@@ -765,71 +773,112 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Text(title,
               style: const TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 22),
-          child,
+                  fontSize: 17, fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827))),
+          const SizedBox(height: 18),
+          ...children,
         ],
       ),
     );
   }
 
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
   // FORM FIELD
-  // =====================================================
+  // ─────────────────────────────────────────────────────────────
 
-  Widget _field(
-    TextEditingController c,
-    String hint,
-    IconData icon, {
+  Widget _field({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    required double sp,
+    FocusNode? focusNode,
+    FocusNode? nextFocus,
     TextInputType keyboard = TextInputType.text,
+    TextInputAction textInputAction = TextInputAction.next,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
+    String? prefixText,
     int  maxLines = 1,
     bool required = true,
     bool readOnly = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
-        controller:  c,
-        keyboardType: keyboard,
-        maxLines:    maxLines,
-        readOnly:    readOnly,
-        validator: (v) {
-          if (required && (v == null || v.trim().isEmpty)) {
-            return "This field is required";
+        controller:         controller,
+        focusNode:          focusNode,
+        keyboardType:       keyboard,
+        textInputAction:    textInputAction,
+        textCapitalization: textCapitalization,
+        inputFormatters:    inputFormatters,
+        maxLines:           maxLines,
+        readOnly:           readOnly,
+        onFieldSubmitted: (_) {
+          if (nextFocus != null) {
+            FocusScope.of(context).requestFocus(nextFocus);
+          } else {
+            FocusScope.of(context).unfocus();
           }
-          return null;
         },
+        validator: validator ??
+            (required
+                ? (v) => (v == null || v.trim().isEmpty)
+                    ? '$hint is required'
+                    : null
+                : null),
+        autovalidateMode: AutovalidateMode.onUserInteraction,
         decoration: InputDecoration(
-          hintText:   hint,
-          prefixIcon: Icon(icon, color: Colors.indigo),
+          hintText:    hint,
+          hintStyle:   TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          prefixIcon:  Icon(icon, color: Colors.indigo, size: 20),
+          prefixText:  prefixText,
+          prefixStyle: const TextStyle(
+              color: Color(0xFF111827), fontWeight: FontWeight.w500),
           suffixIcon: readOnly
-              ? const Icon(Icons.lock_outline,
-                  size: 16, color: Colors.grey)
+              ? const Icon(Icons.lock_outline, size: 15, color: Colors.grey)
               : null,
           filled:    true,
-          fillColor: readOnly
-              ? const Color(0xFFEEEFF5)
-              : const Color(0xFFF7F8FC),
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 18, vertical: 18),
+          fillColor: readOnly ? const Color(0xFFF0F0F6) : const Color(0xFFF7F8FC),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide:  BorderSide(color: Colors.grey.shade200),
-          ),
+              borderRadius: BorderRadius.circular(14),
+              borderSide:  BorderSide(color: Colors.grey.shade200)),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide:  const BorderSide(color: Colors.indigo, width: 1.3),
-          ),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Colors.indigo, width: 1.4)),
           errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide:  const BorderSide(color: Colors.red),
-          ),
+              borderRadius: BorderRadius.circular(14),
+              borderSide:  BorderSide(color: Colors.red.shade400)),
           focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide:  const BorderSide(color: Colors.red, width: 1.3),
-          ),
+              borderRadius: BorderRadius.circular(14),
+              borderSide:  BorderSide(color: Colors.red.shade400, width: 1.4)),
         ),
       ),
     );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // VALIDATORS
+  // ─────────────────────────────────────────────────────────────
+
+  String? _nameValidator(String? v) {
+    if (v == null || v.trim().isEmpty) return 'This field is required';
+    if (v.trim().length < 2)           return 'Must be at least 2 characters';
+    if (v.trim().length > 30)          return 'Must be under 30 characters';
+    if (!RegExp(r"^[a-zA-Z\s\-']+$").hasMatch(v.trim()))
+      return 'Only letters, hyphens, and apostrophes allowed';
+    return null;
+  }
+
+  String? _phoneValidator(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Phone number is required';
+    final digits = v.replaceAll(RegExp(r'\D'), '');
+    if (digits.length != 10)    return 'Enter a valid 10-digit phone number';
+    if (digits.startsWith('0')) return 'Phone number cannot start with 0';
+    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(digits))
+      return 'Enter a valid Indian mobile number';
+    return null;
   }
 }

@@ -28,11 +28,38 @@ class _AccountPageState extends State<AccountPage> {
   // STATE
   // =====================================================
 
-  String userName     = "CallMe User";
-  String userPhone    = "";
-  String userEmail    = "";
-  String profileImage = "";
+  String userName     = 'CallMe User';
+  String userPhone    = '';
+  String userEmail    = '';
+  String profileImage = '';
   bool   isLoading    = true;
+
+  // =====================================================
+  // TIME-BASED GREETING
+  // =====================================================
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour >= 5  && hour < 12) return 'Good Morning';
+    if (hour >= 12 && hour < 17) return 'Good Afternoon';
+    if (hour >= 17 && hour < 21) return 'Good Evening';
+    return 'Good Night';
+  }
+
+  String get _greetingEmoji {
+    final hour = DateTime.now().hour;
+    if (hour >= 5  && hour < 12) return '☀️';
+    if (hour >= 12 && hour < 17) return '👋';
+    if (hour >= 17 && hour < 21) return '🌇';
+    return '🌙';
+  }
+
+  // first name only for greeting (e.g. "Good Morning, Raj")
+  String get _firstName {
+    final name = userName.trim();
+    if (name.isEmpty || name == 'CallMe User') return '';
+    return name.split(' ').first;
+  }
 
   // =====================================================
   // INIT
@@ -45,9 +72,7 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   // =====================================================
-  // FETCH USER DATA
-  // Reads from "users" collection keyed by email.
-  // Falls back to Firebase Auth fields if doc missing.
+  // FETCH USER DATA  (doc ID = UID)
   // =====================================================
 
   Future<void> fetchUserData() async {
@@ -59,24 +84,9 @@ class _AccountPageState extends State<AccountPage> {
         return;
       }
 
-      final email = (user.email ?? "").trim().toLowerCase();
-
-      if (email.isEmpty) {
-        if (mounted) {
-          setState(() {
-            userName     = user.displayName ?? "CallMe User";
-            userPhone    = user.phoneNumber ?? "";
-            userEmail    = user.email       ?? "";
-            profileImage = user.photoURL    ?? "";
-            isLoading    = false;
-          });
-        }
-        return;
-      }
-
       final doc = await FirebaseFirestore.instance
-          .collection("users")
-          .doc(email)
+          .collection('users')
+          .doc((user.email ?? '').trim().toLowerCase())
           .get();
 
       if (!mounted) return;
@@ -84,41 +94,41 @@ class _AccountPageState extends State<AccountPage> {
       if (doc.exists) {
         final data = doc.data()!;
         setState(() {
-          userName     = (data["name"]?.toString()  ?? "").isNotEmpty
-              ? data["name"].toString()
-              : (user.displayName ?? "CallMe User");
+          userName = (data['name']?.toString() ?? '').isNotEmpty
+              ? data['name'].toString()
+              : (user.displayName ?? 'CallMe User');
 
-          userPhone    = (data["phone"]?.toString() ?? "").isNotEmpty
-              ? data["phone"].toString()
-              : (user.phoneNumber ?? "");
+          userPhone = (data['phone']?.toString() ?? '').isNotEmpty
+              ? data['phone'].toString()
+              : (user.phoneNumber ?? '');
 
-          userEmail    = (data["email"]?.toString() ?? "").isNotEmpty
-              ? data["email"].toString()
-              : (user.email ?? "");
+          userEmail = (data['email']?.toString() ?? '').isNotEmpty
+              ? data['email'].toString()
+              : (user.email ?? '');
 
-          profileImage = (data["photo"]?.toString() ?? "").isNotEmpty
-              ? data["photo"].toString()
-              : (user.photoURL ?? "");
+          profileImage = (data['photo']?.toString() ?? '').isNotEmpty
+              ? data['photo'].toString()
+              : (user.photoURL ?? '');
 
           isLoading = false;
         });
       } else {
         setState(() {
-          userName     = user.displayName ?? "CallMe User";
-          userPhone    = user.phoneNumber ?? "";
-          userEmail    = user.email       ?? "";
-          profileImage = user.photoURL    ?? "";
+          userName     = user.displayName ?? 'CallMe User';
+          userPhone    = user.phoneNumber ?? '';
+          userEmail    = user.email       ?? '';
+          profileImage = user.photoURL    ?? '';
           isLoading    = false;
         });
       }
     } catch (e) {
-      debugPrint("FETCH USER ERROR: $e");
+      debugPrint('FETCH USER ERROR: $e');
       if (mounted) setState(() => isLoading = false);
     }
   }
 
   // =====================================================
-  // REFRESH — called when returning from ProfilePage
+  // REFRESH
   // =====================================================
 
   Future<void> refreshUserData() async {
@@ -140,6 +150,29 @@ class _AccountPageState extends State<AccountPage> {
   // =====================================================
 
   Future<void> logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: const Text('Log out?'),
+        content: const Text('You will be signed out of your account.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Log out',
+                style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
     try {
       await _authService.logout();
       if (!mounted) return;
@@ -151,30 +184,40 @@ class _AccountPageState extends State<AccountPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Logout failed: $e")),
+        SnackBar(
+          content: Text('Logout failed: $e'),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+        ),
       );
     }
   }
 
   // =====================================================
-  // UI
+  // BUILD
   // =====================================================
 
   @override
   Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final sw = mq.size.width;
+    final double sp = sw / 390;
+
     return Scaffold(
-      backgroundColor: const Color(0xffF4F7FC),
+      backgroundColor: const Color(0xFFF4F7FC),
 
       appBar: AppBar(
-        elevation: 0,
-        centerTitle: true,
-        backgroundColor: const Color(0xffF4F7FC),
+        elevation:       0,
+        centerTitle:     true,
+        backgroundColor: const Color(0xFFF4F7FC),
         title: const Text(
-          "My Account",
+          'My Account',
           style: TextStyle(
-            color: Colors.black87,
+            color:      Colors.black87,
             fontWeight: FontWeight.bold,
-            fontSize: 22,
+            fontSize:   22,
           ),
         ),
       ),
@@ -183,156 +226,42 @@ class _AccountPageState extends State<AccountPage> {
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(18),
+                padding: EdgeInsets.fromLTRB(
+                  18, 12, 18, 24 + mq.viewPadding.bottom,
+                ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
 
                     // ── PROFILE CARD ─────────────────────
-
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xff4A6CF7), Color(0xff6F8CFF)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(32),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.blue.withOpacity(0.18),
-                            blurRadius: 25,
-                            offset: const Offset(0, 12),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-
-                          // ── AVATAR ──────────────────────
-                          _buildAvatar(),
-
-                          const SizedBox(width: 18),
-
-                          // ── USER INFO ───────────────────
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.16),
-                                    borderRadius: BorderRadius.circular(30),
-                                  ),
-                                  child: const Text(
-                                    "Welcome Back 👋",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(height: 14),
-
-                                Text(
-                                  userName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-
-                                if (userPhone.isNotEmpty) ...[
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.phone_rounded,
-                                          color: Colors.white70, size: 15),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          userPhone,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-
-                                if (userEmail.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.email_rounded,
-                                          color: Colors.white70, size: 15),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          userEmail,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildProfileCard(sp),
 
                     const SizedBox(height: 32),
 
                     // ── SECTION TITLE ─────────────────────
-
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        "Account Settings",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
+                    const Text(
+                      'Account Settings',
+                      style: TextStyle(
+                        fontSize:   20,
+                        fontWeight: FontWeight.bold,
+                        color:      Colors.black87,
                       ),
                     ),
 
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
 
                     // ── TILES ─────────────────────────────
-
                     _buildTile(
-                      title: "Profile",
-                      subtitle: "Manage personal details",
-                      icon: Icons.person_outline,
-                      color: Colors.blue,
+                      title:    'Profile',
+                      subtitle: 'Manage personal details',
+                      icon:     Icons.person_outline,
+                      color:    Colors.blue,
                       onTap: () async {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => ProfilePage(phone: userPhone),
+                            builder: (_) =>
+                                ProfilePage(phone: userPhone),
                           ),
                         );
                         await refreshUserData();
@@ -340,76 +269,74 @@ class _AccountPageState extends State<AccountPage> {
                     ),
 
                     _buildTile(
-                      title: "About Us",
-                      subtitle: "Know more about CallMe",
-                      icon: Icons.info_outline,
-                      color: Colors.orange,
+                      title:    'About Us',
+                      subtitle: 'Know more about CallMe',
+                      icon:     Icons.info_outline,
+                      color:    Colors.orange,
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const AboutPage()),
+                        MaterialPageRoute(
+                            builder: (_) => const AboutPage()),
                       ),
                     ),
 
                     _buildTile(
-                      title: "Contact Us",
-                      subtitle: "Reach our support team",
-                      icon: Icons.support_agent,
-                      color: Colors.green,
+                      title:    'Contact Us',
+                      subtitle: 'Reach our support team',
+                      icon:     Icons.support_agent,
+                      color:    Colors.green,
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const ContactUsPage()),
+                        MaterialPageRoute(
+                            builder: (_) => const ContactUsPage()),
                       ),
                     ),
 
                     _buildTile(
-                      title: "Feedback",
-                      subtitle: "Share your experience",
-                      icon: Icons.feedback_outlined,
-                      color: Colors.purple,
+                      title:    'Feedback',
+                      subtitle: 'Share your experience',
+                      icon:     Icons.feedback_outlined,
+                      color:    Colors.purple,
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const FeedbackPage()),
+                        MaterialPageRoute(
+                            builder: (_) => const FeedbackPage()),
                       ),
                     ),
 
                     _buildTile(
-                      title: "Privacy Policy",
-                      subtitle: "Read our policies",
-                      icon: Icons.privacy_tip_outlined,
-                      color: Colors.red,
-                      onTap: openPrivacyPolicy,
+                      title:    'Privacy Policy',
+                      subtitle: 'Read our policies',
+                      icon:     Icons.privacy_tip_outlined,
+                      color:    Colors.red,
+                      onTap:    openPrivacyPolicy,
                     ),
 
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 28),
 
                     // ── LOGOUT ────────────────────────────
-
                     SizedBox(
-                      width: double.infinity,
-                      height: 58,
-                      child: ElevatedButton.icon(
+                      width:  double.infinity,
+                      height: 54,
+                      child: OutlinedButton.icon(
                         onPressed: logout,
-                        icon: const Icon(Icons.logout_rounded,
-                            color: Colors.white),
+                        icon: const Icon(Icons.logout_rounded, size: 18),
                         label: const Text(
-                          "Logout",
+                          'Log Out',
                           style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            fontSize:   15,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          elevation: 0,
-                          backgroundColor: const Color(0xff4A6CF7),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: BorderSide(color: Colors.red.shade200),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -418,53 +345,196 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   // =====================================================
-  // AVATAR BUILDER
-  // Properly clipped CircleAvatar — handles network
-  // image with loading/error states, falls back to
-  // initials when no photo is set.
+  // PROFILE CARD  with time-based greeting
+  // =====================================================
+
+  Widget _buildProfileCard(double sp) {
+    return Container(
+      width:   double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4A6CF7), Color(0xFF6F8CFF)],
+          begin:  Alignment.topLeft,
+          end:    Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color:      Colors.blue.withOpacity(0.2),
+            blurRadius: 24,
+            offset:     const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+
+          // ── AVATAR ──────────────────────────────────
+          _buildAvatar(),
+
+          const SizedBox(width: 18),
+
+          // ── TEXT ────────────────────────────────────
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                // Greeting pill
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color:        Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _greetingEmoji,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _greeting,
+                        style: const TextStyle(
+                          color:      Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize:   13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Name (first name only in large, rest smaller)
+                RichText(
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    children: _firstName.isNotEmpty
+                        ? [
+                            TextSpan(
+                              text: '$_firstName\n',
+                              style: TextStyle(
+                                color:      Colors.white,
+                                fontSize:   22 * sp,
+                                fontWeight: FontWeight.w800,
+                                height:     1.2,
+                              ),
+                            ),
+                            // last name / rest of name smaller
+                            if (userName.trim().split(' ').length > 1)
+                              TextSpan(
+                                text: userName
+                                    .trim()
+                                    .split(' ')
+                                    .skip(1)
+                                    .join(' '),
+                                style: TextStyle(
+                                  color:      Colors.white70,
+                                  fontSize:   14 * sp,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                          ]
+                        : [
+                            TextSpan(
+                              text: userName,
+                              style: TextStyle(
+                                color:      Colors.white,
+                                fontSize:   20 * sp,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // Phone
+                if (userPhone.isNotEmpty)
+                  _infoRow(Icons.phone_rounded, userPhone),
+
+                if (userPhone.isNotEmpty && userEmail.isNotEmpty)
+                  const SizedBox(height: 5),
+
+                // Email
+                if (userEmail.isNotEmpty)
+                  _infoRow(Icons.email_rounded, userEmail),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white60, size: 14),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // =====================================================
+  // AVATAR
   // =====================================================
 
   Widget _buildAvatar() {
     return ClipOval(
       child: Container(
-        width: 84,
-        height: 84,
-        color: const Color(0xFFEEF2FF),
+        width:  80,
+        height: 80,
+        color:  const Color(0xFFEEF2FF),
         child: profileImage.isNotEmpty
             ? Image.network(
                 profileImage,
-                width: 84,
-                height: 84,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, progress) {
+                width:  80,
+                height: 80,
+                fit:    BoxFit.cover,
+                loadingBuilder: (_, child, progress) {
                   if (progress == null) return child;
                   return const Center(
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Color(0xff4A6CF7),
+                      color: Color(0xFF4A6CF7),
                     ),
                   );
                 },
-                errorBuilder: (context, error, stackTrace) {
-                  return _buildInitialsAvatar();
-                },
+                errorBuilder: (_, __, ___) => _initialsAvatar(),
               )
-            : _buildInitialsAvatar(),
+            : _initialsAvatar(),
       ),
     );
   }
 
-  Widget _buildInitialsAvatar() {
-    final String initial =
-        userName.trim().isNotEmpty ? userName.trim()[0].toUpperCase() : "U";
-
+  Widget _initialsAvatar() {
+    final initial = userName.trim().isNotEmpty
+        ? userName.trim()[0].toUpperCase()
+        : 'U';
     return Center(
       child: Text(
         initial,
         style: const TextStyle(
-          fontSize: 34,
+          fontSize:   32,
           fontWeight: FontWeight.bold,
-          color: Color(0xff4A6CF7),
+          color:      Color(0xFF4A6CF7),
         ),
       ),
     );
@@ -482,20 +552,20 @@ class _AccountPageState extends State<AccountPage> {
     required VoidCallback onTap,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        onTap:        onTap,
         child: Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color:        Colors.white,
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color:      Colors.black.withOpacity(0.04),
                 blurRadius: 12,
-                offset: const Offset(0, 5),
+                offset:     const Offset(0, 4),
               ),
             ],
           ),
@@ -503,13 +573,13 @@ class _AccountPageState extends State<AccountPage> {
             children: [
 
               Container(
-                height: 56,
-                width: 56,
+                width:  52,
+                height: 52,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(18),
+                  color:        color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(icon, color: color, size: 26),
+                child: Icon(icon, color: color, size: 24),
               ),
 
               const SizedBox(width: 16),
@@ -521,18 +591,18 @@ class _AccountPageState extends State<AccountPage> {
                     Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        fontSize:   15,
+                        fontWeight: FontWeight.w700,
+                        color:      Color(0xFF111827),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                        height: 1.4,
+                        fontSize: 12.5,
+                        color:    Colors.grey.shade500,
+                        height:   1.4,
                       ),
                     ),
                   ],
@@ -540,15 +610,15 @@ class _AccountPageState extends State<AccountPage> {
               ),
 
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.arrow_forward_ios_rounded,
-                  size: 14,
-                  color: Colors.black54,
+                  size:  13,
+                  color: Colors.black45,
                 ),
               ),
             ],

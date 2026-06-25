@@ -13,101 +13,108 @@ class EducationServiceCard extends StatelessWidget {
     required this.onUpdate,
   });
 
-  double getRating() {
-    return 4.0 + (service.id.hashCode % 10) / 10;
-  }
-
-  Color getButtonColor(String category) {
+  Color _accentColor(String category) {
     final cat = category.toLowerCase();
-
-    if (cat.contains("beauty")) {
-      return const Color(0xFFE91E63);
-    }
-
+    if (cat.contains("beauty")) return const Color(0xFFE91E63);
     if (cat.contains("network") ||
         cat.contains("data") ||
-        cat.contains("software")) {
-      return Colors.blue;
-    }
-
+        cat.contains("software")) return const Color(0xFF2563EB);
     return const Color(0xFFAE91BA);
   }
 
   @override
   Widget build(BuildContext context) {
+    final accent = _accentColor(service.category);
+    final mq = MediaQuery.of(context);
+    final sw = mq.size.width;
+    final sh = mq.size.height;
+
+    // Adaptive scaling — base 390w, 844h
+    final double wScale = (sw / 390).clamp(0.75, 1.3);
+    final double hScale = (sh / 844).clamp(0.75, 1.3);
+
+    // Adaptive image height: ~21% of screen height, clamped
+    final double imageHeight = (sh * 0.21).clamp(140.0, 220.0);
+
+    // Adaptive font sizes
+    final double titleSize = (15 * wScale).clamp(13.0, 18.0);
+    final double descSize = (12.5 * wScale).clamp(11.0, 15.0);
+    final double btnFontSize = (13 * wScale).clamp(11.5, 15.0);
+    final double chipFontSize = (10 * wScale).clamp(9.0, 12.0);
+    final double badgeFontSize = (11 * wScale).clamp(9.5, 13.0);
+
+    // Adaptive button height
+    final double btnHeight = (42 * hScale).clamp(38.0, 52.0);
+
+    // Adaptive padding
+    final double cardPadding = (14 * wScale).clamp(10.0, 18.0);
+    final double contentGap = (5 * hScale).clamp(4.0, 8.0);
+    final double sectionGap = (14 * hScale).clamp(10.0, 20.0);
+
     return Container(
-      margin: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 8,
+      margin: EdgeInsets.symmetric(
+        horizontal: (12 * wScale).clamp(8.0, 16.0),
+        vertical: (8 * hScale).clamp(6.0, 12.0),
       ),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular((20 * wScale).clamp(14.0, 26.0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min, // ✅ prevents unbounded height overflow
         children: [
 
-          /// 🔥 IMAGE SECTION
+          // ── IMAGE ────────────────────────────────────────────────────
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(18),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular((20 * wScale).clamp(14.0, 26.0)),
             ),
-            child: Container(
-              height: 190,
+            child: SizedBox(
+              height: imageHeight,
               width: double.infinity,
-              color: Colors.grey.shade100,
               child: Stack(
+                fit: StackFit.expand,
                 children: [
 
-                  /// 🔥 BLURRED BACKGROUND IMAGE
-                  Positioned.fill(
-                    child: Opacity(
-                      opacity: 0.18,
-                      child: Image.asset(
-                        service.image,
-                        fit: BoxFit.cover,
+                  // Blurred bg
+                  Opacity(
+                    opacity: 0.18,
+                    child: Image.asset(service.image, fit: BoxFit.cover),
+                  ),
+
+                  // Main image contained
+                  Padding(
+                    padding: EdgeInsets.all((10 * wScale).clamp(6.0, 14.0)),
+                    child: Image.asset(
+                      service.image,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Center(
+                        child: Icon(
+                          Icons.image_not_supported,
+                          size: (40 * wScale).clamp(28.0, 52.0),
+                          color: Colors.grey.shade400,
+                        ),
                       ),
                     ),
                   ),
 
-                  /// 🔥 MAIN IMAGE
+                  // Bottom gradient
                   Positioned.fill(
-                    child: Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: Image.asset(
-                        service.image,
-                        fit: BoxFit.contain,
-                        alignment: Alignment.center,
-                        errorBuilder: (_, __, ___) {
-                          return Center(
-                            child: Icon(
-                              Icons.image_not_supported,
-                              size: 45,
-                              color: Colors.grey.shade400,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-
-                  /// 🔥 GRADIENT OVERLAY
-                  Positioned.fill(
-                    child: Container(
+                    child: DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
                           colors: [
-                            Colors.black.withOpacity(0.35),
+                            Colors.black.withOpacity(0.38),
                             Colors.transparent,
                           ],
                         ),
@@ -115,33 +122,58 @@ class EducationServiceCard extends StatelessWidget {
                     ),
                   ),
 
-                  /// ⏱ DURATION BADGE
+                  // Category chip — top left
                   Positioned(
-                    bottom: 12,
-                    right: 12,
+                    top: (10 * hScale).clamp(6.0, 14.0),
+                    left: (10 * wScale).clamp(6.0, 14.0),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: (10 * wScale).clamp(7.0, 14.0),
+                        vertical: (4 * hScale).clamp(3.0, 6.0),
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black87,
+                        color: accent.withOpacity(0.88),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        service.category,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: chipFontSize,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Duration badge — bottom right
+                  Positioned(
+                    bottom: (10 * hScale).clamp(6.0, 14.0),
+                    right: (10 * wScale).clamp(6.0, 14.0),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: (9 * wScale).clamp(6.0, 12.0),
+                        vertical: (4 * hScale).clamp(3.0, 6.0),
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.72),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
-                            Icons.access_time,
-                            size: 12,
+                          Icon(
+                            Icons.schedule,
+                            size: (11 * wScale).clamp(9.0, 14.0),
                             color: Colors.white,
                           ),
-                          const SizedBox(width: 4),
+                          SizedBox(width: (4 * wScale).clamp(2.0, 6.0)),
                           Text(
                             service.duration,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
-                              fontSize: 11,
+                              fontSize: badgeFontSize,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -154,156 +186,139 @@ class EducationServiceCard extends StatelessWidget {
             ),
           ),
 
-          /// 📄 CONTENT SECTION
+          // ── CONTENT ──────────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 12,
+            padding: EdgeInsets.fromLTRB(
+              cardPadding,
+              cardPadding,
+              cardPadding,
+              cardPadding,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, // ✅ no overflow in column
               children: [
 
-                /// TITLE
+                // Course name
                 Text(
                   service.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                  style: TextStyle(
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF111827),
+                    letterSpacing: -0.2,
                   ),
                 ),
 
-                const SizedBox(height: 5),
+                SizedBox(height: contentGap),
 
-                /// DESCRIPTION
+                // Description
                 Text(
                   service.description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: descSize,
                     color: Colors.grey.shade600,
-                    height: 1.4,
+                    height: 1.45,
                   ),
                 ),
 
-                const SizedBox(height: 10),
+                SizedBox(height: sectionGap),
 
-                /// RATING + PRICE
-                Row(
-                  children: [
+                // ── BUTTONS ──────────────────────────────────────────
+                IntrinsicHeight( // ✅ keeps both buttons same height safely
+                  child: Row(
+                    children: [
 
-                    const Icon(
-                      Icons.star,
-                      size: 15,
-                      color: Colors.orange,
-                    ),
-
-                    const SizedBox(width: 4),
-
-                    Text(
-                      getRating().toStringAsFixed(1),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-
-                    const Spacer(),
-
-                    Text(
-                      "₹${service.finalPrice}",
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 14),
-
-                /// BUTTONS
-                Row(
-                  children: [
-
-                    /// VIEW BUTTON
-                    Expanded(
-                      child: SizedBox(
-                        height: 40,
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(
-                              color: Colors.grey.shade400,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    EducationDetailPage(
-                                  service: service,
+                      // View Details
+                      Expanded(
+                        child: SizedBox(
+                          height: btnHeight,
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: Colors.grey.shade300),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  (12 * wScale).clamp(8.0, 16.0),
                                 ),
                               ),
-                            );
-                          },
-                          child: const Text(
-                            "View",
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w600,
+                              padding: EdgeInsets.zero,
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      EducationDetailPage(service: service),
+                                ),
+                              );
+                            },
+                            child: Text(
+                              "View",
+                              style: TextStyle(
+                                fontSize: btnFontSize,
+                                color: const Color(0xFF374151),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
 
-                    const SizedBox(width: 10),
+                      SizedBox(width: (10 * wScale).clamp(6.0, 14.0)),
 
-                    /// ENQUIRY BUTTON
-                    Expanded(
-                      child: SizedBox(
-                        height: 40,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            elevation: 0,
-                            backgroundColor:
-                                getButtonColor(service.category),
-                            shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(12),
+                      // Enquiry
+                      Expanded(
+                        child: SizedBox(
+                          height: btnHeight,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              elevation: 0,
+                              backgroundColor: accent,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  (12 * wScale).clamp(8.0, 16.0),
+                                ),
+                              ),
+                              padding: EdgeInsets.zero,
                             ),
-                          ),
-                          onPressed: () {
-                            Cart.addEducation(
-                              id: service.id,
-                              name: service.name,
-                              price: service.finalPrice,
-                              category: service.category,
-                              image: service.image,
-                            );
-
-                            onUpdate();
-                          },
-                          child: const Text(
-                            "Enquiry",
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                            onPressed: () {
+                              Cart.addEducation(
+                                id: service.id,
+                                name: service.name,
+                                price: 0,
+                                category: service.category,
+                                image: service.image,
+                              );
+                              onUpdate();
+                            },
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.send_outlined,
+                                  size: (14 * wScale).clamp(11.0, 18.0),
+                                ),
+                                SizedBox(width: (5 * wScale).clamp(3.0, 8.0)),
+                                Text(
+                                  "Enquiry",
+                                  style: TextStyle(
+                                    fontSize: btnFontSize,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),

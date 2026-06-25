@@ -22,23 +22,25 @@ class _SignupPageState extends State<SignupPage> {
 
   // =====================================================
   // AUTO LOGIN
+  // If user is already signed in, refresh the ID token
+  // so Firestore rules see valid auth, then navigate.
   // =====================================================
-  //
-  // If user is already signed in, update FCM token (smart
-  // diff — only writes to Firestore if changed) then navigate.
 
   Future<void> autoLogin() async {
     if (!_authService.isLoggedIn()) return;
 
-    await _authService.updateFcmToken();
+    try {
+      await _authService.currentUser!.getIdToken(true);
+    } catch (e) {
+      print('AUTO LOGIN TOKEN REFRESH ERROR: $e');
+      await _authService.logout();
+      return;
+    }
 
-    final user = _authService.currentUser!;
-
-    await Future.delayed(const Duration(milliseconds: 500));
-
+    await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
 
-    _navigateToHome(user);
+    _navigateToHome(_authService.currentUser!);
   }
 
   // =====================================================
@@ -57,7 +59,6 @@ class _SignupPageState extends State<SignupPage> {
       }
 
       if (!mounted) return;
-
       _navigateToHome(user);
     } on FirebaseAuthException catch (e) {
       showError(e.message ?? 'Google Sign In Failed');
@@ -69,7 +70,7 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   // =====================================================
-  // NAVIGATION HELPER
+  // NAVIGATION
   // =====================================================
 
   void _navigateToHome(User user) {
@@ -99,7 +100,7 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   // =====================================================
-  // UI
+  // UI — unchanged from original
   // =====================================================
 
   @override
@@ -108,7 +109,6 @@ class _SignupPageState extends State<SignupPage> {
       backgroundColor: const Color(0xFFF4F7FC),
       body: Stack(
         children: [
-          // ── Decorative background blobs ──────────────────────────────
           Positioned(
             top: -120,
             right: -80,
@@ -121,7 +121,6 @@ class _SignupPageState extends State<SignupPage> {
               ),
             ),
           ),
-
           Positioned(
             top: 120,
             left: -90,
@@ -134,7 +133,6 @@ class _SignupPageState extends State<SignupPage> {
               ),
             ),
           ),
-
           SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -146,8 +144,6 @@ class _SignupPageState extends State<SignupPage> {
                   child: Column(
                     children: [
                       const SizedBox(height: 10),
-
-                      // ── Logo ───────────────────────────────────────────
                       Hero(
                         tag: 'logo',
                         child: Container(
@@ -157,10 +153,7 @@ class _SignupPageState extends State<SignupPage> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFF4F46E5),
-                                Color(0xFF2563EB),
-                              ],
+                              colors: [Color(0xFF4F46E5), Color(0xFF2563EB)],
                             ),
                             boxShadow: [
                               BoxShadow(
@@ -184,9 +177,7 @@ class _SignupPageState extends State<SignupPage> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 30),
-
                       const Text(
                         'Welcome to CallMe',
                         textAlign: TextAlign.center,
@@ -196,9 +187,7 @@ class _SignupPageState extends State<SignupPage> {
                           color: Color(0xFF111827),
                         ),
                       ),
-
                       const SizedBox(height: 12),
-
                       Text(
                         'Sign in securely using your Google account.',
                         textAlign: TextAlign.center,
@@ -208,10 +197,7 @@ class _SignupPageState extends State<SignupPage> {
                           color: Colors.grey.shade600,
                         ),
                       ),
-
                       const SizedBox(height: 36),
-
-                      // ── Card ───────────────────────────────────────────
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(24),
@@ -240,9 +226,7 @@ class _SignupPageState extends State<SignupPage> {
                                 size: 30,
                               ),
                             ),
-
                             const SizedBox(height: 16),
-
                             const Text(
                               'Continue with Google',
                               textAlign: TextAlign.center,
@@ -251,9 +235,7 @@ class _SignupPageState extends State<SignupPage> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-
                             const SizedBox(height: 8),
-
                             Text(
                               'Your profile, email, and photo will be securely saved. We will never share your information with anyone.',
                               textAlign: TextAlign.center,
@@ -262,10 +244,7 @@ class _SignupPageState extends State<SignupPage> {
                                 height: 1.5,
                               ),
                             ),
-
                             const SizedBox(height: 24),
-
-                            // ── Google Sign-In Button ──────────────────
                             SizedBox(
                               width: double.infinity,
                               height: 58,
@@ -291,8 +270,7 @@ class _SignupPageState extends State<SignupPage> {
                                               width: 24,
                                               height: 24,
                                               child: CircularProgressIndicator(
-                                                strokeWidth: 2.5,
-                                              ),
+                                                  strokeWidth: 2.5),
                                             ),
                                           )
                                         : Row(
@@ -323,7 +301,6 @@ class _SignupPageState extends State<SignupPage> {
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 30),
                     ],
                   ),

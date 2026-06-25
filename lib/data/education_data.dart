@@ -14,9 +14,6 @@ class EducationService {
   final String tools;
   final String duration;
 
-  final int price;
-  final int discount;
-  final int finalPrice;
 
   final String warranty;
 
@@ -31,9 +28,7 @@ class EducationService {
     required this.steps,
     required this.tools,
     required this.duration,
-    required this.price,
-    required this.discount,
-    required this.finalPrice,
+   
     required this.warranty,
   });
 
@@ -74,9 +69,6 @@ final List<EducationService> educationServices = [
     tools: "Books, Worksheets, Activity Kits",
     duration: "1 Year (April–March)",
 
-    price: 35000,
-    discount: 20,
-    finalPrice: 28000,
 
     warranty: "Academic support throughout course",
   ),
@@ -110,9 +102,7 @@ final List<EducationService> educationServices = [
     tools: "Notes, Practice Papers, Digital Content",
     duration: "1 Year",
 
-    price: 40000,
-    discount: 20,
-    finalPrice: 32000,
+
 
     warranty: "Full academic year support",
   ),
@@ -146,10 +136,6 @@ final List<EducationService> educationServices = [
     tools: "Previous Papers, Test Series, Notes",
     duration: "1 Year",
 
-    price: 60000,
-    discount: 20,
-    finalPrice: 48000,
-
     warranty: "Support till board exams",
   ),
 
@@ -182,9 +168,6 @@ final List<EducationService> educationServices = [
     tools: "Reference Books, Test Series, Notes",
     duration: "1–2 Years",
 
-    price: 100000,
-    discount: 20,
-    finalPrice: 80000,
 
     warranty: "Full course academic support",
   ),
@@ -207,9 +190,7 @@ final List<EducationService> educationServices = [
     tools: "MS Office",
     duration: "2–4 Months",
 
-    price: 6000,
-    discount: 10,
-    finalPrice: 5400,
+   
 
     warranty: "Certificate support",
   ),
@@ -231,9 +212,6 @@ final List<EducationService> educationServices = [
     tools: "MS Office",
     duration: "3–6 Months",
 
-    price: 6200,
-    discount: 5,
-    finalPrice: 5900,
 
     warranty: "Certification",
   ),
@@ -255,10 +233,6 @@ final List<EducationService> educationServices = [
     tools: "MS Office",
     duration: "4–8 Months",
 
-    price: 30000,
-    discount: 20,
-    finalPrice: 24000,
-
     warranty: "Skill support",
   ),
 
@@ -279,9 +253,7 @@ final List<EducationService> educationServices = [
     tools: "MS Office",
     duration: "3–6 Months",
 
-    price: 25000,
-    discount: 20,
-    finalPrice: 20000,
+  
 
     warranty: "Job guidance",
   ),
@@ -321,10 +293,7 @@ EducationService(
   tools: "Computer Lab, Notes, Practice Files",
   duration: "3 Months",
 
-  price: 12000,
-  discount: 2000,
-  finalPrice: 10000,
-
+  
   warranty: "Basic Computer & Software Skills",
 ),
 EducationService(
@@ -360,9 +329,6 @@ EducationService(
   tools: "Code Editor, IDEs, Project Work",
   duration: "6 Months",
 
-  price: 30000,
-  discount: 5000,
-  finalPrice: 25000,
 
   warranty: "Job Assistance & Interview Preparation",
 ),
@@ -386,9 +352,7 @@ EducationService(
     tools: "Excel, Python",
     duration: "2–4 Months",
 
-    price: 50000,
-    discount: 40,
-    finalPrice: 30000,
+    
 
     warranty: "Basic training support",
   ),
@@ -412,9 +376,7 @@ EducationService(
     tools: "Python, SQL",
     duration: "3–6 Months",
 
-    price: 80000,
-    discount: 30,
-    finalPrice: 56000,
+
 
     warranty: "Course certificate",
   ),
@@ -438,9 +400,7 @@ EducationService(
     tools: "Python, Power BI",
     duration: "6–12 Months",
 
-    price: 150000,
-    discount: 30,
-    finalPrice: 105000,
+  
 
     warranty: "Project support",
   ),
@@ -463,9 +423,6 @@ EducationService(
     tools: "Python, ML tools",
     duration: "8–18 Months",
 
-    price: 250000,
-    discount: 20,
-    finalPrice: 200000,
 
     warranty: "Career support",
   ),
@@ -489,9 +446,6 @@ EducationService(
     tools: "Excel, Python",
     duration: "2–6 Months",
 
-    price: 80000,
-    discount: 25,
-    finalPrice: 60000,
 
     warranty: "Skill support",
   ),
@@ -515,9 +469,6 @@ EducationService(
     tools: "Networking tools",
     duration: "2–4 Months",
 
-    price: 40000,
-    discount: 25,
-    finalPrice: 30000,
 
     warranty: "Basic support",
   ),
@@ -538,9 +489,7 @@ EducationService(
     tools: "Cisco tools",
     duration: "3–6 Months",
 
-    price: 60000,
-    discount: 20,
-    finalPrice: 48000,
+   
 
     warranty: "Lab support",
   ),
@@ -561,9 +510,7 @@ EducationService(
     tools: "Networking hardware",
     duration: "6–12 Months",
 
-    price: 120000,
-    discount: 25,
-    finalPrice: 90000,
+ 
 
     warranty: "Job support",
   ),
@@ -585,9 +532,6 @@ EducationService(
     tools: "Cisco tools",
     duration: "8–12 Months",
 
-    price: 200000,
-    discount: 25,
-    finalPrice: 150000,
 
     warranty: "Career support",
   ),
@@ -608,9 +552,7 @@ EducationService(
     tools: "Security tools",
     duration: "2–6 Months",
 
-    price: 80000,
-    discount: 25,
-    finalPrice: 60000,
+  
 
     warranty: "Skill support",
   ),
@@ -651,9 +593,7 @@ EducationService(
   tools: "Canva, Mailchimp",
   duration: "2 Months",
 
-  price: 12000,
-  discount: 2000,
-  finalPrice: 10000,
+
 
   warranty: "Basic Marketing & Promotion Skills",
 ),
@@ -694,10 +634,7 @@ EducationService(
   tools: "Google Ads, Google Analytics, WordPress, Canva",
   duration: "4 Months",
 
-  price: 30000,
-  discount: 5000,
-  finalPrice: 25000,
-
+  
   warranty: "Job Ready Skills & Freelancing Support",
 ),
 
@@ -738,9 +675,6 @@ EducationService(
   tools: "Photoshop, CorelDRAW, Canva",
   duration: "3 Months",
 
-  price: 15000,
-  discount: 3000,
-  finalPrice: 12000,
 
   warranty: "Basic Graphic & Printing Skills",
 ),
@@ -785,10 +719,6 @@ EducationService(
   tools: "Photoshop, Illustrator, Figma, Canva",
   duration: "6 Months",
 
-  price: 35000,
-  discount: 7000,
-  finalPrice: 28000,
-
   warranty: "Job Assistance & Freelancing Support",
 ), 
 
@@ -825,10 +755,6 @@ EducationService(
   tools: "Study Material, Test Series, Notes",
   duration: "6–12 Months",
 
-  price: 60000,
-  discount: 20000,
-  finalPrice: 40000,
-
   warranty: "Guidance for State Government Exams",
 ),
 
@@ -863,10 +789,6 @@ EducationService(
 
   tools: "Books, Notes, Mock Interviews",
   duration: "1–2 Years",
-
-  price: 150000,
-  discount: 30000,
-  finalPrice: 120000,
 
   warranty: "Interview & Career Guidance",
 ),
@@ -903,9 +825,7 @@ EducationService(
   tools: "Practice Sets, Test Series",
   duration: "3–6 Months",
 
-  price: 30000,
-  discount: 10000,
-  finalPrice: 20000,
+ 
 
   warranty: "Railway Exam Guidance",
 ),
@@ -942,9 +862,6 @@ EducationService(
   tools: "Mock Tests, Study Material",
   duration: "4–8 Months",
 
-  price: 40000,
-  discount: 10000,
-  finalPrice: 30000,
 
   warranty: "Banking Career Guidance",
 ),
@@ -980,9 +897,7 @@ EducationService(
   tools: "Notes, Practice Papers",
   duration: "4–8 Months",
 
-  price: 35000,
-  discount: 8000,
-  finalPrice: 27000,
+
 
   warranty: "Central Government Exam Guidance",
 ),
@@ -1020,9 +935,7 @@ EducationService(
   tools: "Basic Parlour Kit, Practice Material",
   duration: "1–2 Months",
 
-  price: 30000,
-  discount: 10000,
-  finalPrice: 20000,
+
 
   warranty: "Parlour Basics + Small Earning Start",
 ),
@@ -1061,9 +974,7 @@ EducationService(
   tools: "Professional Kits, Practice Setup",
   duration: "3–6 Months",
 
-  price: 80000,
-  discount: 20000,
-  finalPrice: 60000,
+  
 
   warranty: "Job Ready Salon Skills",
 ),
@@ -1103,9 +1014,7 @@ EducationService(
   tools: "Advanced Makeup Kits, Salon Setup",
   duration: "6–12 Months",
 
-  price: 200000,
-  discount: 40000,
-  finalPrice: 160000,
+
 
   warranty: "Own Salon + High Income Career Guidance",
 ),
@@ -1143,10 +1052,6 @@ EducationService(
   tools: "Lab Kits, Testing Equipment, Study Materials",
   duration: "12 Months",
 
-  price: 55000,
-  discount: 0,
-  finalPrice: 55000,
-
   warranty: "Placement assistance provided",
 ),
 
@@ -1180,10 +1085,6 @@ EducationService(
 
   tools: "OT Equipment, Surgical Tools, Study Notes",
   duration: "12 Months",
-
-  price: 60000,
-  discount: 0,
-  finalPrice: 60000,
 
   warranty: "Internship support available",
 ),
@@ -1219,10 +1120,6 @@ EducationService(
   tools: "X-Ray Equipment, Lab Access, Notes",
   duration: "12 Months",
 
-  price: 70000,
-  discount: 0,
-  finalPrice: 70000,
-
   warranty: "Job guidance support",
 ),
 
@@ -1257,9 +1154,7 @@ EducationService(
   tools: "Medical Kits, Notes, Practice Sessions",
   duration: "6–12 Months",
 
-  price: 45000,
-  discount: 0,
-  finalPrice: 45000,
+  
 
   warranty: "Placement support available",
 ),
@@ -1295,9 +1190,7 @@ EducationService(
   tools: "ECG Machine, Study Material",
   duration: "6 Months",
 
-  price: 35000,
-  discount: 0,
-  finalPrice: 35000,
+
 
   warranty: "Clinic placement support",
 ),
@@ -1333,9 +1226,6 @@ EducationService(
   tools: "Billing Software, Notes, Practical Training",
   duration: "6–12 Months",
 
-  price: 50000,
-  discount: 0,
-  finalPrice: 50000,
 
   warranty: "Medical store job assistance",
 ),
@@ -1374,10 +1264,7 @@ EducationService(
   tools: "Notes, Practice Sheets, Speaking Sessions",
   duration: "1–2 Months",
 
-  price: 8000,
-  discount: 3000,
-  finalPrice: 5000,
-
+ 
   warranty: "Basic Communication Improvement",
 ),
 
@@ -1413,10 +1300,7 @@ EducationService(
   tools: "Audio Practice, Group Activities",
   duration: "2–3 Months",
 
-  price: 15000,
-  discount: 4000,
-  finalPrice: 11000,
-
+  
   warranty: "Fluency & Confidence Development",
 ),
 
@@ -1452,9 +1336,6 @@ EducationService(
   tools: "Mock Interviews, Presentation Practice",
   duration: "3–6 Months",
 
-  price: 30000,
-  discount: 8000,
-  finalPrice: 22000,
 
   warranty: "Professional Communication Skills",
 ),
@@ -1494,9 +1375,7 @@ EducationService(
   tools: "Training Notes, Grooming Kit Guidance",
   duration: "3 Months",
 
-  price: 45000,
-  discount: 5000,
-  finalPrice: 40000,
+
 
   warranty: "Basic Aviation Knowledge",
 ),
@@ -1534,9 +1413,6 @@ EducationService(
   tools: "Mock Interview Setup, Training Material",
   duration: "6 Months",
 
-  price: 85000,
-  discount: 10000,
-  finalPrice: 75000,
 
   warranty: "Interview & Job Readiness",
 ),
@@ -1575,9 +1451,7 @@ EducationService(
   tools: "Simulation Lab, Grooming Kit, Training Material",
   duration: "9–12 Months",
 
-  price: 150000,
-  discount: 20000,
-  finalPrice: 130000,
+
 
   warranty: "Placement Assistance & Career Guidance",
 ),
@@ -1617,9 +1491,6 @@ EducationService(
   tools: "Music System, Practice Studio",
   duration: "2–3 Months",
 
-  price: 12000,
-  discount: 4000,
-  finalPrice: 8000,
 
   warranty: "Basic Dance Skills Development",
 ),
@@ -1658,9 +1529,6 @@ EducationService(
   tools: "Studio, Music System, Performance Setup",
   duration: "4–6 Months",
 
-  price: 30000,
-  discount: 8000,
-  finalPrice: 22000,
 
   warranty: "Stage Performance & Career Guidance",
 ),
@@ -1699,9 +1567,7 @@ EducationService(
   tools: "Harmonium, Keyboard, Notes",
   duration: "3–4 Months",
 
-  price: 15000,
-  discount: 5000,
-  finalPrice: 10000,
+  
 
   warranty: "Basic Singing & Music Skills",
 ),
@@ -1740,9 +1606,6 @@ EducationService(
   tools: "Studio Setup, Instruments, Recording Tools",
   duration: "6–12 Months",
 
-  price: 40000,
-  discount: 10000,
-  finalPrice: 30000,
 
   warranty: "Performance Opportunities & Certification",
 ),
@@ -1784,9 +1647,7 @@ EducationService(
   tools: "Repair Toolkit, Practice Devices",
   duration: "2–3 Months",
 
-  price: 18000,
-  discount: 6000,
-  finalPrice: 12000,
+  
 
   warranty: "Basic Mobile Repairing Skills",
 ),
@@ -1826,10 +1687,6 @@ EducationService(
 
   tools: "Soldering Station, Multimeter, Repair Tools",
   duration: "4–6 Months",
-
-  price: 40000,
-  discount: 10000,
-  finalPrice: 30000,
 
   warranty: "Job Assistance & Shop Setup Guidance",
 ),
