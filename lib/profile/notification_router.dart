@@ -100,7 +100,7 @@ Future<void> _doRoute(NavigatorState navigator, Map<String, dynamic> data) async
     // FIX: was missing `const` — FeedbackPage takes no params.
     case NotificationType.serviceCompleted:
       navigator.push(
-        MaterialPageRoute(builder: (_) => const FeedbackPage()),
+        MaterialPageRoute(builder: (_) =>  FeedbackPage()),
       );
       break;
 

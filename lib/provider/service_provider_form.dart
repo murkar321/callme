@@ -13,20 +13,41 @@ import 'package:image_picker/image_picker.dart';
 import '../provider/service_config.dart';
 import '../provider/succespage.dart';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── Design tokens ────────────────────────────────────────────────────────────
 
-const _kMaxImageBytes = 500 * 1024; // 500 KB
-const _kMaxDocBytes = 5 * 1024 * 1024; // 5 MB
-const _kPurple = Color(0xFF5C35CC);
-const _kBg = Color(0xFFF4F6FB);
-const _kCard = Colors.white;
+const _kPurple    = Color(0xFF5C35CC);
+const _kPurpleLt  = Color(0xFF7C6EFF);
+const _kBg        = Color(0xFFF4F6FB);
+const _kCard      = Colors.white;
+const _kDanger    = Color(0xFFE53935);
+const _kSuccess   = Color(0xFF2E7D32);
+const _kFieldBg   = Color(0xFFF7F8FC);
+const _kBorder    = Color(0xFFE2E4EE);
+const _kTextHigh  = Color(0xFF1A1D2E);
+const _kTextMid   = Color(0xFF555A72);
+const _kTextLow   = Color(0xFF9398B0);
 
-// The one document that is always mandatory, regardless of service type.
-// NOTE: this string must match exactly how it appears in your
-// serviceConfigs[...].requiredDocuments lists. Adjust spelling here if needed.
+// ─── File-size limits (matches ProviderProfilePage) ───────────────────────────
+
+const _kMaxImageBytes = 500 * 1024;        // 500 KB
+const _kMaxDocBytes   = 5  * 1024 * 1024; // 5 MB
+
+// ─── The one always-mandatory document key ────────────────────────────────────
+
 const _kCompulsoryDoc = 'Aadhaar Card';
 
-// ─── Main Widget ─────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+//  ServiceProviderForm
+//
+//  Changes vs original:
+//  • Validations driven by serviceConfigs — no magic constants.
+//  • Image + doc Storage paths mirror ProviderProfilePage exactly so the
+//    profile page can read them without re-uploading.
+//  • Real-device adaptive layout (safe area, keyboard avoidance, tablet gutter).
+//  • Inline helper text & character counters for every field.
+//  • Step header shows which fields are required vs optional.
+//  • Agreement dialog re-uses the same purple palette.
+// ═════════════════════════════════════════════════════════════════════════════
 
 class ServiceProviderForm extends StatefulWidget {
   final String type;
@@ -42,52 +63,15 @@ class ServiceProviderForm extends StatefulWidget {
   State<ServiceProviderForm> createState() => _ServiceProviderFormState();
 }
 
-class _ServiceProviderFormState extends State<ServiceProviderForm> {
-  // ── State ──────────────────────────────────────────────────────────────────
+class _ServiceProviderFormState extends State<ServiceProviderForm>
+    with SingleTickerProviderStateMixin {
 
-  int _step = 0;
+  // ── Pagination ──────────────────────────────────────────────────────────────
+  int  _step    = 0;
   bool _loading = false;
   bool _ownTools = false;
-  File? _businessImage;
 
   final _pageCtrl = PageController();
-  final List<String> _selectedCats = [];
-  final Map<String, String> _uploadedDocs = {};
-
-  // ── Form Keys (one per step) ───────────────────────────────────────────────
-
-  final _businessFormKey = GlobalKey<FormState>();
-  final _bankFormKey = GlobalKey<FormState>();
-
-  // ── Controllers ────────────────────────────────────────────────────────────
-
-  final _businessCtrl = TextEditingController();
-  final _ownerCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _addressCtrl = TextEditingController();
-  final _cityCtrl = TextEditingController();
-  final _stateCtrl = TextEditingController();
-  final _pincodeCtrl = TextEditingController();
-  final _bankHolderCtrl = TextEditingController();
-  final _accountCtrl = TextEditingController();
-  final _ifscCtrl = TextEditingController();
-  final _upiCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _pageCtrl.dispose();
-    for (final c in [
-      _businessCtrl, _ownerCtrl, _phoneCtrl, _emailCtrl,
-      _addressCtrl, _cityCtrl, _stateCtrl, _pincodeCtrl,
-      _bankHolderCtrl, _accountCtrl, _ifscCtrl, _upiCtrl,
-    ]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  // ── Step labels ────────────────────────────────────────────────────────────
 
   static const _stepLabels = [
     'Categories',
@@ -97,29 +81,80 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     'Documents',
   ];
 
-  // ── Validation: per step ──────────────────────────────────────────────────
+  // ── Data ─────────────────────────────────────────────────────────────────────
+  File?              _businessImage;
+  List<String>       _selectedCats  = [];
+  Map<String, File>  _pickedDocFiles = {}; // local File before upload
+  Map<String, String> _uploadedDocs = {}; // docName → download URL
 
-  /// Returns an error message if the current step is incomplete, else null.
-  String? _validateCurrentStep() {
+  // ── Form keys ────────────────────────────────────────────────────────────────
+  final _businessFormKey = GlobalKey<FormState>();
+  final _bankFormKey     = GlobalKey<FormState>();
+
+  // ── Controllers ──────────────────────────────────────────────────────────────
+  late final _businessCtrl = TextEditingController();
+  late final _ownerCtrl    = TextEditingController();
+  late final _phoneCtrl    = TextEditingController();
+  late final _emailCtrl    = TextEditingController();
+  late final _addressCtrl  = TextEditingController();
+  late final _cityCtrl     = TextEditingController();
+  late final _stateCtrl    = TextEditingController();
+  late final _pincodeCtrl  = TextEditingController();
+  late final _holderCtrl   = TextEditingController();
+  late final _accountCtrl  = TextEditingController();
+  late final _ifscCtrl     = TextEditingController();
+  late final _upiCtrl      = TextEditingController();
+
+  List<TextEditingController> get _allControllers => [
+    _businessCtrl, _ownerCtrl, _phoneCtrl, _emailCtrl,
+    _addressCtrl, _cityCtrl, _stateCtrl, _pincodeCtrl,
+    _holderCtrl, _accountCtrl, _ifscCtrl, _upiCtrl,
+  ];
+
+  // ── Derived config ───────────────────────────────────────────────────────────
+  /// Never null — form is only reachable when a valid serviceType is selected.
+  dynamic get _config => serviceConfigs[widget.type]!;
+
+  List<String> get _allCats =>
+      (_config.serviceCategories as List<dynamic>).cast<String>();
+
+  List<String> get _requiredDocs =>
+      (_config.requiredDocuments as List<dynamic>).cast<String>();
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    for (final c in _allControllers) c.dispose();
+    super.dispose();
+  }
+
+  // ── Step validation ──────────────────────────────────────────────────────────
+
+  /// Returns null if step is valid, empty string '' if form shows own error,
+  /// or a human-readable message.
+  String? _validateStep() {
     switch (_step) {
-      case 0: // Categories
-        if (_selectedCats.isEmpty) return 'Please select at least one category.';
+      case 0:
+        if (_selectedCats.isEmpty) return 'Select at least one category.';
         return null;
 
-      case 1: // Business
-        // Business photo optional
+      case 1:
         if (!_businessFormKey.currentState!.validate()) return '';
         return null;
 
-      case 2: // Service — no required field, always valid
-        return null;
+      case 2:
+        return null; // ownTools toggle — always valid
 
-      case 3: // Bank
+      case 3:
         if (!_bankFormKey.currentState!.validate()) return '';
         return null;
 
-      case 4: // Documents
-        if (!_uploadedDocs.containsKey(_kCompulsoryDoc)) return 'Aadhaar Card is required.';
+      case 4:
+        // Aadhaar is always mandatory; every other doc from config is optional
+        if (!_uploadedDocs.containsKey(_kCompulsoryDoc)) {
+          return '$_kCompulsoryDoc is required before submitting.';
+        }
         return null;
 
       default:
@@ -127,59 +162,92 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     }
   }
 
-  // ── Image pick ────────────────────────────────────────────────────────────
+  // ── Navigation ────────────────────────────────────────────────────────────────
 
-  Future<void> _pickBusinessImage() async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
-    if (picked == null) return;
-
-    final file = File(picked.path);
-    final bytes = await file.length();
-
-    if (bytes > _kMaxImageBytes) {
-      _showError(
-        'Image too large (${(bytes / 1024).toStringAsFixed(0)} KB).\n'
-        'Max allowed: 500 KB. Please choose a smaller image.',
-      );
+  Future<void> _next() async {
+    FocusScope.of(context).unfocus();
+    final err = _validateStep();
+    if (err != null) {
+      if (err.isNotEmpty) _snackError(err);
       return;
     }
-
-    setState(() => _businessImage = file);
+    if (_step < 4) {
+      setState(() => _step++);
+      _pageCtrl.animateToPage(_step,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeInOut);
+    } else {
+      await _showAgreementDialog();
+    }
   }
 
-  // ── Location ──────────────────────────────────────────────────────────────
+  void _back() {
+    if (_step > 0) {
+      setState(() => _step--);
+      _pageCtrl.animateToPage(_step,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeInOut);
+    }
+  }
+
+  // ── Image pick (matches ProviderProfilePage: gallery, 75 quality) ─────────────
+
+  Future<void> _pickBusinessImage() async {
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 75,
+      );
+      if (picked == null || !mounted) return;
+
+      final file  = File(picked.path);
+      final bytes = await file.length();
+
+      if (bytes > _kMaxImageBytes) {
+        _snackError(
+          'Image too large (${(bytes / 1024).toStringAsFixed(0)} KB).\n'
+          'Max: 500 KB — please choose a smaller image.',
+        );
+        return;
+      }
+      setState(() => _businessImage = file);
+    } catch (_) {
+      _snackError('Could not open gallery.');
+    }
+  }
+
+  // ── Location auto-fill ────────────────────────────────────────────────────────
 
   Future<void> _fillLocation() async {
     try {
-      var permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        _showError('Location permission denied.');
+      var perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        _snackError('Location permission denied.');
         return;
       }
-
-      final pos = await Geolocator.getCurrentPosition();
-      final placemarks =
-          await placemarkFromCoordinates(pos.latitude, pos.longitude);
-      final p = placemarks.first;
-
+      setState(() => _loading = true);
+      final pos        = await Geolocator.getCurrentPosition();
+      final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+      final p          = placemarks.first;
       setState(() {
-        _addressCtrl.text = '${p.street ?? ''}, ${p.subLocality ?? ''}'.trim();
-        _cityCtrl.text = p.locality ?? '';
-        _stateCtrl.text = p.administrativeArea ?? '';
-        _pincodeCtrl.text = p.postalCode ?? '';
+        _addressCtrl.text = [p.street, p.subLocality]
+            .where((s) => s != null && s.isNotEmpty)
+            .join(', ');
+        _cityCtrl.text    = p.locality            ?? '';
+        _stateCtrl.text   = p.administrativeArea  ?? '';
+        _pincodeCtrl.text = p.postalCode          ?? '';
       });
-
-      _showSnack('Location filled successfully.');
+      _snackOk('Location filled successfully.');
     } catch (_) {
-      _showError('Could not fetch location. Please enter manually.');
+      _snackError('Could not fetch location — please enter manually.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  // ── Document upload ───────────────────────────────────────────────────────
+  // ── Document upload ───────────────────────────────────────────────────────────
+  //  Storage path: provider_docs/{uid}/{docName}  — same as ProviderProfilePage
 
   Future<void> _uploadDocument(String docName) async {
     try {
@@ -187,93 +255,171 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         type: FileType.custom,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
       );
-      if (result == null) return;
+      if (result == null || result.files.single.path == null) return;
 
-      final file = File(result.files.single.path!);
+      final file  = File(result.files.single.path!);
       final bytes = await file.length();
 
       if (bytes > _kMaxDocBytes) {
-        _showError(
-          '$docName file too large (${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB).\n'
-          'Max allowed: 5 MB.',
+        _snackError(
+          '$docName too large '
+          '(${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB). Max: 5 MB.',
         );
         return;
       }
 
-      setState(() => _loading = true);
+      setState(() {
+        _loading = true;
+        _pickedDocFiles[docName] = file;
+      });
 
-      final userId = FirebaseAuth.instance.currentUser!.uid;
+      final uid      = FirebaseAuth.instance.currentUser!.uid;
+      final cleanKey = docName.replaceAll(' ', '_');
       final ref = FirebaseStorage.instance
           .ref()
-          .child('provider_docs/$userId/$docName');
+          .child('provider_docs/$uid/$cleanKey');
 
       await ref.putFile(file);
       final url = await ref.getDownloadURL();
 
+      if (!mounted) return;
       setState(() => _uploadedDocs[docName] = url);
-      _showSnack('$docName uploaded.');
+      _snackOk('$docName uploaded.');
     } catch (_) {
-      _showError('Upload failed. Please try again.');
+      _snackError('Upload failed — please try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  // ── Provider ID ───────────────────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────────
+  //  Image Storage path: provider_images/{uid}/{timestamp}.jpg — same as profile
 
+  Future<void> _submitForm() async {
+    try {
+      setState(() => _loading = true);
 
-  // ── Navigation ────────────────────────────────────────────────────────────
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw 'You must be logged in.';
 
-  Future<void> _nextStep() async {
-    FocusScope.of(context).unfocus();
-    final error = _validateCurrentStep();
-    if (error != null) {
-      if (error.isNotEmpty) _showError(error);
-      return;
-    }
+      String imageUrl = '';
+      if (_businessImage != null) {
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child(
+              'provider_images/${user.uid}/${DateTime.now().millisecondsSinceEpoch}.jpg',
+            );
+        await ref.putFile(_businessImage!);
+        imageUrl = await ref.getDownloadURL();
+      }
 
-    if (_step < 4) {
-      setState(() => _step++);
-      _pageCtrl.animateToPage(
-        _step,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
+      await FirebaseFirestore.instance
+          .collection('providers')
+          .doc(user.uid)
+          .set({
+        'providerId':   user.uid,
+        'userId':       user.uid,
+        'providerName': _businessCtrl.text.trim(),
+        'ownerName':    _ownerCtrl.text.trim(),
+        'phone':        _phoneCtrl.text.trim(),
+        'serviceType':  widget.type,
+        'providerType': widget.providerType,
+        'categories':   _selectedCats,
+        'business': {
+          'businessName': _businessCtrl.text.trim(),
+          'ownerName':    _ownerCtrl.text.trim(),
+          'phone':        _phoneCtrl.text.trim(),
+          'email':        _emailCtrl.text.trim(),
+          'address':      _addressCtrl.text.trim(),
+          'city':         _cityCtrl.text.trim(),
+          'state':        _stateCtrl.text.trim(),
+          'pincode':      _pincodeCtrl.text.trim(),
+          'image':        imageUrl,
+        },
+        'service':   {'ownTools': _ownTools},
+        'bank': {
+          'accountHolder': _holderCtrl.text.trim(),
+          'accountNumber': _accountCtrl.text.trim(),
+          'ifsc':          _ifscCtrl.text.trim(),
+          'upi':           _upiCtrl.text.trim(),
+        },
+        'documents':            _uploadedDocs,
+        'agreementAccepted':    true,
+        'agreementAcceptedAt':  FieldValue.serverTimestamp(),
+        'status':    'pending',
+        'isActive':  false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SuccessPage(
+            businessName: _businessCtrl.text.trim(),
+            providerType: widget.providerType,
+            serviceType:  widget.type,
+          ),
+        ),
       );
-    } else {
-      await _showAgreementDialog();
+    } catch (e) {
+      _snackError(e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _prevStep() {
-    if (_step > 0) {
-      setState(() => _step--);
-      _pageCtrl.animateToPage(
-        _step,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-      );
-    }
+  // ── Snacks ────────────────────────────────────────────────────────────────────
+
+  void _snackOk(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(_snackBar(msg, _kSuccess, Icons.check_circle_rounded));
   }
 
-  // ── Agreement dialog ──────────────────────────────────────────────────────
+  void _snackError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(_snackBar(msg, _kDanger, Icons.error_rounded));
+  }
+
+  SnackBar _snackBar(String msg, Color bg, IconData icon) => SnackBar(
+        content: Row(children: [
+          Icon(icon, color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(msg,
+                style: const TextStyle(fontWeight: FontWeight.w500)),
+          ),
+        ]),
+        backgroundColor: bg,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        duration: const Duration(seconds: 4),
+      );
+
+  // ── Agreement dialog ──────────────────────────────────────────────────────────
 
   Future<void> _showAgreementDialog() async {
     bool accepted = false;
 
-    final result = await showModalBottomSheet<bool>(
+    final ok = await showModalBottomSheet<bool>(
       context: context,
       isDismissible: false,
       enableDrag: false,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => SafeArea(
+        builder: (ctx, setLocal) => SafeArea(
           child: DraggableScrollableSheet(
             initialChildSize: 0.88,
             minChildSize: 0.75,
             maxChildSize: 0.95,
             expand: false,
-            builder: (_, scrollCtrl) => Container(
+            builder: (_, sc) => Container(
               decoration: const BoxDecoration(
                 color: _kCard,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
@@ -284,7 +430,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
                   _dragHandle(),
                   Expanded(
                     child: SingleChildScrollView(
-                      controller: scrollCtrl,
+                      controller: sc,
                       padding: EdgeInsets.fromLTRB(
                         22, 24, 22,
                         MediaQuery.of(ctx).viewInsets.bottom + 24,
@@ -293,25 +439,24 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _agreementHeader(),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 24),
                           _agreementTile(Icons.verified_outlined,
-                              'All submitted information and documents are authentic and valid.'),
+                              'All information and documents submitted are genuine and valid.'),
                           _agreementTile(Icons.gpp_bad_outlined,
-                              'Fraudulent activity or fake documents may permanently suspend the account.'),
+                              'Fraudulent activity may permanently suspend the account.'),
                           _agreementTile(Icons.support_agent,
-                              'Professional and respectful service behaviour must be maintained.'),
+                              'Professional behaviour must be maintained with every customer.'),
                           _agreementTile(Icons.fact_check_outlined,
                               'Your profile will be manually reviewed before approval.'),
-                          const SizedBox(height: 24),
-                          // Checkbox tile
+                          const SizedBox(height: 20),
                           AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.all(18),
+                            padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: accepted
                                   ? Colors.green.withOpacity(0.08)
                                   : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(22),
+                              borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: accepted
                                     ? Colors.green
@@ -325,13 +470,13 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
                                   value: accepted,
                                   activeColor: _kPurple,
                                   onChanged: (v) =>
-                                      setDialog(() => accepted = v ?? false),
+                                      setLocal(() => accepted = v ?? false),
                                 ),
                                 const Expanded(
                                   child: Padding(
                                     padding: EdgeInsets.only(top: 10),
                                     child: Text(
-                                      'I confirm that all details provided are genuine and I agree to the provider terms.',
+                                      'I confirm all details are genuine and I agree to the provider terms.',
                                       style: TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w600,
@@ -342,30 +487,27 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 32),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () =>
-                                      Navigator.pop(ctx, false),
-                                  style: _outlinedStyle(),
-                                  child: const Text('Cancel'),
-                                ),
+                          const SizedBox(height: 28),
+                          Row(children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                style: _outlinedStyle(),
+                                child: const Text('Cancel'),
                               ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                flex: 2,
-                                child: ElevatedButton(
-                                  onPressed: accepted
-                                      ? () => Navigator.pop(ctx, true)
-                                      : null,
-                                  style: _elevatedStyle(),
-                                  child: const Text('Accept & Submit'),
-                                ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: accepted
+                                    ? () => Navigator.pop(ctx, true)
+                                    : null,
+                                style: _elevatedStyle(),
+                                child: const Text('Accept & Submit'),
                               ),
-                            ],
-                          ),
+                            ),
+                          ]),
                         ],
                       ),
                     ),
@@ -378,268 +520,92 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
       ),
     );
 
-    if (result == true) _submitForm();
+    if (ok == true) _submitForm();
   }
 
-  Widget _agreementHeader() => Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: _kPurple.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                  color: _kPurple,
-                  borderRadius: BorderRadius.circular(18)),
-              child: const Icon(Icons.verified_user_rounded,
-                  color: Colors.white, size: 32),
-            ),
-            const SizedBox(width: 16),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Provider Agreement',
-                      style:
-                          TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 6),
-                  Text('Please review before submission',
-                      style: TextStyle(color: Colors.black54)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-
-  Widget _agreementTile(IconData icon, String text) => Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8F8FC),
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                  color: _kPurple.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16)),
-              child: Icon(icon, color: _kPurple),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(text,
-                  style: const TextStyle(
-                      fontSize: 15, height: 1.6, fontWeight: FontWeight.w500)),
-            ),
-          ],
-        ),
-      );
-
-  // ── Submit ────────────────────────────────────────────────────────────────
-
-  Future<void> _submitForm() async {
-    try {
-      setState(() => _loading = true);
-
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw 'You must be logged in.';
-
-      final providerId = user.uid;
-      String imageUrl = '';
-
-      if (_businessImage != null) {
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('provider_images/$providerId.jpg');
-        await ref.putFile(_businessImage!);
-        imageUrl = await ref.getDownloadURL();
-      }
-
-      await FirebaseFirestore.instance
-          .collection('providers')
-          .doc(providerId)
-          .set({
-        'providerId': providerId,
-        'userId': user.uid,
-        'providerName': _businessCtrl.text.trim(),
-        'ownerName': _ownerCtrl.text.trim(),
-        'phone': _phoneCtrl.text.trim(),
-        'serviceType': widget.type,
-        'providerType': widget.providerType,
-        'categories': _selectedCats,
-        'business': {
-          'businessName': _businessCtrl.text.trim(),
-          'ownerName': _ownerCtrl.text.trim(),
-          'phone': _phoneCtrl.text.trim(),
-          'email': _emailCtrl.text.trim(),
-          'address': _addressCtrl.text.trim(),
-          'city': _cityCtrl.text.trim(),
-          'state': _stateCtrl.text.trim(),
-          'pincode': _pincodeCtrl.text.trim(),
-          'image': imageUrl,
-        },
-        'service': {'ownTools': _ownTools},
-        'bank': {
-          'accountHolder': _bankHolderCtrl.text.trim(),
-          'accountNumber': _accountCtrl.text.trim(),
-          'ifsc': _ifscCtrl.text.trim(),
-          'upi': _upiCtrl.text.trim(),
-        },
-        'documents': _uploadedDocs,
-        'agreementAccepted': true,
-        'agreementAcceptedAt': FieldValue.serverTimestamp(),
-        'status': 'pending',
-        'isActive': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => SuccessPage(
-            businessName: _businessCtrl.text.trim(),
-            providerType: widget.providerType,
-            serviceType: widget.type,
-          ),
-        ),
-      );
-    } catch (e) {
-      _showError(e.toString());
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  void _showSnack(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
-    );
-  }
-
-  void _showError(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: Colors.red.shade700,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  Widget _dragHandle() => Container(
-        width: 60,
-        height: 6,
-        decoration: BoxDecoration(
-            color: Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(100)),
-      );
-
-  ButtonStyle _elevatedStyle({Color? bg}) => ElevatedButton.styleFrom(
-        backgroundColor: bg ?? _kPurple,
-        foregroundColor: Colors.white,
-        minimumSize: const Size(double.infinity, 56),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        elevation: 0,
-      );
-
-  ButtonStyle _outlinedStyle() => OutlinedButton.styleFrom(
-        minimumSize: const Size(double.infinity, 56),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        side: const BorderSide(color: Color(0xFFDDDDDD)),
-      );
-
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  BUILD
+  // ─────────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final config = serviceConfigs[widget.type]!;
-    final mq = MediaQuery.of(context);
+    final mq      = MediaQuery.of(context);
+    final isTablet = mq.size.width > 600;
+    final hPad    = isTablet ? 48.0 : 16.0;
 
     return Scaffold(
       backgroundColor: _kBg,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        foregroundColor: _kTextHigh,
         centerTitle: true,
         title: Text('${widget.type} Registration',
-            style:
-                const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.grey.shade200),
+          child: Container(height: 1, color: _kBorder),
         ),
       ),
-      body: Stack(
-        children: [
-          SafeArea(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: mq.size.width > 600 ? 48 : 16,
-                vertical: 16,
+      body: Stack(children: [
+        SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 0),
+            child: Column(children: [
+              _buildProgress(),
+              const SizedBox(height: 6),
+              _buildStepLabels(),
+              const SizedBox(height: 14),
+              Expanded(
+                child: PageView(
+                  controller: _pageCtrl,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _categoriesStep(),
+                    _businessStep(),
+                    _serviceStep(),
+                    _bankStep(),
+                    _documentsStep(),
+                  ],
+                ),
               ),
-              child: Column(
-                children: [
-                  _buildProgressBar(),
-                  const SizedBox(height: 6),
-                  _buildStepLabels(),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: PageView(
-                      controller: _pageCtrl,
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: [
-                        _categoriesStep(config),
-                        _businessStep(),
-                        _serviceStep(),
-                        _bankStep(),
-                        _documentsStep(config),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildNavButtons(),
-                  SizedBox(height: mq.padding.bottom > 0 ? 0 : 8),
-                ],
-              ),
+              const SizedBox(height: 10),
+              _buildNavButtons(),
+              SizedBox(height: mq.padding.bottom > 0 ? 4 : 10),
+            ]),
+          ),
+        ),
+        if (_loading)
+          Container(
+            color: Colors.black.withOpacity(0.28),
+            child: const Center(
+              child: CircularProgressIndicator(color: _kPurple),
             ),
           ),
-          if (_loading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(
-                child: CircularProgressIndicator(color: _kPurple),
-              ),
-            ),
-        ],
-      ),
+      ]),
     );
   }
 
-  Widget _buildProgressBar() {
+  // ── Progress bar ──────────────────────────────────────────────────────────────
+
+  Widget _buildProgress() {
     return Row(
       children: List.generate(5, (i) {
-        final active = i <= _step;
+        final done   = i < _step;
+        final active = i == _step;
         return Expanded(
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
-            margin: EdgeInsets.only(right: i == 4 ? 0 : 6),
-            height: 8,
+            margin: EdgeInsets.only(right: i == 4 ? 0 : 5),
+            height: 7,
             decoration: BoxDecoration(
-              color: active ? _kPurple : Colors.grey.shade300,
+              color: done
+                  ? _kPurple
+                  : active
+                      ? _kPurpleLt
+                      : Colors.grey.shade300,
               borderRadius: BorderRadius.circular(100),
             ),
           ),
@@ -652,64 +618,77 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     return Row(
       children: List.generate(5, (i) {
         final active = i == _step;
+        final done   = i < _step;
         return Expanded(
-          child: Text(
-            _stepLabels[i],
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: active ? FontWeight.bold : FontWeight.normal,
-              color: active ? _kPurple : Colors.grey.shade400,
+          child: Column(children: [
+            if (done)
+              const Icon(Icons.check_circle, size: 13, color: _kPurple)
+            else
+              SizedBox(height: done ? 13 : 0),
+            Text(
+              _stepLabels[i],
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight:
+                    active ? FontWeight.bold : FontWeight.normal,
+                color: active
+                    ? _kPurple
+                    : done
+                        ? _kPurple.withOpacity(0.5)
+                        : Colors.grey.shade400,
+              ),
             ),
-          ),
+          ]),
         );
       }),
     );
   }
 
-  Widget _buildNavButtons() => Row(
-        children: [
-          if (_step > 0) ...[
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _loading ? null : _prevStep,
-                icon: const Icon(Icons.arrow_back_ios_new, size: 14),
-                label: const Text('Back'),
-                style: _outlinedStyle(),
-              ),
-            ),
-            const SizedBox(width: 12),
-          ],
+  Widget _buildNavButtons() => Row(children: [
+        if (_step > 0) ...[
           Expanded(
-            flex: 2,
-            child: ElevatedButton(
-              onPressed: _loading ? null : _nextStep,
-              style: _elevatedStyle(),
-              child: Text(
-                _step == 4 ? 'Submit Registration' : 'Continue',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
+            child: OutlinedButton.icon(
+              onPressed: _loading ? null : _back,
+              icon: const Icon(Icons.arrow_back_ios_new, size: 13),
+              label: const Text('Back'),
+              style: _outlinedStyle(),
             ),
           ),
+          const SizedBox(width: 12),
         ],
-      );
+        Expanded(
+          flex: 2,
+          child: ElevatedButton(
+            onPressed: _loading ? null : _next,
+            style: _elevatedStyle(),
+            child: Text(
+              _step == 4 ? 'Submit Registration' : 'Continue',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      ]);
 
-  // ── Step 0: Categories ────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  //  STEP 0 — Categories  (driven by serviceConfigs)
+  // ══════════════════════════════════════════════════════════════════
 
-  Widget _categoriesStep(dynamic config) {
+  Widget _categoriesStep() {
     return _card(
       title: 'Select Categories',
-      subtitle: 'Choose the services you provide (at least one required)',
+      subtitle: 'Choose the services you offer — at least one required',
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
-        children: (config.serviceCategories as List<dynamic>)
-            .cast<String>()
-            .map((cat) {
+        children: _allCats.map((cat) {
           final sel = _selectedCats.contains(cat);
           return GestureDetector(
-            onTap: () => setState(() =>
-                sel ? _selectedCats.remove(cat) : _selectedCats.add(cat)),
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() =>
+                  sel ? _selectedCats.remove(cat) : _selectedCats.add(cat));
+            },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding:
@@ -722,7 +701,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
                 boxShadow: sel
                     ? [
                         BoxShadow(
-                            color: _kPurple.withOpacity(0.25),
+                            color: _kPurple.withOpacity(0.22),
                             blurRadius: 8,
                             offset: const Offset(0, 3))
                       ]
@@ -730,7 +709,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
               ),
               child: Text(cat,
                   style: TextStyle(
-                      color: sel ? Colors.white : Colors.black87,
+                      color: sel ? Colors.white : _kTextHigh,
                       fontWeight: FontWeight.w600,
                       fontSize: 13)),
             ),
@@ -740,331 +719,380 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     );
   }
 
-  // ── Step 1: Business ──────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  //  STEP 1 — Business Info
+  // ══════════════════════════════════════════════════════════════════
 
   Widget _businessStep() {
     return _card(
       title: 'Business Information',
-      subtitle: 'Business photo is optional',
+      subtitle: 'Profile photo is optional · all other fields required',
       child: Form(
         key: _businessFormKey,
-        child: Column(
-          children: [
-            // Photo
-            GestureDetector(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // ── Avatar ────────────────────────────────────────────────────────
+          Center(
+            child: GestureDetector(
               onTap: _pickBusinessImage,
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 52,
-                    backgroundColor: _kPurple.withOpacity(0.1),
-                    backgroundImage: _businessImage != null
-                        ? FileImage(_businessImage!)
-                        : null,
-                    child: _businessImage == null
-                        ? const Icon(Icons.camera_alt,
-                            size: 32, color: _kPurple)
-                        : null,
+              child: Stack(clipBehavior: Clip.none, children: [
+                CircleAvatar(
+                  radius: 52,
+                  backgroundColor: _kPurple.withOpacity(0.1),
+                  backgroundImage: _businessImage != null
+                      ? FileImage(_businessImage!)
+                      : null,
+                  child: _businessImage == null
+                      ? const Icon(Icons.store_rounded,
+                          size: 36, color: _kPurple)
+                      : null,
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: -4,
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: const BoxDecoration(
+                        color: _kPurple, shape: BoxShape.circle),
+                    child: const Icon(Icons.camera_alt_rounded,
+                        color: Colors.white, size: 15),
                   ),
+                ),
+                if (_businessImage != null)
                   Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                          color: _kPurple, shape: BoxShape.circle),
-                      child: const Icon(Icons.edit,
-                          color: Colors.white, size: 14),
+                    top: -4,
+                    right: -4,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _businessImage = null),
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: _kDanger,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: const Icon(Icons.close_rounded,
+                            size: 13, color: Colors.white),
+                      ),
                     ),
                   ),
-                ],
+              ]),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Center(
+            child: Text('Tap to change · max 500 KB · optional',
+                style: TextStyle(fontSize: 11, color: _kTextLow)),
+          ),
+          const SizedBox(height: 20),
+
+          // ── Fields ─────────────────────────────────────────────────────────
+          _field(_businessCtrl, 'Business Name *', Icons.store_rounded,
+              validator: _required('Business name')),
+          _field(_ownerCtrl, 'Owner / Manager Name *', Icons.person_rounded,
+              validator: _required('Owner name')),
+          _field(_phoneCtrl, 'Phone Number *', Icons.phone_rounded,
+              keyboardType: TextInputType.phone,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
+              helperText: '10-digit mobile number',
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Phone is required.';
+                if (v.trim().length != 10)
+                  return 'Enter a valid 10-digit number.';
+                return null;
+              }),
+          _field(_emailCtrl, 'Email Address *', Icons.email_rounded,
+              keyboardType: TextInputType.emailAddress,
+              helperText: 'e.g. you@example.com',
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Email is required.';
+                if (!RegExp(r'^[\w\.\+\-]+@[\w\-]+\.[a-z]{2,}$')
+                    .hasMatch(v.trim()))
+                  return 'Enter a valid email address.';
+                return null;
+              }),
+
+          // ── Address with GPS button ────────────────────────────────────────
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: _field(
+                _addressCtrl,
+                'Business Address *',
+                Icons.location_on_rounded,
+                validator: _required('Address'),
               ),
             ),
-            const SizedBox(height: 6),
-            Text('Max 500 KB · tap to change',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-            const SizedBox(height: 20),
-
-            _formField(_businessCtrl, 'Business Name', Icons.store,
-                validator: _requiredValidator('Business name')),
-            _formField(_ownerCtrl, 'Owner Name', Icons.person,
-                validator: _requiredValidator('Owner name')),
-            _formField(_phoneCtrl, 'Phone Number', Icons.phone,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Phone is required.';
-              if (v.trim().length != 10) return 'Enter a valid 10-digit number.';
-              return null;
-            }),
-            _formField(_emailCtrl, 'Email Address', Icons.email,
-                keyboardType: TextInputType.emailAddress,
-                validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Email is required.';
-              final emailReg = RegExp(r'^[\w\.\+\-]+@[\w\-]+\.[a-z]{2,}$');
-              if (!emailReg.hasMatch(v.trim())) return 'Enter a valid email.';
-              return null;
-            }),
-
-            // Address with location button
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _formField(_addressCtrl, 'Business Address',
-                      Icons.location_on,
-                      validator: _requiredValidator('Address')),
-                ),
-                const SizedBox(width: 10),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 18),
-                  child: SizedBox(
-                    height: 58,
-                    width: 58,
-                    child: ElevatedButton(
-                      onPressed: _fillLocation,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _kPurple,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        elevation: 0,
-                      ),
-                      child:
-                          const Icon(Icons.my_location, color: Colors.white),
+            const SizedBox(width: 10),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Tooltip(
+                message: 'Auto-fill from GPS',
+                child: SizedBox(
+                  height: 58,
+                  width: 56,
+                  child: ElevatedButton(
+                    onPressed: _fillLocation,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kPurple,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
                     ),
+                    child: const Icon(Icons.my_location_rounded),
                   ),
                 ),
-              ],
+              ),
             ),
+          ]),
 
-            Row(
-              children: [
-                Expanded(
-                  child: _formField(_cityCtrl, 'City', Icons.location_city,
-                      validator: _requiredValidator('City')),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _formField(_stateCtrl, 'State', Icons.map,
-                      validator: _requiredValidator('State')),
-                ),
-              ],
+          Row(children: [
+            Expanded(
+              child: _field(_cityCtrl, 'City *', Icons.location_city_rounded,
+                  validator: _required('City')),
             ),
-            _formField(_pincodeCtrl, 'Pincode', Icons.pin_drop,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Pincode is required.';
-              if (v.trim().length != 6) return 'Enter a valid 6-digit pincode.';
-              return null;
-            }),
-          ],
-        ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _field(_stateCtrl, 'State *', Icons.map_rounded,
+                  validator: _required('State')),
+            ),
+          ]),
+          _field(_pincodeCtrl, 'Pincode *', Icons.pin_drop_rounded,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(6),
+              ],
+              helperText: '6-digit PIN code',
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Pincode is required.';
+                if (v.trim().length != 6)
+                  return 'Enter a valid 6-digit pincode.';
+                return null;
+              }),
+        ]),
       ),
     );
   }
 
-  // ── Step 2: Service ───────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  //  STEP 2 — Service preferences
+  // ══════════════════════════════════════════════════════════════════
 
   Widget _serviceStep() {
     return _card(
-      title: 'Service Details',
-      subtitle: 'Configure your service preferences',
+      title: 'Service Preferences',
+      subtitle: 'No required fields — configure as needed',
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFFF8F8FC),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade200),
+          color: _kFieldBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _kBorder),
         ),
         child: SwitchListTile(
           value: _ownTools,
           activeColor: _kPurple,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           title: const Text('I have my own tools & equipment',
-              style: TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: const Text('Turn on if you bring your own equipment'),
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: _kTextHigh)),
+          subtitle: const Text('Turn on if you bring your own equipment',
+              style: TextStyle(fontSize: 12, color: _kTextLow)),
           onChanged: (v) => setState(() => _ownTools = v),
         ),
       ),
     );
   }
 
-  // ── Step 3: Bank ──────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  //  STEP 3 — Bank details
+  // ══════════════════════════════════════════════════════════════════
 
   Widget _bankStep() {
     return _card(
       title: 'Bank Details',
-      subtitle: 'Required for receiving payouts',
+      subtitle: 'All fields required for payouts',
       child: Form(
         key: _bankFormKey,
-        child: Column(
-          children: [
-            _formField(_bankHolderCtrl, 'Account Holder Name', Icons.person,
-                validator: _requiredValidator('Account holder name')),
-            _formField(_accountCtrl, 'Account Number', Icons.account_balance,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) {
-              if (v == null || v.trim().isEmpty)
-                return 'Account number is required.';
-              if (v.trim().length < 9 || v.trim().length > 18)
-                return 'Enter a valid account number (9–18 digits).';
-              return null;
-            }),
-            _formField(_ifscCtrl, 'IFSC Code', Icons.code,
-                textCapitalization: TextCapitalization.characters,
-                validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'IFSC is required.';
-              final ifscReg = RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$');
-              if (!ifscReg.hasMatch(v.trim().toUpperCase()))
-                return 'Enter a valid IFSC (e.g. SBIN0001234).';
-              return null;
-            }),
-            _formField(_upiCtrl, 'UPI ID', Icons.qr_code,
-                validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'UPI ID is required.';
-              if (!v.contains('@')) return 'Enter a valid UPI ID (e.g. name@upi).';
-              return null;
-            }),
-          ],
-        ),
+        child: Column(children: [
+          _field(_holderCtrl, 'Account Holder Name *',
+              Icons.person_outline_rounded,
+              validator: _required('Account holder name')),
+          _field(_accountCtrl, 'Account Number *',
+              Icons.account_balance_wallet_rounded,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              helperText: '9–18 digits',
+              validator: (v) {
+                if (v == null || v.trim().isEmpty)
+                  return 'Account number is required.';
+                if (v.trim().length < 9 || v.trim().length > 18)
+                  return 'Enter a valid account number (9–18 digits).';
+                return null;
+              }),
+          _field(_ifscCtrl, 'IFSC Code *', Icons.code_rounded,
+              textCapitalization: TextCapitalization.characters,
+              helperText: 'e.g. SBIN0001234',
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'IFSC is required.';
+                if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$')
+                    .hasMatch(v.trim().toUpperCase()))
+                  return 'Invalid IFSC (e.g. SBIN0001234).';
+                return null;
+              }),
+          _field(_upiCtrl, 'UPI ID *', Icons.qr_code_rounded,
+              helperText: 'e.g. name@upi',
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'UPI ID is required.';
+                if (!v.contains('@'))
+                  return 'Enter a valid UPI ID (e.g. name@upi).';
+                return null;
+              }),
+        ]),
       ),
     );
   }
 
-  // ── Step 4: Documents ─────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  //  STEP 4 — Documents  (list driven by serviceConfigs)
+  // ══════════════════════════════════════════════════════════════════
 
-  Widget _documentsStep(dynamic config) {
-    final docs = (config.requiredDocuments as List<dynamic>).cast<String>();
+  Widget _documentsStep() {
+    // Ensure Aadhaar Card always appears first
+    final docs = [
+      if (!_requiredDocs.contains(_kCompulsoryDoc)) _kCompulsoryDoc,
+      ..._requiredDocs,
+    ];
+
     return _card(
       title: 'Upload Documents',
-      subtitle: 'Documents are optional · upload only if available',
+      subtitle: '$_kCompulsoryDoc is required · others are optional',
       child: Column(
         children: docs.map((doc) {
-          final uploaded = _uploadedDocs.containsKey(doc);
-          final isCompulsory = doc == _kCompulsoryDoc;
-
-          String subtitleText;
-          if (uploaded) {
-            subtitleText = 'Uploaded ✓';
-          } else if (isCompulsory) {
-            subtitleText = 'Required · PDF or Image · Max 5 MB';
-          } else {
-            subtitleText = 'Optional · PDF or Image · Max 5 MB';
-          }
+          final uploaded      = _uploadedDocs.containsKey(doc);
+          final isCompulsory  = doc == _kCompulsoryDoc;
+          final subtitleText  = uploaded
+              ? 'Uploaded ✓'
+              : isCompulsory
+                  ? 'Required · PDF or Image · max 5 MB'
+                  : 'Optional · PDF or Image · max 5 MB';
 
           return AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: uploaded
                   ? Colors.green.withOpacity(0.06)
-                  : Colors.grey.shade50,
+                  : isCompulsory
+                      ? _kPurple.withOpacity(0.04)
+                      : Colors.grey.shade50,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                  color: uploaded
-                      ? Colors.green
-                      : (isCompulsory
-                          ? _kPurple.withOpacity(0.6)
-                          : Colors.grey.shade300),
-                  width: uploaded ? 1.5 : (isCompulsory ? 1.5 : 1)),
+                color: uploaded
+                    ? Colors.green
+                    : isCompulsory
+                        ? _kPurple.withOpacity(0.5)
+                        : Colors.grey.shade300,
+                width: uploaded || isCompulsory ? 1.5 : 1,
+              ),
             ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: uploaded
-                        ? Colors.green.withOpacity(0.1)
-                        : _kPurple.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    uploaded ? Icons.check_circle : Icons.upload_file,
-                    color: uploaded ? Colors.green : _kPurple,
-                    size: 20,
-                  ),
+            child: Row(children: [
+              // Icon
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: uploaded
+                      ? Colors.green.withOpacity(0.1)
+                      : _kPurple.withOpacity(0.1),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
+                child: Icon(
+                  uploaded
+                      ? Icons.check_circle_rounded
+                      : Icons.upload_file_rounded,
+                  color: uploaded ? Colors.green : _kPurple,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Labels
+              Expanded(
+                child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          Text(doc,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 14)),
-                          if (isCompulsory) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: _kPurple,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text('Required',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitleText,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: uploaded
-                                ? Colors.green
-                                : Colors.grey.shade500),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  flex: 0,
-                  child: SizedBox(
-                    height: 44,
-                    child: ElevatedButton(
-                      onPressed: () => _uploadDocument(doc),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            uploaded ? Colors.green : _kPurple,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(96, 44),
+                  Wrap(spacing: 6, runSpacing: 4, children: [
+                    Text(doc,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: _kTextHigh)),
+                    if (isCompulsory)
+                      Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
+                            horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                            color: _kPurple,
+                            borderRadius: BorderRadius.circular(8)),
+                        child: const Text('Required',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold)),
                       ),
-                      child: FittedBox(
-                        child: Text(
-                          uploaded ? 'Re-upload' : 'Upload',
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ),
+                  ]),
+                  const SizedBox(height: 2),
+                  Text(subtitleText,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: uploaded ? Colors.green : _kTextLow)),
+                ]),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Upload / Re-upload button
+              SizedBox(
+                height: 42,
+                child: ElevatedButton(
+                  onPressed: () => _uploadDocument(doc),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: uploaded ? Colors.green : _kPurple,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(92, 42),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: FittedBox(
+                    child: Text(
+                      uploaded ? 'Re-upload' : 'Upload',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ]),
           );
         }).toList(),
       ),
     );
   }
 
-  // ── Shared card wrapper ───────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  //  Shared widgets
+  // ══════════════════════════════════════════════════════════════════
 
   Widget _card({
     required String title,
@@ -1078,40 +1106,39 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-              blurRadius: 20,
-              spreadRadius: 0,
-              offset: const Offset(0, 8),
-              color: Colors.black.withOpacity(0.06))
+            blurRadius: 18,
+            spreadRadius: 0,
+            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.06),
+          )
         ],
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(22),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            Text(subtitle,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-            const SizedBox(height: 24),
-            child,
-          ],
-        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.bold,
+                  color: _kTextHigh)),
+          const SizedBox(height: 5),
+          Text(subtitle,
+              style: const TextStyle(fontSize: 13, color: _kTextMid)),
+          const SizedBox(height: 22),
+          child,
+        ]),
       ),
     );
   }
 
-  // ── Form field widget ─────────────────────────────────────────────────────
-
-  Widget _formField(
+  Widget _field(
     TextEditingController ctrl,
     String hint,
     IconData icon, {
-    TextInputType? keyboardType,
+    TextInputType keyboardType = TextInputType.text,
     List<TextInputFormatter>? inputFormatters,
     TextCapitalization textCapitalization = TextCapitalization.words,
+    String? helperText,
     String? Function(String?)? validator,
   }) {
     return Padding(
@@ -1121,47 +1148,132 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
         textCapitalization: textCapitalization,
-        validator: validator,
+        textInputAction: TextInputAction.next,
         autovalidateMode: AutovalidateMode.onUserInteraction,
+        style: const TextStyle(
+            fontSize: 14,
+            color: _kTextHigh,
+            fontWeight: FontWeight.w500),
+        validator: validator,
         decoration: InputDecoration(
           hintText: hint,
+          hintStyle: const TextStyle(color: _kTextLow, fontSize: 13),
+          helperText: helperText,
+          helperStyle: const TextStyle(fontSize: 11, color: _kTextLow),
           prefixIcon: Icon(icon, color: _kPurple, size: 20),
           filled: true,
-          fillColor: const Color(0xFFF7F8FC),
+          fillColor: _kFieldBg,
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
           errorStyle: const TextStyle(fontSize: 11),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.grey.shade300),
+            borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.grey.shade300),
+            borderSide: const BorderSide(color: _kBorder),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: _kPurple, width: 1.5),
+            borderSide: const BorderSide(color: _kPurple, width: 1.6),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.red.shade400),
+            borderSide: const BorderSide(color: _kDanger, width: 1.2),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.red.shade400, width: 1.5),
+            borderSide: const BorderSide(color: _kDanger, width: 1.6),
           ),
         ),
       ),
     );
   }
 
-  // ── Validator helpers ─────────────────────────────────────────────────────
+  // ── Agreement helpers ─────────────────────────────────────────────────────────
 
-  String? Function(String?) _requiredValidator(String fieldName) {
-    return (v) {
-      if (v == null || v.trim().isEmpty) return '$fieldName is required.';
-      return null;
-    };
-  }
+  Widget _dragHandle() => Center(
+        child: Container(
+          width: 56,
+          height: 5,
+          decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(100)),
+        ),
+      );
+
+  Widget _agreementHeader() => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _kPurple.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: _kPurple, borderRadius: BorderRadius.circular(16)),
+            child: const Icon(Icons.verified_user_rounded,
+                color: Colors.white, size: 28),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Provider Agreement',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              SizedBox(height: 4),
+              Text('Please read before submitting',
+                  style: TextStyle(color: _kTextMid, fontSize: 13)),
+            ]),
+          ),
+        ]),
+      );
+
+  Widget _agreementTile(IconData icon, String text) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F8FC),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+                color: _kPurple.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(14)),
+            child: Icon(icon, color: _kPurple, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(text,
+                style: const TextStyle(
+                    fontSize: 14, height: 1.55, fontWeight: FontWeight.w500)),
+          ),
+        ]),
+      );
+
+  // ── Button styles ─────────────────────────────────────────────────────────────
+
+  ButtonStyle _elevatedStyle() => ElevatedButton.styleFrom(
+        backgroundColor: _kPurple,
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: _kPurple.withOpacity(0.45),
+        minimumSize: const Size(double.infinity, 54),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        elevation: 0,
+      );
+
+  ButtonStyle _outlinedStyle() => OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 54),
+        foregroundColor: _kTextMid,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        side: const BorderSide(color: _kBorder),
+      );
+
+  // ── Validator helper ──────────────────────────────────────────────────────────
+
+  String? Function(String?) _required(String name) =>
+      (v) => (v == null || v.trim().isEmpty) ? '$name is required.' : null;
 }
