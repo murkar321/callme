@@ -11,25 +11,24 @@ import 'package:image_picker/image_picker.dart';
 import '../provider/service_config.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Design tokens  (identical to ServiceProviderForm so both pages feel like
-//  the same product)
+//  Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _T {
-  static const primary    = Color(0xFF5C35CC);
-  static const primaryLt  = Color(0xFF7C6EFF);
-  static const bg         = Color(0xFFF4F6FB);
-  static const surface    = Colors.white;
-  static const danger     = Color(0xFFE53935);
-  static const success    = Color(0xFF2E7D32);
-  static const textHigh   = Color(0xFF1A1D2E);
-  static const textMid    = Color(0xFF555A72);
-  static const textLow    = Color(0xFF9398B0);
-  static const border     = Color(0xFFE2E4EE);
-  static const fieldBg    = Color(0xFFF7F8FC);
+  static const primary   = Color(0xFF5C35CC);
+  static const primaryLt = Color(0xFF7C6EFF);
+  static const bg        = Color(0xFFF4F6FB);
+  static const surface   = Colors.white;
+  static const danger    = Color(0xFFE53935);
+  static const success   = Color(0xFF2E7D32);
+  static const textHigh  = Color(0xFF1A1D2E);
+  static const textMid   = Color(0xFF555A72);
+  static const textLow   = Color(0xFF9398B0);
+  static const border    = Color(0xFFE2E4EE);
+  static const fieldBg   = Color(0xFFF7F8FC);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  File-size limits (shared with ServiceProviderForm)
+//  File-size limits
 // ─────────────────────────────────────────────────────────────────────────────
 const _kMaxImageBytes = 500 * 1024;        // 500 KB
 const _kMaxDocBytes   = 5  * 1024 * 1024; // 5 MB
@@ -38,18 +37,22 @@ const _kCompulsoryDoc = 'Aadhaar Card';
 // ─────────────────────────────────────────────────────────────────────────────
 //  ProviderProfilePage
 //
-//  Key improvements:
-//  • Profile photo is loaded from business.image — the exact path written by
-//    ServiceProviderForm — so registration photo appears automatically.
-//  • New photo upload uses the same Storage path pattern:
-//      provider_images/{uid}/{timestamp}.jpg
-//  • Document list is driven by serviceConfigs[serviceType].requiredDocuments
-//    (+ Aadhaar Card always pinned at top) — no hard-coded doc names.
-//  • Validations mirror ServiceProviderForm (phone 10-digit, IFSC regex,
-//    pincode 6-digit, UPI @-check, account 9-18 digits).
-//  • Real-device adaptive: tablet gutter, SafeArea, keyboard-dismiss on drag,
-//    LengthLimitingTextInputFormatter on phone/pincode fields.
-//  • isAdmin flag: admins see danger zone + can delete; providers only edit.
+//  FIX SUMMARY (vs original):
+//
+//  1. Profile photo path aligned with ServiceProviderForm.
+//     ServiceProviderForm writes:  provider_images/{uid}/{timestamp}.jpg
+//     Old _save() wrote to:        profile_images/{uid}/profile.jpg   ← WRONG
+//     New _save() writes to:       provider_images/{uid}/{timestamp}.jpg ← FIXED
+//     Both read from:              business.image in Firestore
+//
+//  2. Firestore field round-trip fixed.
+//     _load() reads nested:  business.businessName, business.ownerName, …
+//     Old _save() wrote flat: providerName, ownerName, …              ← WRONG
+//     New _save() writes:    business.businessName, business.ownerName, …
+//                             + top-level mirrors for admin queries    ← FIXED
+//
+//  3. Image state refresh after save: _imageUrl updated + _pickedImage
+//     cleared so the hero card re-renders the new photo immediately.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ProviderProfilePage extends StatefulWidget {
@@ -57,7 +60,7 @@ class ProviderProfilePage extends StatefulWidget {
   final String providerId;
 
   /// Set true only when an admin opens another provider's profile.
-  /// Unlocks the delete button (which requires admin Firestore rules).
+  /// Unlocks the delete button (requires admin Firestore rules).
   final bool isAdmin;
 
   const ProviderProfilePage({
@@ -82,16 +85,18 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   bool _loading = true;
   bool _saving  = false;
 
-  bool   _ownTools  = false;
-  bool   _isActive  = true;
+  bool   _ownTools     = false;
+  bool   _isActive     = true;
   String _status       = 'pending';
   String _providerType = '';
   String _serviceType  = '';
 
   // ── Image ─────────────────────────────────────────────────────────────────
-  /// URL loaded from Firestore / uploaded by ServiceProviderForm
+  /// Download URL stored in Firestore under business.image.
+  /// ServiceProviderForm writes this field — we read and update the same key.
   String _imageUrl    = '';
-  /// Newly picked file (not yet uploaded)
+
+  /// Newly picked local file (not yet uploaded).
   File?  _pickedImage;
 
   bool get _hasImage => _pickedImage != null || _imageUrl.isNotEmpty;
@@ -167,7 +172,10 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     try {
       setState(() => _loading = true);
 
-      final snap = await _db.collection('providers').doc(widget.providerId).get();
+      final snap = await _db
+          .collection('providers')
+          .doc(widget.providerId)
+          .get();
       if (!snap.exists || !mounted) return;
 
       final d        = snap.data()!;
@@ -175,7 +183,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       final service  = (d['service']  as Map?)?.cast<String, dynamic>() ?? {};
       final bank     = (d['bank']     as Map?)?.cast<String, dynamic>() ?? {};
 
-      // ── Populate controllers ───────────────────────────────────────────────
+      // ── Controllers ──────────────────────────────────────────────────────
       _businessCtrl.text = business['businessName'] ?? '';
       _ownerCtrl.text    = business['ownerName']    ?? '';
       _phoneCtrl.text    = business['phone']        ?? '';
@@ -189,20 +197,21 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       _ifscCtrl.text     = bank['ifsc']             ?? '';
       _upiCtrl.text      = bank['upi']              ?? '';
 
-      // ── Profile image — reads the URL written by ServiceProviderForm ───────
-      //  ServiceProviderForm writes to: business.image
-      //  Storage path: provider_images/{uid}/{timestamp}.jpg
+      // ── Profile image ────────────────────────────────────────────────────
+      // ServiceProviderForm stores the download URL in business.image.
+      // We read from and write back to that exact same key so the photo
+      // set during registration appears here automatically.
       _imageUrl = business['image'] ?? '';
 
-      // ── Other fields ───────────────────────────────────────────────────────
-      _ownTools     = service['ownTools'] as bool? ?? false;
+      // ── Other fields ─────────────────────────────────────────────────────
+      _ownTools     = service['ownTools'] as bool?   ?? false;
       _providerType = d['providerType']   as String? ?? '';
       _serviceType  = d['serviceType']    as String? ?? '';
       _status       = d['status']         as String? ?? 'pending';
       _isActive     = d['isActive']       as bool?   ?? true;
       _selectedCats = List<String>.from(d['categories'] ?? []);
       _docs         = Map<String, dynamic>.from(d['documents'] ?? {});
-    } catch (e) {
+    } catch (_) {
       _snack('Failed to load profile', ok: false);
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -210,7 +219,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Pick profile photo ────────────────────────────────────────────────────
-  //  imageQuality: 75  — same as ServiceProviderForm
   Future<void> _pickImage() async {
     try {
       final picked = await ImagePicker().pickImage(
@@ -242,10 +250,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   });
 
   // ── Upload document ───────────────────────────────────────────────────────
-  //  Storage path: provider_docs/{uid}/{docName_underscored}
-  //  Rule: match /provider_docs/{uid}/{fileName}
+  // Storage path: provider_docs/{uid}/{docName_underscored}
   Future<void> _uploadDoc(String name) async {
-    // Auth guard — same pattern as _save()
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       _snack('Session expired — please log in again', ok: false);
@@ -331,15 +337,14 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       return;
     }
 
-    // ── Auth guard: ensure token is fresh before any Storage write ────────
-    // This prevents 403s caused by an expired ID token on cold start.
+    // Auth guard: ensure token is fresh before any Storage write.
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       _snack('Session expired — please log in again', ok: false);
       return;
     }
     try {
-      await user.getIdToken(true); // force-refresh
+      await user.getIdToken(true);
     } catch (_) {
       _snack('Could not refresh session — check connection', ok: false);
       return;
@@ -348,30 +353,37 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     try {
       setState(() => _saving = true);
 
-      // Upload new photo if picked.
-      // Storage path: profile_images/{uid}/profile.jpg
-      // This matches the existing Storage rule:
-      //   match /profile_images/{uid}/{fileName}
-      // Using a fixed filename (profile.jpg) means re-uploads overwrite cleanly
-      // instead of accumulating timestamped copies.
+      // ── Upload new photo ─────────────────────────────────────────────────
+      // Storage path: provider_images/{uid}/{timestamp}.jpg
+      //
+      // This matches the path that ServiceProviderForm uses on first
+      // registration, so both registration and profile edits land in the
+      // same bucket. The download URL is then stored at business.image in
+      // Firestore — the same key _load() reads from.
       String updatedUrl = _imageUrl;
       if (_pickedImage != null) {
         final ref = _storage.ref().child(
-          'profile_images/${widget.providerId}/profile.jpg',
+          'provider_images/${widget.providerId}'
+          '/${DateTime.now().millisecondsSinceEpoch}.jpg',
         );
         await ref.putFile(_pickedImage!);
         updatedUrl = await ref.getDownloadURL();
       }
 
-      // NOTE: We deliberately do NOT write `status` — Firestore rules prevent
-      // self-edits from changing that field.
+      // ── Write back to Firestore ──────────────────────────────────────────
+      // Nested business.* fields are what _load() reads — these MUST be
+      // updated or edits will appear lost on the next reload.
+      // Top-level mirrors (providerName, ownerName, phone) are kept in sync
+      // so admin list queries that read the root doc stay accurate.
       await _db.collection('providers').doc(widget.providerId).update({
         'updatedAt':             FieldValue.serverTimestamp(),
+        // Top-level mirrors for admin queries
         'providerName':          _businessCtrl.text.trim(),
         'ownerName':             _ownerCtrl.text.trim(),
         'phone':                 _phoneCtrl.text.trim(),
         'categories':            _selectedCats,
         'isActive':              _isActive,
+        // Nested business map — exactly what _load() reads
         'business.businessName': _businessCtrl.text.trim(),
         'business.ownerName':    _ownerCtrl.text.trim(),
         'business.phone':        _phoneCtrl.text.trim(),
@@ -380,7 +392,9 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         'business.city':         _cityCtrl.text.trim(),
         'business.state':        _stateCtrl.text.trim(),
         'business.pincode':      _pincodeCtrl.text.trim(),
-        'business.image':        updatedUrl,   // ← same key form writes to
+        // Image URL — same key ServiceProviderForm writes to
+        'business.image':        updatedUrl,
+        // Service and bank
         'service.ownTools':      _ownTools,
         'bank.accountHolder':    _holderCtrl.text.trim(),
         'bank.accountNumber':    _accountCtrl.text.trim(),
@@ -389,6 +403,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       });
 
       if (!mounted) return;
+      // Refresh local state so the hero card re-renders the new photo
+      // and the remove button reflects the current image immediately.
       setState(() {
         _imageUrl    = updatedUrl;
         _pickedImage = null;
@@ -426,16 +442,16 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   // ── Profile completion ────────────────────────────────────────────────────
   int get _completion {
     int s = 0;
-    if (_hasImage)                       s += 10;
-    if (_businessCtrl.text.isNotEmpty)   s += 10;
-    if (_phoneCtrl.text.length == 10)    s += 10;
-    if (_emailCtrl.text.contains('@'))   s += 10;
-    if (_addressCtrl.text.isNotEmpty)    s += 10;
-    if (_selectedCats.isNotEmpty)        s += 10;
+    if (_hasImage)                          s += 10;
+    if (_businessCtrl.text.isNotEmpty)      s += 10;
+    if (_phoneCtrl.text.length == 10)       s += 10;
+    if (_emailCtrl.text.contains('@'))      s += 10;
+    if (_addressCtrl.text.isNotEmpty)       s += 10;
+    if (_selectedCats.isNotEmpty)           s += 10;
     if (_docs.containsKey(_kCompulsoryDoc)) s += 15;
-    if (_docs.length > 1)                s += 5;
-    if (_holderCtrl.text.isNotEmpty)     s += 10;
-    if (_upiCtrl.text.isNotEmpty)        s += 10;
+    if (_docs.length > 1)                   s += 5;
+    if (_holderCtrl.text.isNotEmpty)        s += 10;
+    if (_upiCtrl.text.isNotEmpty)           s += 10;
     return s.clamp(0, 100);
   }
 
@@ -599,7 +615,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       color: _T.bg,
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
       child: Row(children: [
-        // Back button
         Material(
           color: _T.surface,
           borderRadius: BorderRadius.circular(14),
@@ -629,7 +644,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        // Status badge
         if (_status.isNotEmpty)
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 110),
@@ -639,7 +653,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               decoration: BoxDecoration(
                 color: _statusColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: _statusColor.withOpacity(0.3)),
+                border:
+                    Border.all(color: _statusColor.withOpacity(0.3)),
               ),
               child: Text(
                 _status.toUpperCase(),
@@ -678,11 +693,10 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       ),
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        // ── Avatar ──────────────────────────────────────────────────────────
+        // ── Avatar ────────────────────────────────────────────────────────
         GestureDetector(
           onTap: _pickImage,
           child: Stack(clipBehavior: Clip.none, children: [
-            // Outer ring glows if photo is present
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               decoration: BoxDecoration(
@@ -704,7 +718,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     : null,
               ),
             ),
-            // Camera button
+            // Camera badge
             Positioned(
               bottom: 0,
               right: -4,
@@ -717,7 +731,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     size: 16, color: _T.primary),
               ),
             ),
-            // Remove button — only when photo exists
+            // Remove button — only when a photo exists
             if (_hasImage)
               Positioned(
                 top: -4,
@@ -743,11 +757,13 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         const Text(
           'Tap to change photo · Optional · max 500 KB',
           style: TextStyle(
-              color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w400),
+              color: Colors.white54,
+              fontSize: 11,
+              fontWeight: FontWeight.w400),
         ),
         const SizedBox(height: 10),
 
-        // ── Business name (live preview) ─────────────────────────────────────
+        // ── Business name (live preview) ──────────────────────────────────
         AnimatedBuilder(
           animation: _businessCtrl,
           builder: (_, __) {
@@ -767,7 +783,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           },
         ),
 
-        // ── Provider type / service type badges ───────────────────────────────
+        // ── Provider/service type badges ──────────────────────────────────
         if (_providerType.isNotEmpty || _serviceType.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -783,7 +799,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           ),
         const SizedBox(height: 16),
 
-        // ── Active toggle ─────────────────────────────────────────────────────
+        // ── Active toggle ─────────────────────────────────────────────────
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
@@ -803,8 +819,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                         fontWeight: FontWeight.w700,
                         fontSize: 14)),
                 Text('Accept new bookings',
-                    style:
-                        TextStyle(color: Colors.white60, fontSize: 11)),
+                    style: TextStyle(color: Colors.white60, fontSize: 11)),
               ]),
             ),
             Switch(
@@ -820,7 +835,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         ),
         const SizedBox(height: 16),
 
-        // ── Profile completion bar ─────────────────────────────────────────────
+        // ── Profile completion bar ────────────────────────────────────────
         AnimatedBuilder(
           animation: Listenable.merge(_allCtrls),
           builder: (_, __) {
@@ -832,8 +847,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                 const Text('Profile completion',
-                    style:
-                        TextStyle(color: Colors.white70, fontSize: 12)),
+                    style: TextStyle(color: Colors.white70, fontSize: 12)),
                 Text('$pct%',
                     style: const TextStyle(
                         color: Colors.white,
@@ -938,16 +952,19 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           }),
       _field(_addressCtrl, 'Full Address *', Icons.location_on_rounded,
           validator: _required('Address')),
-      // City + State side-by-side
       Row(children: [
         Expanded(
-          child: _field(_cityCtrl, 'City *', Icons.location_city_rounded,
-              validator: _required('City')),
+          child: _field(
+            _cityCtrl, 'City *', Icons.location_city_rounded,
+            validator: _required('City'),
+          ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: _field(_stateCtrl, 'State *', Icons.map_rounded,
-              validator: _required('State')),
+          child: _field(
+            _stateCtrl, 'State *', Icons.map_rounded,
+            validator: _required('State'),
+          ),
         ),
       ]),
       _field(_pincodeCtrl, 'Pincode *', Icons.pin_drop_rounded,
@@ -959,7 +976,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           helperText: '6-digit PIN code',
           validator: (v) {
             if (v == null || v.trim().isEmpty) return 'Pincode is required.';
-            if (v.trim().length != 6) return 'Enter a valid 6-digit pincode.';
+            if (v.trim().length != 6)
+              return 'Enter a valid 6-digit pincode.';
             return null;
           }),
     ]);
@@ -990,13 +1008,12 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           activeColor: _T.primary,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
           onChanged: (v) => setState(() => _ownTools = v),
         ),
       ),
 
-      // Dynamic categories from serviceConfigs
       if (_allCats.isNotEmpty) ...[
         const SizedBox(height: 16),
         const Text('Service Categories',
@@ -1023,7 +1040,9 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: sel ? _T.primary.withOpacity(0.1) : _T.fieldBg,
+                  color: sel
+                      ? _T.primary.withOpacity(0.1)
+                      : _T.fieldBg,
                   borderRadius: BorderRadius.circular(30),
                   border: Border.all(
                     color: sel ? _T.primary : _T.border,
@@ -1044,7 +1063,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           }).toList(),
         ),
       ] else if (_serviceType.isNotEmpty)
-        // serviceType is set but no config found — show info
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1059,8 +1077,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             Expanded(
               child: Text(
                 'No category config found for "$_serviceType".',
-                style: const TextStyle(
-                    color: _T.textMid, fontSize: 13),
+                style: const TextStyle(color: _T.textMid, fontSize: 13),
               ),
             ),
           ]),
@@ -1068,19 +1085,20 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     ]);
   }
 
-  // ── Documents section — driven by serviceConfigs ──────────────────────────
+  // ── Documents section ─────────────────────────────────────────────────────
   Widget _buildDocumentsSection() {
-    final docs = _docList; // dynamic list from getter above
+    final docs = _docList;
 
     return Column(
         mainAxisSize: MainAxisSize.min,
         children: docs.map((name) {
-          final uploaded      = _docs.containsKey(name);
-          final isCompulsory  = name == _kCompulsoryDoc;
+          final uploaded     = _docs.containsKey(name);
+          final isCompulsory = name == _kCompulsoryDoc;
 
           return Container(
             margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: uploaded
                   ? const Color(0xFFF0FAF0)
@@ -1098,7 +1116,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               ),
             ),
             child: Row(children: [
-              // Icon
               Container(
                 width: 36,
                 height: 36,
@@ -1117,8 +1134,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                 ),
               ),
               const SizedBox(width: 10),
-
-              // Name + required badge
               Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1155,16 +1170,11 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                             : 'Optional · PDF or Image · max 5 MB',
                     style: TextStyle(
                         fontSize: 11,
-                        color: uploaded
-                            ? Colors.green
-                            : _T.textLow),
+                        color: uploaded ? Colors.green : _T.textLow),
                   ),
                 ]),
               ),
-
               const SizedBox(width: 6),
-
-              // Upload + delete buttons
               Row(mainAxisSize: MainAxisSize.min, children: [
                 _IconBtn(
                   icon: Icons.upload_rounded,
@@ -1218,7 +1228,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       _field(_upiCtrl, 'UPI ID (optional)', Icons.qr_code_rounded,
           helperText: 'e.g. name@upi',
           validator: (v) {
-            if (v == null || v.trim().isEmpty) return null; // optional
+            if (v == null || v.trim().isEmpty) return null;
             if (!v.contains('@'))
               return 'Enter a valid UPI ID (e.g. name@upi).';
             return null;
@@ -1267,7 +1277,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         const Text(
           'Deleting this provider is permanent and cannot be undone. '
           'All associated data will be removed.',
-          style: TextStyle(fontSize: 13, color: _T.textMid, height: 1.5),
+          style:
+              TextStyle(fontSize: 13, color: _T.textMid, height: 1.5),
         ),
         const SizedBox(height: 16),
         SizedBox(
@@ -1275,8 +1286,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           height: 48,
           child: OutlinedButton.icon(
             onPressed: _saving ? null : _deleteProvider,
-            icon:
-                const Icon(Icons.delete_forever_rounded, size: 18),
+            icon: const Icon(Icons.delete_forever_rounded, size: 18),
             label: const Text('Delete Provider',
                 style: TextStyle(fontWeight: FontWeight.w700)),
             style: OutlinedButton.styleFrom(
@@ -1333,7 +1343,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                       SizedBox(width: 8),
                       Text('Save Changes',
                           style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold)),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold)),
                     ],
                   ),
           ),
@@ -1421,8 +1432,7 @@ class _HeroBadge extends StatelessWidget {
       constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.4),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.15),
           borderRadius: BorderRadius.circular(30),

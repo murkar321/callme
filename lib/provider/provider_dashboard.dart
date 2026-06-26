@@ -5,7 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
 
 import 'provider_profile_page.dart';
-import '../provider/order_service.dart';   // NotificationType lives here now
+import '../provider/order_service.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -38,6 +38,24 @@ String _norm(String s) =>
     s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
 
 bool _svcEq(String a, String b) => _norm(a) == _norm(b);
+
+/// Returns true if the order's category matches ANY of the provider's
+/// selected categories. Falls back to true when neither side has a category
+/// so old orders (without a category field) still show up.
+bool _categoryMatch(Map<String, dynamic> orderData, List<String> providerCats) {
+  if (providerCats.isEmpty) return true; // provider has no category filter yet
+
+  // orders store category in any of these keys
+  String orderCat = '';
+  for (final k in ['category', 'serviceCategory', 'subCategory', 'jobCategory']) {
+    final v = (orderData[k] ?? '').toString().trim();
+    if (v.isNotEmpty) { orderCat = v; break; }
+  }
+
+  if (orderCat.isEmpty) return true; // order has no category — show to everyone
+
+  return providerCats.any((c) => _svcEq(c, orderCat));
+}
 
 // ═══════════════════════════════════════════════════════════════
 // COUNT NOTIFIER
@@ -131,6 +149,9 @@ class _BDPState extends State<BusinessDashboardPage> {
         .doc(widget.providerId)
         .snapshots();
 
+    // We load ALL unassigned orders for this serviceType.
+    // Category filtering is done client-side using the live provider snapshot
+    // so it instantly reacts when the provider edits their categories.
     _availStream = _db
         .collection('orders')
         .where('isAssigned', isEqualTo: false)
@@ -203,7 +224,6 @@ class _BDPState extends State<BusinessDashboardPage> {
         });
       });
 
-      // FIX: NotificationType.bookingAccepted = 'booking_accepted'
       _notify(
         custId, id,
         '✅ Provider Found!',
@@ -246,7 +266,6 @@ class _BDPState extends State<BusinessDashboardPage> {
         'lastActionBy':    'provider',
       });
 
-      // FIX: NotificationType.bookingRejected = 'booking_rejected'
       _notify(
         custId, id,
         '🔄 Finding Another Provider',
@@ -272,8 +291,6 @@ class _BDPState extends State<BusinessDashboardPage> {
         'lastActionBy': 'provider',
       });
 
-      // FIX: NotificationType.serviceCompleted = 'service_completed'
-      // Router's switch-case on 'service_completed' opens FeedbackPage
       _notify(
         custId, id,
         '✅ Service Completed',
@@ -303,7 +320,6 @@ class _BDPState extends State<BusinessDashboardPage> {
         'declinedBy':         FieldValue.arrayUnion([_uid]),
       });
 
-      // FIX: NotificationType.bookingRejected (provider cancelled = rejected from user's view)
       _notify(
         custId, id,
         '❌ Provider Cancelled',
@@ -390,15 +406,28 @@ class _BDPState extends State<BusinessDashboardPage> {
           if (prov['status'] != 'approved') {
             return const _PendingBody();
           }
+
+          // ── Extract profile photo & categories live from snapshot ─────────
+          // Both update instantly when the provider edits their profile.
+          final business   = (prov['business'] as Map?)
+                                 ?.cast<String, dynamic>() ?? {};
+          final photoUrl   = (business['image'] ?? '').toString().trim();
+
+          // categories is stored as List<dynamic> at the provider doc root
+          final rawCats    = (prov['categories'] as List?) ?? [];
+          final providerCategories = rawCats.map((e) => e.toString()).toList();
+
           return Column(children: [
             _Header(
-              businessName: widget.businessName,
-              serviceType:  widget.serviceType,
-              providerId:   widget.providerId,
-              tab:          _tab,
-              availCount:   _availCount,
-              myCount:      _myCount,
-              onTab:        _goTab,
+              businessName:       widget.businessName,
+              serviceType:        widget.serviceType,
+              providerId:         widget.providerId,
+              tab:                _tab,
+              availCount:         _availCount,
+              myCount:            _myCount,
+              photoUrl:           photoUrl,
+              activeCategories:   providerCategories,  // ← shown in header
+              onTab:              _goTab,
               onProfile: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -410,15 +439,17 @@ class _BDPState extends State<BusinessDashboardPage> {
                 index: _tab,
                 children: [
                   _AvailTab(
-                    key:           const ValueKey('available'),
-                    stream:        _availStream,
-                    myUid:         _uid,
-                    svcNorm:       _svcNorm,
-                    serviceType:   widget.serviceType,
-                    countNotifier: _availNotifier,
-                    onAccept:      _accept,
-                    onDecline:     _showDecline,
-                    onRetry:       _retry,
+                    key:               const ValueKey('available'),
+                    stream:            _availStream,
+                    myUid:             _uid,
+                    svcNorm:           _svcNorm,
+                    serviceType:       widget.serviceType,
+                    // ↓ live category list — tab re-filters whenever this changes
+                    providerCategories: providerCategories,
+                    countNotifier:     _availNotifier,
+                    onAccept:          _accept,
+                    onDecline:         _showDecline,
+                    onRetry:           _retry,
                   ),
                   _MyTab(
                     key:           const ValueKey('myjobs'),
@@ -442,10 +473,14 @@ class _BDPState extends State<BusinessDashboardPage> {
 
 // ═══════════════════════════════════════════════════════════════
 // AVAILABLE JOBS TAB
+// Now receives providerCategories and filters orders against it.
+// Since providerCategories comes from the live Firestore snapshot,
+// the list refreshes instantly whenever the provider edits their profile.
 // ═══════════════════════════════════════════════════════════════
 class _AvailTab extends StatelessWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
   final String              svcNorm, myUid, serviceType;
+  final List<String>        providerCategories; // ← NEW: live from Firestore
   final _CountNotifier      countNotifier;
   final Future<void> Function(String, Map<String, dynamic>) onAccept;
   final Future<void> Function(String, Map<String, dynamic>) onDecline;
@@ -457,6 +492,7 @@ class _AvailTab extends StatelessWidget {
     required this.myUid,
     required this.svcNorm,
     required this.serviceType,
+    required this.providerCategories,
     required this.countNotifier,
     required this.onAccept,
     required this.onDecline,
@@ -482,23 +518,35 @@ class _AvailTab extends StatelessWidget {
           final m        = d.data();
           final st       = (m['status'] ?? '').toString().toLowerCase();
           final reopened = m['reopenForOthers'] == true;
+
+          // 1. Must not already be assigned
           if (m['isAssigned'] == true) return false;
+
+          // 2. Must be an open order
           final isOpen = st == 'pending' || st == 'enquiry' ||
               (st == 'cancelled' && reopened);
           if (!isOpen) return false;
+
+          // 3. Must match this provider's service type
           if (!_svcEq((m['serviceType'] ?? '').toString(), svcNorm))
             return false;
+
+          // 4. Must not have been declined by this provider
           final declined = (m['declinedBy'] as List?) ?? [];
-          return !declined.contains(myUid);
+          if (declined.contains(myUid)) return false;
+
+          // 5. ★ NEW: Must match one of provider's registered categories
+          //    (falls back to true when order or provider has no category data)
+          if (!_categoryMatch(m, providerCategories)) return false;
+
+          return true;
         }).toList();
 
         docs.sort((a, b) {
           final at =
-              (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ??
-                  0;
+              (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
           final bt =
-              (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ??
-                  0;
+              (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
           return at.compareTo(bt);
         });
 
@@ -508,7 +556,11 @@ class _AvailTab extends StatelessWidget {
           return _Empty(
             icon:  Icons.work_outline_rounded,
             title: 'No Available Jobs',
-            msg:   'New $serviceType orders will appear here in real-time.',
+            msg:   providerCategories.isEmpty
+                ? 'New $serviceType orders will appear here in real-time.'
+                : 'No open orders match your categories:\n'
+                  '${providerCategories.join(', ')}.\n'
+                  'Edit your profile to update categories.',
           );
         }
 
@@ -535,7 +587,7 @@ class _AvailTab extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// MY JOBS TAB
+// MY JOBS TAB  (unchanged)
 // ═══════════════════════════════════════════════════════════════
 class _MyTab extends StatelessWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>>? stream;
@@ -593,11 +645,9 @@ class _MyTab extends StatelessWidget {
           final bp  = ord[bs]  ?? 4;
           if (ap != bp) return ap.compareTo(bp);
           final at =
-              (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ??
-                  0;
+              (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
           final bt =
-              (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ??
-                  0;
+              (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
           return bt.compareTo(at);
         });
 
@@ -688,9 +738,7 @@ class _Card extends StatelessWidget {
       (v?.toString() ?? '').trim().isEmpty ? fb : v.toString().trim();
 
   String _name() {
-    for (final k in [
-      'userName', 'customerName', 'name', 'displayName', 'fullName'
-    ]) {
+    for (final k in ['userName', 'customerName', 'name', 'displayName', 'fullName']) {
       final v = _s(data[k]);
       if (v.isNotEmpty) return v;
     }
@@ -698,9 +746,7 @@ class _Card extends StatelessWidget {
   }
 
   String _phone() {
-    for (final k in [
-      'phone', 'phoneNumber', 'mobile', 'contactPhone'
-    ]) {
+    for (final k in ['phone', 'phoneNumber', 'mobile', 'contactPhone']) {
       final v = _s(data[k]);
       if (v.isNotEmpty) return v;
     }
@@ -714,9 +760,7 @@ class _Card extends StatelessWidget {
     }
     final loc = data['location'];
     if (loc is Map) {
-      for (final k in [
-        'address', 'fullAddress', 'formattedAddress', 'name'
-      ]) {
+      for (final k in ['address', 'fullAddress', 'formattedAddress', 'name']) {
         final v = _s(loc[k]);
         if (v.isNotEmpty) return v;
       }
@@ -776,6 +820,15 @@ class _Card extends StatelessWidget {
     return sv is List ? sv.map((e) => e.toString()).toList() : [];
   }
 
+  /// Reads category from order, returns empty string if none set.
+  String _category() {
+    for (final k in ['category', 'serviceCategory', 'subCategory', 'jobCategory']) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
+    }
+    return '';
+  }
+
   String _displayStatus(String raw) =>
       (raw == 'cancelled' && data['reopenForOthers'] == true)
           ? 'reopened'
@@ -802,13 +855,14 @@ class _Card extends StatelessWidget {
         : '';
     final cancelNote =
         _s(data['providerCancelNote'] ?? data['cancelReason']);
-    final name    = _name();
-    final phone   = _phone();
-    final addr    = _addr();
-    final sched   = _sched();
-    final amt     = _amt();
-    final note    = _note();
-    final svcList = _services();
+    final name     = _name();
+    final phone    = _phone();
+    final addr     = _addr();
+    final sched    = _sched();
+    final amt      = _amt();
+    final note     = _note();
+    final svcList  = _services();
+    final category = _category(); // ← show category chip on card
 
     return RepaintBoundary(
       child: Container(
@@ -826,8 +880,7 @@ class _Card extends StatelessWidget {
           ],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-          // Status stripe
+          // ── Status bar ───────────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -842,26 +895,42 @@ class _Card extends StatelessWidget {
               const SizedBox(width: 8),
               Text(dispStatus.toUpperCase(),
                   style: TextStyle(
-                    color:       sc,
-                    fontWeight:  FontWeight.w800,
-                    fontSize:    11,
+                    color:        sc,
+                    fontWeight:   FontWeight.w800,
+                    fontSize:     11,
                     letterSpacing: 1,
                   )),
+              // ← Category chip (visible when order has a category)
+              if (category.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: _C.indigo.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    category,
+                    style: const TextStyle(
+                      color:      _C.indigo,
+                      fontSize:   10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
               const Spacer(),
               if (dateLbl.isNotEmpty) ...[
-                const Icon(Icons.access_time_rounded,
-                    size: 11, color: _C.sub),
+                const Icon(Icons.access_time_rounded, size: 11, color: _C.sub),
                 const SizedBox(width: 4),
                 Text(dateLbl,
                     style: const TextStyle(color: _C.sub, fontSize: 11)),
               ],
             ]),
           ),
-
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 _Avatar(name: name),
                 const SizedBox(width: 12),
@@ -896,37 +965,24 @@ class _Card extends StatelessWidget {
                   ),
                 ),
               ]),
-
               const SizedBox(height: 12),
               const Divider(height: 1, color: _C.divider),
               const SizedBox(height: 12),
-
               if (svcList.isNotEmpty)
-                _Row(
-                    icon:  Icons.miscellaneous_services_rounded,
-                    value: svcList.join(', '),
-                    ic:    _C.indigo, bg: _C.indigoSft),
+                _Row(icon: Icons.miscellaneous_services_rounded,
+                    value: svcList.join(', '), ic: _C.indigo, bg: _C.indigoSft),
               if (phone.isNotEmpty)
-                _Row(
-                    icon:  Icons.phone_rounded,
-                    value: phone,
-                    ic:    _C.indigo, bg: _C.indigoSft),
+                _Row(icon: Icons.phone_rounded,
+                    value: phone, ic: _C.indigo, bg: _C.indigoSft),
               if (addr.isNotEmpty)
-                _Row(
-                    icon:  Icons.location_on_rounded,
-                    value: addr,
-                    ic:    _C.red, bg: _C.redSft),
+                _Row(icon: Icons.location_on_rounded,
+                    value: addr, ic: _C.red, bg: _C.redSft),
               if (sched.isNotEmpty)
-                _Row(
-                    icon:  Icons.schedule_rounded,
-                    value: sched,
-                    ic:    _C.green, bg: _C.greenSft),
+                _Row(icon: Icons.schedule_rounded,
+                    value: sched, ic: _C.green, bg: _C.greenSft),
               if (note.isNotEmpty)
-                _Row(
-                    icon:  Icons.notes_rounded,
-                    value: note,
-                    ic:    _C.orange, bg: _C.orangeSft),
-
+                _Row(icon: Icons.notes_rounded,
+                    value: note, ic: _C.orange, bg: _C.orangeSft),
               if (rawStatus == 'cancelled' &&
                   cancelNote.isNotEmpty &&
                   mode == _Mode.mine) ...[
@@ -952,9 +1008,7 @@ class _Card extends StatelessWidget {
                   ]),
                 ),
               ],
-
               const SizedBox(height: 14),
-
               if (mode == _Mode.avail)
                 Row(children: [
                   Expanded(child: _Btn(
@@ -962,8 +1016,8 @@ class _Card extends StatelessWidget {
                       bg: _C.indigo, fg: Colors.white, onTap: onAccept)),
                   const SizedBox(width: 10),
                   Expanded(child: _Btn(
-                      label:    'Decline', icon: Icons.close_rounded,
-                      bg:       _C.redSft, fg: _C.red,
+                      label: 'Decline', icon: Icons.close_rounded,
+                      bg: _C.redSft, fg: _C.red,
                       outlined: true, onTap: onDecline)),
                 ])
               else ...[
@@ -1006,7 +1060,8 @@ class _Pill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(5),
     decoration: BoxDecoration(
-        color: color.withOpacity(.15), borderRadius: BorderRadius.circular(8)),
+        color: color.withOpacity(.15),
+        borderRadius: BorderRadius.circular(8)),
     child: Icon(icon, color: color, size: 13),
   );
 }
@@ -1029,7 +1084,8 @@ class _Avatar extends StatelessWidget {
 
 class _Row extends StatelessWidget {
   final IconData icon; final String value; final Color ic, bg;
-  const _Row({required this.icon, required this.value, required this.ic, required this.bg});
+  const _Row({required this.icon, required this.value,
+      required this.ic, required this.bg});
   @override
   Widget build(BuildContext context) {
     if (value.isEmpty) return const SizedBox.shrink();
@@ -1038,8 +1094,8 @@ class _Row extends StatelessWidget {
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
             padding: const EdgeInsets.all(6),
-            decoration:
-                BoxDecoration(color: bg, borderRadius: BorderRadius.circular(9)),
+            decoration: BoxDecoration(
+                color: bg, borderRadius: BorderRadius.circular(9)),
             child: Icon(icon, color: ic, size: 13)),
         const SizedBox(width: 10),
         Expanded(
@@ -1081,15 +1137,15 @@ class _Btn extends StatelessWidget {
 
 class _IcoBtn extends StatelessWidget {
   final IconData icon; final Color color, bg; final VoidCallback? onTap;
-  const _IcoBtn(
-      {required this.icon, required this.color, required this.bg, required this.onTap});
+  const _IcoBtn({required this.icon, required this.color,
+      required this.bg, required this.onTap});
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
       width: 46, height: 46,
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(12)),
       child: Icon(icon, color: color, size: 20),
     ),
   );
@@ -1102,8 +1158,8 @@ class _Badge extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width:   double.infinity,
     padding: const EdgeInsets.symmetric(vertical: 11),
-    decoration:
-        BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+    decoration: BoxDecoration(
+        color: bg, borderRadius: BorderRadius.circular(12)),
     child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
       Icon(icon, color: color, size: 15),
       const SizedBox(width: 7),
@@ -1136,8 +1192,7 @@ class _Empty extends StatelessWidget {
         const SizedBox(height: 8),
         Text(msg,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: _C.sub, fontSize: 13, height: 1.6)),
+            style: const TextStyle(color: _C.sub, fontSize: 13, height: 1.6)),
       ]),
     ),
   );
@@ -1153,15 +1208,14 @@ class _ErrorRetry extends StatelessWidget {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
           padding: const EdgeInsets.all(24),
-          decoration:
-              const BoxDecoration(color: _C.redSft, shape: BoxShape.circle),
+          decoration: const BoxDecoration(
+              color: _C.redSft, shape: BoxShape.circle),
           child: const Icon(Icons.wifi_off_rounded, size: 42, color: _C.red),
         ),
         const SizedBox(height: 20),
         Text(message,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: _C.sub, fontSize: 14, height: 1.5)),
+            style: const TextStyle(color: _C.sub, fontSize: 14, height: 1.5)),
         const SizedBox(height: 18),
         ElevatedButton.icon(
           onPressed: onRetry,
@@ -1192,8 +1246,7 @@ class _PendingBody extends StatelessWidget {
       SafeArea(
         bottom: false,
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(children: [
             const BackButton(color: _C.text),
             const SizedBox(width: 4),
@@ -1227,8 +1280,7 @@ class _PendingBody extends StatelessWidget {
               const Text(
                   "Your account is under review.\nYou'll be notified once approved.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: _C.sub, fontSize: 14, height: 1.6)),
+                  style: TextStyle(color: _C.sub, fontSize: 14, height: 1.6)),
               const SizedBox(height: 28),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -1236,8 +1288,7 @@ class _PendingBody extends StatelessWidget {
                 decoration: BoxDecoration(
                     color: _C.orangeSft,
                     borderRadius: BorderRadius.circular(30),
-                    border: Border.all(
-                        color: _C.orange.withOpacity(.3))),
+                    border: Border.all(color: _C.orange.withOpacity(.3))),
                 child: const Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.circle, color: _C.orange, size: 9),
                   SizedBox(width: 10),
@@ -1257,19 +1308,23 @@ class _PendingBody extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// HEADER
+// HEADER — now shows active category chips below the tab bar
 // ═══════════════════════════════════════════════════════════════
 class _Header extends StatelessWidget {
   final String        businessName, serviceType, providerId;
+  final String        photoUrl;
+  final List<String>  activeCategories; // ← NEW: live from Firestore
   final int           tab, availCount, myCount;
   final void Function(int) onTab;
   final VoidCallback  onProfile;
 
   const _Header({
-    required this.businessName, required this.serviceType,
-    required this.providerId,   required this.tab,
-    required this.availCount,   required this.myCount,
-    required this.onTab,        required this.onProfile,
+    required this.businessName,       required this.serviceType,
+    required this.providerId,         required this.photoUrl,
+    required this.activeCategories,
+    required this.tab,                required this.availCount,
+    required this.myCount,            required this.onTab,
+    required this.onProfile,
   });
 
   @override
@@ -1282,6 +1337,7 @@ class _Header extends StatelessWidget {
         bottom: false,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const SizedBox(height: 12),
+          // ── Business name row ───────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(children: [
@@ -1312,24 +1368,74 @@ class _Header extends StatelessWidget {
                             color: _C.green, shape: BoxShape.circle)),
                     const SizedBox(width: 6),
                     Text(serviceType,
-                        style: const TextStyle(
-                            color: _C.sub, fontSize: 12)),
+                        style: const TextStyle(color: _C.sub, fontSize: 12)),
                   ]),
                 ]),
               ),
               GestureDetector(
                 onTap: onProfile,
-                child: Container(
-                    width:  44, height: 44,
-                    decoration: BoxDecoration(
-                        color: _C.indigoSft,
-                        borderRadius: BorderRadius.circular(14)),
-                    child: const Icon(Icons.person_rounded,
-                        color: _C.indigo, size: 22)),
+                child: _ProfileAvatar(
+                  photoUrl:     photoUrl,
+                  businessName: businessName,
+                  size:         44,
+                ),
               ),
             ]),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+
+          // ── Active category chips — updates live when provider edits profile ──
+          if (activeCategories.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Receiving jobs for:',
+                    style: TextStyle(
+                      color:      _C.sub,
+                      fontSize:   11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing:    6,
+                    runSpacing: 6,
+                    children: activeCategories.map((cat) => Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _C.indigoSft,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: _C.indigo.withOpacity(0.3)),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Container(
+                          width: 5, height: 5,
+                          decoration: const BoxDecoration(
+                              color: _C.indigo, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(cat,
+                            style: const TextStyle(
+                              color:      _C.indigo,
+                              fontSize:   11,
+                              fontWeight: FontWeight.w600,
+                            )),
+                      ]),
+                    )).toList(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // ── Stats chips ─────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(children: [
@@ -1345,6 +1451,8 @@ class _Header extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 16),
+
+          // ── Tab switcher ────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
@@ -1371,10 +1479,80 @@ class _Header extends StatelessWidget {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// PROFILE AVATAR
+// ═══════════════════════════════════════════════════════════════
+class _ProfileAvatar extends StatelessWidget {
+  final String photoUrl;
+  final String businessName;
+  final double size;
+
+  const _ProfileAvatar({
+    required this.photoUrl,
+    required this.businessName,
+    required this.size,
+  });
+
+  String get _initial =>
+      businessName.trim().isNotEmpty
+          ? businessName.trim()[0].toUpperCase()
+          : '?';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width:  size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _C.indigo.withOpacity(0.25), width: 1.5),
+        color: _C.indigoSft,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(13),
+        child: photoUrl.isNotEmpty
+            ? Image.network(
+                photoUrl,
+                fit:        BoxFit.cover,
+                loadingBuilder: (_, child, progress) =>
+                    progress == null
+                        ? child
+                        : _InitialsFallback(initial: _initial, size: size),
+                errorBuilder: (_, __, ___) =>
+                    _InitialsFallback(initial: _initial, size: size),
+              )
+            : _InitialsFallback(initial: _initial, size: size),
+      ),
+    );
+  }
+}
+
+class _InitialsFallback extends StatelessWidget {
+  final String initial;
+  final double size;
+  const _InitialsFallback({required this.initial, required this.size});
+  @override
+  Widget build(BuildContext context) => Container(
+    color: _C.indigoSft,
+    child: Center(
+      child: Text(
+        initial,
+        style: TextStyle(
+          color:      _C.indigo,
+          fontWeight: FontWeight.w700,
+          fontSize:   size * 0.38,
+        ),
+      ),
+    ),
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB / CHIP helpers
+// ═══════════════════════════════════════════════════════════════
 class _TabBtn extends StatelessWidget {
   final String label; final bool active; final VoidCallback onTap;
-  const _TabBtn(
-      {required this.label, required this.active, required this.onTap});
+  const _TabBtn({required this.label, required this.active, required this.onTap});
   @override
   Widget build(BuildContext context) => Expanded(
     child: GestureDetector(
@@ -1406,14 +1584,14 @@ class _TabBtn extends StatelessWidget {
 
 class _Chip extends StatelessWidget {
   final String label; final int count; final Color color, bg;
-  const _Chip(
-      {required this.label, required this.count, required this.color, required this.bg});
+  const _Chip({required this.label, required this.count,
+      required this.color, required this.bg});
   @override
   Widget build(BuildContext context) => Expanded(
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(14)),
       child: Row(children: [
         Container(
             width:  32, height: 32,
