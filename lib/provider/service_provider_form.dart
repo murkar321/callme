@@ -27,7 +27,7 @@ const _kTextHigh  = Color(0xFF1A1D2E);
 const _kTextMid   = Color(0xFF555A72);
 const _kTextLow   = Color(0xFF9398B0);
 
-// ─── File-size limits (matches ProviderProfilePage) ───────────────────────────
+// ─── File-size limits ─────────────────────────────────────────────────────────
 
 const _kMaxImageBytes = 500 * 1024;        // 500 KB
 const _kMaxDocBytes   = 5  * 1024 * 1024; // 5 MB
@@ -36,17 +36,63 @@ const _kMaxDocBytes   = 5  * 1024 * 1024; // 5 MB
 
 const _kCompulsoryDoc = 'Aadhaar Card';
 
+// ─── Readable document-ID prefix map ─────────────────────────────────────────
+//
+// Produces IDs like  CIV-765791 / CLE-961199 / EDU-003040 etc.
+// Keys must match the serviceType strings used in serviceConfigs.
+// ─────────────────────────────────────────────────────────────────────────────
+const Map<String, String> _kServicePrefix = {
+  'civil':     'CIV',
+  'cleaning':  'CLE',
+  'education': 'EDU',
+  'hotel':     'HOT',
+  'laundry':   'LAU',
+  'plumbing':  'PLU',
+  'resort':    'RST',
+  'salon':     'SAL',
+  'water':     'WAT',
+  // Add more verticals here as needed
+};
+
+/// Generates a readable provider document ID, e.g. `CIV-765791`.
+///
+/// Algorithm:
+///   prefix   = 3-letter code from [_kServicePrefix] (falls back to first-3
+///               uppercase chars of the serviceType)
+///   suffix   = last 6 digits of current epoch-milliseconds, zero-padded
+///
+/// Collision probability is negligible for typical marketplace scale;
+/// [_ensureUniqueProviderId] adds a retry loop just in case.
+String _buildProviderId(String serviceType) {
+  final key    = serviceType.trim().toLowerCase();
+  final prefix = _kServicePrefix[key] ??
+      serviceType.trim().toUpperCase().replaceAll(' ', '').padRight(3, 'X').substring(0, 3);
+  final suffix = (DateTime.now().millisecondsSinceEpoch % 1000000)
+      .toString()
+      .padLeft(6, '0');
+  return '$prefix-$suffix';
+}
+
+/// Retries up to [maxAttempts] times to find an ID not already in Firestore.
+Future<String> _ensureUniqueProviderId(
+  FirebaseFirestore db,
+  String serviceType, {
+  int maxAttempts = 10,
+}) async {
+  for (var i = 0; i < maxAttempts; i++) {
+    // Small delay so millisecond-based suffix actually changes on retry
+    if (i > 0) await Future<void>.delayed(const Duration(milliseconds: 2));
+    final id   = _buildProviderId(serviceType);
+    final snap = await db.collection('providers').doc(id).get();
+    if (!snap.exists) return id;
+  }
+  // Extremely unlikely fallback: append uid suffix
+  final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+  return '${_buildProviderId(serviceType)}-${uid.substring(0, 4).toUpperCase()}';
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  ServiceProviderForm
-//
-//  Changes vs original:
-//  • Validations driven by serviceConfigs — no magic constants.
-//  • Image + doc Storage paths mirror ProviderProfilePage exactly so the
-//    profile page can read them without re-uploading.
-//  • Real-device adaptive layout (safe area, keyboard avoidance, tablet gutter).
-//  • Inline helper text & character counters for every field.
-//  • Step header shows which fields are required vs optional.
-//  • Agreement dialog re-uses the same purple palette.
 // ═════════════════════════════════════════════════════════════════════════════
 
 class ServiceProviderForm extends StatefulWidget {
@@ -67,8 +113,8 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
     with SingleTickerProviderStateMixin {
 
   // ── Pagination ──────────────────────────────────────────────────────────────
-  int  _step    = 0;
-  bool _loading = false;
+  int  _step     = 0;
+  bool _loading  = false;
   bool _ownTools = false;
 
   final _pageCtrl = PageController();
@@ -82,10 +128,10 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   ];
 
   // ── Data ─────────────────────────────────────────────────────────────────────
-  File?              _businessImage;
-  List<String>       _selectedCats  = [];
-  Map<String, File>  _pickedDocFiles = {}; // local File before upload
-  Map<String, String> _uploadedDocs = {}; // docName → download URL
+  File?               _businessImage;
+  List<String>        _selectedCats   = [];
+  Map<String, File>   _pickedDocFiles  = {};
+  Map<String, String> _uploadedDocs   = {};
 
   // ── Form keys ────────────────────────────────────────────────────────────────
   final _businessFormKey = GlobalKey<FormState>();
@@ -112,7 +158,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   ];
 
   // ── Derived config ───────────────────────────────────────────────────────────
-  /// Never null — form is only reachable when a valid serviceType is selected.
   dynamic get _config => serviceConfigs[widget.type]!;
 
   List<String> get _allCats =>
@@ -131,32 +176,24 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
 
   // ── Step validation ──────────────────────────────────────────────────────────
 
-  /// Returns null if step is valid, empty string '' if form shows own error,
-  /// or a human-readable message.
   String? _validateStep() {
     switch (_step) {
       case 0:
         if (_selectedCats.isEmpty) return 'Select at least one category.';
         return null;
-
       case 1:
         if (!_businessFormKey.currentState!.validate()) return '';
         return null;
-
       case 2:
-        return null; // ownTools toggle — always valid
-
+        return null;
       case 3:
         if (!_bankFormKey.currentState!.validate()) return '';
         return null;
-
       case 4:
-        // Aadhaar is always mandatory; every other doc from config is optional
         if (!_uploadedDocs.containsKey(_kCompulsoryDoc)) {
           return '$_kCompulsoryDoc is required before submitting.';
         }
         return null;
-
       default:
         return null;
     }
@@ -190,7 +227,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
     }
   }
 
-  // ── Image pick (matches ProviderProfilePage: gallery, 75 quality) ─────────────
+  // ── Image pick ────────────────────────────────────────────────────────────────
 
   Future<void> _pickBusinessImage() async {
     try {
@@ -228,15 +265,16 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
       }
       setState(() => _loading = true);
       final pos        = await Geolocator.getCurrentPosition();
-      final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
-      final p          = placemarks.first;
+      final placemarks =
+          await placemarkFromCoordinates(pos.latitude, pos.longitude);
+      final p = placemarks.first;
       setState(() {
         _addressCtrl.text = [p.street, p.subLocality]
             .where((s) => s != null && s.isNotEmpty)
             .join(', ');
-        _cityCtrl.text    = p.locality            ?? '';
-        _stateCtrl.text   = p.administrativeArea  ?? '';
-        _pincodeCtrl.text = p.postalCode          ?? '';
+        _cityCtrl.text    = p.locality           ?? '';
+        _stateCtrl.text   = p.administrativeArea ?? '';
+        _pincodeCtrl.text = p.postalCode         ?? '';
       });
       _snackOk('Location filled successfully.');
     } catch (_) {
@@ -247,7 +285,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   }
 
   // ── Document upload ───────────────────────────────────────────────────────────
-  //  Storage path: provider_docs/{uid}/{docName}  — same as ProviderProfilePage
 
   Future<void> _uploadDocument(String docName) async {
     try {
@@ -293,7 +330,13 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────────
-  //  Image Storage path: provider_images/{uid}/{timestamp}.jpg — same as profile
+  //
+  // KEY CHANGE: the Firestore document ID is now a readable string like
+  // CIV-765791 generated by [_ensureUniqueProviderId], NOT the Firebase UID.
+  //
+  // The UID is still stored inside the document as `userId` / `providerId`
+  // so security rules and queries that use the UID continue to work.
+  // ─────────────────────────────────────────────────────────────────────────────
 
   Future<void> _submitForm() async {
     try {
@@ -302,6 +345,13 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw 'You must be logged in.';
 
+      final db = FirebaseFirestore.instance;
+
+      // ── 1. Generate readable provider document ID ──────────────────────────
+      final readableId =
+          await _ensureUniqueProviderId(db, widget.type);
+
+      // ── 2. Upload business image (if provided) ─────────────────────────────
       String imageUrl = '';
       if (_businessImage != null) {
         final ref = FirebaseStorage.instance
@@ -313,18 +363,26 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
         imageUrl = await ref.getDownloadURL();
       }
 
-      await FirebaseFirestore.instance
-          .collection('providers')
-          .doc(user.uid)
-          .set({
-        'providerId':   user.uid,
-        'userId':       user.uid,
+      // ── 3. Write to providers/{readableId} ────────────────────────────────
+      await db.collection('providers').doc(readableId).set({
+        // Readable document key is the doc ID itself; store it too for
+        // easy access without knowing the document path.
+        'providerId':   readableId,   // e.g. "CIV-765791"
+        'userId':       user.uid,     // Firebase UID — used for FCM, auth checks
+        'uid':          user.uid,     // legacy alias
+
         'providerName': _businessCtrl.text.trim(),
+        'businessName': _businessCtrl.text.trim(),
         'ownerName':    _ownerCtrl.text.trim(),
         'phone':        _phoneCtrl.text.trim(),
-        'serviceType':  widget.type,
+        'serviceType':  widget.type.trim().toLowerCase(),
         'providerType': widget.providerType,
-        'categories':   _selectedCats,
+
+        // ★ Categories chosen by the provider at registration (Step 0).
+        // OrderService._notifyMatchingProviders() uses this list to decide
+        // which providers to fan-out a new-order notification to.
+        'categories': _selectedCats,
+
         'business': {
           'businessName': _businessCtrl.text.trim(),
           'ownerName':    _ownerCtrl.text.trim(),
@@ -336,20 +394,34 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
           'pincode':      _pincodeCtrl.text.trim(),
           'image':        imageUrl,
         },
-        'service':   {'ownTools': _ownTools},
+
+        'service': {'ownTools': _ownTools},
+
         'bank': {
           'accountHolder': _holderCtrl.text.trim(),
           'accountNumber': _accountCtrl.text.trim(),
           'ifsc':          _ifscCtrl.text.trim(),
           'upi':           _upiCtrl.text.trim(),
         },
-        'documents':            _uploadedDocs,
-        'agreementAccepted':    true,
-        'agreementAcceptedAt':  FieldValue.serverTimestamp(),
+
+        'documents':           _uploadedDocs,
+        'agreementAccepted':   true,
+        'agreementAcceptedAt': FieldValue.serverTimestamp(),
+
         'status':    'pending',
         'isActive':  false,
+        'fcmToken':  '',   // populated later by NotificationService on device
+
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // ── 4. Also write a lookup document so we can find the provider by UID ─
+      // Useful for queries that start from the logged-in user's UID.
+      await db
+          .collection('provider_uid_lookup')
+          .doc(user.uid)
+          .set({'providerId': readableId}, SetOptions(merge: true));
 
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -529,9 +601,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
 
   @override
   Widget build(BuildContext context) {
-    final mq      = MediaQuery.of(context);
+    final mq       = MediaQuery.of(context);
     final isTablet = mq.size.width > 600;
-    final hPad    = isTablet ? 48.0 : 16.0;
+    final hPad     = isTablet ? 48.0 : 16.0;
 
     return Scaffold(
       backgroundColor: _kBg,
@@ -630,8 +702,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 10,
-                fontWeight:
-                    active ? FontWeight.bold : FontWeight.normal,
+                fontWeight: active ? FontWeight.bold : FontWeight.normal,
                 color: active
                     ? _kPurple
                     : done
@@ -671,13 +742,15 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
       ]);
 
   // ══════════════════════════════════════════════════════════════════
-  //  STEP 0 — Categories  (driven by serviceConfigs)
+  //  STEP 0 — Categories
   // ══════════════════════════════════════════════════════════════════
 
   Widget _categoriesStep() {
     return _card(
       title: 'Select Categories',
-      subtitle: 'Choose the services you offer — at least one required',
+      subtitle:
+          'Choose the services you offer — at least one required.\n'
+          'Only orders matching these categories will notify you.',
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
@@ -730,7 +803,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
       child: Form(
         key: _businessFormKey,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // ── Avatar ────────────────────────────────────────────────────────
           Center(
             child: GestureDetector(
               onTap: _pickBusinessImage,
@@ -786,8 +858,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                 style: TextStyle(fontSize: 11, color: _kTextLow)),
           ),
           const SizedBox(height: 20),
-
-          // ── Fields ─────────────────────────────────────────────────────────
           _field(_businessCtrl, 'Business Name *', Icons.store_rounded,
               validator: _required('Business name')),
           _field(_ownerCtrl, 'Owner / Manager Name *', Icons.person_rounded,
@@ -801,8 +871,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
               helperText: '10-digit mobile number',
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Phone is required.';
-                if (v.trim().length != 10)
-                  return 'Enter a valid 10-digit number.';
+                if (v.trim().length != 10) return 'Enter a valid 10-digit number.';
                 return null;
               }),
           _field(_emailCtrl, 'Email Address *', Icons.email_rounded,
@@ -815,16 +884,11 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                   return 'Enter a valid email address.';
                 return null;
               }),
-
-          // ── Address with GPS button ────────────────────────────────────────
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(
-              child: _field(
-                _addressCtrl,
-                'Business Address *',
-                Icons.location_on_rounded,
-                validator: _required('Address'),
-              ),
+              child: _field(_addressCtrl, 'Business Address *',
+                  Icons.location_on_rounded,
+                  validator: _required('Address')),
             ),
             const SizedBox(width: 10),
             Padding(
@@ -850,7 +914,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
               ),
             ),
           ]),
-
           Row(children: [
             Expanded(
               child: _field(_cityCtrl, 'City *', Icons.location_city_rounded,
@@ -871,8 +934,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
               helperText: '6-digit PIN code',
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Pincode is required.';
-                if (v.trim().length != 6)
-                  return 'Enter a valid 6-digit pincode.';
+                if (v.trim().length != 6) return 'Enter a valid 6-digit pincode.';
                 return null;
               }),
         ]),
@@ -962,11 +1024,10 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   }
 
   // ══════════════════════════════════════════════════════════════════
-  //  STEP 4 — Documents  (list driven by serviceConfigs)
+  //  STEP 4 — Documents
   // ══════════════════════════════════════════════════════════════════
 
   Widget _documentsStep() {
-    // Ensure Aadhaar Card always appears first
     final docs = [
       if (!_requiredDocs.contains(_kCompulsoryDoc)) _kCompulsoryDoc,
       ..._requiredDocs,
@@ -977,9 +1038,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
       subtitle: '$_kCompulsoryDoc is required · others are optional',
       child: Column(
         children: docs.map((doc) {
-          final uploaded      = _uploadedDocs.containsKey(doc);
-          final isCompulsory  = doc == _kCompulsoryDoc;
-          final subtitleText  = uploaded
+          final uploaded     = _uploadedDocs.containsKey(doc);
+          final isCompulsory = doc == _kCompulsoryDoc;
+          final subtitleText = uploaded
               ? 'Uploaded ✓'
               : isCompulsory
                   ? 'Required · PDF or Image · max 5 MB'
@@ -1006,7 +1067,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
               ),
             ),
             child: Row(children: [
-              // Icon
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -1024,8 +1084,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                 ),
               ),
               const SizedBox(width: 12),
-
-              // Labels
               Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1057,10 +1115,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                           color: uploaded ? Colors.green : _kTextLow)),
                 ]),
               ),
-
               const SizedBox(width: 8),
-
-              // Upload / Re-upload button
               SizedBox(
                 height: 42,
                 child: ElevatedButton(
@@ -1115,7 +1170,8 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(22),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title,
               style: const TextStyle(
                   fontSize: 21,
@@ -1219,7 +1275,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
           ),
           const SizedBox(width: 14),
           const Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               Text('Provider Agreement',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               SizedBox(height: 4),
@@ -1254,8 +1312,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
         ]),
       );
 
-  // ── Button styles ─────────────────────────────────────────────────────────────
-
   ButtonStyle _elevatedStyle() => ElevatedButton.styleFrom(
         backgroundColor: _kPurple,
         foregroundColor: Colors.white,
@@ -1271,8 +1327,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         side: const BorderSide(color: _kBorder),
       );
-
-  // ── Validator helper ──────────────────────────────────────────────────────────
 
   String? Function(String?) _required(String name) =>
       (v) => (v == null || v.trim().isEmpty) ? '$name is required.' : null;

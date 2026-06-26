@@ -34,25 +34,55 @@ class _C {
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════
+
+/// Normalise a string for loose comparison:
+/// trim, lowercase, collapse whitespace / underscores / hyphens.
 String _norm(String s) =>
     s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
 
 bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 
-/// Returns true if the order's category matches ANY of the provider's
-/// selected categories. Falls back to true when neither side has a category
-/// so old orders (without a category field) still show up.
-bool _categoryMatch(Map<String, dynamic> orderData, List<String> providerCats) {
-  if (providerCats.isEmpty) return true; // provider has no category filter yet
+// ─── Core matching logic ─────────────────────────────────────────────────────
+//
+// An order is visible to a provider ONLY when ALL three conditions pass:
+//
+//  1. order.serviceType  == provider.serviceType    (from registration)
+//  2. order.category     is in provider.categories  (from registration Step 0)
+//  3. The order is unassigned / open
+//
+// Fallback rules (backward-compat with old orders that lack fields):
+//  • If the ORDER has no category field  → still show it (don't hide old orders).
+//  • If the PROVIDER has no categories   → skip category check (shouldn't
+//    happen after the new form, but safe guard).
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // orders store category in any of these keys
+/// Returns true when the order's category matches one of the provider's
+/// registered categories.  Falls back to true when either side is missing
+/// the field so legacy data still works.
+bool _categoryMatch(
+  Map<String, dynamic> orderData,
+  List<String> providerCats,
+) {
+  // No provider categories saved yet → skip filter (shouldn't occur post-v2)
+  if (providerCats.isEmpty) return true;
+
+  // Try every key where an order might store its category
   String orderCat = '';
-  for (final k in ['category', 'serviceCategory', 'subCategory', 'jobCategory']) {
+  for (final k in [
+    'category',
+    'serviceCategory',
+    'subCategory',
+    'jobCategory',
+  ]) {
     final v = (orderData[k] ?? '').toString().trim();
-    if (v.isNotEmpty) { orderCat = v; break; }
+    if (v.isNotEmpty) {
+      orderCat = v;
+      break;
+    }
   }
 
-  if (orderCat.isEmpty) return true; // order has no category — show to everyone
+  // Old order with no category field → show to everyone in the service type
+  if (orderCat.isEmpty) return true;
 
   return providerCats.any((c) => _svcEq(c, orderCat));
 }
@@ -100,10 +130,18 @@ class _BDPState extends State<BusinessDashboardPage> {
   int    _tab = 0;
   String _uid = '';
 
-  Stream<DocumentSnapshot<Map<String, dynamic>>>?  _providerSnap;
-  Stream<QuerySnapshot<Map<String, dynamic>>>       _availStream =
+  /// Live snapshot of the provider document — drives BOTH the header UI and
+  /// the order filtering.  When the provider edits their profile/categories,
+  /// this stream fires and the Available Jobs list re-filters instantly.
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _providerSnap;
+
+  /// Unassigned orders for this serviceType — fetched server-side by
+  /// serviceType for efficiency, then filtered client-side by category.
+  Stream<QuerySnapshot<Map<String, dynamic>>> _availStream =
       const Stream.empty();
-  Stream<QuerySnapshot<Map<String, dynamic>>>?      _myStream;
+
+  /// All orders already assigned to this provider (My Jobs tab).
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _myStream;
 
   final _availNotifier = _CountNotifier();
   final _myNotifier    = _CountNotifier();
@@ -144,20 +182,24 @@ class _BDPState extends State<BusinessDashboardPage> {
   void _initStreams() {
     _uid = _auth.currentUser?.uid ?? '';
 
+    // ── Provider doc (live) ──────────────────────────────────────────────────
+    // Contains: serviceType, categories[], business{}, status, etc.
     _providerSnap = _db
         .collection('providers')
         .doc(widget.providerId)
         .snapshots();
 
-    // We load ALL unassigned orders for this serviceType.
-    // Category filtering is done client-side using the live provider snapshot
-    // so it instantly reacts when the provider edits their categories.
+    // ── Available orders ─────────────────────────────────────────────────────
+    // Server-side filter: unassigned + matching serviceType.
+    // Client-side filter (in _AvailTab): category must be in provider.categories.
     _availStream = _db
         .collection('orders')
         .where('isAssigned', isEqualTo: false)
+        .where('serviceType', isEqualTo: _svcNorm)
         .limit(200)
         .snapshots();
 
+    // ── My Jobs ───────────────────────────────────────────────────────────────
     _myStream = _uid.isEmpty
         ? null
         : _db
@@ -183,8 +225,9 @@ class _BDPState extends State<BusinessDashboardPage> {
         content: Row(children: [
           Icon(icon, color: Colors.white, size: 18),
           const SizedBox(width: 10),
-          Expanded(child: Text(msg,
-              style: const TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(
+              child: Text(msg,
+                  style: const TextStyle(fontWeight: FontWeight.w600))),
         ]),
         backgroundColor: color,
         behavior:  SnackBarBehavior.floating,
@@ -402,32 +445,35 @@ class _BDPState extends State<BusinessDashboardPage> {
             return const Center(
                 child: CircularProgressIndicator(color: _C.indigo));
           }
+
           final prov = snap.data?.data() ?? {};
+
           if (prov['status'] != 'approved') {
             return const _PendingBody();
           }
 
-          // ── Extract profile photo & categories live from snapshot ─────────
-          // Both update instantly when the provider edits their profile.
-          final business   = (prov['business'] as Map?)
-                                 ?.cast<String, dynamic>() ?? {};
-          final photoUrl   = (business['image'] ?? '').toString().trim();
+          // ── Pull live provider data from registration snapshot ────────────
+          // serviceType  → set at registration (widget.serviceType also holds it)
+          // categories[] → Step 0 of ServiceProviderForm; drives order filtering
+          final business  = (prov['business'] as Map?)?.cast<String, dynamic>() ?? {};
+          final photoUrl  = (business['image'] ?? '').toString().trim();
 
-          // categories is stored as List<dynamic> at the provider doc root
-          final rawCats    = (prov['categories'] as List?) ?? [];
+          // Categories chosen during registration (e.g. ["Ice Blocks","Bottles"])
+          final rawCats            = (prov['categories'] as List?) ?? [];
           final providerCategories = rawCats.map((e) => e.toString()).toList();
 
           return Column(children: [
             _Header(
-              businessName:       widget.businessName,
-              serviceType:        widget.serviceType,
-              providerId:         widget.providerId,
-              tab:                _tab,
-              availCount:         _availCount,
-              myCount:            _myCount,
-              photoUrl:           photoUrl,
-              activeCategories:   providerCategories,  // ← shown in header
-              onTab:              _goTab,
+              businessName:     widget.businessName,
+              serviceType:      widget.serviceType,
+              providerId:       widget.providerId,
+              tab:              _tab,
+              availCount:       _availCount,
+              myCount:          _myCount,
+              photoUrl:         photoUrl,
+              // Live category list shown as chips in the header
+              activeCategories: providerCategories,
+              onTab:            _goTab,
               onProfile: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -439,17 +485,18 @@ class _BDPState extends State<BusinessDashboardPage> {
                 index: _tab,
                 children: [
                   _AvailTab(
-                    key:               const ValueKey('available'),
-                    stream:            _availStream,
-                    myUid:             _uid,
-                    svcNorm:           _svcNorm,
-                    serviceType:       widget.serviceType,
-                    // ↓ live category list — tab re-filters whenever this changes
+                    key:                const ValueKey('available'),
+                    stream:             _availStream,
+                    myUid:              _uid,
+                    svcNorm:            _svcNorm,
+                    serviceType:        widget.serviceType,
+                    // ↓ Live categories from registration — tab re-filters
+                    //   instantly when provider edits their profile.
                     providerCategories: providerCategories,
-                    countNotifier:     _availNotifier,
-                    onAccept:          _accept,
-                    onDecline:         _showDecline,
-                    onRetry:           _retry,
+                    countNotifier:      _availNotifier,
+                    onAccept:           _accept,
+                    onDecline:          _showDecline,
+                    onRetry:            _retry,
                   ),
                   _MyTab(
                     key:           const ValueKey('myjobs'),
@@ -473,18 +520,25 @@ class _BDPState extends State<BusinessDashboardPage> {
 
 // ═══════════════════════════════════════════════════════════════
 // AVAILABLE JOBS TAB
-// Now receives providerCategories and filters orders against it.
-// Since providerCategories comes from the live Firestore snapshot,
-// the list refreshes instantly whenever the provider edits their profile.
+//
+// Filtering pipeline (in order):
+//  1. isAssigned == false             (server-side)
+//  2. serviceType == provider.serviceType (server-side)
+//  3. status is open (pending / enquiry / reopened-cancelled)
+//  4. Not already declined by this provider
+//  5. ★ order.category ∈ provider.categories  ← registration categories
+//
+// Step 5 is client-side so it reacts instantly when the provider
+// edits their category list without needing a new Firestore query.
 // ═══════════════════════════════════════════════════════════════
 class _AvailTab extends StatelessWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
-  final String              svcNorm, myUid, serviceType;
-  final List<String>        providerCategories; // ← NEW: live from Firestore
-  final _CountNotifier      countNotifier;
+  final String         svcNorm, myUid, serviceType;
+  final List<String>   providerCategories;
+  final _CountNotifier countNotifier;
   final Future<void> Function(String, Map<String, dynamic>) onAccept;
   final Future<void> Function(String, Map<String, dynamic>) onDecline;
-  final VoidCallback        onRetry;
+  final VoidCallback   onRetry;
 
   const _AvailTab({
     super.key,
@@ -522,45 +576,51 @@ class _AvailTab extends StatelessWidget {
           // 1. Must not already be assigned
           if (m['isAssigned'] == true) return false;
 
-          // 2. Must be an open order
-          final isOpen = st == 'pending' || st == 'enquiry' ||
+          // 2. serviceType already filtered server-side; double-check for safety
+          if (!_svcEq((m['serviceType'] ?? '').toString(), svcNorm)) return false;
+
+          // 3. Must be an open order
+          final isOpen = st == 'pending' ||
+              st == 'enquiry' ||
               (st == 'cancelled' && reopened);
           if (!isOpen) return false;
-
-          // 3. Must match this provider's service type
-          if (!_svcEq((m['serviceType'] ?? '').toString(), svcNorm))
-            return false;
 
           // 4. Must not have been declined by this provider
           final declined = (m['declinedBy'] as List?) ?? [];
           if (declined.contains(myUid)) return false;
 
-          // 5. ★ NEW: Must match one of provider's registered categories
+          // 5. ★ Category must match one of the provider's registered categories
           //    (falls back to true when order or provider has no category data)
           if (!_categoryMatch(m, providerCategories)) return false;
 
           return true;
         }).toList();
 
+        // Sort oldest first so providers see jobs in arrival order
         docs.sort((a, b) {
-          final at =
-              (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-          final bt =
-              (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+          final at = (a.data()['createdAt'] as Timestamp?)
+                  ?.millisecondsSinceEpoch ??
+              0;
+          final bt = (b.data()['createdAt'] as Timestamp?)
+                  ?.millisecondsSinceEpoch ??
+              0;
           return at.compareTo(bt);
         });
 
         countNotifier.update(docs.length);
 
         if (docs.isEmpty) {
+          // Helpful message tells provider exactly why nothing shows
+          final catMsg = providerCategories.isEmpty
+              ? 'New $serviceType orders will appear here in real‑time.'
+              : 'No open orders match your registered categories:\n'
+                '${providerCategories.join(', ')}.\n\n'
+                'Update your categories via Edit Profile if needed.';
+
           return _Empty(
             icon:  Icons.work_outline_rounded,
             title: 'No Available Jobs',
-            msg:   providerCategories.isEmpty
-                ? 'New $serviceType orders will appear here in real-time.'
-                : 'No open orders match your categories:\n'
-                  '${providerCategories.join(', ')}.\n'
-                  'Edit your profile to update categories.',
+            msg:   catMsg,
           );
         }
 
@@ -587,7 +647,7 @@ class _AvailTab extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// MY JOBS TAB  (unchanged)
+// MY JOBS TAB
 // ═══════════════════════════════════════════════════════════════
 class _MyTab extends StatelessWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>>? stream;
@@ -636,7 +696,7 @@ class _MyTab extends StatelessWidget {
         }).toList();
 
         const ord = {
-          'accepted': 0, 'completed': 1, 'cancelled': 2, 'pending': 3
+          'accepted': 0, 'completed': 1, 'cancelled': 2, 'pending': 3,
         };
         docs.sort((a, b) {
           final as_ = (a.data()['status'] ?? '').toString().toLowerCase();
@@ -644,10 +704,12 @@ class _MyTab extends StatelessWidget {
           final ap  = ord[as_] ?? 4;
           final bp  = ord[bs]  ?? 4;
           if (ap != bp) return ap.compareTo(bp);
-          final at =
-              (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-          final bt =
-              (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+          final at = (a.data()['createdAt'] as Timestamp?)
+                  ?.millisecondsSinceEpoch ??
+              0;
+          final bt = (b.data()['createdAt'] as Timestamp?)
+                  ?.millisecondsSinceEpoch ??
+              0;
           return bt.compareTo(at);
         });
 
@@ -663,7 +725,7 @@ class _MyTab extends StatelessWidget {
           return _Empty(
             icon:  Icons.assignment_outlined,
             title: 'No Jobs Yet',
-            msg:   'Jobs you accept will appear here and update in real-time.',
+            msg:   'Jobs you accept will appear here and update in real‑time.',
           );
         }
 
@@ -675,10 +737,10 @@ class _MyTab extends StatelessWidget {
             final data   = doc.data();
             final status = (data['status'] ?? '').toString().toLowerCase();
             return _Card(
-              key:        ValueKey(doc.id),
-              doc:        doc,
-              data:       data,
-              mode:       _Mode.mine,
+              key:         ValueKey(doc.id),
+              doc:         doc,
+              data:        data,
+              mode:        _Mode.mine,
               serviceType: serviceType,
               onComplete: status == 'accepted'
                   ? () => onComplete(doc.id, data)
@@ -820,7 +882,8 @@ class _Card extends StatelessWidget {
     return sv is List ? sv.map((e) => e.toString()).toList() : [];
   }
 
-  /// Reads category from order, returns empty string if none set.
+  /// The category this order belongs to (e.g. "Ice Blocks").
+  /// Stored at registration by the customer booking form.
   String _category() {
     for (final k in ['category', 'serviceCategory', 'subCategory', 'jobCategory']) {
       final v = _s(data[k]);
@@ -862,7 +925,7 @@ class _Card extends StatelessWidget {
     final amt      = _amt();
     final note     = _note();
     final svcList  = _services();
-    final category = _category(); // ← show category chip on card
+    final category = _category();
 
     return RepaintBoundary(
       child: Container(
@@ -895,18 +958,19 @@ class _Card extends StatelessWidget {
               const SizedBox(width: 8),
               Text(dispStatus.toUpperCase(),
                   style: TextStyle(
-                    color:        sc,
-                    fontWeight:   FontWeight.w800,
-                    fontSize:     11,
+                    color:         sc,
+                    fontWeight:    FontWeight.w800,
+                    fontSize:      11,
                     letterSpacing: 1,
                   )),
-              // ← Category chip (visible when order has a category)
+              // Category chip — shows the category this order belongs to
               if (category.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: _C.indigo.withOpacity(0.12),
+                    color:        _C.indigo.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -991,7 +1055,7 @@ class _Card extends StatelessWidget {
                   width:   double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color:        _C.redSft,
+                    color:  _C.redSft,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: _C.red.withOpacity(.25)),
                   ),
@@ -1308,22 +1372,23 @@ class _PendingBody extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// HEADER — now shows active category chips below the tab bar
+// HEADER
+// Shows business name, live category chips, stats, and tab bar.
 // ═══════════════════════════════════════════════════════════════
 class _Header extends StatelessWidget {
   final String        businessName, serviceType, providerId;
   final String        photoUrl;
-  final List<String>  activeCategories; // ← NEW: live from Firestore
+  final List<String>  activeCategories;
   final int           tab, availCount, myCount;
   final void Function(int) onTab;
   final VoidCallback  onProfile;
 
   const _Header({
-    required this.businessName,       required this.serviceType,
-    required this.providerId,         required this.photoUrl,
+    required this.businessName,     required this.serviceType,
+    required this.providerId,       required this.photoUrl,
     required this.activeCategories,
-    required this.tab,                required this.availCount,
-    required this.myCount,            required this.onTab,
+    required this.tab,              required this.availCount,
+    required this.myCount,          required this.onTab,
     required this.onProfile,
   });
 
@@ -1363,7 +1428,7 @@ class _Header extends StatelessWidget {
                   const SizedBox(height: 3),
                   Row(children: [
                     Container(
-                        width:  7, height: 7,
+                        width: 7, height: 7,
                         decoration: const BoxDecoration(
                             color: _C.green, shape: BoxShape.circle)),
                     const SizedBox(width: 6),
@@ -1384,7 +1449,10 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // ── Active category chips — updates live when provider edits profile ──
+          // ── Registered category chips ────────────────────────────────────
+          // These come directly from registration Step 0 (serviceConfigs
+          // categories). They reflect what the provider chose during sign-up
+          // and only orders whose category matches one of these will appear.
           if (activeCategories.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1394,9 +1462,9 @@ class _Header extends StatelessWidget {
                   const Text(
                     'Receiving jobs for:',
                     style: TextStyle(
-                      color:      _C.sub,
-                      fontSize:   11,
-                      fontWeight: FontWeight.w600,
+                      color:         _C.sub,
+                      fontSize:      11,
+                      fontWeight:    FontWeight.w600,
                       letterSpacing: 0.3,
                     ),
                   ),
@@ -1415,17 +1483,16 @@ class _Header extends StatelessWidget {
                       ),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                         Container(
-                          width: 5, height: 5,
-                          decoration: const BoxDecoration(
-                              color: _C.indigo, shape: BoxShape.circle),
-                        ),
+                            width: 5, height: 5,
+                            decoration: const BoxDecoration(
+                                color:  _C.indigo,
+                                shape:  BoxShape.circle)),
                         const SizedBox(width: 5),
                         Text(cat,
                             style: const TextStyle(
-                              color:      _C.indigo,
-                              fontSize:   11,
-                              fontWeight: FontWeight.w600,
-                            )),
+                                color:      _C.indigo,
+                                fontSize:   11,
+                                fontWeight: FontWeight.w600)),
                       ]),
                     )).toList(),
                   ),
@@ -1548,7 +1615,7 @@ class _InitialsFallback extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TAB / CHIP helpers
+// TAB / CHIP HELPERS
 // ═══════════════════════════════════════════════════════════════
 class _TabBtn extends StatelessWidget {
   final String label; final bool active; final VoidCallback onTap;
