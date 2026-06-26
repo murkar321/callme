@@ -5,24 +5,31 @@ import 'package:flutter/foundation.dart';
 // NOTIFICATION TYPE CONSTANTS
 // ============================================================
 class NotificationType {
+  // ── existing constants (kept as-is) ──────────────────────
   static const String newBooking    = 'new_booking';
   static const String accepted      = 'order_accepted';
   static const String rejected      = 'order_rejected';
   static const String cancelled     = 'order_cancelled';
   static const String completed     = 'order_completed';
   static const String userCancelled = 'user_cancelled';
+
+  // ── FIX: was `=> null`, now proper string constants ───────
+  // These must match the switch-case strings in the notification router.
+  static const String bookingAccepted  = 'booking_accepted';
+  static const String bookingRejected  = 'booking_rejected';
+  static const String serviceCompleted = 'service_completed';
 }
 
 // ============================================================
 // ORDER STATUS CONSTANTS
 // ============================================================
 class OrderStatus {
-  static const String pending    = 'pending';
-  static const String accepted   = 'accepted';
-  static const String rejected   = 'rejected';
-  static const String cancelled  = 'cancelled';
-  static const String completed  = 'completed';
-  static const String enquiry    = 'enquiry';
+  static const String pending   = 'pending';
+  static const String accepted  = 'accepted';
+  static const String rejected  = 'rejected';
+  static const String cancelled = 'cancelled';
+  static const String completed = 'completed';
+  static const String enquiry   = 'enquiry';
 }
 
 class OrderService {
@@ -31,7 +38,6 @@ class OrderService {
   // ==========================================================
   // ORDER ID GENERATOR
   // ==========================================================
-
   static String generateOrderId(String userName) {
     final cleanName =
         userName.trim().toLowerCase().replaceAll(' ', '');
@@ -42,7 +48,6 @@ class OrderService {
   // ==========================================================
   // PLACE ORDER
   // ==========================================================
-
   static Future<DocumentReference> placeOrder({
     required String serviceType,
     required List<String> services,
@@ -90,32 +95,32 @@ class OrderService {
 
     await docRef.set({
       'orderId': orderId,
-      'userId': userId,
+      'userId':  userId,
 
       'userName': userName,
-      'phone': phone,
-      'email': email ?? '',
+      'phone':    phone,
+      'email':    email ?? '',
 
       'user': {
-        'id': userId,
-        'name': userName,
+        'id':    userId,
+        'name':  userName,
         'phone': phone,
         'email': email ?? '',
       },
 
-      'providerId': providerId,
-      'providerUserId': resolvedProviderUserId,
-      'providerName': resolvedProviderName,
+      'providerId':      providerId,
+      'providerUserId':  resolvedProviderUserId,
+      'providerName':    resolvedProviderName,
 
       'provider': {
-        'providerId': providerId,
-        'providerUserId': resolvedProviderUserId,
-        'providerName': resolvedProviderName,
+        'providerId':      providerId,
+        'providerUserId':  resolvedProviderUserId,
+        'providerName':    resolvedProviderName,
       },
 
       'serviceType': normalizedServiceType,
       'serviceName': normalizedServiceType,
-      'services': services,
+      'services':    services,
 
       'date': Timestamp.fromDate(date),
       'time': time,
@@ -126,37 +131,37 @@ class OrderService {
       },
 
       'address': address.isEmpty ? 'Not Provided' : address,
-      'note': note ?? '',
+      'note':    note ?? '',
 
       'location': {
         'address': address.isEmpty ? 'Not Provided' : address,
-        'note': note ?? '',
+        'note':    note ?? '',
       },
 
       'totalAmount': totalAmount,
 
       'payment': {
         'totalAmount': totalAmount,
-        'paid': !isEnquiry,
-        'method': isEnquiry ? 'enquiry' : 'upi',
+        'paid':        !isEnquiry,
+        'method':      isEnquiry ? 'enquiry' : 'upi',
       },
 
-      'adults': adults ?? 0,
-      'children': children ?? 0,
+      'adults':    adults    ?? 0,
+      'children':  children  ?? 0,
       'visitType': visitType ?? '',
 
       'isEnquiry': isEnquiry,
 
-      'status': isEnquiry ? OrderStatus.enquiry : OrderStatus.pending,
-      'isAssigned': false,
+      'status':      isEnquiry ? OrderStatus.enquiry : OrderStatus.pending,
+      'isAssigned':  false,
       'isCompleted': false,
 
-      // Reason fields — always written as empty strings so reads never get null.
-      'declineReason': '',   // canonical field for reject / provider-cancel reason
-      'cancelReason': '',    // kept for backwards compat
-      'cancelledBy': '',     // 'user' | 'provider'
+      // Reason fields — always empty strings so reads never get null.
+      'declineReason': '',  // canonical field for reject / provider-cancel reason
+      'cancelReason':  '',  // legacy fallback
+      'cancelledBy':   '',  // 'user' | 'provider'
 
-      'createdBy': createdBy,
+      'createdBy':     createdBy,
       'createdByRole': createdByRole,
 
       'createdAt': FieldValue.serverTimestamp(),
@@ -164,16 +169,16 @@ class OrderService {
     });
 
     await _notifyProvider(
-      providerId: providerId,
-      providerUserId: resolvedProviderUserId,
-      providerName: resolvedProviderName,
-      orderId: orderId,
-      serviceType: normalizedServiceType,
-      userName: userName,
-      date: date,
-      time: time,
-      totalAmount: totalAmount,
-      providerData: providerData,
+      providerId:        providerId,
+      providerUserId:    resolvedProviderUserId,
+      providerName:      resolvedProviderName,
+      orderId:           orderId,
+      serviceType:       normalizedServiceType,
+      userName:          userName,
+      date:              date,
+      time:              time,
+      totalAmount:       totalAmount,
+      providerData:      providerData,
     );
 
     return docRef;
@@ -191,25 +196,23 @@ class OrderService {
     required String serviceType,
   }) async {
     await _db.collection('orders').doc(orderId).update({
-      'status': OrderStatus.accepted,
+      'status':     OrderStatus.accepted,
       'isAssigned': true,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt':  FieldValue.serverTimestamp(),
     });
 
     await notifyUser(
-      userId: userId,
+      userId:  userId,
       orderId: orderId,
-      title: '✅ Booking Accepted',
-      body:
-          '$providerName has accepted your $serviceType booking. '
-          'They will contact you soon.',
-      type: NotificationType.accepted,
+      title:   '✅ Booking Accepted',
+      body:    '$providerName has accepted your $serviceType booking. '
+               'They will contact you soon.',
+      type:    NotificationType.bookingAccepted,   // FIX: was NotificationType.accepted
     );
   }
 
   /// Provider REJECTS the order (with mandatory reason).
-  /// Writes to `declineReason` (canonical) AND legacy `cancelReason`
-  /// so both old and new clients can read the reason safely.
+  /// Writes to `declineReason` (canonical) AND legacy `cancelReason`.
   static Future<void> rejectOrder({
     required String orderId,
     required String userId,
@@ -220,22 +223,21 @@ class OrderService {
     final trimmedReason = reason.trim();
 
     await _db.collection('orders').doc(orderId).update({
-      'status': OrderStatus.rejected,
-      'declineReason': trimmedReason,   // canonical — new field
-      'cancelReason': trimmedReason,    // legacy fallback
-      'cancelledBy': 'provider',
-      'providerCancelNote': trimmedReason, // extra legacy compat
-      'updatedAt': FieldValue.serverTimestamp(),
+      'status':              OrderStatus.rejected,
+      'declineReason':       trimmedReason,   // canonical
+      'cancelReason':        trimmedReason,   // legacy fallback
+      'cancelledBy':         'provider',
+      'providerCancelNote':  trimmedReason,   // extra legacy compat
+      'updatedAt':           FieldValue.serverTimestamp(),
     });
 
     await notifyUser(
-      userId: userId,
+      userId:  userId,
       orderId: orderId,
-      title: '❌ Booking Rejected',
-      body:
-          '$providerName has rejected your $serviceType booking. '
-          'Reason: $trimmedReason',
-      type: NotificationType.rejected,
+      title:   '❌ Booking Rejected',
+      body:    '$providerName has rejected your $serviceType booking. '
+               'Reason: $trimmedReason',
+      type:    NotificationType.bookingRejected,   // FIX: was NotificationType.rejected
     );
   }
 
@@ -247,19 +249,18 @@ class OrderService {
     required String serviceType,
   }) async {
     await _db.collection('orders').doc(orderId).update({
-      'status': OrderStatus.completed,
+      'status':      OrderStatus.completed,
       'isCompleted': true,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt':   FieldValue.serverTimestamp(),
     });
 
     await notifyUser(
-      userId: userId,
+      userId:  userId,
       orderId: orderId,
-      title: '🎉 Service Completed',
-      body:
-          'Your $serviceType service by $providerName has been '
-          'marked as completed. Thank you!',
-      type: NotificationType.completed,
+      title:   '🎉 Service Completed',
+      body:    'Your $serviceType service by $providerName has been '
+               'marked as completed. Thank you!',
+      type:    NotificationType.serviceCompleted,   // FIX: was NotificationType.completed
     );
   }
 
@@ -274,29 +275,27 @@ class OrderService {
     final trimmedReason = reason.trim();
 
     await _db.collection('orders').doc(orderId).update({
-      'status': OrderStatus.cancelled,
-      'declineReason': trimmedReason,   // canonical
-      'cancelReason': trimmedReason,    // legacy
-      'cancelledBy': 'provider',
+      'status':             OrderStatus.cancelled,
+      'declineReason':      trimmedReason,   // canonical
+      'cancelReason':       trimmedReason,   // legacy
+      'cancelledBy':        'provider',
       'providerCancelNote': trimmedReason,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt':          FieldValue.serverTimestamp(),
     });
 
     await notifyUser(
-      userId: userId,
+      userId:  userId,
       orderId: orderId,
-      title: '🚫 Booking Cancelled by Provider',
-      body:
-          '$providerName cancelled your $serviceType booking. '
-          'Reason: $trimmedReason',
-      type: NotificationType.cancelled,
+      title:   '🚫 Booking Cancelled by Provider',
+      body:    '$providerName cancelled your $serviceType booking. '
+               'Reason: $trimmedReason',
+      type:    NotificationType.bookingRejected,   // FIX: was NotificationType.cancelled
     );
   }
 
   // ==========================================================
   // USER CANCELS ORDER
   // ==========================================================
-
   static Future<void> userCancelOrder({
     required String orderId,
     required String providerUserId,
@@ -304,19 +303,19 @@ class OrderService {
     required String serviceType,
   }) async {
     await _db.collection('orders').doc(orderId).update({
-      'status': OrderStatus.cancelled,
+      'status':      OrderStatus.cancelled,
       'cancelledBy': 'user',
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt':   FieldValue.serverTimestamp(),
     });
 
     if (providerUserId.isNotEmpty) {
       await _sendNotification(
         receiverId: providerUserId,
-        role: 'provider',
-        orderId: orderId,
-        title: '⚠️ Order Cancelled by User',
-        body: '$userName has cancelled their $serviceType booking.',
-        type: NotificationType.userCancelled,
+        role:       'provider',
+        orderId:    orderId,
+        title:      '⚠️ Order Cancelled by User',
+        body:       '$userName has cancelled their $serviceType booking.',
+        type:       NotificationType.userCancelled,
       );
     }
   }
@@ -324,7 +323,6 @@ class OrderService {
   // ==========================================================
   // NOTIFY PROVIDER — new booking
   // ==========================================================
-
   static Future<void> _notifyProvider({
     required String providerId,
     required String providerUserId,
@@ -351,30 +349,30 @@ class OrderService {
     try {
       await _sendNotification(
         receiverId: providerUserId,
-        role: 'provider',
-        orderId: orderId,
-        title: title,
-        body: body,
-        type: NotificationType.newBooking,
+        role:       'provider',
+        orderId:    orderId,
+        title:      title,
+        body:       body,
+        type:       NotificationType.newBooking,
       );
 
       final fcmToken =
           (providerData['fcmToken'] ?? '').toString().trim();
       if (fcmToken.isNotEmpty) {
         await _db.collection('fcm_queue').add({
-          'token': fcmToken,
-          'receiverId': providerUserId,
-          'providerId': providerId,
-          'orderId': orderId,
-          'title': title,
-          'body': body,
-          'type': NotificationType.newBooking,
+          'token':       fcmToken,
+          'receiverId':  providerUserId,
+          'providerId':  providerId,
+          'orderId':     orderId,
+          'title':       title,
+          'body':        body,
+          'type':        NotificationType.newBooking,
           'data': {
-            'type': NotificationType.newBooking,
-            'orderId': orderId,
+            'type':       NotificationType.newBooking,
+            'orderId':    orderId,
             'receiverId': providerUserId,
           },
-          'sent': false,
+          'sent':      false,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -386,7 +384,6 @@ class OrderService {
   // ==========================================================
   // NOTIFY USER — status updates from provider
   // ==========================================================
-
   static Future<void> notifyUser({
     required String userId,
     required String orderId,
@@ -399,11 +396,11 @@ class OrderService {
     try {
       await _sendNotification(
         receiverId: userId,
-        role: 'user',
-        orderId: orderId,
-        title: title,
-        body: body,
-        type: type,
+        role:       'user',
+        orderId:    orderId,
+        title:      title,
+        body:       body,
+        type:       type,
       );
 
       final userDoc =
@@ -413,18 +410,18 @@ class OrderService {
 
       if (fcmToken.isNotEmpty) {
         await _db.collection('fcm_queue').add({
-          'token': fcmToken,
+          'token':      fcmToken,
           'receiverId': userId,
-          'orderId': orderId,
-          'title': title,
-          'body': body,
-          'type': type,
+          'orderId':    orderId,
+          'title':      title,
+          'body':       body,
+          'type':       type,
           'data': {
-            'type': type,
-            'orderId': orderId,
+            'type':       type,
+            'orderId':    orderId,
             'receiverId': userId,
           },
-          'sent': false,
+          'sent':      false,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -436,7 +433,6 @@ class OrderService {
   // ==========================================================
   // INTERNAL: write to notifications collection
   // ==========================================================
-
   static Future<void> _sendNotification({
     required String receiverId,
     required String role,
@@ -447,21 +443,20 @@ class OrderService {
   }) async {
     await _db.collection('notifications').add({
       'receiverId': receiverId,
-      'senderId': '',
-      'role': role,
-      'orderId': orderId,
-      'title': title,
-      'body': body,
-      'type': type,
-      'read': false,
-      'createdAt': FieldValue.serverTimestamp(),
+      'senderId':   '',
+      'role':       role,
+      'orderId':    orderId,
+      'title':      title,
+      'body':       body,
+      'type':       type,
+      'read':       false,
+      'createdAt':  FieldValue.serverTimestamp(),
     });
   }
 
   // ==========================================================
   // DATE FORMATTER
   // ==========================================================
-
   static String _formatDate(DateTime date) {
     const months = [
       '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

@@ -107,7 +107,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         return null;
 
       case 1: // Business
-        if (_businessImage == null) return 'Please upload a business photo.';
+        // Business photo optional
         if (!_businessFormKey.currentState!.validate()) return '';
         return null;
 
@@ -119,25 +119,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
         return null;
 
       case 4: // Documents
-        // Aadhaar Card is always compulsory. Beyond that, uploading just
-        // one document (Aadhaar itself, or any other) is sufficient —
-        // the user does not need to upload every document in the config list.
-        final config = serviceConfigs[widget.type]!;
-        final allDocs = (config.requiredDocuments as List<dynamic>).cast<String>();
-
-        // Only enforce Aadhaar specifically if it's actually part of this
-        // service type's document list. If it isn't listed for this type,
-        // we don't block on a doc name that was never offered.
-        final aadhaarApplies = allDocs.contains(_kCompulsoryDoc);
-
-        if (aadhaarApplies && !_uploadedDocs.containsKey(_kCompulsoryDoc)) {
-          return 'Aadhaar Card is compulsory. Please upload it to continue.';
-        }
-
-        if (_uploadedDocs.isEmpty) {
-          return 'Please upload at least one document.';
-        }
-
+        if (!_uploadedDocs.containsKey(_kCompulsoryDoc)) return 'Aadhaar Card is required.';
         return null;
 
       default:
@@ -239,11 +221,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
 
   // ── Provider ID ───────────────────────────────────────────────────────────
 
-  String _generateProviderId() {
-    final type = widget.type.substring(0, 3).toUpperCase();
-    final ts = DateTime.now().millisecondsSinceEpoch.toString().substring(7);
-    return '$type-$ts';
-  }
 
   // ── Navigation ────────────────────────────────────────────────────────────
 
@@ -474,7 +451,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw 'You must be logged in.';
 
-      final providerId = _generateProviderId();
+      final providerId = user.uid;
       String imageUrl = '';
 
       if (_businessImage != null) {
@@ -768,7 +745,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
   Widget _businessStep() {
     return _card(
       title: 'Business Information',
-      subtitle: 'All fields and a business photo are required',
+      subtitle: 'Business photo is optional',
       child: Form(
         key: _businessFormKey,
         child: Column(
@@ -962,7 +939,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
     final docs = (config.requiredDocuments as List<dynamic>).cast<String>();
     return _card(
       title: 'Upload Documents',
-      subtitle: 'Aadhaar Card is compulsory · upload at least one document',
+      subtitle: 'Documents are optional · upload only if available',
       child: Column(
         children: docs.map((doc) {
           final uploaded = _uploadedDocs.containsKey(doc);
@@ -1015,7 +992,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
                           Text(doc,
                               style: const TextStyle(
@@ -1050,21 +1029,32 @@ class _ServiceProviderFormState extends State<ServiceProviderForm> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () => _uploadDocument(doc),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        uploaded ? Colors.green : _kPurple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
+                const SizedBox(width: 8),
+                Flexible(
+                  flex: 0,
+                  child: SizedBox(
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: () => _uploadDocument(doc),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            uploaded ? Colors.green : _kPurple,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(96, 44),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      child: FittedBox(
+                        child: Text(
+                          uploaded ? 'Re-upload' : 'Upload',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ),
                   ),
-                  child: Text(uploaded ? 'Re-upload' : 'Upload',
-                      style: const TextStyle(fontSize: 13)),
                 ),
               ],
             ),

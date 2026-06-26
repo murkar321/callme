@@ -5,7 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
 
 import 'provider_profile_page.dart';
-import '../provider/order_service.dart';
+import '../provider/order_service.dart';   // NotificationType lives here now
 
 // ═══════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -41,26 +41,6 @@ bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 
 // ═══════════════════════════════════════════════════════════════
 // COUNT NOTIFIER
-//
-// Replaces the Future.microtask(() => widget.onCount(c)) pattern
-// which was the primary trigger of the '_dependents.isEmpty' assertion.
-//
-// Why that pattern was dangerous:
-//   StreamBuilder calls build() synchronously during a frame.
-//   Inside build() we scheduled a microtask to call setState() on
-//   the *parent*. Microtasks run at the end of the current microtask
-//   checkpoint — which can land in the middle of Flutter's own
-//   frame pipeline (specifically during the "unmount" phase of an
-//   InheritedElement). When setState fires while an InheritedElement
-//   is unmounting its dependents, Flutter hits the
-//   '_dependents.isEmpty' assertion because it's trying to add a
-//   new dependent to an element that is already tearing down.
-//
-// Fix: use a ChangeNotifier. The parent _BDPState listens to it and
-//   schedules its own setState via addPostFrameCallback — which is
-//   always safe because post-frame callbacks run AFTER the entire
-//   build/layout/paint pipeline for the current frame, never during
-//   InheritedElement unmounting.
 // ═══════════════════════════════════════════════════════════════
 class _CountNotifier extends ChangeNotifier {
   int _value = 0;
@@ -69,12 +49,7 @@ class _CountNotifier extends ChangeNotifier {
   void update(int newValue) {
     if (_value != newValue) {
       _value = newValue;
-      // Don't call notifyListeners() synchronously inside a build()
-      // call — defer to post-frame so we're never inside a frame pipeline.
       SchedulerBinding.instance.addPostFrameCallback((_) {
-        // The notifier itself might have been disposed by the time
-        // the callback fires (e.g. fast navigation). Guard with
-        // hasListeners so we don't crash.
         if (hasListeners) notifyListeners();
       });
     }
@@ -104,33 +79,26 @@ class _BDPState extends State<BusinessDashboardPage> {
   final _db   = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  int _tab = 0;
+  int    _tab = 0;
   String _uid = '';
 
-  Stream<DocumentSnapshot<Map<String, dynamic>>>? _providerSnap;
-  Stream<QuerySnapshot<Map<String, dynamic>>>      _availStream =
+  Stream<DocumentSnapshot<Map<String, dynamic>>>?  _providerSnap;
+  Stream<QuerySnapshot<Map<String, dynamic>>>       _availStream =
       const Stream.empty();
   Stream<QuerySnapshot<Map<String, dynamic>>>?      _myStream;
 
-  // ChangeNotifiers let child tabs report counts without calling
-  // setState() synchronously from inside a StreamBuilder build(),
-  // which was what triggered the '_dependents.isEmpty' assertion.
   final _availNotifier = _CountNotifier();
   final _myNotifier    = _CountNotifier();
 
-  // Cached inherited state — looked up once in didChangeDependencies()
-  // so we never touch `context` from inside async gaps.
   ScaffoldMessengerState? _messenger;
 
-  String get _svcNorm => _norm(widget.serviceType);
-
-  int get _availCount => _availNotifier.value;
-  int get _myCount    => _myNotifier.value;
+  String get _svcNorm    => _norm(widget.serviceType);
+  int    get _availCount => _availNotifier.value;
+  int    get _myCount    => _myNotifier.value;
 
   @override
   void initState() {
     super.initState();
-    // Listen to notifiers and rebuild the header counts safely.
     _availNotifier.addListener(_onCountChanged);
     _myNotifier.addListener(_onCountChanged);
     _initStreams();
@@ -139,8 +107,6 @@ class _BDPState extends State<BusinessDashboardPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Cache ScaffoldMessenger here — this is the only safe place to
-    // call inherited lookups. Never do this inside async callbacks.
     _messenger = ScaffoldMessenger.of(context);
   }
 
@@ -154,8 +120,6 @@ class _BDPState extends State<BusinessDashboardPage> {
   }
 
   void _onCountChanged() {
-    // Listeners fire from addPostFrameCallback (see _CountNotifier),
-    // so this setState is always safe — never inside a build/unmount.
     if (mounted) setState(() {});
   }
 
@@ -191,9 +155,6 @@ class _BDPState extends State<BusinessDashboardPage> {
     if (mounted && _tab != i) setState(() => _tab = i);
   }
 
-  // ─── Snack ────────────────────────────────────────────────────
-  // Uses cached _messenger — never calls ScaffoldMessenger.of(context)
-  // which would be unsafe inside async gaps.
   void _snack(String msg, Color color, IconData icon) {
     _messenger
       ?..clearSnackBars()
@@ -241,9 +202,15 @@ class _BDPState extends State<BusinessDashboardPage> {
           'lastActionBy':    'provider',
         });
       });
-      _notify(custId, id, '✅ Provider Found!',
-          '${widget.businessName} accepted your ${widget.serviceType} booking.',
-          'booking_accepted');
+
+      // FIX: NotificationType.bookingAccepted = 'booking_accepted'
+      _notify(
+        custId, id,
+        '✅ Provider Found!',
+        '${widget.businessName} accepted your ${widget.serviceType} booking.',
+        NotificationType.bookingAccepted,
+      );
+
       if (!mounted) return;
       _goTab(1);
       _snack('Job accepted! Moved to My Jobs.', _C.green, Icons.check_circle_rounded);
@@ -278,10 +245,14 @@ class _BDPState extends State<BusinessDashboardPage> {
         'status':          'pending',
         'lastActionBy':    'provider',
       });
-      _notify(custId, id,
-          '🔄 Finding Another Provider',
-          'A provider was unavailable. Finding another for you.',
-          'booking_declined');
+
+      // FIX: NotificationType.bookingRejected = 'booking_rejected'
+      _notify(
+        custId, id,
+        '🔄 Finding Another Provider',
+        'A provider was unavailable. Finding another for you.',
+        NotificationType.bookingRejected,
+      );
       _snack('Declined successfully.', _C.orange, Icons.thumb_down_rounded);
     } catch (e) {
       debugPrint('[decline] $e');
@@ -300,9 +271,16 @@ class _BDPState extends State<BusinessDashboardPage> {
         'updatedAt':    FieldValue.serverTimestamp(),
         'lastActionBy': 'provider',
       });
-      _notify(custId, id, '✅ Service Completed',
-          'Your ${widget.serviceType} service by ${widget.businessName} is complete!',
-          'booking_completed');
+
+      // FIX: NotificationType.serviceCompleted = 'service_completed'
+      // Router's switch-case on 'service_completed' opens FeedbackPage
+      _notify(
+        custId, id,
+        '✅ Service Completed',
+        'Your ${widget.serviceType} service by ${widget.businessName} is complete! '
+        'Please rate your experience.',
+        NotificationType.serviceCompleted,
+      );
       _snack('Marked as completed!', _C.green, Icons.verified_rounded);
     } catch (e) {
       debugPrint('[complete] $e');
@@ -324,11 +302,16 @@ class _BDPState extends State<BusinessDashboardPage> {
         'lastActionBy':       'provider',
         'declinedBy':         FieldValue.arrayUnion([_uid]),
       });
-      _notify(custId, id, '❌ Provider Cancelled',
-          '${widget.businessName} cancelled. '
-          'Reason: ${note.isEmpty ? "Not specified" : note}. '
-          'Finding another provider.',
-          'booking_cancelled');
+
+      // FIX: NotificationType.bookingRejected (provider cancelled = rejected from user's view)
+      _notify(
+        custId, id,
+        '❌ Provider Cancelled',
+        '${widget.businessName} cancelled. '
+        'Reason: ${note.isEmpty ? "Not specified" : note}. '
+        'Finding another provider.',
+        NotificationType.bookingRejected,
+      );
       _snack('Job cancelled — order reopened for others.', _C.orange, Icons.cancel_rounded);
     } catch (e) {
       debugPrint('[cancel] $e');
@@ -336,11 +319,15 @@ class _BDPState extends State<BusinessDashboardPage> {
     }
   }
 
-  void _notify(String uid, String orderId, String title, String body, String type) {
+  void _notify(
+      String uid, String orderId, String title, String body, String type) {
     if (uid.isEmpty) return;
     OrderService.notifyUser(
-      userId: uid, orderId: orderId,
-      title: title, body: body, type: type,
+      userId:  uid,
+      orderId: orderId,
+      title:   title,
+      body:    body,
+      type:    type,
     ).catchError((e) => debugPrint('[notify] $e'));
   }
 
@@ -390,12 +377,14 @@ class _BDPState extends State<BusinessDashboardPage> {
         builder: (ctx, snap) {
           if (snap.hasError) {
             return _ErrorRetry(
-              message: 'Could not load your provider profile.\nCheck your connection and try again.',
+              message: 'Could not load your provider profile.\n'
+                       'Check your connection and try again.',
               onRetry: _retry,
             );
           }
           if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator(color: _C.indigo));
+            return const Center(
+                child: CircularProgressIndicator(color: _C.indigo));
           }
           final prov = snap.data?.data() ?? {};
           if (prov['status'] != 'approved') {
@@ -410,34 +399,36 @@ class _BDPState extends State<BusinessDashboardPage> {
               availCount:   _availCount,
               myCount:      _myCount,
               onTab:        _goTab,
-              onProfile: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) =>
-                      ProviderProfilePage(providerId: widget.providerId))),
+              onProfile: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => ProviderProfilePage(
+                          providerId: widget.providerId))),
             ),
             Expanded(
               child: IndexedStack(
                 index: _tab,
                 children: [
                   _AvailTab(
-                    key:         const ValueKey('available'),
-                    stream:      _availStream,
-                    myUid:       _uid,
-                    svcNorm:     _svcNorm,
-                    serviceType: widget.serviceType,
+                    key:           const ValueKey('available'),
+                    stream:        _availStream,
+                    myUid:         _uid,
+                    svcNorm:       _svcNorm,
+                    serviceType:   widget.serviceType,
                     countNotifier: _availNotifier,
-                    onAccept:    _accept,
-                    onDecline:   _showDecline,
-                    onRetry:     _retry,
+                    onAccept:      _accept,
+                    onDecline:     _showDecline,
+                    onRetry:       _retry,
                   ),
                   _MyTab(
-                    key:         const ValueKey('myjobs'),
-                    stream:      _myStream,
-                    svcNorm:     _svcNorm,
-                    serviceType: widget.serviceType,
+                    key:           const ValueKey('myjobs'),
+                    stream:        _myStream,
+                    svcNorm:       _svcNorm,
+                    serviceType:   widget.serviceType,
                     countNotifier: _myNotifier,
-                    onComplete:  _complete,
-                    onCancel:    _showCancel,
-                    onRetry:     _retry,
+                    onComplete:    _complete,
+                    onCancel:      _showCancel,
+                    onRetry:       _retry,
                   ),
                 ],
               ),
@@ -454,11 +445,11 @@ class _BDPState extends State<BusinessDashboardPage> {
 // ═══════════════════════════════════════════════════════════════
 class _AvailTab extends StatelessWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
-  final String svcNorm, myUid, serviceType;
-  final _CountNotifier countNotifier;
+  final String              svcNorm, myUid, serviceType;
+  final _CountNotifier      countNotifier;
   final Future<void> Function(String, Map<String, dynamic>) onAccept;
   final Future<void> Function(String, Map<String, dynamic>) onDecline;
-  final VoidCallback onRetry;
+  final VoidCallback        onRetry;
 
   const _AvailTab({
     super.key,
@@ -478,10 +469,12 @@ class _AvailTab extends StatelessWidget {
       stream: stream,
       builder: (_, snap) {
         if (snap.hasError) {
-          return _ErrorRetry(message: 'Could not load available jobs.', onRetry: onRetry);
+          return _ErrorRetry(
+              message: 'Could not load available jobs.', onRetry: onRetry);
         }
         if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-          return const Center(child: CircularProgressIndicator(color: _C.indigo));
+          return const Center(
+              child: CircularProgressIndicator(color: _C.indigo));
         }
 
         final raw  = snap.data?.docs ?? [];
@@ -490,22 +483,25 @@ class _AvailTab extends StatelessWidget {
           final st       = (m['status'] ?? '').toString().toLowerCase();
           final reopened = m['reopenForOthers'] == true;
           if (m['isAssigned'] == true) return false;
-          final isOpen   = st == 'pending' || st == 'enquiry'
-              || (st == 'cancelled' && reopened);
+          final isOpen = st == 'pending' || st == 'enquiry' ||
+              (st == 'cancelled' && reopened);
           if (!isOpen) return false;
-          if (!_svcEq((m['serviceType'] ?? '').toString(), svcNorm)) return false;
+          if (!_svcEq((m['serviceType'] ?? '').toString(), svcNorm))
+            return false;
           final declined = (m['declinedBy'] as List?) ?? [];
           return !declined.contains(myUid);
         }).toList();
 
         docs.sort((a, b) {
-          final at = (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-          final bt = (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+          final at =
+              (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ??
+                  0;
+          final bt =
+              (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ??
+                  0;
           return at.compareTo(bt);
         });
 
-        // Safe count update — goes through _CountNotifier which defers
-        // to addPostFrameCallback, so it never fires during a build.
         countNotifier.update(docs.length);
 
         if (docs.isEmpty) {
@@ -543,11 +539,11 @@ class _AvailTab extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════
 class _MyTab extends StatelessWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>>? stream;
-  final String svcNorm, serviceType;
+  final String         svcNorm, serviceType;
   final _CountNotifier countNotifier;
   final Future<void> Function(String, Map<String, dynamic>) onComplete;
   final Future<void> Function(String, Map<String, dynamic>) onCancel;
-  final VoidCallback onRetry;
+  final VoidCallback   onRetry;
 
   const _MyTab({
     super.key,
@@ -564,7 +560,8 @@ class _MyTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (stream == null) {
       return _ErrorRetry(
-        message: 'Your session could not be verified.\nPlease retry or sign in again.',
+        message: 'Your session could not be verified.\n'
+                 'Please retry or sign in again.',
         onRetry: onRetry,
       );
     }
@@ -573,10 +570,12 @@ class _MyTab extends StatelessWidget {
       stream: stream,
       builder: (_, snap) {
         if (snap.hasError) {
-          return _ErrorRetry(message: 'Could not load your jobs.', onRetry: onRetry);
+          return _ErrorRetry(
+              message: 'Could not load your jobs.', onRetry: onRetry);
         }
         if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-          return const Center(child: CircularProgressIndicator(color: _C.indigo));
+          return const Center(
+              child: CircularProgressIndicator(color: _C.indigo));
         }
 
         final docs = (snap.data?.docs ?? []).where((d) {
@@ -584,22 +583,30 @@ class _MyTab extends StatelessWidget {
           return svc.isEmpty || _svcEq(svc, svcNorm);
         }).toList();
 
-        const ord = {'accepted': 0, 'completed': 1, 'cancelled': 2, 'pending': 3};
+        const ord = {
+          'accepted': 0, 'completed': 1, 'cancelled': 2, 'pending': 3
+        };
         docs.sort((a, b) {
           final as_ = (a.data()['status'] ?? '').toString().toLowerCase();
           final bs  = (b.data()['status'] ?? '').toString().toLowerCase();
           final ap  = ord[as_] ?? 4;
           final bp  = ord[bs]  ?? 4;
           if (ap != bp) return ap.compareTo(bp);
-          final at = (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-          final bt = (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+          final at =
+              (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ??
+                  0;
+          final bt =
+              (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ??
+                  0;
           return bt.compareTo(at);
         });
 
-        final active = docs.where((d) =>
-            (d.data()['status'] ?? '').toString().toLowerCase() == 'accepted').length;
+        final active = docs
+            .where((d) =>
+                (d.data()['status'] ?? '').toString().toLowerCase() ==
+                'accepted')
+            .length;
 
-        // Safe — deferred through _CountNotifier / addPostFrameCallback.
         countNotifier.update(active);
 
         if (docs.isEmpty) {
@@ -618,13 +625,17 @@ class _MyTab extends StatelessWidget {
             final data   = doc.data();
             final status = (data['status'] ?? '').toString().toLowerCase();
             return _Card(
-              key:         ValueKey(doc.id),
-              doc:         doc,
-              data:        data,
-              mode:        _Mode.mine,
+              key:        ValueKey(doc.id),
+              doc:        doc,
+              data:       data,
+              mode:       _Mode.mine,
               serviceType: serviceType,
-              onComplete: status == 'accepted' ? () => onComplete(doc.id, data) : null,
-              onCancel:   status == 'accepted' ? () => onCancel(doc.id, data)   : null,
+              onComplete: status == 'accepted'
+                  ? () => onComplete(doc.id, data)
+                  : null,
+              onCancel: status == 'accepted'
+                  ? () => onCancel(doc.id, data)
+                  : null,
             );
           },
         );
@@ -677,30 +688,42 @@ class _Card extends StatelessWidget {
       (v?.toString() ?? '').trim().isEmpty ? fb : v.toString().trim();
 
   String _name() {
-    for (final k in ['userName','customerName','name','displayName','fullName']) {
-      final v = _s(data[k]); if (v.isNotEmpty) return v;
+    for (final k in [
+      'userName', 'customerName', 'name', 'displayName', 'fullName'
+    ]) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
     }
     return 'Customer';
   }
 
   String _phone() {
-    for (final k in ['phone','phoneNumber','mobile','contactPhone']) {
-      final v = _s(data[k]); if (v.isNotEmpty) return v;
+    for (final k in [
+      'phone', 'phoneNumber', 'mobile', 'contactPhone'
+    ]) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
     }
     return '';
   }
 
   String _addr() {
-    for (final k in ['address','fullAddress','customerAddress']) {
-      final v = _s(data[k]); if (v.isNotEmpty) return v;
+    for (final k in ['address', 'fullAddress', 'customerAddress']) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
     }
     final loc = data['location'];
     if (loc is Map) {
-      for (final k in ['address','fullAddress','formattedAddress','name']) {
-        final v = _s(loc[k]); if (v.isNotEmpty) return v;
+      for (final k in [
+        'address', 'fullAddress', 'formattedAddress', 'name'
+      ]) {
+        final v = _s(loc[k]);
+        if (v.isNotEmpty) return v;
       }
-      final pts = [loc['street'],loc['area'],loc['city'],loc['state']]
-          .map((e) => _s(e)).where((e) => e.isNotEmpty).toList();
+      final pts = [loc['street'], loc['area'], loc['city'], loc['state']]
+          .map((e) => _s(e))
+          .where((e) => e.isNotEmpty)
+          .toList();
       if (pts.isNotEmpty) return pts.join(', ');
     }
     return '';
@@ -718,28 +741,32 @@ class _Card extends StatelessWidget {
       if (dateStr.isNotEmpty) return dateStr;
       if (timeStr.isNotEmpty) return timeStr;
     }
-    for (final k in ['scheduledTime','scheduledDate','appointmentTime']) {
-      final v = _s(data[k]); if (v.isNotEmpty) return v;
+    for (final k in ['scheduledTime', 'scheduledDate', 'appointmentTime']) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
     }
     return '';
   }
 
   double _amt() {
-    for (final k in ['totalAmount','amount','price','total','cost']) {
-      final v = data[k]; if (v is num) return v.toDouble();
+    for (final k in ['totalAmount', 'amount', 'price', 'total', 'cost']) {
+      final v = data[k];
+      if (v is num) return v.toDouble();
     }
     final pay = data['payment'];
     if (pay is Map) {
-      for (final k in ['totalAmount','amount','total','price']) {
-        final v = pay[k]; if (v is num) return v.toDouble();
+      for (final k in ['totalAmount', 'amount', 'total', 'price']) {
+        final v = pay[k];
+        if (v is num) return v.toDouble();
       }
     }
     return 0;
   }
 
   String _note() {
-    for (final k in ['note','notes','description','specialRequest']) {
-      final v = _s(data[k]); if (v.isNotEmpty) return v;
+    for (final k in ['note', 'notes', 'description', 'specialRequest']) {
+      final v = _s(data[k]);
+      if (v.isNotEmpty) return v;
     }
     return '';
   }
@@ -750,29 +777,38 @@ class _Card extends StatelessWidget {
   }
 
   String _displayStatus(String raw) =>
-      (raw == 'cancelled' && data['reopenForOthers'] == true) ? 'reopened' : raw;
+      (raw == 'cancelled' && data['reopenForOthers'] == true)
+          ? 'reopened'
+          : raw;
 
   @override
   Widget build(BuildContext context) {
     final rawStatus  = (data['status'] ?? 'pending').toString().toLowerCase();
     final dispStatus = _displayStatus(rawStatus);
 
-    final sc   = dispStatus == 'reopened' ? _C.orange    : (_col[rawStatus] ?? _C.indigo);
-    final soft = dispStatus == 'reopened' ? _C.orangeSft : (_bg[rawStatus]  ?? _C.indigoSft);
+    final sc   = dispStatus == 'reopened'
+        ? _C.orange
+        : (_col[rawStatus] ?? _C.indigo);
+    final soft = dispStatus == 'reopened'
+        ? _C.orangeSft
+        : (_bg[rawStatus] ?? _C.indigoSft);
     final icon = dispStatus == 'reopened'
         ? Icons.refresh_rounded
         : (_ico[rawStatus] ?? Icons.schedule_rounded);
 
     final ts         = data['createdAt'] as Timestamp?;
-    final dateLbl    = ts != null ? DateFormat('dd MMM • hh:mm a').format(ts.toDate()) : '';
-    final cancelNote = _s(data['providerCancelNote'] ?? data['cancelReason']);
-    final name       = _name();
-    final phone      = _phone();
-    final addr       = _addr();
-    final sched      = _sched();
-    final amt        = _amt();
-    final note       = _note();
-    final svcList    = _services();
+    final dateLbl    = ts != null
+        ? DateFormat('dd MMM • hh:mm a').format(ts.toDate())
+        : '';
+    final cancelNote =
+        _s(data['providerCancelNote'] ?? data['cancelReason']);
+    final name    = _name();
+    final phone   = _phone();
+    final addr    = _addr();
+    final sched   = _sched();
+    final amt     = _amt();
+    final note    = _note();
+    final svcList = _services();
 
     return RepaintBoundary(
       child: Container(
@@ -781,10 +817,13 @@ class _Card extends StatelessWidget {
           color:        Colors.white,
           borderRadius: BorderRadius.circular(20),
           border:       Border.all(color: _C.divider),
-          boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12, offset: const Offset(0, 4),
-          )],
+          boxShadow: [
+            BoxShadow(
+              color:      Colors.black.withOpacity(0.04),
+              blurRadius: 12,
+              offset:     const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
@@ -794,21 +833,27 @@ class _Card extends StatelessWidget {
             decoration: BoxDecoration(
               color: soft,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20), topRight: Radius.circular(20),
+                topLeft:  Radius.circular(20),
+                topRight: Radius.circular(20),
               ),
             ),
             child: Row(children: [
               _Pill(icon: icon, color: sc),
               const SizedBox(width: 8),
-              Text(dispStatus.toUpperCase(), style: TextStyle(
-                color: sc, fontWeight: FontWeight.w800,
-                fontSize: 11, letterSpacing: 1,
-              )),
+              Text(dispStatus.toUpperCase(),
+                  style: TextStyle(
+                    color:       sc,
+                    fontWeight:  FontWeight.w800,
+                    fontSize:    11,
+                    letterSpacing: 1,
+                  )),
               const Spacer(),
               if (dateLbl.isNotEmpty) ...[
-                const Icon(Icons.access_time_rounded, size: 11, color: _C.sub),
+                const Icon(Icons.access_time_rounded,
+                    size: 11, color: _C.sub),
                 const SizedBox(width: 4),
-                Text(dateLbl, style: const TextStyle(color: _C.sub, fontSize: 11)),
+                Text(dateLbl,
+                    style: const TextStyle(color: _C.sub, fontSize: 11)),
               ],
             ]),
           ),
@@ -820,23 +865,34 @@ class _Card extends StatelessWidget {
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 _Avatar(name: name),
                 const SizedBox(width: 12),
-                Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(name, style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700, color: _C.text)),
-                  const SizedBox(height: 2),
-                  Text(serviceType, style: const TextStyle(color: _C.sub, fontSize: 12)),
-                ])),
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(name,
+                        style: const TextStyle(
+                            fontSize:   15,
+                            fontWeight: FontWeight.w700,
+                            color:      _C.text)),
+                    const SizedBox(height: 2),
+                    Text(serviceType,
+                        style: const TextStyle(color: _C.sub, fontSize: 12)),
+                  ]),
+                ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 11, vertical: 5),
                   decoration: BoxDecoration(
-                      color: _C.greenSft, borderRadius: BorderRadius.circular(20)),
+                      color:        _C.greenSft,
+                      borderRadius: BorderRadius.circular(20)),
                   child: Text(
                     amt == 0
                         ? 'TBD'
                         : '₹${amt % 1 == 0 ? amt.toInt() : amt.toStringAsFixed(2)}',
                     style: const TextStyle(
-                        color: _C.green, fontWeight: FontWeight.w700, fontSize: 13),
+                        color:      _C.green,
+                        fontWeight: FontWeight.w700,
+                        fontSize:   13),
                   ),
                 ),
               ]),
@@ -846,32 +902,53 @@ class _Card extends StatelessWidget {
               const SizedBox(height: 12),
 
               if (svcList.isNotEmpty)
-                _Row(icon: Icons.miscellaneous_services_rounded,
-                    value: svcList.join(', '), ic: _C.indigo, bg: _C.indigoSft),
+                _Row(
+                    icon:  Icons.miscellaneous_services_rounded,
+                    value: svcList.join(', '),
+                    ic:    _C.indigo, bg: _C.indigoSft),
               if (phone.isNotEmpty)
-                _Row(icon: Icons.phone_rounded, value: phone, ic: _C.indigo, bg: _C.indigoSft),
+                _Row(
+                    icon:  Icons.phone_rounded,
+                    value: phone,
+                    ic:    _C.indigo, bg: _C.indigoSft),
               if (addr.isNotEmpty)
-                _Row(icon: Icons.location_on_rounded, value: addr, ic: _C.red, bg: _C.redSft),
+                _Row(
+                    icon:  Icons.location_on_rounded,
+                    value: addr,
+                    ic:    _C.red, bg: _C.redSft),
               if (sched.isNotEmpty)
-                _Row(icon: Icons.schedule_rounded, value: sched, ic: _C.green, bg: _C.greenSft),
+                _Row(
+                    icon:  Icons.schedule_rounded,
+                    value: sched,
+                    ic:    _C.green, bg: _C.greenSft),
               if (note.isNotEmpty)
-                _Row(icon: Icons.notes_rounded, value: note, ic: _C.orange, bg: _C.orangeSft),
+                _Row(
+                    icon:  Icons.notes_rounded,
+                    value: note,
+                    ic:    _C.orange, bg: _C.orangeSft),
 
-              if (rawStatus == 'cancelled' && cancelNote.isNotEmpty && mode == _Mode.mine) ...[
+              if (rawStatus == 'cancelled' &&
+                  cancelNote.isNotEmpty &&
+                  mode == _Mode.mine) ...[
                 const SizedBox(height: 10),
                 Container(
-                  width: double.infinity,
+                  width:   double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _C.redSft,
+                    color:        _C.redSft,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: _C.red.withOpacity(.25)),
                   ),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Icon(Icons.info_outline_rounded, color: _C.red, size: 15),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    const Icon(Icons.info_outline_rounded,
+                        color: _C.red, size: 15),
                     const SizedBox(width: 8),
-                    Expanded(child: Text('Reason: $cancelNote',
-                        style: const TextStyle(color: _C.red, fontSize: 12, height: 1.4))),
+                    Expanded(
+                        child: Text('Reason: $cancelNote',
+                            style: const TextStyle(
+                                color: _C.red, fontSize: 12, height: 1.4))),
                   ]),
                 ),
               ],
@@ -885,25 +962,31 @@ class _Card extends StatelessWidget {
                       bg: _C.indigo, fg: Colors.white, onTap: onAccept)),
                   const SizedBox(width: 10),
                   Expanded(child: _Btn(
-                      label: 'Decline', icon: Icons.close_rounded,
-                      bg: _C.redSft, fg: _C.red, outlined: true, onTap: onDecline)),
+                      label:    'Decline', icon: Icons.close_rounded,
+                      bg:       _C.redSft, fg: _C.red,
+                      outlined: true, onTap: onDecline)),
                 ])
               else ...[
                 if (rawStatus == 'accepted')
                   Row(children: [
                     Expanded(child: _Btn(
-                        label: 'Mark Complete', icon: Icons.verified_rounded,
-                        bg: _C.green, fg: Colors.white, onTap: onComplete)),
+                        label: 'Mark Complete',
+                        icon:  Icons.verified_rounded,
+                        bg:    _C.green, fg: Colors.white,
+                        onTap: onComplete)),
                     const SizedBox(width: 10),
-                    _IcoBtn(icon: Icons.close_rounded,
-                        color: _C.red, bg: _C.redSft, onTap: onCancel),
+                    _IcoBtn(
+                        icon:  Icons.close_rounded,
+                        color: _C.red, bg: _C.redSft,
+                        onTap: onCancel),
                   ]),
                 if (rawStatus == 'completed')
                   _Badge(Icons.verified_rounded,
                       'Job Completed Successfully', _C.blue, _C.blueSft),
                 if (rawStatus == 'cancelled')
                   _Badge(Icons.refresh_rounded,
-                      'Cancelled — Reopened for Other Providers', _C.orange, _C.orangeSft),
+                      'Cancelled — Reopened for Other Providers',
+                      _C.orange, _C.orangeSft),
               ],
             ]),
           ),
@@ -955,20 +1038,24 @@ class _Row extends StatelessWidget {
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
             padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(9)),
+            decoration:
+                BoxDecoration(color: bg, borderRadius: BorderRadius.circular(9)),
             child: Icon(icon, color: ic, size: 13)),
         const SizedBox(width: 10),
-        Expanded(child: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(value, style: const TextStyle(fontSize: 13, color: _C.text, height: 1.4)))),
+        Expanded(
+            child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(value,
+                    style: const TextStyle(
+                        fontSize: 13, color: _C.text, height: 1.4)))),
       ]),
     );
   }
 }
 
 class _Btn extends StatelessWidget {
-  final String label; final IconData icon;
-  final Color bg, fg; final bool outlined; final VoidCallback? onTap;
+  final String    label; final IconData icon;
+  final Color     bg, fg; final bool outlined; final VoidCallback? onTap;
   const _Btn({required this.label, required this.icon,
       required this.bg, required this.fg,
       required this.onTap, this.outlined = false});
@@ -978,14 +1065,15 @@ class _Btn extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color:  outlined ? Colors.transparent : bg,
-        border: outlined ? Border.all(color: bg, width: 1.5) : null,
+        color:        outlined ? Colors.transparent : bg,
+        border:       outlined ? Border.all(color: bg, width: 1.5) : null,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(icon, color: fg, size: 15),
         const SizedBox(width: 6),
-        Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 13)),
+        Text(label, style: TextStyle(
+            color: fg, fontWeight: FontWeight.w700, fontSize: 13)),
       ]),
     ),
   );
@@ -993,13 +1081,15 @@ class _Btn extends StatelessWidget {
 
 class _IcoBtn extends StatelessWidget {
   final IconData icon; final Color color, bg; final VoidCallback? onTap;
-  const _IcoBtn({required this.icon, required this.color, required this.bg, required this.onTap});
+  const _IcoBtn(
+      {required this.icon, required this.color, required this.bg, required this.onTap});
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
       width: 46, height: 46,
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
       child: Icon(icon, color: color, size: 20),
     ),
   );
@@ -1010,14 +1100,18 @@ class _Badge extends StatelessWidget {
   const _Badge(this.icon, this.label, this.color, this.bg);
   @override
   Widget build(BuildContext context) => Container(
-    width: double.infinity,
+    width:   double.infinity,
     padding: const EdgeInsets.symmetric(vertical: 11),
-    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+    decoration:
+        BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
     child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
       Icon(icon, color: color, size: 15),
       const SizedBox(width: 7),
-      Flexible(child: Text(label, textAlign: TextAlign.center,
-          style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13))),
+      Flexible(
+          child: Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: color, fontWeight: FontWeight.w700, fontSize: 13))),
     ]),
   );
 }
@@ -1027,18 +1121,23 @@ class _Empty extends StatelessWidget {
   const _Empty({required this.icon, required this.title, required this.msg});
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(padding: const EdgeInsets.all(40),
+    child: Padding(
+      padding: const EdgeInsets.all(40),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
             padding: const EdgeInsets.all(28),
-            decoration: const BoxDecoration(color: _C.indigoSft, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+                color: _C.indigoSft, shape: BoxShape.circle),
             child: Icon(icon, size: 48, color: _C.indigo)),
         const SizedBox(height: 20),
-        Text(title, style: const TextStyle(
-            fontSize: 21, fontWeight: FontWeight.w700, color: _C.text)),
+        Text(title,
+            style: const TextStyle(
+                fontSize: 21, fontWeight: FontWeight.w700, color: _C.text)),
         const SizedBox(height: 8),
-        Text(msg, textAlign: TextAlign.center,
-            style: const TextStyle(color: _C.sub, fontSize: 13, height: 1.6)),
+        Text(msg,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                color: _C.sub, fontSize: 13, height: 1.6)),
       ]),
     ),
   );
@@ -1054,22 +1153,27 @@ class _ErrorRetry extends StatelessWidget {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
           padding: const EdgeInsets.all(24),
-          decoration: const BoxDecoration(color: _C.redSft, shape: BoxShape.circle),
+          decoration:
+              const BoxDecoration(color: _C.redSft, shape: BoxShape.circle),
           child: const Icon(Icons.wifi_off_rounded, size: 42, color: _C.red),
         ),
         const SizedBox(height: 20),
-        Text(message, textAlign: TextAlign.center,
-            style: const TextStyle(color: _C.sub, fontSize: 14, height: 1.5)),
+        Text(message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                color: _C.sub, fontSize: 14, height: 1.5)),
         const SizedBox(height: 18),
         ElevatedButton.icon(
           onPressed: onRetry,
-          icon: const Icon(Icons.refresh_rounded, size: 18),
+          icon:  const Icon(Icons.refresh_rounded, size: 18),
           label: const Text('Retry'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: _C.indigo, foregroundColor: Colors.white,
+            backgroundColor: _C.indigo,
+            foregroundColor: Colors.white,
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
           ),
         ),
       ]),
@@ -1088,12 +1192,16 @@ class _PendingBody extends StatelessWidget {
       SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(children: [
             const BackButton(color: _C.text),
             const SizedBox(width: 4),
-            const Text('Dashboard', style: TextStyle(
-                color: _C.text, fontWeight: FontWeight.w700, fontSize: 18)),
+            const Text('Dashboard',
+                style: TextStyle(
+                    color:      _C.text,
+                    fontWeight: FontWeight.w700,
+                    fontSize:   18)),
           ]),
         ),
       ),
@@ -1105,28 +1213,39 @@ class _PendingBody extends StatelessWidget {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
                   padding: const EdgeInsets.all(32),
-                  decoration: const BoxDecoration(color: _C.indigoSft, shape: BoxShape.circle),
-                  child: const Icon(Icons.hourglass_top_rounded, size: 52, color: _C.indigo)),
+                  decoration: const BoxDecoration(
+                      color: _C.indigoSft, shape: BoxShape.circle),
+                  child: const Icon(Icons.hourglass_top_rounded,
+                      size: 52, color: _C.indigo)),
               const SizedBox(height: 28),
-              const Text('Pending Approval', style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.w700, color: _C.text)),
+              const Text('Pending Approval',
+                  style: TextStyle(
+                      fontSize:   24,
+                      fontWeight: FontWeight.w700,
+                      color:      _C.text)),
               const SizedBox(height: 10),
               const Text(
                   "Your account is under review.\nYou'll be notified once approved.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: _C.sub, fontSize: 14, height: 1.6)),
+                  style: TextStyle(
+                      color: _C.sub, fontSize: 14, height: 1.6)),
               const SizedBox(height: 28),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
                     color: _C.orangeSft,
                     borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: _C.orange.withOpacity(.3))),
+                    border: Border.all(
+                        color: _C.orange.withOpacity(.3))),
                 child: const Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.circle, color: _C.orange, size: 9),
                   SizedBox(width: 10),
-                  Text('Status: Under Review', style: TextStyle(
-                      color: _C.orange, fontWeight: FontWeight.w600, fontSize: 13)),
+                  Text('Status: Under Review',
+                      style: TextStyle(
+                          color:      _C.orange,
+                          fontWeight: FontWeight.w600,
+                          fontSize:   13)),
                 ]),
               ),
             ]),
@@ -1141,10 +1260,10 @@ class _PendingBody extends StatelessWidget {
 // HEADER
 // ═══════════════════════════════════════════════════════════════
 class _Header extends StatelessWidget {
-  final String businessName, serviceType, providerId;
-  final int tab, availCount, myCount;
+  final String        businessName, serviceType, providerId;
+  final int           tab, availCount, myCount;
   final void Function(int) onTab;
-  final VoidCallback onProfile;
+  final VoidCallback  onProfile;
 
   const _Header({
     required this.businessName, required this.serviceType,
@@ -1159,88 +1278,127 @@ class _Header extends StatelessWidget {
       decoration: const BoxDecoration(
           color: Colors.white,
           border: Border(bottom: BorderSide(color: _C.divider))),
-      child: SafeArea(bottom: false, child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SizedBox(height: 12),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(children: [
-            Container(
-                width: 52, height: 52,
-                decoration: BoxDecoration(
-                    color: _C.indigoSft, borderRadius: BorderRadius.circular(16)),
-                child: const Icon(Icons.storefront_rounded, color: _C.indigo, size: 26)),
-            const SizedBox(width: 14),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(businessName, maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
-              const SizedBox(height: 3),
-              Row(children: [
-                Container(width: 7, height: 7,
-                    decoration: const BoxDecoration(color: _C.green, shape: BoxShape.circle)),
-                const SizedBox(width: 6),
-                Text(serviceType, style: const TextStyle(color: _C.sub, fontSize: 12)),
-              ]),
-            ])),
-            GestureDetector(
-              onTap: onProfile,
-              child: Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                      color: _C.indigoSft, borderRadius: BorderRadius.circular(14)),
-                  child: const Icon(Icons.person_rounded, color: _C.indigo, size: 22)),
-            ),
-          ]),
-        ),
-        const SizedBox(height: 16),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(children: [
-            _Chip(label: 'Available',   count: availCount, color: _C.indigo, bg: _C.indigoSft),
-            const SizedBox(width: 10),
-            _Chip(label: 'Active Jobs', count: myCount,    color: _C.green,  bg: _C.greenSft),
-          ]),
-        ),
-        const SizedBox(height: 16),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Container(
-            height: 46,
-            decoration: BoxDecoration(
-                color: const Color(0xFFF0F2F8), borderRadius: BorderRadius.circular(14)),
+      child: SafeArea(
+        bottom: false,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(children: [
-              _TabBtn(label: 'Available Jobs', active: tab == 0, onTap: () => onTab(0)),
-              _TabBtn(label: 'My Jobs',        active: tab == 1, onTap: () => onTab(1)),
+              Container(
+                  width:  52, height: 52,
+                  decoration: BoxDecoration(
+                      color: _C.indigoSft,
+                      borderRadius: BorderRadius.circular(16)),
+                  child: const Icon(Icons.storefront_rounded,
+                      color: _C.indigo, size: 26)),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(businessName,
+                      maxLines:  1,
+                      overflow:  TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize:   18,
+                          fontWeight: FontWeight.w700,
+                          color:      _C.text)),
+                  const SizedBox(height: 3),
+                  Row(children: [
+                    Container(
+                        width:  7, height: 7,
+                        decoration: const BoxDecoration(
+                            color: _C.green, shape: BoxShape.circle)),
+                    const SizedBox(width: 6),
+                    Text(serviceType,
+                        style: const TextStyle(
+                            color: _C.sub, fontSize: 12)),
+                  ]),
+                ]),
+              ),
+              GestureDetector(
+                onTap: onProfile,
+                child: Container(
+                    width:  44, height: 44,
+                    decoration: BoxDecoration(
+                        color: _C.indigoSft,
+                        borderRadius: BorderRadius.circular(14)),
+                    child: const Icon(Icons.person_rounded,
+                        color: _C.indigo, size: 22)),
+              ),
             ]),
           ),
-        ),
-        const SizedBox(height: 8),
-      ])),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(children: [
+              _Chip(
+                  label: 'Available',
+                  count: availCount,
+                  color: _C.indigo, bg: _C.indigoSft),
+              const SizedBox(width: 10),
+              _Chip(
+                  label: 'Active Jobs',
+                  count: myCount,
+                  color: _C.green, bg: _C.greenSft),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              height: 46,
+              decoration: BoxDecoration(
+                  color: const Color(0xFFF0F2F8),
+                  borderRadius: BorderRadius.circular(14)),
+              child: Row(children: [
+                _TabBtn(
+                    label:  'Available Jobs',
+                    active: tab == 0,
+                    onTap:  () => onTab(0)),
+                _TabBtn(
+                    label:  'My Jobs',
+                    active: tab == 1,
+                    onTap:  () => onTab(1)),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
     );
   }
 }
 
 class _TabBtn extends StatelessWidget {
   final String label; final bool active; final VoidCallback onTap;
-  const _TabBtn({required this.label, required this.active, required this.onTap});
+  const _TabBtn(
+      {required this.label, required this.active, required this.onTap});
   @override
   Widget build(BuildContext context) => Expanded(
     child: GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.all(4),
+        margin:   const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: active ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(11),
           boxShadow: active
-              ? [BoxShadow(color: Colors.black.withOpacity(0.07),
-                  blurRadius: 8, offset: const Offset(0, 2))]
+              ? [BoxShadow(
+                  color:      Colors.black.withOpacity(0.07),
+                  blurRadius: 8,
+                  offset:     const Offset(0, 2))]
               : [],
         ),
-        child: Center(child: Text(label, style: TextStyle(
-          color:      active ? _C.indigo : _C.sub,
-          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-          fontSize:   13,
-        ))),
+        child: Center(
+            child: Text(label,
+                style: TextStyle(
+                  color:      active ? _C.indigo : _C.sub,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  fontSize:   13,
+                ))),
       ),
     ),
   );
@@ -1248,21 +1406,30 @@ class _TabBtn extends StatelessWidget {
 
 class _Chip extends StatelessWidget {
   final String label; final int count; final Color color, bg;
-  const _Chip({required this.label, required this.count, required this.color, required this.bg});
+  const _Chip(
+      {required this.label, required this.count, required this.color, required this.bg});
   @override
   Widget build(BuildContext context) => Expanded(
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
       child: Row(children: [
         Container(
-            width: 32, height: 32,
+            width:  32, height: 32,
             decoration: BoxDecoration(
-                color: color.withOpacity(.15), borderRadius: BorderRadius.circular(9)),
-            child: Center(child: Text('$count', style: TextStyle(
-                color: color, fontWeight: FontWeight.w800, fontSize: 14)))),
+                color: color.withOpacity(.15),
+                borderRadius: BorderRadius.circular(9)),
+            child: Center(
+                child: Text('$count',
+                    style: TextStyle(
+                        color:      color,
+                        fontWeight: FontWeight.w800,
+                        fontSize:   14)))),
         const SizedBox(width: 10),
-        Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+        Text(label,
+            style: TextStyle(
+                color: color, fontSize: 12, fontWeight: FontWeight.w600)),
       ]),
     ),
   );
@@ -1331,7 +1498,8 @@ class _DialogState extends State<_Dialog> {
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85),
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -1341,49 +1509,60 @@ class _DialogState extends State<_Dialog> {
                   decoration: BoxDecoration(
                       color: widget.btnColor.withOpacity(.1),
                       borderRadius: BorderRadius.circular(14)),
-                  child: Icon(Icons.info_outline_rounded, color: widget.btnColor, size: 26)),
+                  child: Icon(Icons.info_outline_rounded,
+                      color: widget.btnColor, size: 26)),
               const SizedBox(height: 14),
-              Text(widget.title, style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
+              Text(widget.title,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
               const SizedBox(height: 4),
-              Text(widget.subtitle, textAlign: TextAlign.center,
+              Text(widget.subtitle,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(color: _C.sub, fontSize: 13)),
               const SizedBox(height: 16),
               TextField(
                 controller: _ctrl,
-                maxLines: 3,
+                maxLines:   3,
                 decoration: InputDecoration(
                   hintText:  widget.hint,
                   hintStyle: const TextStyle(color: _C.sub, fontSize: 13),
                   filled:    true,
                   fillColor: const Color(0xFFF7F8FC),
-                  border:    OutlineInputBorder(
+                  border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(13),
                       borderSide:   BorderSide.none),
                 ),
               ),
               const SizedBox(height: 18),
               Row(children: [
-                Expanded(child: OutlinedButton(
-                  onPressed: _keep,
-                  style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      side: const BorderSide(color: _C.divider),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12))),
-                  child: Text(widget.keepLabel, style: const TextStyle(color: _C.sub)),
-                )),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _keep,
+                    style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        side:    const BorderSide(color: _C.divider),
+                        shape:   RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12))),
+                    child: Text(widget.keepLabel,
+                        style: const TextStyle(color: _C.sub)),
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: ElevatedButton(
-                  onPressed: _confirm,
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: widget.btnColor, elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12))),
-                  child: Text(widget.btnLabel, style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w700)),
-                )),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _confirm,
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: widget.btnColor,
+                        elevation:       0,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape:   RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12))),
+                    child: Text(widget.btnLabel,
+                        style: const TextStyle(
+                            color:      Colors.white,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
               ]),
             ]),
           ),

@@ -13,18 +13,12 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 const bool _debugNotif = true;
 
 // ─── Sound config ──────────────────────────────────────────────────────────────
-// File must exist at: android/app/src/main/res/raw/notification_sound.mp3
-// Filename: lowercase, numbers, underscores only. No spaces or caps.
-// After adding/changing: flutter clean → uninstall app → reinstall.
 const bool _useCustomSound = true;
 const String _soundFile = 'notification_sound';
 
 // ─── Channel constants ─────────────────────────────────────────────────────────
-// ⚠ Bump version suffix when you change importance/sound — Android permanently
-// caches channel settings; a new ID forces fresh settings.
-// MUST match android:value in AndroidManifest.xml <meta-data>.
 class NotificationChannels {
-  static const String id   = 'callme_high_v7'; // bumped → forces fresh channel
+  static const String id   = 'callme_high_v7';
   static const String name = 'CallMe Notifications';
   static const String desc = 'Booking, acceptance, and admin alerts.';
 }
@@ -37,6 +31,8 @@ class NotificationType {
   static const String providerRegistered   = 'provider_registered';
   static const String registrationApproved = 'registration_approved';
   static const String registrationRejected = 'registration_rejected';
+  static const String providerFound        = 'provider_found';
+  static const String serviceCompleted     = 'service_completed';
 }
 
 // ─── Shared plugin instance ────────────────────────────────────────────────────
@@ -50,8 +46,11 @@ void _onTapBackground(NotificationResponse response) {
   NotificationService.pendingNavigationPayload = response.payload;
   if (response.payload != null) {
     try {
-      NotificationService.onNotificationTap
-          ?.call(jsonDecode(response.payload!) as Map<String, dynamic>);
+      final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+      // FIX: use _fireTap() which queues the tap if the callback isn't set yet.
+      // Previously calling onNotificationTap directly meant cold-start taps
+      // were lost because the callback hadn't been assigned yet.
+      NotificationService._fireTap(data);
     } catch (e) {
       debugPrint('[NOTIF-TAP-BG] decode error: $e');
     }
@@ -59,7 +58,6 @@ void _onTapBackground(NotificationResponse response) {
 }
 
 // ─── Background FCM handler ────────────────────────────────────────────────────
-// MUST be top-level, annotated, registered in main() BEFORE Firebase.initializeApp().
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
@@ -74,10 +72,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('[FCM-BG]   notification: ${message.notification?.title} / ${message.notification?.body}');
   debugPrint('[FCM-BG]   data: ${message.data}');
 
-  // Only show manually for DATA-ONLY messages — FCM auto-shows notification-block messages.
   if (message.notification == null && message.data.isNotEmpty) {
     await _showLocalNotificationStandalone(
-      id: _notifId(message),
+      id: _uniqueNotifId(),
       title: message.data['title']?.toString() ?? 'New notification',
       body:  message.data['body']?.toString()  ?? '',
       payload: jsonEncode(message.data),
@@ -87,26 +84,21 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await _persistNotification(message, source: 'background-isolate');
 }
 
-// ─── Shared helpers ────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-int _notifId(RemoteMessage message) {
-  final raw = message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString();
-  return raw.hashCode & 0x7fffffff;
-}
+// FIX: unique ID per notification — using messageId.hashCode caused Android
+// to *replace* the previous notification (same slot = same ID) instead of
+// showing a new popup + sound. Epoch millis guarantees a fresh slot every time.
+int _uniqueNotifId() =>
+    DateTime.now().millisecondsSinceEpoch & 0x7fffffff;
 
-/// Vibration pattern: [delay, vibrate, pause, vibrate, …] all in ms.
-/// 0 ms delay → immediate. Pattern: short-short-long.
 const List<int> _vibrationPattern = [0, 300, 200, 300, 200, 600];
 
-/// Builds the Android notification channel.
-/// ─ Importance.max   → heads-up (on-screen) popup + lock screen
-/// ─ enableVibration  → vibrates using _vibrationPattern
-/// ─ playSound + RawResource → custom sound from res/raw/
 AndroidNotificationChannel _buildChannel() => AndroidNotificationChannel(
   NotificationChannels.id,
   NotificationChannels.name,
   description: NotificationChannels.desc,
-  importance: Importance.max,          // IMPORTANCE_HIGH = heads-up popup
+  importance: Importance.max,
   playSound: true,
   sound: _useCustomSound
       ? RawResourceAndroidNotificationSound(_soundFile)
@@ -117,14 +109,15 @@ AndroidNotificationChannel _buildChannel() => AndroidNotificationChannel(
   showBadge: true,
 );
 
-/// Builds [NotificationDetails] for every show() call.
-NotificationDetails _buildDetails() => NotificationDetails(
+// FIX: pass actual body text into BigTextStyleInformation — empty string
+// caused Samsung/MIUI/ColorOS to suppress heads-up banners on repeat messages.
+NotificationDetails _buildDetails({String body = ''}) => NotificationDetails(
   android: AndroidNotificationDetails(
     NotificationChannels.id,
     NotificationChannels.name,
     channelDescription: NotificationChannels.desc,
-    importance: Importance.max,        // triggers heads-up popup
-    priority: Priority.max,            // ← changed from high → max for on-screen banner
+    importance: Importance.max,
+    priority: Priority.max,
     playSound: true,
     sound: _useCustomSound
         ? RawResourceAndroidNotificationSound(_soundFile)
@@ -132,16 +125,14 @@ NotificationDetails _buildDetails() => NotificationDetails(
     enableVibration: true,
     vibrationPattern: Int64List.fromList(_vibrationPattern),
     enableLights: true,
-    ledColor: const Color(0xFFFF6B9D),  // pink accent matching callme brand
+    ledColor: const Color(0xFFAE91BA),
     ledOnMs: 500,
     ledOffMs: 500,
-    visibility: NotificationVisibility.public, // show on lock screen
-    ticker: 'CallMe',                  // accessibility / status bar ticker
-    fullScreenIntent: false,           // true only for calls/alarms
+    visibility: NotificationVisibility.public,
+    ticker: 'CallMe',
+    fullScreenIntent: false,
     audioAttributesUsage: AudioAttributesUsage.notification,
-    // ⚠ styleInformation not required for popup — defaults to BigTextStyle
-    // which expands automatically on pull-down.
-    styleInformation: const BigTextStyleInformation(''),
+    styleInformation: BigTextStyleInformation(body),
   ),
   iOS: const DarwinNotificationDetails(
     presentAlert: true,
@@ -151,7 +142,6 @@ NotificationDetails _buildDetails() => NotificationDetails(
   ),
 );
 
-/// Standalone show used by the background isolate.
 Future<void> _showLocalNotificationStandalone({
   required int id,
   required String title,
@@ -178,10 +168,9 @@ Future<void> _showLocalNotificationStandalone({
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
-  await plugin.show(id, title, body, _buildDetails(), payload: payload);
+  await plugin.show(id, title, body, _buildDetails(body: body), payload: payload);
 }
 
-/// Persists FCM message to Firestore for NotificationPage display.
 Future<void> _persistNotification(
   RemoteMessage msg, {
   required String source,
@@ -190,8 +179,7 @@ Future<void> _persistNotification(
 
   if (rid == null || rid.isEmpty) {
     debugPrint(
-      '[NOTIF-STORE:$source] ⚠ Skipped — no "receiverId" in message.data. '
-      'Add receiverId to your Cloud Function data block.',
+      '[NOTIF-STORE:$source] ⚠ Skipped — no "receiverId" in message.data.',
     );
     return;
   }
@@ -222,7 +210,51 @@ class NotificationService {
 
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
 
-  static void Function(Map<String, dynamic> data)? onNotificationTap;
+  // ── Tap callback with pending-queue ─────────────────────────────────────────
+  // FIX: This is the root cause of navigation never working on cold-start and
+  // background taps.
+  //
+  // What was happening:
+  //   1. User taps a notification while app is terminated.
+  //   2. Flutter engine starts → firebaseMessagingBackgroundHandler runs →
+  //      onNotificationTap is called.
+  //   3. BUT the app's main() hasn't called NotificationService.initialize()
+  //      yet, and the widget tree hasn't assigned onNotificationTap yet.
+  //   4. So onNotificationTap is null → tap is silently dropped → no navigation.
+  //
+  // Fix: _pendingTap stores the data if the callback isn't set yet.
+  //      When the callback IS assigned (via setTapCallback), we immediately
+  //      fire any queued tap so navigation always happens.
+  static Map<String, dynamic>? _pendingTap;
+
+  static void Function(Map<String, dynamic> data)? _onNotificationTap;
+
+  /// Assign the callback that routes notifications to pages.
+  /// Call this as early as possible — ideally in main() or BottomNavPage.initState().
+  static set onNotificationTap(void Function(Map<String, dynamic>)? cb) {
+    _onNotificationTap = cb;
+    // If a tap arrived before the callback was ready, fire it now.
+    if (cb != null && _pendingTap != null) {
+      debugPrint('[NOTIF] Flushing pending tap: $_pendingTap');
+      final queued = _pendingTap!;
+      _pendingTap = null;
+      cb(queued);
+    }
+  }
+
+  static void Function(Map<String, dynamic> data)? get onNotificationTap =>
+      _onNotificationTap;
+
+  /// Routes a tap — queues it if the callback isn't set yet.
+  static void _fireTap(Map<String, dynamic> data) {
+    if (_onNotificationTap != null) {
+      _onNotificationTap!(data);
+    } else {
+      debugPrint('[NOTIF] Callback not set — queuing tap: $data');
+      _pendingTap = data;
+    }
+  }
+
   static String? pendingNavigationPayload;
 
   // ── initialize ───────────────────────────────────────────────────────────────
@@ -230,14 +262,12 @@ class NotificationService {
     if (_initialised) return;
 
     try {
-      // ① Create channel FIRST — Android caches settings permanently.
       await _sharedPlugin
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(_buildChannel());
       debugPrint('[NOTIF] Channel registered: ${NotificationChannels.id}');
 
-      // ② Init plugin with both tap callbacks.
       await _sharedPlugin.initialize(
         const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -251,29 +281,27 @@ class NotificationService {
         onDidReceiveBackgroundNotificationResponse: _onTapBackground,
       );
 
-      // ③ Request OS permissions.
       await _requestPermissions();
 
-      // ④ iOS foreground presentation.
       await _fcm.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
         sound: true,
       );
 
-      // ⑤ FCM listeners.
       _listenForeground();
       _listenBackgroundTap();
       _listenTokenRefresh();
 
-      // ⑥ Save token (non-blocking).
       Future.microtask(_saveToken);
-
-      // ⑦ Cold-start payload (1 s delay avoids race with LogoPage navigation).
-      Future.delayed(const Duration(seconds: 1), _checkColdStart);
+      // FIX: cold-start delay reduced to 500 ms — 1 s was too long on fast
+      // devices and the callback was sometimes still null at 1 s anyway.
+      // The pending-queue mechanism above makes the delay irrelevant for
+      // correctness, but shorter is better for UX.
+      Future.delayed(const Duration(milliseconds: 500), _checkColdStart);
 
       _initialised = true;
-      debugPrint('[NOTIF] ✓ Initialised — channel: ${NotificationChannels.id}');
+      debugPrint('[NOTIF] ✓ Initialised');
     } catch (e, st) {
       debugPrint('[NOTIF] Init error: $e\n$st');
     }
@@ -282,33 +310,24 @@ class NotificationService {
   // ── Permissions ───────────────────────────────────────────────────────────────
   Future<void> _requestPermissions() async {
     final s = await _fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      criticalAlert: false,
-      announcement: false,
-      carPlay: false,
-      provisional: false,
+      alert: true, badge: true, sound: true,
+      criticalAlert: false, announcement: false,
+      carPlay: false, provisional: false,
     );
     debugPrint('[FCM] Auth status: ${s.authorizationStatus}');
 
     if (!kIsWeb && Platform.isAndroid) {
-      // POST_NOTIFICATIONS required on Android 13+ (API 33+)
       final granted = await _sharedPlugin
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.requestNotificationsPermission();
       debugPrint('[NOTIF] POST_NOTIFICATIONS granted: $granted');
 
-      // ─── EXACT_ALARM permission (Android 12+ API 31+) ─────────────────────
-      // Required to schedule precise local notifications. Without it,
-      // scheduled notifications silently fail on Android 12+. For immediate
-      // show() calls this isn't needed, but good practice to request.
-      final exactAlarmGranted = await _sharedPlugin
+      final exactAlarm = await _sharedPlugin
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.requestExactAlarmsPermission();
-      debugPrint('[NOTIF] EXACT_ALARM granted: $exactAlarmGranted');
+      debugPrint('[NOTIF] EXACT_ALARM granted: $exactAlarm');
     }
   }
 
@@ -318,8 +337,9 @@ class NotificationService {
     pendingNavigationPayload = response.payload;
     if (response.payload != null) {
       try {
-        onNotificationTap
-            ?.call(jsonDecode(response.payload!) as Map<String, dynamic>);
+        final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+        // FIX: use _fireTap so it queues if callback not ready yet.
+        NotificationService._fireTap(data);
       } catch (e) {
         debugPrint('[NOTIF-TAP-FG] decode error: $e');
       }
@@ -327,8 +347,6 @@ class NotificationService {
   }
 
   // ── Foreground FCM listener ────────────────────────────────────────────────────
-  // Android does NOT auto-show a banner when the app is open — we must call
-  // _sharedPlugin.show() ourselves to get the heads-up popup + sound + vibration.
   void _listenForeground() {
     FirebaseMessaging.onMessage.listen(
       (RemoteMessage message) async {
@@ -339,28 +357,22 @@ class NotificationService {
         final notif  = message.notification;
         final title  = notif?.title ?? message.data['title']?.toString() ?? 'New message';
         final body   = notif?.body  ?? message.data['body']?.toString()  ?? '';
-        final id     = _notifId(message);
-        final details = _buildDetails();
+        final id     = _uniqueNotifId();      // FIX: unique every time
+        final details = _buildDetails(body: body); // FIX: pass body
 
         if (_debugNotif) {
-          debugPrint('━━━ NOTIF DEBUG (foreground) ━━━━━━━━━━━━━━━━━━━━━━━━');
-          debugPrint('  channelId  : ${NotificationChannels.id}');
-          debugPrint('  sound      : ${_useCustomSound ? _soundFile : "default"}');
-          debugPrint('  title      : $title');
-          debugPrint('  body       : $body');
-          debugPrint('  id         : $id');
-          debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          debugPrint('━━━ NOTIF DEBUG (foreground) ━━━━━━━━━━━━━━━━━━━');
+          debugPrint('  channelId : ${NotificationChannels.id}');
+          debugPrint('  id        : $id');
+          debugPrint('  title     : $title');
+          debugPrint('  body      : $body');
+          debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         }
 
-        await _sharedPlugin.show(
-          id,
-          title,
-          body,
-          details,
-          payload: jsonEncode(message.data),
-        );
+        await _sharedPlugin.show(id, title, body, details,
+            payload: jsonEncode(message.data));
 
-        debugPrint('[FCM-FG] ✓ _sharedPlugin.show() called (id=$id)');
+        debugPrint('[FCM-FG] ✓ show() called id=$id');
         await _persistNotification(message, source: 'foreground');
       },
       onError: (e) => debugPrint('[FCM-FG] stream error: $e'),
@@ -373,7 +385,8 @@ class NotificationService {
       (RemoteMessage msg) {
         debugPrint('[FCM-TAP] opened from background: ${msg.data}');
         pendingNavigationPayload = jsonEncode(msg.data);
-        onNotificationTap?.call(msg.data);
+        // FIX: _fireTap queues if callback not set yet.
+        NotificationService._fireTap(msg.data);
       },
       onError: (e) => debugPrint('[FCM-TAP] error: $e'),
     );
@@ -385,6 +398,9 @@ class NotificationService {
     if (msg != null) {
       debugPrint('[FCM-COLD] opened from terminated state: ${msg.data}');
       pendingNavigationPayload = jsonEncode(msg.data);
+      // FIX: _fireTap queues if callback not set yet, and the pending-queue
+      // setter flushes it the moment onNotificationTap is assigned.
+      NotificationService._fireTap(msg.data);
     }
   }
 
@@ -413,121 +429,96 @@ class NotificationService {
       );
 
   Future<void> _writeToken(String token) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
       debugPrint('[FCM] No logged-in user — token not saved yet');
       return;
     }
-    await FirebaseFirestore.instance.collection('users').doc(uid).set({
+
+    // FIX: your users collection is keyed by EMAIL, not UID.
+    final email = user.email;
+    if (email == null || email.isEmpty) {
+      debugPrint('[FCM] No email on current user — token not saved');
+      return;
+    }
+
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(email)             // FIX: was doc(uid)
+        .set({
       'fcmToken':       token,
       'tokenUpdatedAt': FieldValue.serverTimestamp(),
       'platform':       (!kIsWeb && Platform.isIOS) ? 'ios' : 'android',
     }, SetOptions(merge: true));
-    debugPrint('[FCM] Token saved uid=$uid');
+
+    debugPrint('[FCM] Token saved → users/$email');
   }
 
   // ── Public helpers ─────────────────────────────────────────────────────────────
   Future<void> refreshTokenAfterLogin() => _saveToken();
 
   Future<void> clearTokenOnLogout() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    await FirebaseFirestore.instance
-        .collection('users').doc(uid)
-        .update({'fcmToken': FieldValue.delete()});
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final email = user.email;
+    if (email != null && email.isNotEmpty) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(email)           // FIX: was doc(uid)
+          .update({'fcmToken': FieldValue.delete()});
+    }
+
     await _fcm.deleteToken();
     debugPrint('[FCM] Token cleared on logout');
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WHAT CHANGED FROM v6 → v7  (all the fixes for popup / sound / vibration)
+// HOW TO WIRE onNotificationTap IN YOUR APP
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// 1. Channel ID bumped to callme_high_v7
-//    Android permanently caches channel settings. Changing importance/sound
-//    on an existing channel ID has NO effect. A new ID forces fresh settings.
-//    Update AndroidManifest.xml <meta-data android:value="callme_high_v7"/>.
+// Set the callback AS EARLY AS POSSIBLE — before initialize() if you can.
+// The safest place is main() right after WidgetsFlutterBinding.ensureInitialized():
 //
-// 2. Priority.max (was Priority.high)
-//    Priority.high can still suppress heads-up popups on some OEMs.
-//    Priority.max guarantees the floating heads-up banner on Android 8+.
+//   void main() async {
+//     WidgetsFlutterBinding.ensureInitialized();
 //
-// 3. vibrationPattern added (both channel + details)
-//    Without an explicit pattern the channel may silently skip vibration
-//    on some devices even when enableVibration = true.
-//    Pattern [0,300,200,300,200,600] = short-short-long, starts immediately.
+//     // Register background handler FIRST.
+//     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 //
-// 4. visibility = NotificationVisibility.public
-//    Makes the full notification content visible on the lock screen.
-//    Private/Secret would hide or redact it.
+//     // Assign tap callback BEFORE initialize() so cold-start taps are never lost.
+//     NotificationService.onNotificationTap = routeNotification;
 //
-// 5. styleInformation = BigTextStyleInformation('')
-//    Ensures long bodies expand without truncation, and fixes a rendering
-//    quirk on some Samsung devices that suppressed heads-up for
-//    notifications with no explicit style.
+//     await Firebase.initializeApp();
+//     await NotificationService().initialize();
 //
-// 6. ledColor / ledOnMs / ledOffMs added
-//    Blinks the notification LED (devices that have one).
+//     runApp(const MyApp());
+//   }
 //
-// 7. requestExactAlarmsPermission() added
-//    Required on Android 12+ (API 31+) for reliable notification delivery.
-//    Without it, some OEMs silently drop notifications from the tray.
+// If you also assign it in a widget (e.g. BottomNavPage.initState), that's fine
+// as a backup, but main() assignment is what guarantees cold-start works.
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// MANDATORY AndroidManifest.xml CHECKLIST
+// CLOUD FUNCTION — include these fields in data block:
 // ─────────────────────────────────────────────────────────────────────────────
 //
-//  <uses-permission android:name="android.permission.VIBRATE"/>
-//  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-//  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-//  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>   ← ADD THIS
-//  <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>        ← ADD THIS (API 33+)
-//
-//  Inside <application>:
-//  <meta-data
-//    android:name="com.google.firebase.messaging.default_notification_channel_id"
-//    android:value="callme_high_v7"/>    ← must match NotificationChannels.id
+//   data: {
+//     type: 'registration_approved',   // NotificationType constant
+//     receiverId: userEmail,           // email — matches users doc key
+//     title: '...',
+//     body:  '...',
+//     // For registration_approved / registration_rejected only:
+//     // No need to send businessName/serviceType — router fetches from Firestore.
+//   }
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// CLOUD FUNCTION PAYLOAD (send BOTH notification + data blocks)
-// ─────────────────────────────────────────────────────────────────────────────
-//
-//  await admin.messaging().send({
-//    token: fcmToken,
-//    notification: { title: 'Hello', body: 'World' },
-//    data: {
-//      type: 'new_booking',
-//      receiverId: uid,       ← REQUIRED for Firestore persistence
-//      title: 'Hello',
-//      body: 'World',
-//    },
-//    android: {
-//      priority: 'high',
-//      notification: {
-//        channelId: 'callme_high_v7',           ← must match
-//        defaultSound: false,
-//        defaultVibrateTimings: false,           ← false so our pattern is used
-//        vibrateTimingsMillis: [0,300,200,300,200,600],
-//        notificationPriority: 'PRIORITY_MAX',
-//      },
-//    },
-//    apns: {
-//      headers: { 'apns-priority': '10' },
-//      payload: { aps: { sound: 'default', badge: 1, 'content-available': 1 } },
-//    },
-//  });
-//
-// ─────────────────────────────────────────────────────────────────────────────
-// AFTER ANY CHANNEL ID OR SOUND FILE CHANGE — ALWAYS DO THIS:
-//   flutter clean → uninstall app from device → flutter run
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// DEVICE SETTINGS TO VERIFY:
-//   ✓ App notifications: ON
-//   ✓ Channel "CallMe Notifications": Sound ON, Importance HIGH or URGENT
-//   ✓ Battery optimisation: Unrestricted (Settings > Apps > callme > Battery)
-//   ✓ DND: OFF during testing
-//   ✓ Notification volume (not media volume) turned up
-//   ✓ Lock screen notifications: Show all content
+// AndroidManifest.xml checklist:
+//   <uses-permission android:name="android.permission.VIBRATE"/>
+//   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+//   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+//   <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+//   <meta-data
+//     android:name="com.google.firebase.messaging.default_notification_channel_id"
+//     android:value="callme_high_v7"/>
 // ─────────────────────────────────────────────────────────────────────────────

@@ -31,8 +31,22 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
 
   void refresh() => setState(() {});
 
+  /// Converts a CleaningService into a ServiceProduct so Cart can handle it
+  /// uniformly (needs an `id` and `imagePath` which CleaningService lacks).
+  ServiceProduct _cleaningToProduct(CleaningService c) {
+    return ServiceProduct(
+      id: '${c.name}_cleaning',
+      service: 'Cleaning',
+      name: c.name,
+      price: c.price,
+      imagePath: c.image,         // CleaningService stores image path in `image`
+      description: c.description,
+      finalPrice: c.finalPrice,
+    );
+  }
+
   Map<String, List<dynamic>> getData() {
-    final Map<String, List<dynamic>> data = {};
+    final Map<String, List<dynamic>> result = {};
 
     if (widget.serviceName == 'Cleaning') {
       cleaningServices.forEach((category, list) {
@@ -41,7 +55,7 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                 search.isEmpty ||
                 item.name.toLowerCase().contains(search.toLowerCase()))
             .toList();
-        if (filtered.isNotEmpty) data[category] = filtered;
+        if (filtered.isNotEmpty) result[category] = filtered;
       });
     } else if (widget.serviceName == 'Water') {
       waterServices.forEach((category, list) {
@@ -51,7 +65,7 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                 search.isEmpty ||
                 item.name.toLowerCase().contains(search.toLowerCase()))
             .toList();
-        if (filtered.isNotEmpty) data[category] = filtered;
+        if (filtered.isNotEmpty) result[category] = filtered;
       });
     } else if (widget.serviceName == 'Plumbing') {
       final plumbing = serviceProducts['Plumbing'] ?? {};
@@ -62,11 +76,11 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                 search.isEmpty ||
                 item.name.toLowerCase().contains(search.toLowerCase()))
             .toList();
-        if (filtered.isNotEmpty) data[category] = filtered;
+        if (filtered.isNotEmpty) result[category] = filtered;
       });
     }
 
-    return data;
+    return result;
   }
 
   Color getColor() {
@@ -203,9 +217,14 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                       final category = categories[i];
                       final selected = i == selectedIndex;
                       final firstItem = data[category]!.first;
-                      final image = widget.serviceName == 'Cleaning'
-                          ? firstItem.image
-                          : (firstItem.imagePath ?? 'assets/images/default.png');
+
+                      // ── FIX: CleaningService.image vs ServiceProduct.imagePath ──
+                      final String image;
+                      if (widget.serviceName == 'Cleaning') {
+                        image = (firstItem as CleaningService).image;
+                      } else {
+                        image = (firstItem as ServiceProduct).imagePath;
+                      }
 
                       return GestureDetector(
                         onTap: () => setState(() => selectedIndex = i),
@@ -249,24 +268,30 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                     itemBuilder: (_, i) {
                       final item = items[i];
 
+                      // ── FIX: extract fields safely per type ──────────────
                       final String image;
                       final String title;
                       final String desc;
                       final int price;
                       final double? rating;
+                      final String itemId;
 
                       if (widget.serviceName == 'Cleaning') {
-                        image = item.image;
-                        title = item.name;
-                        desc = item.description;
-                        price = item.finalPrice;
+                        final c = item as CleaningService;
+                        image  = c.image;
+                        title  = c.name;
+                        desc   = c.description;
+                        price  = c.finalPrice;
                         rating = null;
+                        itemId = '${c.name}_cleaning';
                       } else {
-                        image = item.imagePath ?? 'assets/images/default.png';
-                        title = item.name;
-                        desc = item.description ?? '';
-                        price = item.calculatedFinalPrice;
-                        rating = item.safeRating;
+                        final p = item as ServiceProduct;
+                        image  = p.imagePath;
+                        title  = p.name;
+                        desc   = p.description ?? '';
+                        price  = p.calculatedFinalPrice;
+                        rating = p.safeRating;
+                        itemId = p.id;
                       }
 
                       return UniversalServiceCard(
@@ -280,7 +305,7 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                             ? ServiceActionType.quantity
                             : ServiceActionType.normal,
                         quantity: widget.serviceName == 'Water'
-                            ? Cart.getQuantity(item.id, 'Water')
+                            ? Cart.getQuantity(itemId, 'Water')
                             : 0,
                         onView: () => Navigator.push(
                           context,
@@ -293,29 +318,23 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                         ).then((_) => refresh()),
                         onPrimaryAction: () {
                           if (widget.serviceName == 'Cleaning') {
+                            // ── FIX: wrap CleaningService in ServiceProduct ──
                             Cart.addProduct(
-                              ServiceProduct(
-                                id: '${item.name}_cleaning',
-                                service: 'Cleaning',
-                                name: item.name,
-                                price: item.price,
-                                imagePath: item.image,
-                                description: item.description,
-                                finalPrice: item.finalPrice,
-                              ),
+                              _cleaningToProduct(item as CleaningService),
                               'Cleaning',
                             );
                           } else {
-                            Cart.addProduct(item, widget.serviceName);
+                            Cart.addProduct(item as ServiceProduct,
+                                widget.serviceName);
                           }
                           refresh();
                         },
                         onIncrease: () {
-                          Cart.addProduct(item, 'Water');
+                          Cart.addProduct(item as ServiceProduct, 'Water');
                           refresh();
                         },
                         onDecrease: () {
-                          Cart.removeById(item.id, 'Water');
+                          Cart.removeById(itemId, 'Water');
                           refresh();
                         },
                       );
@@ -328,7 +347,7 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
         ],
       ),
 
-      // ── Bottom cart bar — SafeArea handles the nav bar ─────────────────
+      // ── Bottom cart bar ─────────────────────────────────────────────────
       bottomNavigationBar: totalItems > 0
           ? SafeArea(
               child: Container(
