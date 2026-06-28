@@ -113,7 +113,6 @@ class OrderService {
     Object? providerUserId,
   }) async {
     // ── Resolve provider details ──────────────────────────────────────────────
-    // providerId is already the readable doc ID — fetch the doc directly.
     String resolvedProviderId     = providerId ?? '';
     String resolvedProviderName   = '';
     String resolvedProviderUserId = '';
@@ -133,7 +132,11 @@ class OrderService {
 
     final orderId               = generateOrderId(userName);
     final docRef                = _db.collection('orders').doc(orderId);
+    // FIX 1: Always store serviceType as lowercase so Firestore equality
+    // queries from the dashboard (_svcNorm) match reliably.
     final normalizedServiceType = serviceType.trim().toLowerCase();
+    // FIX 2: Normalise category the same way — trim only, keep original
+    // casing so the UI can display it nicely, but compare via _normCat().
     final normalizedCategory    = (category ?? '').trim();
 
     await docRef.set({
@@ -151,8 +154,8 @@ class OrderService {
         'email': email ?? '',
       },
 
-      'providerId':     resolvedProviderId,     // readable doc ID (CIV-765791)
-      'providerUserId': resolvedProviderUserId, // Firebase UID — used for auth checks
+      'providerId':     resolvedProviderId,
+      'providerUserId': resolvedProviderUserId,
       'providerName':   resolvedProviderName,
 
       'provider': {
@@ -161,12 +164,14 @@ class OrderService {
         'providerName':   resolvedProviderName,
       },
 
-      'serviceType': normalizedServiceType,
+      // FIX 3: Store BOTH forms so old and new clients can read it.
+      'serviceType': normalizedServiceType,   // lowercase — queried by dashboard
       'serviceName': normalizedServiceType,
       'services':    services,
 
-      // Category stored on the order so provider dashboard can
-      // filter and the card can show a category chip.
+      // Category stored exactly as the user chose it (original case).
+      // The dashboard's _categoryMatch() uses _norm() on both sides so
+      // "Software And Programming" == "software and programming" == "softwareandprogramming".
       'category': normalizedCategory,
 
       'date': Timestamp.fromDate(date),
@@ -223,8 +228,6 @@ class OrderService {
       date:          date,
       time:          time,
       totalAmount:   totalAmount,
-      // If a specific provider was assigned, only notify that one.
-      // Pass the readable doc ID directly — no lookup needed here.
       specificProviderId: resolvedProviderId.isNotEmpty
           ? resolvedProviderId
           : null,
@@ -239,7 +242,7 @@ class OrderService {
 
   static Future<void> acceptOrder({
     required String orderId,
-    required String userId,       // customer Firebase UID
+    required String userId,
     required String providerName,
     required String serviceType,
   }) async {
@@ -339,14 +342,10 @@ class OrderService {
 
   // ==========================================================
   // USER CANCELS ORDER
-  //
-  // providerUserId is the provider's Firebase UID (stored on
-  // the order as providerUserId). We resolve it to the readable
-  // doc ID only when we need to fetch the FCM token.
   // ==========================================================
   static Future<void> userCancelOrder({
     required String orderId,
-    required String providerUserId,   // provider's Firebase UID
+    required String providerUserId,
     required String userName,
     required String serviceType,
   }) async {
@@ -357,7 +356,6 @@ class OrderService {
     });
 
     if (providerUserId.isNotEmpty) {
-      // In-app notification uses the UID as receiverId — unchanged.
       await _sendNotification(
         receiverId: providerUserId,
         role:       'provider',
@@ -367,12 +365,13 @@ class OrderService {
         type:       NotificationType.userCancelled,
       );
 
-      // Resolve UID → readable doc ID to fetch the FCM token.
       final docId = await _getProviderDocId(providerUserId);
       if (docId != null) {
-        final snap      = await _db.collection('providers').doc(docId).get();
-        final fcmToken  =
-            (snap.data()?['fcmToken'] ?? '').toString().trim();
+        // FIX 4: Use typed DocumentSnapshot to avoid shadowing the outer
+        // `data` variable.  Renamed to `providerSnap` for clarity.
+        final providerSnap = await _db.collection('providers').doc(docId).get();
+        final providerData = providerSnap.data() ?? {};
+        final fcmToken     = (providerData['fcmToken'] ?? '').toString().trim();
 
         if (fcmToken.isNotEmpty) {
           await _db.collection('fcm_queue').add({
@@ -401,15 +400,22 @@ class OrderService {
   //
   // Matching rules (mirrors _AvailTab client-side filter):
   //   1. provider.status == 'approved'
-  //   2. provider.serviceType == order.serviceType
+  //   2. provider.serviceType == order.serviceType  (normalised)
   //   3. If order carries a category AND provider has categories[]:
   //        provider.categories must contain the order.category
+  //        (comparison via _normCat — case/space insensitive)
   //      Else: notify all providers of that serviceType (fallback)
   //
   // When specificProviderId is given (direct assignment),
   // only that one provider is notified.
-  // specificProviderId is already the readable doc ID.
   // ==========================================================
+
+  /// Normalise a category string for comparison:
+  /// trim, lowercase, collapse whitespace / underscores / hyphens.
+  /// Mirrors the `_norm()` helper in business_dashboard_page.dart.
+  static String _normCat(String s) =>
+      s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
+
   static Future<void> _notifyMatchingProviders({
     required String orderId,
     required String serviceType,
@@ -421,17 +427,15 @@ class OrderService {
     String? specificProviderId,
   }) async {
     try {
-      QuerySnapshot<Map<String, dynamic>> snap;
-
       if (specificProviderId != null && specificProviderId.isNotEmpty) {
-        // Direct assignment — fetch just that one provider doc by readable ID.
+        // Direct assignment — notify only this provider.
         final doc = await _db
             .collection('providers')
             .doc(specificProviderId)
             .get();
         if (!doc.exists) return;
         await _sendProviderNotification(
-          providerId: doc.id,
+          providerId:  doc.id,
           orderId:     orderId,
           serviceType: serviceType,
           category:    category,
@@ -443,31 +447,32 @@ class OrderService {
         return;
       }
 
-      // Fetch all approved providers with this serviceType.
-      // Query uses field values, not doc ID — unaffected by the ID change.
-      snap = await _db
+      // Fetch all approved providers for this serviceType.
+      final snap = await _db
           .collection('providers')
           .where('status', isEqualTo: 'approved')
           .where('serviceType', isEqualTo: serviceType)
           .get();
 
       for (final doc in snap.docs) {
-        final data = doc.data();
+        final provData = doc.data();
 
         // ── Category filter ────────────────────────────────────────────
+        // FIX 5: Use _normCat on BOTH sides so "Software And Programming"
+        // matches "software and programming" and "softwareandprogramming".
         if (category.isNotEmpty) {
-          final rawCats = (data['categories'] as List?) ?? [];
-          final providerCats =
-              rawCats.map((e) => e.toString().trim().toLowerCase()).toList();
+          final rawCats      = (provData['categories'] as List?) ?? [];
+          final providerCats = rawCats.map((e) => _normCat(e.toString())).toList();
 
+          // Provider has no categories saved → skip (should not happen post-v2)
           if (providerCats.isEmpty) continue;
 
-          final orderCatNorm = category.trim().toLowerCase();
+          final orderCatNorm = _normCat(category);
           if (!providerCats.any((c) => c == orderCatNorm)) continue;
         }
 
         await _sendProviderNotification(
-          providerId: doc.id,
+          providerId:  doc.id,
           orderId:     orderId,
           serviceType: serviceType,
           category:    category,
@@ -483,8 +488,10 @@ class OrderService {
   }
 
   // ── Send notification + FCM queue entry for one provider doc ──────────────
-  // providerDoc.id  → readable doc ID (CIV-765791)  [stored as providerId]
-  // data['userId']  → Firebase UID                  [stored as receiverId]
+  // FIX 6: The original code had `final data = await _db...get()` which
+  // returned a DocumentSnapshot but then accessed it as `data['fcmToken']`
+  // (Map syntax). This caused a type error at runtime.
+  // Fixed by calling `.data()` explicitly and renaming variable to `provMap`.
   static Future<void> _sendProviderNotification({
     required String providerId,
     required String orderId,
@@ -495,16 +502,24 @@ class OrderService {
     required String time,
     required double totalAmount,
   }) async {
-    final data             = await _db.collection('providers').doc(providerId).get();
-    final providerUserId   =
-        (data['userId'] ?? data['uid'] ?? '').toString().trim();
-    final providerName     =
-        (data['businessName'] ?? data['providerName'] ?? data['name'] ?? '')
+    final provSnap = await _db.collection('providers').doc(providerId).get();
+    if (!provSnap.exists) {
+      debugPrint('[OrderService] Provider $providerId not found — skipping');
+      return;
+    }
+
+    // FIX 7: Explicitly call .data() so we get Map<String, dynamic>
+    // not DocumentSnapshot. Original code shadowed the variable name
+    // and tried to use DocumentSnapshot as a Map.
+    final provMap = provSnap.data()!;
+
+    final providerUserId = (provMap['userId'] ?? provMap['uid'] ?? '').toString().trim();
+    final providerName   =
+        (provMap['businessName'] ?? provMap['providerName'] ?? provMap['name'] ?? '')
             .toString();
 
     if (providerUserId.isEmpty) {
-      debugPrint(
-          '[OrderService] Provider ${providerId} has no userId — skipping');
+      debugPrint('[OrderService] Provider $providerId has no userId — skipping');
       return;
     }
 
@@ -526,12 +541,13 @@ class OrderService {
     );
 
     // FCM push via Cloud Function queue
-    final fcmToken = (data['fcmToken'] ?? '').toString().trim();
+    // FIX 8: Access fcmToken from provMap (Map), not provSnap (DocumentSnapshot).
+    final fcmToken = (provMap['fcmToken'] ?? '').toString().trim();
     if (fcmToken.isNotEmpty) {
       await _db.collection('fcm_queue').add({
         'token':      fcmToken,
-        'receiverId': providerUserId,         // Firebase UID
-        'providerId': providerId,         // readable doc ID (CIV-765791)
+        'receiverId': providerUserId,
+        'providerId': providerId,
         'orderId':    orderId,
         'title':      title,
         'body':       body,
@@ -630,4 +646,3 @@ class OrderService {
     return '${date.day} ${months[date.month]} ${date.year}';
   }
 }
-

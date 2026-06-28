@@ -87,5 +87,11 @@
             <data android:scheme="mailto" />
         </intent>
     </queries>
+    <queries>
+  <intent>
+    <action android:name="android.intent.action.DIAL" />
+    <data android:scheme="tel" />
+  </intent>
+</queries>
 
 </manifest>

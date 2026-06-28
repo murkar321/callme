@@ -29,8 +29,7 @@ class MapPickerResult {
 
 class MapPickerPage extends StatefulWidget {
   /// Optional seed position. When provided the map opens centred here instead
-  /// of the device's current GPS fix. Useful when the user already entered a
-  /// location and wants to refine it.
+  /// of the device's current GPS fix.
   final LatLng? initialLatLng;
 
   const MapPickerPage({super.key, this.initialLatLng});
@@ -75,6 +74,9 @@ class _MapPickerPageState extends State<MapPickerPage>
   // ── Debounce for onCameraIdle ──
   Timer? _geocodeDebounce;
 
+  // ── Track last geocoded centre to avoid redundant calls ──
+  LatLng? _lastGeocodedLatLng;
+
   @override
   void initState() {
     super.initState();
@@ -87,7 +89,6 @@ class _MapPickerPageState extends State<MapPickerPage>
       CurvedAnimation(parent: _pinAnimController, curve: Curves.easeOut),
     );
 
-    // If a seed location was passed in, use it directly and skip GPS.
     if (widget.initialLatLng != null) {
       _pickedLatLng = widget.initialLatLng;
       _reverseGeocode(_pickedLatLng!).then((_) {
@@ -122,8 +123,10 @@ class _MapPickerPageState extends State<MapPickerPage>
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.deniedForever) {
+        // Fall back to a world-centre view so the user can still search
+        _pickedLatLng = const LatLng(20.5937, 78.9629); // centre of India
+        if (mounted) setState(() => _loading = false);
         _showSnack('Location permission denied. Please enable in settings.');
-        setState(() => _loading = false);
         return;
       }
 
@@ -137,6 +140,7 @@ class _MapPickerPageState extends State<MapPickerPage>
         _fetchNearbyPlaces(_pickedLatLng!),
       ]);
     } catch (e) {
+      _pickedLatLng = const LatLng(20.5937, 78.9629);
       _showSnack('Could not get location: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -156,12 +160,11 @@ class _MapPickerPageState extends State<MapPickerPage>
   }
 
   // ──────────────────────────────────────────
-  //  REVERSE GEOCODING
+  //  REVERSE GEOCODING  (no region restriction)
   // ──────────────────────────────────────────
 
-  String _fallbackAddress(LatLng latlng) {
-    return '${latlng.latitude.toStringAsFixed(6)}, ${latlng.longitude.toStringAsFixed(6)}';
-  }
+  String _fallbackAddress(LatLng latlng) =>
+      '${latlng.latitude.toStringAsFixed(6)}, ${latlng.longitude.toStringAsFixed(6)}';
 
   Future<void> _reverseGeocode(LatLng latlng) async {
     if (mounted) {
@@ -171,16 +174,18 @@ class _MapPickerPageState extends State<MapPickerPage>
       });
     }
     try {
+      // ── No region/components restriction → works globally ──
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/geocode/json'
         '?latlng=${latlng.latitude},${latlng.longitude}'
         '&key=$_kGoogleApiKey',
       );
-      final res = await http.get(url);
-      final data = jsonDecode(res.body);
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
 
-      if (data['status'] == 'OK' && data['results'].isNotEmpty) {
-        final result = data['results'][0];
+      if (data['status'] == 'OK' &&
+          (data['results'] as List).isNotEmpty) {
+        final result = (data['results'] as List)[0];
         final components = result['address_components'] as List<dynamic>;
 
         String sublocality = '';
@@ -191,20 +196,20 @@ class _MapPickerPageState extends State<MapPickerPage>
         String postalCode = '';
 
         for (final c in components) {
-          final types = List<String>.from(c['types']);
+          final types = List<String>.from(c['types'] as List);
           if (types.contains('sublocality_level_1') ||
               types.contains('sublocality')) {
-            sublocality = c['long_name'];
+            sublocality = c['long_name'] as String;
           } else if (types.contains('locality')) {
-            locality = c['long_name'];
+            locality = c['long_name'] as String;
           } else if (types.contains('administrative_area_level_2')) {
-            city = c['long_name'];
+            city = c['long_name'] as String;
           } else if (types.contains('administrative_area_level_1')) {
-            state = c['long_name'];
+            state = c['long_name'] as String;
           } else if (types.contains('country')) {
-            country = c['long_name'];
+            country = c['long_name'] as String;
           } else if (types.contains('postal_code')) {
-            postalCode = c['long_name'];
+            postalCode = c['long_name'] as String;
           }
         }
 
@@ -215,7 +220,7 @@ class _MapPickerPageState extends State<MapPickerPage>
         final full = [
           sublocality,
           locality,
-          city != locality ? city : '',
+          (city.isNotEmpty && city != locality) ? city : '',
           state,
           postalCode,
           country,
@@ -224,9 +229,11 @@ class _MapPickerPageState extends State<MapPickerPage>
         if (mounted) {
           setState(() {
             _pickedLatLng = latlng;
+            _lastGeocodedLatLng = latlng;
             _shortAddress = short.isNotEmpty ? short : 'Selected location';
-            _fullAddress =
-                full.isNotEmpty ? full : result['formatted_address'] ?? '';
+            _fullAddress = full.isNotEmpty
+                ? full
+                : (result['formatted_address'] as String? ?? '');
           });
         }
       } else {
@@ -241,8 +248,7 @@ class _MapPickerPageState extends State<MapPickerPage>
       if (mounted) {
         setState(() {
           _shortAddress = 'Selected location';
-          _fullAddress = '${latlng.latitude.toStringAsFixed(5)}, '
-              '${latlng.longitude.toStringAsFixed(5)}';
+          _fullAddress = _fallbackAddress(latlng);
         });
       }
     } finally {
@@ -251,26 +257,28 @@ class _MapPickerPageState extends State<MapPickerPage>
   }
 
   // ──────────────────────────────────────────
-  //  NEARBY PLACES
+  //  NEARBY PLACES  (no region restriction)
   // ──────────────────────────────────────────
 
   Future<void> _fetchNearbyPlaces(LatLng center) async {
     try {
+      // ── No type/region filter → returns places worldwide ──
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
         '?location=${center.latitude},${center.longitude}'
-        '&radius=400'
+        '&radius=500'
         '&key=$_kGoogleApiKey',
       );
-      final res = await http.get(url);
-      final data = jsonDecode(res.body);
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
 
       if (data['status'] == 'OK') {
         final places = data['results'] as List<dynamic>;
         final newMarkers = <Marker>{};
 
         for (final place in places.take(15)) {
-          final loc = place['geometry']['location'];
+          final loc =
+              place['geometry']['location'] as Map<String, dynamic>;
           final lat = (loc['lat'] as num).toDouble();
           final lng = (loc['lng'] as num).toDouble();
           final name = place['name'] as String;
@@ -296,7 +304,7 @@ class _MapPickerPageState extends State<MapPickerPage>
   }
 
   // ──────────────────────────────────────────
-  //  PLACES AUTOCOMPLETE
+  //  PLACES AUTOCOMPLETE  (global — no region/components)
   // ──────────────────────────────────────────
 
   void _onSearchChanged(String value) {
@@ -308,45 +316,50 @@ class _MapPickerPageState extends State<MapPickerPage>
       });
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 400), () {
-      _fetchPredictions(value.trim());
-    });
+    _debounce =
+        Timer(const Duration(milliseconds: 400), () => _fetchPredictions(value.trim()));
   }
 
   Future<void> _fetchPredictions(String input) async {
     try {
+      // ── Key change: removed &components and &region parameters
+      //    so results are not restricted to any country or region ──
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/place/autocomplete/json'
         '?input=${Uri.encodeComponent(input)}'
         '&key=$_kGoogleApiKey'
         '&language=en',
+        // NO &components=country:in
+        // NO &region=in
+        // NO &strictbounds
       );
-      final res = await http.get(url);
-      final data = jsonDecode(res.body);
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
 
       if (data['status'] == 'OK') {
         if (mounted) {
           setState(() {
             _predictions =
-                List<Map<String, dynamic>>.from(data['predictions']);
+                List<Map<String, dynamic>>.from(data['predictions'] as List);
             _showSuggestions = true;
           });
         }
       } else {
         if (mounted) setState(() => _showSuggestions = false);
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _showSuggestions = false);
+    }
   }
 
-  Future<void> _onPredictionSelected(
-      Map<String, dynamic> prediction) async {
-    final placeId = prediction['place_id'];
+  Future<void> _onPredictionSelected(Map<String, dynamic> prediction) async {
+    final placeId = prediction['place_id'] as String;
     FocusScope.of(context).unfocus();
     setState(() {
       _showSuggestions = false;
       _searchController.text =
-          prediction['structured_formatting']?['main_text'] ??
-              prediction['description'];
+          (prediction['structured_formatting'] as Map?)?['main_text'] as String? ??
+              prediction['description'] as String;
       _predictions = [];
     });
 
@@ -354,14 +367,15 @@ class _MapPickerPageState extends State<MapPickerPage>
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/place/details/json'
         '?place_id=$placeId'
-        '&fields=geometry,name,formatted_address'
+        '&fields=geometry,name,formatted_address,address_components'
         '&key=$_kGoogleApiKey',
       );
-      final res = await http.get(url);
-      final data = jsonDecode(res.body);
+      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
 
       if (data['status'] == 'OK') {
-        final loc = data['result']['geometry']['location'];
+        final loc =
+            data['result']['geometry']['location'] as Map<String, dynamic>;
         final latlng = LatLng(
           (loc['lat'] as num).toDouble(),
           (loc['lng'] as num).toDouble(),
@@ -386,17 +400,29 @@ class _MapPickerPageState extends State<MapPickerPage>
   void _onCameraIdle() {
     _geocodeDebounce?.cancel();
     _geocodeDebounce =
-        Timer(const Duration(milliseconds: 300), () async {
-      if (_mapController == null) return;
-      final bounds = await _mapController!.getVisibleRegion();
-      final center = LatLng(
-        (bounds.northeast.latitude + bounds.southwest.latitude) / 2,
-        (bounds.northeast.longitude + bounds.southwest.longitude) / 2,
-      );
-      await Future.wait([
-        _reverseGeocode(center),
-        _fetchNearbyPlaces(center),
-      ]);
+        Timer(const Duration(milliseconds: 400), () async {
+      if (_mapController == null || !mounted) return;
+      try {
+        final bounds = await _mapController!.getVisibleRegion();
+        final center = LatLng(
+          (bounds.northeast.latitude + bounds.southwest.latitude) / 2,
+          (bounds.northeast.longitude + bounds.southwest.longitude) / 2,
+        );
+
+        // Skip if map hasn't actually moved meaningfully
+        if (_lastGeocodedLatLng != null) {
+          final latDiff =
+              (center.latitude - _lastGeocodedLatLng!.latitude).abs();
+          final lngDiff =
+              (center.longitude - _lastGeocodedLatLng!.longitude).abs();
+          if (latDiff < 0.0001 && lngDiff < 0.0001) return;
+        }
+
+        await Future.wait([
+          _reverseGeocode(center),
+          _fetchNearbyPlaces(center),
+        ]);
+      } catch (_) {}
     });
   }
 
@@ -412,17 +438,17 @@ class _MapPickerPageState extends State<MapPickerPage>
 
   void _confirmLocation() {
     if (_pickedLatLng == null) return;
-
-    final resolvedFullAddress =
-        _fullAddress.trim().isNotEmpty ? _fullAddress : _fallbackAddress(_pickedLatLng!);
-    final resolvedShortAddress =
+    final resolvedFull = _fullAddress.trim().isNotEmpty
+        ? _fullAddress
+        : _fallbackAddress(_pickedLatLng!);
+    final resolvedShort =
         _shortAddress.trim().isNotEmpty ? _shortAddress : 'Selected location';
     HapticFeedback.mediumImpact();
     Navigator.pop(
       context,
       MapPickerResult(
-        shortAddress: resolvedShortAddress,
-        fullAddress: resolvedFullAddress,
+        shortAddress: resolvedShort,
+        fullAddress: resolvedFull,
         addressDetails: _detailsController.text.trim(),
         latLng: _pickedLatLng!,
       ),
@@ -445,11 +471,13 @@ class _MapPickerPageState extends State<MapPickerPage>
     }
 
     final screenH = MediaQuery.of(context).size.height;
+    final bottomPad = MediaQuery.of(context).viewPadding.bottom;
     const sheetMinFraction = 0.38;
 
     return Scaffold(
       backgroundColor: Colors.white,
       resizeToAvoidBottomInset: false,
+      extendBody: true,
       body: GestureDetector(
         onTap: () {
           FocusScope.of(context).unfocus();
@@ -461,7 +489,7 @@ class _MapPickerPageState extends State<MapPickerPage>
             Positioned.fill(
               child: GoogleMap(
                 initialCameraPosition: CameraPosition(
-                  target: _pickedLatLng ?? const LatLng(19.076, 72.877),
+                  target: _pickedLatLng ?? const LatLng(20.5937, 78.9629),
                   zoom: 16,
                 ),
                 markers: _markers,
@@ -481,7 +509,7 @@ class _MapPickerPageState extends State<MapPickerPage>
             // ── 2. CENTRE PIN ────────────────────────────
             IgnorePointer(
               child: Align(
-                alignment: Alignment.center,
+                alignment: const Alignment(0, -0.12),
                 child: AnimatedBuilder(
                   animation: _pinLiftAnim,
                   builder: (_, __) {
@@ -494,14 +522,14 @@ class _MapPickerPageState extends State<MapPickerPage>
                           offset: Offset(0, -lift),
                           child: const Icon(
                             Icons.location_pin,
-                            size: 48,
+                            size: 52,
                             color: Color(0xFFE8344E),
                           ),
                         ),
                         Transform.scale(
                           scale: shadowScale,
                           child: Container(
-                            width: 12,
+                            width: 14,
                             height: 5,
                             decoration: BoxDecoration(
                               color: Colors.black.withOpacity(
@@ -525,8 +553,8 @@ class _MapPickerPageState extends State<MapPickerPage>
               child: SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -547,7 +575,9 @@ class _MapPickerPageState extends State<MapPickerPage>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
+
+                      // Search bar
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -569,6 +599,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                               setState(() => _showSuggestions = true);
                             }
                           },
+                          textInputAction: TextInputAction.search,
                           decoration: InputDecoration(
                             hintText: 'Search for area, street name...',
                             hintStyle: TextStyle(
@@ -578,8 +609,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                             suffixIcon: _searchController.text.isNotEmpty
                                 ? IconButton(
                                     icon: Icon(Icons.close,
-                                        color: Colors.grey.shade400,
-                                        size: 20),
+                                        color: Colors.grey.shade400, size: 20),
                                     onPressed: () {
                                       _searchController.clear();
                                       setState(() {
@@ -604,7 +634,7 @@ class _MapPickerPageState extends State<MapPickerPage>
             // ── 4. AUTOCOMPLETE SUGGESTIONS ──────────────
             if (_showSuggestions && _predictions.isNotEmpty)
               Positioned(
-                top: MediaQuery.of(context).padding.top + 110,
+                top: MediaQuery.of(context).padding.top + 115,
                 left: 12,
                 right: 12,
                 child: Material(
@@ -615,19 +645,21 @@ class _MapPickerPageState extends State<MapPickerPage>
                     child: ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _predictions.length > 6
-                          ? 6
-                          : _predictions.length,
+                      itemCount:
+                          _predictions.length > 6 ? 6 : _predictions.length,
                       separatorBuilder: (_, __) =>
                           Divider(height: 1, color: Colors.grey.shade100),
                       itemBuilder: (context, i) {
                         final p = _predictions[i];
                         final main =
-                            p['structured_formatting']?['main_text'] ??
-                                p['description'];
+                            (p['structured_formatting']
+                                        as Map?)?['main_text']
+                                    as String? ??
+                                p['description'] as String;
                         final secondary =
-                            p['structured_formatting']
-                                    ?['secondary_text'] ??
+                            (p['structured_formatting']
+                                        as Map?)?['secondary_text']
+                                    as String? ??
                                 '';
                         return ListTile(
                           dense: true,
@@ -656,7 +688,7 @@ class _MapPickerPageState extends State<MapPickerPage>
 
             // ── 5. "USE CURRENT LOCATION" BUTTON ─────────
             Positioned(
-              bottom: screenH * sheetMinFraction + 12,
+              bottom: screenH * sheetMinFraction + 14,
               left: 0,
               right: 0,
               child: Center(
@@ -682,6 +714,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Custom GPS-style icon
                         SizedBox(
                           width: 20,
                           height: 20,
@@ -749,14 +782,13 @@ class _MapPickerPageState extends State<MapPickerPage>
                   ),
                   child: ListView(
                     controller: scrollCtrl,
-                    padding:
-                        const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                    padding: EdgeInsets.fromLTRB(
+                        16, 0, 16, 32 + bottomPad),
                     children: [
                       // Drag handle
                       Center(
                         child: Container(
-                          margin:
-                              const EdgeInsets.symmetric(vertical: 10),
+                          margin: const EdgeInsets.symmetric(vertical: 10),
                           width: 40,
                           height: 4,
                           decoration: BoxDecoration(
@@ -777,7 +809,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                       ),
                       const SizedBox(height: 10),
 
-                      // Address tile
+                      // ── Address tile ──
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 14),
@@ -791,9 +823,8 @@ class _MapPickerPageState extends State<MapPickerPage>
                           children: [
                             Padding(
                               padding: const EdgeInsets.only(top: 1),
-                              child: Icon(Icons.location_on,
-                                  color: const Color(0xFFE8344E),
-                                  size: 22),
+                              child: const Icon(Icons.location_on,
+                                  color: Color(0xFFE8344E), size: 22),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -829,8 +860,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                                               color: Colors.grey.shade600,
                                             ),
                                             maxLines: 2,
-                                            overflow:
-                                                TextOverflow.ellipsis,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ],
                                       ],
@@ -843,7 +873,7 @@ class _MapPickerPageState extends State<MapPickerPage>
                       ),
                       const SizedBox(height: 12),
 
-                      // Address details input
+                      // ── Address details input ──
                       Container(
                         decoration: BoxDecoration(
                           border: Border.all(
@@ -865,34 +895,32 @@ class _MapPickerPageState extends State<MapPickerPage>
                             border: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 14),
-                            suffixIcon:
-                                _detailsController.text.isNotEmpty
-                                    ? IconButton(
-                                        icon: Icon(Icons.cancel,
-                                            color: Colors.grey.shade400,
-                                            size: 20),
-                                        onPressed: () {
-                                          _detailsController.clear();
-                                          setState(() {});
-                                        },
-                                      )
-                                    : null,
+                            suffixIcon: _detailsController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: Icon(Icons.cancel,
+                                        color: Colors.grey.shade400, size: 20),
+                                    onPressed: () {
+                                      _detailsController.clear();
+                                      setState(() {});
+                                    },
+                                  )
+                                : null,
                           ),
                         ),
                       ),
                       const SizedBox(height: 20),
 
-                      // Save button
+                      // ── Save button ──
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: (_pickedLatLng == null || _addressLoading)
-                              ? null
-                              : _confirmLocation,
+                          onPressed:
+                              (_pickedLatLng == null || _addressLoading)
+                                  ? null
+                                  : _confirmLocation,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFE8344E),
-                            disabledBackgroundColor:
-                                Colors.grey.shade300,
+                            disabledBackgroundColor: Colors.grey.shade300,
                             padding:
                                 const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
