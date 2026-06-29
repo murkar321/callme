@@ -34,33 +34,13 @@ const _kMaxImageBytes = 500 * 1024;        // 500 KB
 const _kMaxDocBytes   = 5  * 1024 * 1024; // 5 MB
 const _kCompulsoryDoc = 'Aadhaar Card';
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  ProviderProfilePage
-//
-//  FIX SUMMARY (vs original):
-//
-//  1. Profile photo path aligned with ServiceProviderForm.
-//     ServiceProviderForm writes:  provider_images/{uid}/{timestamp}.jpg
-//     Old _save() wrote to:        profile_images/{uid}/profile.jpg   ← WRONG
-//     New _save() writes to:       provider_images/{uid}/{timestamp}.jpg ← FIXED
-//     Both read from:              business.image in Firestore
-//
-//  2. Firestore field round-trip fixed.
-//     _load() reads nested:  business.businessName, business.ownerName, …
-//     Old _save() wrote flat: providerName, ownerName, …              ← WRONG
-//     New _save() writes:    business.businessName, business.ownerName, …
-//                             + top-level mirrors for admin queries    ← FIXED
-//
-//  3. Image state refresh after save: _imageUrl updated + _pickedImage
-//     cleared so the hero card re-renders the new photo immediately.
-// ─────────────────────────────────────────────────────────────────────────────
-
 class ProviderProfilePage extends StatefulWidget {
   /// Firestore doc ID in /providers — must equal the provider's UID.
   final String providerId;
 
   /// Set true only when an admin opens another provider's profile.
-  /// Unlocks the delete button (requires admin Firestore rules).
+  /// Unlocks the admin-specific danger zone (currently same as self-delete
+  /// but can be extended with extra admin actions).
   final bool isAdmin;
 
   const ProviderProfilePage({
@@ -84,6 +64,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   // ── Page state ────────────────────────────────────────────────────────────
   bool _loading = true;
   bool _saving  = false;
+  bool _deleting = false;
 
   bool   _ownTools     = false;
   bool   _isActive     = true;
@@ -92,11 +73,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   String _serviceType  = '';
 
   // ── Image ─────────────────────────────────────────────────────────────────
-  /// Download URL stored in Firestore under business.image.
-  /// ServiceProviderForm writes this field — we read and update the same key.
   String _imageUrl    = '';
-
-  /// Newly picked local file (not yet uploaded).
   File?  _pickedImage;
 
   bool get _hasImage => _pickedImage != null || _imageUrl.isNotEmpty;
@@ -108,13 +85,11 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Documents ─────────────────────────────────────────────────────────────
-  /// docName → download URL  (populated from Firestore)
   Map<String, dynamic> _docs = {};
 
   // ── Selected service categories ───────────────────────────────────────────
   List<String> _selectedCats = [];
 
-  /// All possible categories for this provider's serviceType
   List<String> get _allCats {
     if (_serviceType.isEmpty) return [];
     final cfg = serviceConfigs[_serviceType];
@@ -122,7 +97,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     return (cfg.serviceCategories as List<dynamic>).cast<String>();
   }
 
-  /// Document list driven by serviceConfigs — Aadhaar always first
   List<String> get _docList {
     if (_serviceType.isEmpty) return [_kCompulsoryDoc];
     final cfg = serviceConfigs[_serviceType];
@@ -183,7 +157,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       final service  = (d['service']  as Map?)?.cast<String, dynamic>() ?? {};
       final bank     = (d['bank']     as Map?)?.cast<String, dynamic>() ?? {};
 
-      // ── Controllers ──────────────────────────────────────────────────────
       _businessCtrl.text = business['businessName'] ?? '';
       _ownerCtrl.text    = business['ownerName']    ?? '';
       _phoneCtrl.text    = business['phone']        ?? '';
@@ -197,13 +170,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       _ifscCtrl.text     = bank['ifsc']             ?? '';
       _upiCtrl.text      = bank['upi']              ?? '';
 
-      // ── Profile image ────────────────────────────────────────────────────
-      // ServiceProviderForm stores the download URL in business.image.
-      // We read from and write back to that exact same key so the photo
-      // set during registration appears here automatically.
-      _imageUrl = business['image'] ?? '';
-
-      // ── Other fields ─────────────────────────────────────────────────────
+      _imageUrl     = business['image'] ?? '';
       _ownTools     = service['ownTools'] as bool?   ?? false;
       _providerType = d['providerType']   as String? ?? '';
       _serviceType  = d['serviceType']    as String? ?? '';
@@ -250,7 +217,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   });
 
   // ── Upload document ───────────────────────────────────────────────────────
-  // Storage path: provider_docs/{uid}/{docName_underscored}
   Future<void> _uploadDoc(String name) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -337,7 +303,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       return;
     }
 
-    // Auth guard: ensure token is fresh before any Storage write.
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       _snack('Session expired — please log in again', ok: false);
@@ -353,13 +318,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     try {
       setState(() => _saving = true);
 
-      // ── Upload new photo ─────────────────────────────────────────────────
-      // Storage path: provider_images/{uid}/{timestamp}.jpg
-      //
-      // This matches the path that ServiceProviderForm uses on first
-      // registration, so both registration and profile edits land in the
-      // same bucket. The download URL is then stored at business.image in
-      // Firestore — the same key _load() reads from.
       String updatedUrl = _imageUrl;
       if (_pickedImage != null) {
         final ref = _storage.ref().child(
@@ -370,20 +328,13 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         updatedUrl = await ref.getDownloadURL();
       }
 
-      // ── Write back to Firestore ──────────────────────────────────────────
-      // Nested business.* fields are what _load() reads — these MUST be
-      // updated or edits will appear lost on the next reload.
-      // Top-level mirrors (providerName, ownerName, phone) are kept in sync
-      // so admin list queries that read the root doc stay accurate.
       await _db.collection('providers').doc(widget.providerId).update({
         'updatedAt':             FieldValue.serverTimestamp(),
-        // Top-level mirrors for admin queries
         'providerName':          _businessCtrl.text.trim(),
         'ownerName':             _ownerCtrl.text.trim(),
         'phone':                 _phoneCtrl.text.trim(),
         'categories':            _selectedCats,
         'isActive':              _isActive,
-        // Nested business map — exactly what _load() reads
         'business.businessName': _businessCtrl.text.trim(),
         'business.ownerName':    _ownerCtrl.text.trim(),
         'business.phone':        _phoneCtrl.text.trim(),
@@ -392,9 +343,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         'business.city':         _cityCtrl.text.trim(),
         'business.state':        _stateCtrl.text.trim(),
         'business.pincode':      _pincodeCtrl.text.trim(),
-        // Image URL — same key ServiceProviderForm writes to
         'business.image':        updatedUrl,
-        // Service and bank
         'service.ownTools':      _ownTools,
         'bank.accountHolder':    _holderCtrl.text.trim(),
         'bank.accountNumber':    _accountCtrl.text.trim(),
@@ -403,8 +352,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       });
 
       if (!mounted) return;
-      // Refresh local state so the hero card re-renders the new photo
-      // and the remove button reflects the current image immediately.
       setState(() {
         _imageUrl    = updatedUrl;
         _pickedImage = null;
@@ -417,7 +364,172 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     }
   }
 
-  // ── Delete provider (admin-only) ──────────────────────────────────────────
+  // ── Delete my profile (self) ──────────────────────────────────────────────
+  // Two-step confirmation: first a standard confirm dialog, then the user
+  // must type their business name to prevent accidental deletion.
+  Future<void> _deleteMyProfile() async {
+    // Step 1 — intent confirmation
+    final step1 = await _confirm(
+      title: 'Delete Your Profile?',
+      body: 'This will permanently delete your profile, all documents, and '
+            'remove you from the platform. This cannot be undone.',
+      action: 'Continue',
+      destructive: true,
+    );
+    if (!step1 || !mounted) return;
+
+    // Step 2 — type business name to confirm
+    final nameToMatch = _businessCtrl.text.trim();
+    final inputCtrl   = TextEditingController();
+    final confirmed   = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22)),
+          title: const Text(
+            'Confirm Deletion',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                      color: _T.textMid, fontSize: 14, height: 1.5),
+                  children: [
+                    const TextSpan(text: 'Type '),
+                    TextSpan(
+                      text: '"$nameToMatch"',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: _T.danger),
+                    ),
+                    const TextSpan(
+                        text: ' below to permanently delete your profile.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: inputCtrl,
+                autofocus: true,
+                onChanged: (_) => setS(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Business name',
+                  hintStyle: const TextStyle(
+                      color: _T.textLow, fontSize: 13),
+                  filled: true,
+                  fillColor: _T.fieldBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: _T.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide:
+                        const BorderSide(color: _T.danger, width: 1.6),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                ),
+              ),
+            ],
+          ),
+          actionsPadding:
+              const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel',
+                  style: TextStyle(color: _T.textMid)),
+            ),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: inputCtrl,
+              builder: (_, val, __) {
+                final match = val.text.trim() == nameToMatch;
+                return ElevatedButton(
+                  onPressed: match
+                      ? () => Navigator.pop(ctx, true)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _T.danger,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor:
+                        _T.danger.withOpacity(0.3),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 22, vertical: 10),
+                  ),
+                  child: const Text('Delete Forever',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // ── Perform deletion ──────────────────────────────────────────────────
+    try {
+      setState(() => _deleting = true);
+
+      // 1. Delete Firestore document
+      await _db
+          .collection('providers')
+          .doc(widget.providerId)
+          .delete();
+
+      // 2. Delete Storage files — best-effort (don't block on errors)
+      await _deleteStorageFolder(
+          'provider_images/${widget.providerId}');
+      await _deleteStorageFolder(
+          'provider_docs/${widget.providerId}');
+
+      // 3. Sign out if this provider is deleting their own account
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      if (!widget.isAdmin && currentUid == widget.providerId) {
+        await FirebaseAuth.instance.signOut();
+      }
+
+      if (!mounted) return;
+      // Pop back to the previous screen (login / home)
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (e) {
+      debugPrint('[PROFILE] Delete failed: $e');
+      _snack('Failed to delete profile — check your connection', ok: false);
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  /// Deletes every file inside a Storage "folder" (prefix).
+  /// Silently ignores errors so a missing folder doesn't block deletion.
+  Future<void> _deleteStorageFolder(String prefix) async {
+    try {
+      final ref    = _storage.ref().child(prefix);
+      final result = await ref.listAll();
+      for (final item in result.items) {
+        try { await item.delete(); } catch (_) {}
+      }
+      // Recurse into sub-folders
+      for (final sub in result.prefixes) {
+        await _deleteStorageFolder(sub.fullPath);
+      }
+    } catch (_) {
+      // Folder may not exist — ignore
+    }
+  }
+
+  // ── Delete provider (admin-only, simpler flow) ────────────────────────────
   Future<void> _deleteProvider() async {
     final ok = await _confirm(
       title: 'Delete Provider?',
@@ -429,7 +541,15 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
 
     try {
       setState(() => _saving = true);
-      await _db.collection('providers').doc(widget.providerId).delete();
+
+      await _db
+          .collection('providers')
+          .doc(widget.providerId)
+          .delete();
+
+      await _deleteStorageFolder('provider_images/${widget.providerId}');
+      await _deleteStorageFolder('provider_docs/${widget.providerId}');
+
       if (!mounted) return;
       Navigator.pop(context);
     } catch (_) {
@@ -544,6 +664,29 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       );
     }
 
+    // Full-screen deletion overlay
+    if (_deleting) {
+      return const Scaffold(
+        backgroundColor: _T.bg,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: _T.danger),
+              SizedBox(height: 16),
+              Text(
+                'Deleting your profile…',
+                style: TextStyle(
+                    color: _T.textMid,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final mq       = MediaQuery.of(context);
     final isTablet = mq.size.width > 600;
     final hPad     = isTablet ? 32.0 : (mq.size.width < 360 ? 12.0 : 16.0);
@@ -594,10 +737,14 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     icon: Icons.account_balance_rounded,
                     child: _buildBankFields(),
                   ),
+                  // ── Admin danger zone ────────────────────────────────────
                   if (widget.isAdmin) ...[
                     const SizedBox(height: 16),
-                    _buildDangerZone(),
+                    _buildAdminDangerZone(),
                   ],
+                  // ── Self-delete — always visible to the provider ─────────
+                  const SizedBox(height: 16),
+                  _buildSelfDeleteZone(),
                   const SizedBox(height: 16),
                 ]),
               ),
@@ -693,7 +840,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       ),
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        // ── Avatar ────────────────────────────────────────────────────────
         GestureDetector(
           onTap: _pickImage,
           child: Stack(clipBehavior: Clip.none, children: [
@@ -718,7 +864,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     : null,
               ),
             ),
-            // Camera badge
             Positioned(
               bottom: 0,
               right: -4,
@@ -731,7 +876,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     size: 16, color: _T.primary),
               ),
             ),
-            // Remove button — only when a photo exists
             if (_hasImage)
               Positioned(
                 top: -4,
@@ -762,8 +906,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               fontWeight: FontWeight.w400),
         ),
         const SizedBox(height: 10),
-
-        // ── Business name (live preview) ──────────────────────────────────
         AnimatedBuilder(
           animation: _businessCtrl,
           builder: (_, __) {
@@ -782,8 +924,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             );
           },
         ),
-
-        // ── Provider/service type badges ──────────────────────────────────
         if (_providerType.isNotEmpty || _serviceType.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -798,8 +938,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             ),
           ),
         const SizedBox(height: 16),
-
-        // ── Active toggle ─────────────────────────────────────────────────
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
@@ -834,8 +972,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           ]),
         ),
         const SizedBox(height: 16),
-
-        // ── Profile completion bar ────────────────────────────────────────
         AnimatedBuilder(
           animation: Listenable.merge(_allCtrls),
           builder: (_, __) {
@@ -989,7 +1125,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-      // Own tools toggle
       Container(
         decoration: BoxDecoration(
           color: _T.fieldBg,
@@ -1013,7 +1148,6 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           onChanged: (v) => setState(() => _ownTools = v),
         ),
       ),
-
       if (_allCats.isNotEmpty) ...[
         const SizedBox(height: 16),
         const Text('Service Categories',
@@ -1088,13 +1222,11 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   // ── Documents section ─────────────────────────────────────────────────────
   Widget _buildDocumentsSection() {
     final docs = _docList;
-
     return Column(
         mainAxisSize: MainAxisSize.min,
         children: docs.map((name) {
           final uploaded     = _docs.containsKey(name);
           final isCompulsory = name == _kCompulsoryDoc;
-
           return Container(
             margin: const EdgeInsets.only(bottom: 10),
             padding:
@@ -1236,8 +1368,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     ]);
   }
 
-  // ── Danger zone (admin only) ──────────────────────────────────────────────
-  Widget _buildDangerZone() {
+  // ── Admin danger zone ─────────────────────────────────────────────────────
+  Widget _buildAdminDangerZone() {
     return Container(
       decoration: BoxDecoration(
         color: _T.surface,
@@ -1263,11 +1395,11 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               color: _T.danger.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.warning_amber_rounded,
+            child: const Icon(Icons.admin_panel_settings_rounded,
                 color: _T.danger, size: 18),
           ),
           const SizedBox(width: 12),
-          const Text('Danger Zone',
+          const Text('Admin — Danger Zone',
               style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -1275,10 +1407,9 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         ]),
         const SizedBox(height: 12),
         const Text(
-          'Deleting this provider is permanent and cannot be undone. '
-          'All associated data will be removed.',
-          style:
-              TextStyle(fontSize: 13, color: _T.textMid, height: 1.5),
+          'As admin you can permanently delete this provider. '
+          'All associated data will be removed and cannot be recovered.',
+          style: TextStyle(fontSize: 13, color: _T.textMid, height: 1.5),
         ),
         const SizedBox(height: 16),
         SizedBox(
@@ -1301,6 +1432,106 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     );
   }
 
+  // ── Self-delete zone — visible to the provider themselves ─────────────────
+  Widget _buildSelfDeleteZone() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _T.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _T.danger.withOpacity(0.20)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 12,
+              offset: const Offset(0, 4)),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header
+          Row(children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: _T.danger.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.warning_amber_rounded,
+                  color: _T.danger, size: 18),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Delete My Profile',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: _T.danger),
+            ),
+          ]),
+          const SizedBox(height: 12),
+
+          // Warning text
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _T.danger.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _T.danger.withOpacity(0.15)),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    color: _T.danger, size: 16),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'This will permanently delete your profile, '
+                    'all uploaded documents, and your account from '
+                    'the platform. You will be signed out immediately. '
+                    'This action cannot be undone.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: _T.danger,
+                        height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Delete button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: (_saving || _deleting) ? null : _deleteMyProfile,
+              icon: const Icon(Icons.delete_forever_rounded, size: 18),
+              label: const Text(
+                'Delete My Profile',
+                style: TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _T.danger,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: _T.danger.withOpacity(0.35),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Save bar ──────────────────────────────────────────────────────────────
   Widget _buildSaveBar() {
     final bot = MediaQuery.of(context).viewPadding.bottom;
@@ -1320,7 +1551,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         child: SizedBox(
           height: 52,
           child: ElevatedButton(
-            onPressed: _saving ? null : _save,
+            onPressed: (_saving || _deleting) ? null : _save,
             style: ElevatedButton.styleFrom(
               backgroundColor: _T.primary,
               foregroundColor: Colors.white,
@@ -1343,8 +1574,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                       SizedBox(width: 8),
                       Text('Save Changes',
                           style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold)),
+                              fontSize: 16, fontWeight: FontWeight.bold)),
                     ],
                   ),
           ),
@@ -1491,3 +1721,4 @@ class _IconBtn extends StatelessWidget {
     );
   }
 }
+

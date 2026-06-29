@@ -38,11 +38,11 @@ class _C {
 // TERMINOLOGY — maps serviceType → { singular, available, mine }
 // ═══════════════════════════════════════════════════════════════
 class _Terms {
-  final String singular;    // "enquiry" / "order" / "booking"
-  final String availableTab; // "Available Enquiries"
-  final String myTab;        // "My Enquiries"
-  final String availableStat; // "Available"
-  final String myStat;        // "Active Enquiries"
+  final String singular;
+  final String availableTab;
+  final String myTab;
+  final String availableStat;
+  final String myStat;
 
   const _Terms({
     required this.singular,
@@ -55,35 +55,32 @@ class _Terms {
   static _Terms forService(String serviceType) {
     final v = serviceType.toLowerCase().trim();
 
-    // Education & Civil → enquiry
     if (v.contains('educ') || v.contains('civil')) {
       return const _Terms(
-        singular:     'Enquiry',
-        availableTab: 'Available Enquiries',
-        myTab:        'My Enquiries',
-        availableStat:'Available',
-        myStat:       'Active Enquiries',
+        singular:      'Enquiry',
+        availableTab:  'Available Enquiries',
+        myTab:         'My Enquiries',
+        availableStat: 'Available',
+        myStat:        'Active Enquiries',
       );
     }
 
-    // Hotel & Resorts → booking
     if (v.contains('hotel') || v.contains('resort')) {
       return const _Terms(
-        singular:     'Booking',
-        availableTab: 'Available Bookings',
-        myTab:        'My Bookings',
-        availableStat:'Available',
-        myStat:       'Active Bookings',
+        singular:      'Booking',
+        availableTab:  'Available Bookings',
+        myTab:         'My Bookings',
+        availableStat: 'Available',
+        myStat:        'Active Bookings',
       );
     }
 
-    // Everything else (laundry, cleaning, water, plumbing, salon, …) → order
     return const _Terms(
-      singular:     'Order',
-      availableTab: 'Available Orders',
-      myTab:        'My Orders',
-      availableStat:'Available',
-      myStat:       'Active Orders',
+      singular:      'Order',
+      availableTab:  'Available Orders',
+      myTab:         'My Orders',
+      availableStat: 'Available',
+      myStat:        'Active Orders',
     );
   }
 }
@@ -110,49 +107,105 @@ bool _categoryMatch(
   return providerCats.any((c) => _norm(c) == _norm(orderCat));
 }
 
+// ─────────────────────────────────────────────────────────────
+// FIX: isAssigned can be null/missing in Firestore (treated as
+// "not yet set" = unassigned).  We only block if it is
+// explicitly true AND a real providerUserId is present.
+// ─────────────────────────────────────────────────────────────
 bool _isAvailable({
   required Map<String, dynamic> data,
   required String myUid,
   required String svcNorm,
   required List<String> providerCats,
 }) {
-  final assigned  = data['isAssigned'];
-  final status    = (data['status'] ?? '').toString().toLowerCase().trim();
-  final reopened  = data['reopenForOthers'] == true;
-  final provUid   = (data['providerUserId'] ?? '').toString().trim();
+  final dynamic assignedRaw = data['isAssigned'];
+  // Treat null / missing as false (order not yet taken)
+  final bool isAssigned = assignedRaw == true;
 
-  final isAssignedBool = assigned == true;
-  final hasProvider    = provUid.isNotEmpty;
+  final provUid =
+      (data['providerUserId'] ?? '').toString().trim();
+  final status  =
+      (data['status'] ?? '').toString().toLowerCase().trim();
+  final reopened = data['reopenForOthers'] == true;
 
-  if (isAssignedBool && hasProvider) {
+  // Already firmly taken by someone else → skip
+  if (isAssigned && provUid.isNotEmpty && provUid != myUid) {
     debugPrint('[avail] SKIP ${data['orderId'] ?? ''}: assigned to $provUid');
     return false;
   }
 
-  final isOpen = status == 'pending'
+  // ── Open-status check ───────────────────────────────────────
+  // An order is open if:
+  //   • status is pending or enquiry (brand-new, not yet taken)
+  //   • status is cancelled AND reopenForOthers == true
+  //   • status is accepted BUT no provider yet (edge-case recovery)
+  //   • isAssigned is null/false (Firestore field missing → open)
+  final bool hasRealProvider = provUid.isNotEmpty && provUid != myUid;
+  final bool isOpen = status == 'pending'
       || status == 'enquiry'
       || (status == 'cancelled' && reopened)
-      || (status == 'accepted' && !hasProvider);
+      || (status == 'accepted' && !hasRealProvider)
+      || assignedRaw == null; // ← FIX: field missing means unassigned
 
   if (!isOpen) {
-    debugPrint('[avail] SKIP status="$status" reopened=$reopened hasProvider=$hasProvider');
+    debugPrint('[avail] SKIP status="$status" reopened=$reopened '
+        'isAssigned=$assignedRaw provUid=$provUid');
     return false;
   }
 
+  // Already declined by this provider → skip
   final declined = (data['declinedBy'] as List?) ?? [];
   if (myUid.isNotEmpty && declined.contains(myUid)) {
     debugPrint('[avail] SKIP: already declined by me');
     return false;
   }
 
+  // Service-type match
   final orderSvc = (data['serviceType'] ?? '').toString().trim();
   if (orderSvc.isNotEmpty && !_svcEq(orderSvc, svcNorm)) {
     debugPrint('[avail] SKIP svc mismatch: "$orderSvc" vs "$svcNorm"');
     return false;
   }
 
+  // Category match
   if (!_categoryMatch(data, providerCats)) {
     debugPrint('[avail] SKIP category mismatch');
+    return false;
+  }
+
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────
+// FIX: "My Jobs" must ONLY show orders that are explicitly and
+// firmly assigned to this provider — not pending/open ones.
+// ─────────────────────────────────────────────────────────────
+bool _isMine({
+  required Map<String, dynamic> data,
+  required String myUid,
+  required String svcNorm,
+}) {
+  final provUid  = (data['providerUserId'] ?? '').toString().trim();
+  final status   = (data['status'] ?? '').toString().toLowerCase().trim();
+  final dynamic assignedRaw = data['isAssigned'];
+
+  // Must belong to this provider
+  if (provUid != myUid) return false;
+
+  // Service type must match (allow empty for legacy docs)
+  final orderSvc = (data['serviceType'] ?? '').toString().trim();
+  if (orderSvc.isNotEmpty && !_svcEq(orderSvc, svcNorm)) return false;
+
+  // Only show statuses that mean "this job is mine"
+  // 'pending' without assignment = available job, not mine
+  const mineStatuses = {'accepted', 'completed', 'cancelled'};
+  if (!mineStatuses.contains(status)) return false;
+
+  // Extra guard: if isAssigned is explicitly false and status is
+  // somehow 'accepted', treat as available (data inconsistency)
+  if (assignedRaw == false && status == 'accepted') {
+    debugPrint('[mine] SKIP: isAssigned=false but status=accepted, '
+        'treating as available');
     return false;
   }
 
@@ -223,8 +276,21 @@ class _BDPState extends State<BusinessDashboardPage> {
 
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _providerSnap;
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> _availStream      = const Stream.empty();
-  Stream<QuerySnapshot<Map<String, dynamic>>> _availLegacyStream = const Stream.empty();
+  // ── Available: 3 streams to catch every case ─────────────────
+  // Stream A: isAssigned == false  (standard new orders)
+  // Stream B: status IN [pending, enquiry]  (legacy / no isAssigned field)
+  // Stream C: isAssigned == null is NOT queryable directly in
+  //           Firestore, so we fetch recent docs broadly and
+  //           filter client-side via _isAvailable().
+  Stream<QuerySnapshot<Map<String, dynamic>>> _availPrimaryStream =
+      const Stream.empty();
+  Stream<QuerySnapshot<Map<String, dynamic>>> _availLegacyStream =
+      const Stream.empty();
+  // Broad fallback: recent orders regardless of isAssigned field
+  // (catches docs where the field is missing entirely)
+  Stream<QuerySnapshot<Map<String, dynamic>>> _availFallbackStream =
+      const Stream.empty();
+
   Stream<QuerySnapshot<Map<String, dynamic>>>? _myStream;
 
   final _availNotifier = _CountNotifier();
@@ -233,8 +299,6 @@ class _BDPState extends State<BusinessDashboardPage> {
   ScaffoldMessengerState? _messenger;
 
   String get _svcNorm => _norm(widget.serviceType);
-
-  // Terminology derived once from serviceType
   late final _Terms _terms = _Terms.forService(widget.serviceType);
 
   @override
@@ -289,19 +353,35 @@ class _BDPState extends State<BusinessDashboardPage> {
         .doc(widget.providerId)
         .snapshots();
 
-    _availStream = _db
+    // ── Stream A: explicitly unassigned ──────────────────────
+    _availPrimaryStream = _db
         .collection('orders')
         .where('isAssigned', isEqualTo: false)
         .orderBy('createdAt', descending: true)
         .limit(300)
         .snapshots();
 
+    // ── Stream B: legacy / status-based ──────────────────────
     _availLegacyStream = _db
         .collection('orders')
         .where('status', whereIn: ['pending', 'enquiry'])
-        .limit(100)
+        .orderBy('createdAt', descending: true)
+        .limit(150)
         .snapshots();
 
+    // ── Stream C: broad fallback — catches docs where
+    //    isAssigned field was never written (null/missing).
+    //    We pull recent orders and filter client-side.
+    _availFallbackStream = _db
+        .collection('orders')
+        .orderBy('createdAt', descending: true)
+        .limit(200)
+        .snapshots();
+
+    // ── My Jobs: assigned to this provider ────────────────────
+    // FIX: query by providerUserId so only truly assigned orders
+    // come through. _isMine() then filters out any 'pending'
+    // docs that slipped in due to data inconsistency.
     _myStream = _uid.isEmpty
         ? null
         : _db
@@ -317,10 +397,11 @@ class _BDPState extends State<BusinessDashboardPage> {
   void _retry() {
     if (!mounted) return;
     setState(() {
-      _availStream       = const Stream.empty();
-      _availLegacyStream = const Stream.empty();
-      _myStream          = null;
-      _authReady         = false;
+      _availPrimaryStream  = const Stream.empty();
+      _availLegacyStream   = const Stream.empty();
+      _availFallbackStream = const Stream.empty();
+      _myStream            = null;
+      _authReady           = false;
     });
     _resolveAuthThenInit();
   }
@@ -362,19 +443,24 @@ class _BDPState extends State<BusinessDashboardPage> {
         if (!snap.exists) throw Exception('not_found');
         final cur = snap.data()!;
 
+        // Already taken by someone else
+        final curProvider = (cur['providerUserId'] ?? '').toString().trim();
         if (cur['isAssigned'] == true &&
-            (cur['providerUserId'] ?? '').toString().isNotEmpty) {
+            curProvider.isNotEmpty &&
+            curProvider != _uid) {
           throw Exception('taken');
         }
 
-        final st          = (cur['status'] ?? '').toString().toLowerCase();
-        final reopened    = cur['reopenForOthers'] == true;
-        final hasNoProvider = (cur['providerUserId'] ?? '').toString().trim().isEmpty;
+        final st       = (cur['status'] ?? '').toString().toLowerCase();
+        final reopened = cur['reopenForOthers'] == true;
+        final dynamic assignedRaw = cur['isAssigned'];
+        final hasNoProvider = curProvider.isEmpty;
 
         final canAccept = st == 'pending'
             || st == 'enquiry'
             || (st == 'cancelled' && reopened)
-            || (st == 'accepted' && hasNoProvider);
+            || (st == 'accepted' && hasNoProvider)
+            || assignedRaw == null; // missing field = open
 
         if (!canAccept) throw Exception('taken');
 
@@ -384,7 +470,7 @@ class _BDPState extends State<BusinessDashboardPage> {
           'providerName':    widget.businessName,
           'serviceType':     _svcNorm,
           'status':          'accepted',
-          'isAssigned':      true,
+          'isAssigned':      true,          // always written on accept
           'reopenForOthers': false,
           'acceptedAt':      FieldValue.serverTimestamp(),
           'updatedAt':       FieldValue.serverTimestamp(),
@@ -482,6 +568,10 @@ class _BDPState extends State<BusinessDashboardPage> {
         'updatedAt':          FieldValue.serverTimestamp(),
         'lastActionBy':       'provider',
         'declinedBy':         FieldValue.arrayUnion([_uid]),
+        // Clear provider fields so it becomes truly unassigned
+        'providerUserId':     null,
+        'providerId':         null,
+        'providerName':       null,
       });
       _notify(custId, id,
         '❌ Provider Cancelled',
@@ -515,12 +605,12 @@ class _BDPState extends State<BusinessDashboardPage> {
       context: context,
       barrierDismissible: false,
       builder: (_) => _Dialog(
-        title:    'Decline ${_terms.singular}',
-        subtitle: '${_terms.singular} stays open for other providers.',
-        hint:     'Reason (optional)...',
-        btnLabel: 'Decline',
-        btnColor: _C.orange,
-        keepLabel:'Keep',
+        title:     'Decline ${_terms.singular}',
+        subtitle:  '${_terms.singular} stays open for other providers.',
+        hint:      'Reason (optional)...',
+        btnLabel:  'Decline',
+        btnColor:  _C.orange,
+        keepLabel: 'Keep',
       ),
     );
     if (!mounted || reason == null) return;
@@ -532,12 +622,12 @@ class _BDPState extends State<BusinessDashboardPage> {
       context: context,
       barrierDismissible: false,
       builder: (_) => _Dialog(
-        title:    'Cancel ${_terms.singular}',
-        subtitle: '${_terms.singular} will reopen for other providers.',
-        hint:     'Reason (shown to customer)...',
-        btnLabel: 'Cancel ${_terms.singular}',
-        btnColor: _C.red,
-        keepLabel:'Keep ${_terms.singular}',
+        title:     'Cancel ${_terms.singular}',
+        subtitle:  '${_terms.singular} will reopen for other providers.',
+        hint:      'Reason (shown to customer)...',
+        btnLabel:  'Cancel ${_terms.singular}',
+        btnColor:  _C.red,
+        keepLabel: 'Keep ${_terms.singular}',
       ),
     );
     if (!mounted || reason == null) return;
@@ -604,8 +694,9 @@ class _BDPState extends State<BusinessDashboardPage> {
                 children: [
                   _AvailTab(
                     key:                const ValueKey('available'),
-                    primaryStream:      _availStream,
+                    primaryStream:      _availPrimaryStream,
                     legacyStream:       _availLegacyStream,
+                    fallbackStream:     _availFallbackStream,
                     myUid:              _uid,
                     svcNorm:            _svcNorm,
                     serviceType:        widget.serviceType,
@@ -619,6 +710,7 @@ class _BDPState extends State<BusinessDashboardPage> {
                   _MyTab(
                     key:           const ValueKey('myjobs'),
                     stream:        _myStream,
+                    myUid:         _uid,
                     svcNorm:       _svcNorm,
                     serviceType:   widget.serviceType,
                     countNotifier: _myNotifier,
@@ -643,6 +735,7 @@ class _BDPState extends State<BusinessDashboardPage> {
 class _AvailTab extends StatelessWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>> primaryStream;
   final Stream<QuerySnapshot<Map<String, dynamic>>> legacyStream;
+  final Stream<QuerySnapshot<Map<String, dynamic>>> fallbackStream;
   final String         myUid, svcNorm, serviceType;
   final List<String>   providerCategories;
   final _CountNotifier countNotifier;
@@ -655,6 +748,7 @@ class _AvailTab extends StatelessWidget {
     super.key,
     required this.primaryStream,
     required this.legacyStream,
+    required this.fallbackStream,
     required this.myUid,
     required this.svcNorm,
     required this.serviceType,
@@ -674,84 +768,104 @@ class _AvailTab extends StatelessWidget {
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: legacyStream,
           builder: (_, legacySnap) {
+            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: fallbackStream,
+              builder: (_, fallbackSnap) {
 
-            if (primarySnap.hasError) {
-              final err = primarySnap.error.toString();
-              final isIdx = err.contains('failed-precondition') ||
-                  err.contains('requires an index');
-              return _ErrorRetry(
-                message: isIdx
-                    ? 'Missing Firestore index.\n\n'
-                      'Create in Firebase Console → Firestore → Indexes:\n'
-                      'Collection: orders\n'
-                      'Fields: isAssigned ASC, createdAt DESC'
-                    : 'Could not load ${terms.availableTab.toLowerCase()}.\n$err',
-                onRetry: onRetry,
-              );
-            }
+                if (primarySnap.hasError) {
+                  final err = primarySnap.error.toString();
+                  final isIdx = err.contains('failed-precondition') ||
+                      err.contains('requires an index');
+                  return _ErrorRetry(
+                    message: isIdx
+                        ? 'Missing Firestore index.\n\n'
+                          'Create in Firebase Console → Firestore → Indexes:\n'
+                          'Collection: orders\n'
+                          'Fields: isAssigned ASC, createdAt DESC'
+                        : 'Could not load ${terms.availableTab.toLowerCase()}.\n$err',
+                    onRetry: onRetry,
+                  );
+                }
 
-            final loading = (primarySnap.connectionState == ConnectionState.waiting
-                && !primarySnap.hasData);
-            if (loading) {
-              return const Center(
-                  child: CircularProgressIndicator(color: _C.indigo));
-            }
+                // Show spinner only if ALL streams are still loading
+                final loading =
+                    primarySnap.connectionState == ConnectionState.waiting &&
+                    !primarySnap.hasData &&
+                    legacySnap.connectionState == ConnectionState.waiting &&
+                    !legacySnap.hasData &&
+                    fallbackSnap.connectionState == ConnectionState.waiting &&
+                    !fallbackSnap.hasData;
 
-            final seen    = <String>{};
-            final allDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                if (loading) {
+                  return const Center(
+                      child: CircularProgressIndicator(color: _C.indigo));
+                }
 
-            for (final doc in (primarySnap.data?.docs ?? [])) {
-              if (seen.add(doc.id)) allDocs.add(doc);
-            }
-            for (final doc in (legacySnap.data?.docs ?? [])) {
-              if (seen.add(doc.id)) allDocs.add(doc);
-            }
+                // ── Merge all three streams, deduplicate by doc ID ──
+                final seen    = <String>{};
+                final allDocs =
+                    <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
-            final docs = allDocs.where((d) => _isAvailable(
-              data:         d.data(),
-              myUid:        myUid,
-              svcNorm:      svcNorm,
-              providerCats: providerCategories,
-            )).toList();
+                for (final doc in (primarySnap.data?.docs ?? [])) {
+                  if (seen.add(doc.id)) allDocs.add(doc);
+                }
+                for (final doc in (legacySnap.data?.docs ?? [])) {
+                  if (seen.add(doc.id)) allDocs.add(doc);
+                }
+                // FIX: fallback catches docs with missing isAssigned field
+                for (final doc in (fallbackSnap.data?.docs ?? [])) {
+                  if (seen.add(doc.id)) allDocs.add(doc);
+                }
 
-            docs.sort((a, b) {
-              final at = (a.data()['createdAt'] as Timestamp?)
-                  ?.millisecondsSinceEpoch ?? 0;
-              final bt = (b.data()['createdAt'] as Timestamp?)
-                  ?.millisecondsSinceEpoch ?? 0;
-              return bt.compareTo(at);
-            });
+                // ── Client-side filter: only truly available ────────
+                final docs = allDocs.where((d) => _isAvailable(
+                  data:         d.data(),
+                  myUid:        myUid,
+                  svcNorm:      svcNorm,
+                  providerCats: providerCategories,
+                )).toList();
 
-            countNotifier.update(docs.length);
+                docs.sort((a, b) {
+                  final at = (a.data()['createdAt'] as Timestamp?)
+                      ?.millisecondsSinceEpoch ?? 0;
+                  final bt = (b.data()['createdAt'] as Timestamp?)
+                      ?.millisecondsSinceEpoch ?? 0;
+                  return bt.compareTo(at);
+                });
 
-            if (docs.isEmpty) {
-              final hint = allDocs.isEmpty
-                  ? 'No $serviceType ${terms.singular.toLowerCase()}s have been placed yet.\n\n'
-                    'New ${terms.availableTab.toLowerCase()} will appear here automatically.'
-                  : '${terms.singular}s exist but do not match your profile.\n\n'
-                    '${providerCategories.isNotEmpty ? "Your categories: ${providerCategories.join(', ')}" : "Check that your service type matches."}';
-              return _Empty(
-                icon:  Icons.work_outline_rounded,
-                title: 'No ${terms.availableTab}',
-                msg:   hint,
-              );
-            }
+                countNotifier.update(docs.length);
 
-            return ListView.builder(
-              padding:   const EdgeInsets.fromLTRB(16, 16, 16, 32),
-              itemCount: docs.length,
-              itemBuilder: (_, i) {
-                final doc  = docs[i];
-                final data = doc.data();
-                return _Card(
-                  key:         ValueKey(doc.id),
-                  doc:         doc,
-                  data:        data,
-                  mode:        _Mode.avail,
-                  serviceType: serviceType,
-                  terms:       terms,
-                  onAccept:    () => onAccept(doc.id, data),
-                  onDecline:   () => onDecline(doc.id, data),
+                if (docs.isEmpty) {
+                  final hint = allDocs.isEmpty
+                      ? 'No $serviceType ${terms.singular.toLowerCase()}s have been '
+                        'placed yet.\n\nNew ${terms.availableTab.toLowerCase()} will '
+                        'appear here automatically.'
+                      : '${terms.singular}s exist but do not match your profile.\n\n'
+                        '${providerCategories.isNotEmpty ? "Your categories: ${providerCategories.join(', ')}" : "Check that your service type matches."}';
+                  return _Empty(
+                    icon:  Icons.work_outline_rounded,
+                    title: 'No ${terms.availableTab}',
+                    msg:   hint,
+                  );
+                }
+
+                return ListView.builder(
+                  padding:   const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                  itemCount: docs.length,
+                  itemBuilder: (_, i) {
+                    final doc  = docs[i];
+                    final data = doc.data();
+                    return _Card(
+                      key:         ValueKey(doc.id),
+                      doc:         doc,
+                      data:        data,
+                      mode:        _Mode.avail,
+                      serviceType: serviceType,
+                      terms:       terms,
+                      onAccept:    () => onAccept(doc.id, data),
+                      onDecline:   () => onDecline(doc.id, data),
+                    );
+                  },
                 );
               },
             );
@@ -767,7 +881,7 @@ class _AvailTab extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════
 class _MyTab extends StatelessWidget {
   final Stream<QuerySnapshot<Map<String, dynamic>>>? stream;
-  final String         svcNorm, serviceType;
+  final String         myUid, svcNorm, serviceType;
   final _CountNotifier countNotifier;
   final _Terms         terms;
   final Future<void> Function(String, Map<String, dynamic>) onComplete;
@@ -777,6 +891,7 @@ class _MyTab extends StatelessWidget {
   const _MyTab({
     super.key,
     required this.stream,
+    required this.myUid,
     required this.svcNorm,
     required this.serviceType,
     required this.countNotifier,
@@ -807,10 +922,13 @@ class _MyTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator(color: _C.indigo));
         }
 
-        final docs = (snap.data?.docs ?? []).where((d) {
-          final svc = (d.data()['serviceType'] ?? '').toString();
-          return svc.isEmpty || _svcEq(svc, svcNorm);
-        }).toList();
+        // FIX: use _isMine() to strictly filter — prevents pending/open
+        // orders from leaking into My Jobs tab.
+        final docs = (snap.data?.docs ?? []).where((d) => _isMine(
+          data:    d.data(),
+          myUid:   myUid,
+          svcNorm: svcNorm,
+        )).toList();
 
         const ord = {'accepted': 0, 'completed': 1, 'cancelled': 2, 'pending': 3};
         docs.sort((a, b) {
@@ -1034,7 +1152,6 @@ class _CardState extends State<_Card> {
     final category   = _category();
     final isEnquiry  = _isEnquiry;
 
-    // Accept / decline button labels use the term
     final acceptLabel  = 'Accept ${widget.terms.singular}';
     final declineLabel = 'Decline';
 
@@ -1319,7 +1436,7 @@ class _CardState extends State<_Card> {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SMALL WIDGETS
+// SMALL WIDGETS  (unchanged)
 // ═══════════════════════════════════════════════════════════════
 
 class _TagBadge extends StatelessWidget {
@@ -1651,7 +1768,6 @@ class _Header extends StatelessWidget {
             const SizedBox(height: 12),
           ],
 
-          // Stat chips use dynamic terminology
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(children: [
@@ -1672,7 +1788,6 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Tab switcher uses dynamic terminology
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
@@ -1912,4 +2027,3 @@ class _DialogState extends State<_Dialog> {
     ),
   );
 }
-

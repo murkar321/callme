@@ -19,13 +19,7 @@ class NotificationPage extends StatefulWidget {
 }
 
 class _NotificationPageState extends State<NotificationPage> {
-  // FIX: was a field initializer — stale if auth state changed while widget
-  // was alive. Now reactive via authStateChanges listener set in initState.
   String? _uid;
-
-  // FIX: streams were created inside build() — recreated on every rebuild,
-  // causing redundant Firestore reads and badge counter flicker.
-  // Moved to initState / _setupStreams() so they are created once.
   Stream<QuerySnapshot>? _notifStream;
   Stream<int>? _unreadStream;
 
@@ -90,8 +84,20 @@ class _NotificationPageState extends State<NotificationPage> {
     _showSnack('${snap.docs.length} notifications marked as read');
   }
 
-  Future<void> _deleteNotification(DocumentSnapshot doc) async {
-    await doc.reference.delete();
+  /// Deletes a single notification from Firestore by document ID.
+  /// Uses the document ID directly (not the captured DocumentSnapshot)
+  /// so the correct record is always deleted even if the list shifts
+  /// during a dismiss animation.
+  Future<void> _deleteById(String docId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(docId)
+          .delete();
+    } catch (e) {
+      debugPrint('[NOTIF-PAGE] Delete failed for $docId: $e');
+      _showSnack('Failed to delete notification');
+    }
   }
 
   Future<void> _deleteAllNotifications() async {
@@ -119,17 +125,22 @@ class _NotificationPageState extends State<NotificationPage> {
 
     if (confirm != true) return;
 
-    final snap = await FirebaseFirestore.instance
-        .collection('notifications')
-        .where('receiverId', isEqualTo: _uid)
-        .get();
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('receiverId', isEqualTo: _uid)
+          .get();
 
-    final batch = FirebaseFirestore.instance.batch();
-    for (final doc in snap.docs) {
-      batch.delete(doc.reference);
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snap.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      _showSnack('${snap.docs.length} notifications deleted');
+    } catch (e) {
+      debugPrint('[NOTIF-PAGE] Delete-all failed: $e');
+      _showSnack('Failed to delete notifications');
     }
-    await batch.commit();
-    _showSnack('${snap.docs.length} notifications deleted');
   }
 
   String _relativeTime(dynamic value) {
@@ -160,7 +171,10 @@ class _NotificationPageState extends State<NotificationPage> {
       case NotificationType.serviceCompleted:
         return (icon: Icons.task_alt_outlined, color: Colors.teal);
       default:
-        return (icon: Icons.notifications_active_outlined, color: Colors.indigo);
+        return (
+          icon: Icons.notifications_active_outlined,
+          color: Colors.indigo
+        );
     }
   }
 
@@ -176,7 +190,6 @@ class _NotificationPageState extends State<NotificationPage> {
       appBar: AppBar(
         title: const Text('Notifications'),
         actions: [
-          // FIX: stable stream from initState — no longer rebuilt every frame
           StreamBuilder<int>(
             stream: _unreadStream,
             builder: (context, snapshot) {
@@ -198,11 +211,8 @@ class _NotificationPageState extends State<NotificationPage> {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _notifStream,   // FIX: stable stream from initState
+        stream: _notifStream,
         builder: (context, snapshot) {
-          // FIX: log Firestore errors — often a missing composite index.
-          // Without this, empty notifications + no error message made it
-          // impossible to diagnose why the list wasn't showing.
           if (snapshot.hasError) {
             debugPrint('[NOTIF-PAGE] Firestore error: ${snapshot.error}');
             return Center(
@@ -258,13 +268,17 @@ class _NotificationPageState extends State<NotificationPage> {
           return ListView.builder(
             itemCount: docs.length,
             itemBuilder: (context, index) {
-              final doc    = docs[index];
+              final doc   = docs[index];
+              // Capture the stable document ID immediately so Dismissible
+              // and long-press dialogs always delete the correct record,
+              // even if the list reorders before the callback fires.
+              final docId  = doc.id;
               final data   = doc.data() as Map<String, dynamic>;
               final isRead = data['read'] == true;
               final style  = _style(data['type'] as String?);
 
               return Dismissible(
-                key: ValueKey(doc.id),
+                key: ValueKey(docId),
                 direction: DismissDirection.endToStart,
                 background: Container(
                   color: Colors.red,
@@ -272,13 +286,13 @@ class _NotificationPageState extends State<NotificationPage> {
                   padding: const EdgeInsets.only(right: 20),
                   child: const Icon(Icons.delete_outline, color: Colors.white),
                 ),
-                onDismissed: (_) => _deleteNotification(doc),
+                // Delete by ID — not by captured DocumentSnapshot reference —
+                // so the right document is removed even if the list shifted.
+                onDismissed: (_) => _deleteById(docId),
                 child: ListTile(
                   tileColor: isRead ? null : Colors.blue.withOpacity(0.04),
                   onTap: () async {
                     await _markAsRead(doc);
-                    // Pass full data map so the router has all fields
-                    // (type, receiverId, businessName, serviceType, etc.)
                     widget.onNotificationTap?.call(data);
                   },
                   onLongPress: () async {
@@ -301,9 +315,8 @@ class _NotificationPageState extends State<NotificationPage> {
                         ],
                       ),
                     );
-                    // FIX: was missing await — errors silently swallowed
                     if (confirm == true) {
-                      await _deleteNotification(doc);
+                      await _deleteById(docId);
                     }
                   },
                   leading: CircleAvatar(
@@ -340,7 +353,8 @@ class _NotificationPageState extends State<NotificationPage> {
                       const SizedBox(height: 4),
                       Text(
                         _relativeTime(data['createdAt']),
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                     ],
                   ),
