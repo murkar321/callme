@@ -93,18 +93,37 @@ String _norm(String s) =>
 
 bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 
+// ─────────────────────────────────────────────────────────────
+// CATEGORY MATCH
+//
+// NOTE: This no longer has its own logic. It delegates to
+// `categoryMatch()` in order_service.dart, which is the EXACT
+// same function used to decide who gets a push notification for
+// a new order. Keeping a single shared implementation is what
+// fixes the "water provider never sees the order even though it
+// was placed" / "education provider sees orders outside their
+// selected categories" bugs — previously the dashboard only
+// checked the `category` field and strict-failed if it was
+// empty, while the notifier also checked `services[]` and fell
+// back to "show anyway" if nothing was found. Two different
+// rules on two different screens = orders appearing in pushes
+// but not in the list, or vice versa.
+//
+// If you still see mismatches after this fix, check Firestore
+// debug console output for lines starting with "[catMatch]" —
+// they tell you exactly why a given order was shown or skipped
+// for a given provider, including the actual candidate sets
+// being compared.
+// ─────────────────────────────────────────────────────────────
 bool _categoryMatch(
   Map<String, dynamic> orderData,
   List<String> providerCats,
 ) {
-  if (providerCats.isEmpty) return true;
-  String orderCat = '';
-  for (final k in ['category', 'serviceCategory', 'subCategory', 'jobCategory']) {
-    final v = (orderData[k] ?? '').toString().trim();
-    if (v.isNotEmpty) { orderCat = v; break; }
-  }
-  if (orderCat.isEmpty) return true;
-  return providerCats.any((c) => _norm(c) == _norm(orderCat));
+  return categoryMatch(
+    orderData,
+    providerCats,
+    debugOrderId: (orderData['orderId'] ?? '').toString(),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -167,9 +186,8 @@ bool _isAvailable({
     return false;
   }
 
-  // Category match
+  // Category match — strict, see _categoryMatch() doc comment.
   if (!_categoryMatch(data, providerCats)) {
-    debugPrint('[avail] SKIP category mismatch');
     return false;
   }
 

@@ -34,6 +34,15 @@ const _kMaxImageBytes = 500 * 1024;        // 500 KB
 const _kMaxDocBytes   = 5  * 1024 * 1024; // 5 MB
 const _kCompulsoryDoc = 'Aadhaar Card';
 
+/// A single named field-level validation rule used to build the
+/// "exactly what's wrong" error summary shown to the user on save.
+class _FieldCheck {
+  final String label;
+  final FocusNode? focus;
+  final String? Function() check;
+  const _FieldCheck({required this.label, required this.check, this.focus});
+}
+
 class ProviderProfilePage extends StatefulWidget {
   /// Firestore doc ID in /providers — must equal the provider's UID.
   final String providerId;
@@ -60,6 +69,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
 
   // ── Form ──────────────────────────────────────────────────────────────────
   final _formKey = GlobalKey<FormState>();
+  final _scrollCtrl = ScrollController();
 
   // ── Page state ────────────────────────────────────────────────────────────
   bool _loading = true;
@@ -128,6 +138,130 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     _holderCtrl,   _accountCtrl, _ifscCtrl, _upiCtrl,
   ];
 
+  // ── Focus nodes (used to jump to + highlight the first failing field) ─────
+  final _businessFocus = FocusNode();
+  final _ownerFocus    = FocusNode();
+  final _phoneFocus    = FocusNode();
+  final _emailFocus    = FocusNode();
+  final _addressFocus  = FocusNode();
+  final _cityFocus     = FocusNode();
+  final _stateFocus    = FocusNode();
+  final _pincodeFocus  = FocusNode();
+  final _holderFocus   = FocusNode();
+  final _accountFocus  = FocusNode();
+  final _ifscFocus     = FocusNode();
+  final _upiFocus      = FocusNode();
+
+  List<FocusNode> get _allFocusNodes => [
+    _businessFocus, _ownerFocus, _phoneFocus, _emailFocus,
+    _addressFocus,  _cityFocus,  _stateFocus, _pincodeFocus,
+    _holderFocus,   _accountFocus, _ifscFocus, _upiFocus,
+  ];
+
+  // ── Named validation rules — drives the "what exactly failed" summary ─────
+  List<_FieldCheck> get _validations => [
+    _FieldCheck(
+      label: 'Business Name',
+      focus: _businessFocus,
+      check: () =>
+          _businessCtrl.text.trim().isEmpty ? 'is required' : null,
+    ),
+    _FieldCheck(
+      label: 'Owner / Manager Name',
+      focus: _ownerFocus,
+      check: () =>
+          _ownerCtrl.text.trim().isEmpty ? 'is required' : null,
+    ),
+    _FieldCheck(
+      label: 'Phone Number',
+      focus: _phoneFocus,
+      check: () {
+        final v = _phoneCtrl.text.trim();
+        if (v.isEmpty) return 'is required';
+        if (v.length != 10) return 'must be a valid 10-digit number';
+        return null;
+      },
+    ),
+    _FieldCheck(
+      label: 'Email Address',
+      focus: _emailFocus,
+      check: () {
+        final v = _emailCtrl.text.trim();
+        if (v.isEmpty) return 'is required';
+        if (!RegExp(r'^[\w\.\+\-]+@[\w\-]+\.[a-z]{2,}$').hasMatch(v)) {
+          return 'must be a valid email address';
+        }
+        return null;
+      },
+    ),
+    _FieldCheck(
+      label: 'Address',
+      focus: _addressFocus,
+      check: () =>
+          _addressCtrl.text.trim().isEmpty ? 'is required' : null,
+    ),
+    _FieldCheck(
+      label: 'City',
+      focus: _cityFocus,
+      check: () => _cityCtrl.text.trim().isEmpty ? 'is required' : null,
+    ),
+    _FieldCheck(
+      label: 'State',
+      focus: _stateFocus,
+      check: () => _stateCtrl.text.trim().isEmpty ? 'is required' : null,
+    ),
+    _FieldCheck(
+      label: 'Pincode',
+      focus: _pincodeFocus,
+      check: () {
+        final v = _pincodeCtrl.text.trim();
+        if (v.isEmpty) return 'is required';
+        if (v.length != 6) return 'must be a valid 6-digit pincode';
+        return null;
+      },
+    ),
+    _FieldCheck(
+      label: 'Account Holder Name',
+      focus: _holderFocus,
+      check: () =>
+          _holderCtrl.text.trim().isEmpty ? 'is required' : null,
+    ),
+    _FieldCheck(
+      label: 'Account Number',
+      focus: _accountFocus,
+      check: () {
+        final v = _accountCtrl.text.trim();
+        if (v.isEmpty) return 'is required';
+        if (v.length < 9 || v.length > 18) {
+          return 'must be 9–18 digits';
+        }
+        return null;
+      },
+    ),
+    _FieldCheck(
+      label: 'IFSC Code',
+      focus: _ifscFocus,
+      check: () {
+        final v = _ifscCtrl.text.trim().toUpperCase();
+        if (v.isEmpty) return 'is required';
+        if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$').hasMatch(v)) {
+          return 'is invalid — use the format SBIN0001234';
+        }
+        return null;
+      },
+    ),
+    _FieldCheck(
+      label: 'UPI ID',
+      focus: _upiFocus,
+      check: () {
+        final v = _upiCtrl.text.trim();
+        if (v.isEmpty) return null; // optional
+        if (!v.contains('@')) return 'must be a valid UPI ID (e.g. name@upi)';
+        return null;
+      },
+    ),
+  ];
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
   @override
   void initState() {
@@ -138,6 +272,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   @override
   void dispose() {
     for (final c in _allCtrls) c.dispose();
+    for (final f in _allFocusNodes) f.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -298,8 +434,50 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
 
   // ── Save ──────────────────────────────────────────────────────────────────
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) {
-      _snack('Please fix the errors above', ok: false);
+    // Trigger inline red field errors (kept for visual consistency).
+    _formKey.currentState?.validate();
+
+    // ── Manual, named validation pass so we can tell the user EXACTLY
+    //    which field(s) failed and why, instead of a generic message.
+    final failures = <String>[];
+    FocusNode? firstFailFocus;
+
+    for (final v in _validations) {
+      final err = v.check();
+      if (err != null) {
+        failures.add('${v.label} $err');
+        firstFailFocus ??= v.focus;
+      }
+    }
+
+    if (_allCats.isNotEmpty && _selectedCats.isEmpty) {
+      failures.add('Select at least one service category');
+    }
+    if (!_docs.containsKey(_kCompulsoryDoc)) {
+      failures.add('Upload the compulsory document: $_kCompulsoryDoc');
+    }
+
+    if (failures.isNotEmpty) {
+      if (firstFailFocus != null) {
+        final ctx = firstFailFocus.context;
+        if (ctx != null) {
+          await Scrollable.ensureVisible(
+            ctx,
+            duration: const Duration(milliseconds: 300),
+            alignment: 0.2,
+            curve: Curves.easeOut,
+          );
+        }
+        firstFailFocus.requestFocus();
+      } else if (_scrollCtrl.hasClients) {
+        await _scrollCtrl.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+
+      if (mounted) _showErrorSummary(failures);
       return;
     }
 
@@ -362,6 +540,119 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  // ── Error summary sheet — lists exactly what's missing/invalid ────────────
+  void _showErrorSummary(List<String> failures) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          decoration: const BoxDecoration(
+            color: _T.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: _T.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: _T.danger.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.error_rounded,
+                      color: _T.danger, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '${failures.length} thing${failures.length > 1 ? 's' : ''} '
+                    'need${failures.length > 1 ? '' : 's'} your attention',
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: _T.textHigh),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: failures
+                        .map((f) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Row(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  const Padding(
+                                    padding: EdgeInsets.only(top: 5),
+                                    child: Icon(Icons.circle,
+                                        size: 6, color: _T.danger),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      f,
+                                      style: const TextStyle(
+                                          fontSize: 13.5,
+                                          color: _T.textMid,
+                                          height: 1.4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _T.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Got it',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ── Delete my profile (self) ──────────────────────────────────────────────
@@ -704,6 +995,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             _buildTopBar(),
             Expanded(
               child: SingleChildScrollView(
+                controller: _scrollCtrl,
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 physics: const BouncingScrollPhysics(),
@@ -1060,10 +1352,13 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   Widget _buildBusinessFields() {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       _field(_businessCtrl, 'Business Name *', Icons.store_rounded,
+          focusNode: _businessFocus,
           validator: _required('Business name')),
       _field(_ownerCtrl, 'Owner / Manager Name *', Icons.person_rounded,
+          focusNode: _ownerFocus,
           validator: _required('Owner name')),
       _field(_phoneCtrl, 'Phone Number *', Icons.phone_rounded,
+          focusNode: _phoneFocus,
           keyboardType: TextInputType.phone,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
@@ -1077,6 +1372,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             return null;
           }),
       _field(_emailCtrl, 'Email Address *', Icons.email_rounded,
+          focusNode: _emailFocus,
           keyboardType: TextInputType.emailAddress,
           helperText: 'e.g. you@example.com',
           validator: (v) {
@@ -1087,11 +1383,13 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             return null;
           }),
       _field(_addressCtrl, 'Full Address *', Icons.location_on_rounded,
+          focusNode: _addressFocus,
           validator: _required('Address')),
       Row(children: [
         Expanded(
           child: _field(
             _cityCtrl, 'City *', Icons.location_city_rounded,
+            focusNode: _cityFocus,
             validator: _required('City'),
           ),
         ),
@@ -1099,11 +1397,13 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         Expanded(
           child: _field(
             _stateCtrl, 'State *', Icons.map_rounded,
+            focusNode: _stateFocus,
             validator: _required('State'),
           ),
         ),
       ]),
       _field(_pincodeCtrl, 'Pincode *', Icons.pin_drop_rounded,
+          focusNode: _pincodeFocus,
           keyboardType: TextInputType.number,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
@@ -1334,9 +1634,11 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       _field(_holderCtrl, 'Account Holder Name *',
           Icons.person_outline_rounded,
+          focusNode: _holderFocus,
           validator: _required('Account holder name')),
       _field(_accountCtrl, 'Account Number *',
           Icons.account_balance_wallet_rounded,
+          focusNode: _accountFocus,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           helperText: '9–18 digits',
@@ -1348,6 +1650,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             return null;
           }),
       _field(_ifscCtrl, 'IFSC Code *', Icons.code_rounded,
+          focusNode: _ifscFocus,
           textCapitalization: TextCapitalization.characters,
           helperText: 'e.g. SBIN0001234',
           validator: (v) {
@@ -1358,6 +1661,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             return null;
           }),
       _field(_upiCtrl, 'UPI ID (optional)', Icons.qr_code_rounded,
+          focusNode: _upiFocus,
           helperText: 'e.g. name@upi',
           validator: (v) {
             if (v == null || v.trim().isEmpty) return null;
@@ -1588,6 +1892,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     TextEditingController ctrl,
     String hint,
     IconData icon, {
+    FocusNode? focusNode,
     TextInputType keyboardType = TextInputType.text,
     List<TextInputFormatter>? inputFormatters,
     TextCapitalization textCapitalization = TextCapitalization.words,
@@ -1598,6 +1903,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
         controller: ctrl,
+        focusNode: focusNode,
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
         textCapitalization: textCapitalization,
@@ -1721,4 +2027,3 @@ class _IconBtn extends StatelessWidget {
     );
   }
 }
-

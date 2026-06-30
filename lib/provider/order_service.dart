@@ -28,6 +28,91 @@ class OrderStatus {
   static const String enquiry   = 'enquiry';
 }
 
+// ============================================================
+// SHARED CATEGORY-MATCHING LOGIC
+//
+// IMPORTANT: This logic MUST stay byte-for-byte identical to
+// `_categoryMatch()` / `_orderCategoryCandidates()` in
+// business_dashboard_page.dart. If they drift apart, a provider
+// can get a push notification for an order that never shows up
+// in their "Available" tab (or vice versa) — which is exactly
+// the water/education bug this was written to fix.
+//
+// Rules:
+//   1. Build the order's candidate set from EVERY legacy category
+//      field (category, serviceCategory, subCategory, jobCategory)
+//      PLUS every string in services[]. Using only the first
+//      non-empty field (the old behaviour) is what caused orders
+//      like "Water" to be silently dropped when only `services`
+//      was populated and `category` was left blank.
+//   2. providerCats empty  → provider is unrestricted, show/notify
+//      everything for their serviceType.
+//   3. providerCats NOT empty AND orderCandidates empty → we have
+//      no category info to check against at all, so fall back to
+//      showing/notifying (can't restrict what we can't read).
+//   4. Otherwise → require at least one overlap between the two
+//      normalised sets.
+// ============================================================
+
+/// Normalise a string for category comparison: trim, lowercase,
+/// collapse whitespace/underscores/hyphens.
+String normalizeCategory(String s) =>
+    s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
+
+/// Builds the full set of normalised category candidates for an
+/// order: every legacy category-ish field + every entry in
+/// `services`.
+Set<String> orderCategoryCandidates(Map<String, dynamic> orderData) {
+  final candidates = <String>{};
+
+  for (final k in ['category', 'serviceCategory', 'subCategory', 'jobCategory']) {
+    final v = (orderData[k] ?? '').toString().trim();
+    if (v.isNotEmpty) candidates.add(normalizeCategory(v));
+  }
+
+  final services = orderData['services'];
+  if (services is List) {
+    for (final s in services) {
+      final v = s.toString().trim();
+      if (v.isNotEmpty) candidates.add(normalizeCategory(v));
+    }
+  }
+
+  return candidates;
+}
+
+/// Returns true if `orderData` should be visible/notified to a
+/// provider who has selected `providerCats`.
+bool categoryMatch(
+  Map<String, dynamic> orderData,
+  List<String> providerCats, {
+  String debugOrderId = '',
+}) {
+  if (providerCats.isEmpty) return true;
+
+  final normProviderCats = providerCats
+      .map(normalizeCategory)
+      .where((s) => s.isNotEmpty)
+      .toSet();
+
+  final orderCandidates = orderCategoryCandidates(orderData);
+
+  if (orderCandidates.isEmpty) {
+    debugPrint('[catMatch] $debugOrderId: order has no category/services info '
+        '— provider has categories selected, falling back to SHOW (cannot restrict '
+        'what we cannot read). Fix the originating booking page to pass `category` '
+        'or `services` if this should actually be filtered.');
+    return true;
+  }
+
+  final matched = orderCandidates.any(normProviderCats.contains);
+  if (!matched) {
+    debugPrint('[catMatch] $debugOrderId: SKIP — order candidates $orderCandidates '
+        'do not overlap with provider categories $normProviderCats');
+  }
+  return matched;
+}
+
 class OrderService {
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
 
@@ -70,9 +155,19 @@ class OrderService {
   // After writing the order, this fans out a notification to
   // every APPROVED provider whose:
   //   • serviceType  matches the order's serviceType
-  //   • categories[] contains the order's category  (if the
-  //     order carries a category; falls back to all providers
-  //     of that serviceType when category is absent)
+  //   • categories[] overlaps with categoryMatch() candidates
+  //     (see the shared categoryMatch()/orderCategoryCandidates()
+  //     functions above — kept IN SYNC with the dashboard).
+  //
+  // IMPORTANT FOR CALLERS: always pass BOTH `category` (a single
+  // clean category string matching what's shown in the provider's
+  // registration category picker) AND `services` (the list of
+  // items/services actually booked) whenever you have them. Do not
+  // rely on only one of the two — the matching logic checks both,
+  // but if a booking page never sends either, the order falls back
+  // to "show to everyone" for that serviceType, which is usually
+  // not what you want (this was the root cause of orders bypassing
+  // category filtering).
   // ==========================================================
   static Future<DocumentReference> placeOrder({
     required String serviceType,
@@ -103,7 +198,12 @@ class OrderService {
     String? providerId,
 
     // Category chosen by the customer (e.g. "Ice Blocks").
-    // Used to filter which providers receive the notification.
+    // Used to filter which providers see/receive this order.
+    // If the caller doesn't have a single category string (e.g. multi-item
+    // bookings like laundry), leave this null/empty — the `services` list
+    // is automatically used as a category-matching fallback. But whenever
+    // possible, pass it — this is the #1 cause of "order isn't showing up
+    // for the right provider" bugs.
     String? category,
 
     bool isEnquiry = false,
@@ -112,6 +212,14 @@ class OrderService {
     String providerName = '',
     Object? providerUserId,
   }) async {
+    if ((category == null || category.trim().isEmpty) && services.isEmpty) {
+      debugPrint('[OrderService.placeOrder] WARNING: neither `category` nor '
+          '`services` was provided for a $serviceType order. This order will '
+          'be shown to ALL approved $serviceType providers regardless of their '
+          'selected categories. Pass `category` and/or `services` from the '
+          'booking page to enable correct filtering.');
+    }
+
     // ── Resolve provider details ──────────────────────────────────────────────
     String resolvedProviderId     = providerId ?? '';
     String resolvedProviderName   = '';
@@ -132,11 +240,11 @@ class OrderService {
 
     final orderId               = generateOrderId(userName);
     final docRef                = _db.collection('orders').doc(orderId);
-    // FIX 1: Always store serviceType as lowercase so Firestore equality
+    // Always store serviceType as lowercase so Firestore equality
     // queries from the dashboard (_svcNorm) match reliably.
     final normalizedServiceType = serviceType.trim().toLowerCase();
-    // FIX 2: Normalise category the same way — trim only, keep original
-    // casing so the UI can display it nicely, but compare via _normCat().
+    // Category kept in original casing for display; comparison always
+    // goes through normalizeCategory() (same regex on both sides).
     final normalizedCategory    = (category ?? '').trim();
 
     await docRef.set({
@@ -164,14 +272,13 @@ class OrderService {
         'providerName':   resolvedProviderName,
       },
 
-      // FIX 3: Store BOTH forms so old and new clients can read it.
+      // Stored BOTH forms so old and new clients can read it.
       'serviceType': normalizedServiceType,   // lowercase — queried by dashboard
       'serviceName': normalizedServiceType,
       'services':    services,
 
       // Category stored exactly as the user chose it (original case).
-      // The dashboard's _categoryMatch() uses _norm() on both sides so
-      // "Software And Programming" == "software and programming" == "softwareandprogramming".
+      // Matching always normalises both sides — see normalizeCategory().
       'category': normalizedCategory,
 
       'date': Timestamp.fromDate(date),
@@ -222,6 +329,10 @@ class OrderService {
     // ── Fan-out notification to matching providers ──────────────────────────
     await _notifyMatchingProviders(
       orderId:       orderId,
+      orderData: {
+        'category': normalizedCategory,
+        'services': services,
+      },
       serviceType:   normalizedServiceType,
       category:      normalizedCategory,
       userName:      userName,
@@ -367,8 +478,6 @@ class OrderService {
 
       final docId = await _getProviderDocId(providerUserId);
       if (docId != null) {
-        // FIX 4: Use typed DocumentSnapshot to avoid shadowing the outer
-        // `data` variable.  Renamed to `providerSnap` for clarity.
         final providerSnap = await _db.collection('providers').doc(docId).get();
         final providerData = providerSnap.data() ?? {};
         final fcmToken     = (providerData['fcmToken'] ?? '').toString().trim();
@@ -398,26 +507,19 @@ class OrderService {
   // ==========================================================
   // FAN-OUT: notify ALL matching approved providers
   //
-  // Matching rules (mirrors _AvailTab client-side filter):
-  //   1. provider.status == 'approved'
-  //   2. provider.serviceType == order.serviceType  (normalised)
-  //   3. If order carries a category AND provider has categories[]:
-  //        provider.categories must contain the order.category
-  //        (comparison via _normCat — case/space insensitive)
-  //      Else: notify all providers of that serviceType (fallback)
+  // Matching is delegated entirely to the shared `categoryMatch()`
+  // function above so this stays byte-for-byte consistent with
+  // `_categoryMatch()` in business_dashboard_page.dart. A provider
+  // only ever gets a push notification for an order that will
+  // actually show up in their Available tab, and vice versa.
   //
   // When specificProviderId is given (direct assignment),
-  // only that one provider is notified.
+  // only that one provider is notified — no category filtering
+  // applies since the assignment was already explicit.
   // ==========================================================
-
-  /// Normalise a category string for comparison:
-  /// trim, lowercase, collapse whitespace / underscores / hyphens.
-  /// Mirrors the `_norm()` helper in business_dashboard_page.dart.
-  static String _normCat(String s) =>
-      s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
-
   static Future<void> _notifyMatchingProviders({
     required String orderId,
+    required Map<String, dynamic> orderData,
     required String serviceType,
     required String category,
     required String userName,
@@ -428,7 +530,7 @@ class OrderService {
   }) async {
     try {
       if (specificProviderId != null && specificProviderId.isNotEmpty) {
-        // Direct assignment — notify only this provider.
+        // Direct assignment — notify only this provider, no category check.
         final doc = await _db
             .collection('providers')
             .doc(specificProviderId)
@@ -454,22 +556,22 @@ class OrderService {
           .where('serviceType', isEqualTo: serviceType)
           .get();
 
+      debugPrint('[OrderService] order $orderId: found ${snap.docs.length} '
+          'approved $serviceType providers to check');
+
       for (final doc in snap.docs) {
         final provData = doc.data();
 
-        // ── Category filter ────────────────────────────────────────────
-        // FIX 5: Use _normCat on BOTH sides so "Software And Programming"
-        // matches "software and programming" and "softwareandprogramming".
-        if (category.isNotEmpty) {
-          final rawCats      = (provData['categories'] as List?) ?? [];
-          final providerCats = rawCats.map((e) => _normCat(e.toString())).toList();
+        final rawCats      = (provData['categories'] as List?) ?? [];
+        final providerCats = rawCats.map((e) => e.toString()).toList();
 
-          // Provider has no categories saved → skip (should not happen post-v2)
-          if (providerCats.isEmpty) continue;
+        final shouldNotify = categoryMatch(
+          orderData,
+          providerCats,
+          debugOrderId: '$orderId -> provider ${doc.id}',
+        );
 
-          final orderCatNorm = _normCat(category);
-          if (!providerCats.any((c) => c == orderCatNorm)) continue;
-        }
+        if (!shouldNotify) continue;
 
         await _sendProviderNotification(
           providerId:  doc.id,
@@ -488,10 +590,6 @@ class OrderService {
   }
 
   // ── Send notification + FCM queue entry for one provider doc ──────────────
-  // FIX 6: The original code had `final data = await _db...get()` which
-  // returned a DocumentSnapshot but then accessed it as `data['fcmToken']`
-  // (Map syntax). This caused a type error at runtime.
-  // Fixed by calling `.data()` explicitly and renaming variable to `provMap`.
   static Future<void> _sendProviderNotification({
     required String providerId,
     required String orderId,
@@ -508,9 +606,6 @@ class OrderService {
       return;
     }
 
-    // FIX 7: Explicitly call .data() so we get Map<String, dynamic>
-    // not DocumentSnapshot. Original code shadowed the variable name
-    // and tried to use DocumentSnapshot as a Map.
     final provMap = provSnap.data()!;
 
     final providerUserId = (provMap['userId'] ?? provMap['uid'] ?? '').toString().trim();
@@ -541,7 +636,6 @@ class OrderService {
     );
 
     // FCM push via Cloud Function queue
-    // FIX 8: Access fcmToken from provMap (Map), not provSnap (DocumentSnapshot).
     final fcmToken = (provMap['fcmToken'] ?? '').toString().trim();
     if (fcmToken.isNotEmpty) {
       await _db.collection('fcm_queue').add({
