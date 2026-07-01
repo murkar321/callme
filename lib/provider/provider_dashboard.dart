@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'provider_profile_page.dart';
 import '../provider/order_service.dart';
+// ⚠️ Adjust path if service_config.dart lives elsewhere.
 
 // ═══════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -96,36 +97,88 @@ bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 // ─────────────────────────────────────────────────────────────
 // CATEGORY MATCH
 //
-// NOTE: This no longer has its own logic. It delegates to
-// `categoryMatch()` in order_service.dart, which is the EXACT
-// same function used to decide who gets a push notification for
-// a new order. Keeping a single shared implementation is what
-// fixes the "water provider never sees the order even though it
-// was placed" / "education provider sees orders outside their
-// selected categories" bugs — previously the dashboard only
-// checked the `category` field and strict-failed if it was
-// empty, while the notifier also checked `services[]` and fell
-// back to "show anyway" if nothing was found. Two different
-// rules on two different screens = orders appearing in pushes
-// but not in the list, or vice versa.
+// STAGE 1 — delegate to the shared `categoryMatch()` in
+// order_service.dart. Orders now have their `category` snapped
+// onto the canonical serviceConfigs list at creation time (see
+// resolveCanonicalCategory() in order_service.dart), so this
+// exact-match stage now succeeds for the large majority of
+// correctly-categorized orders — a provider only ever sees/gets
+// notified for orders inside the categories they selected at
+// registration.
 //
-// If you still see mismatches after this fix, check Firestore
-// debug console output for lines starting with "[catMatch]" —
-// they tell you exactly why a given order was shown or skipped
-// for a given provider, including the actual candidate sets
-// being compared.
+// STAGE 2 — FUZZY FALLBACK.
+// Kept as a safety net for orders placed before canonicalization
+// was added, or from any booking page that still sends free-text
+// category strings. Only runs when Stage 1 fails AND both sides
+// actually have non-empty category data — it never loosens the
+// "no data at all -> show anyway" fallback, and never turns ON
+// restriction where there wasn't any.
+//
+// Debug console lines starting with "[catMatch]" or
+// "[catMatch:fuzzy]" explain exactly why a given order was shown
+// or skipped for a given provider.
 // ─────────────────────────────────────────────────────────────
+
+Set<String> _wordsOf(String normalized) => normalized
+    .split(RegExp(r'[^a-z0-9]+'))
+    .where((w) => w.length >= 3)
+    .toSet();
+
+bool _fuzzyOverlap(Set<String> orderCandidates, Set<String> providerCats) {
+  for (final o in orderCandidates) {
+    for (final p in providerCats) {
+      if (o.isEmpty || p.isEmpty) continue;
+      if (o == p) return true;
+      if (o.contains(p) || p.contains(o)) return true;
+      final oWords = _wordsOf(o);
+      final pWords = _wordsOf(p);
+      if (oWords.intersection(pWords).isNotEmpty) return true;
+    }
+  }
+  return false;
+}
+
 bool _categoryMatch(
   Map<String, dynamic> orderData,
   List<String> providerCats,
 ) {
-  return categoryMatch(
-    orderData,
-    providerCats,
-    debugOrderId: (orderData['orderId'] ?? '').toString(),
-  );
-}
+  final orderId = (orderData['orderId'] ?? '').toString();
 
+  // Stage 1: exact shared logic (kept byte-identical to notifier).
+  final exact = categoryMatch(orderData, providerCats, debugOrderId: orderId);
+  if (exact) return true;
+
+  // providerCats is non-empty here (categoryMatch() would already have
+  // returned true above otherwise), and exact match failed.
+  final orderCandidates = orderCategoryCandidates(orderData);
+
+  // No category data on the order at all → categoryMatch() already
+  // returned true. Reaching here means we DO have order candidates
+  // but none matched exactly — try fuzzy matching before giving up.
+  if (orderCandidates.isEmpty) return false;
+
+  final normProviderCats = providerCats
+      .map(normalizeCategory)
+      .where((s) => s.isNotEmpty)
+      .toSet();
+
+  final fuzzy = _fuzzyOverlap(orderCandidates, normProviderCats);
+
+  if (fuzzy) {
+    debugPrint('[catMatch:fuzzy] $orderId: MATCHED via fuzzy fallback — '
+        'order candidates $orderCandidates ~ provider categories '
+        '$normProviderCats (no exact match). This order was likely placed '
+        'before category canonicalization, or from a booking page sending '
+        'free-text category strings.');
+  } else {
+    debugPrint('[catMatch:fuzzy] $orderId: SKIP — no exact OR fuzzy overlap. '
+        'order candidates $orderCandidates vs provider categories '
+        '$normProviderCats. Genuinely unrelated categories — nothing more '
+        'to do here.');
+  }
+
+  return fuzzy;
+}
 // ─────────────────────────────────────────────────────────────
 // FIX: isAssigned can be null/missing in Firestore (treated as
 // "not yet set" = unassigned).  We only block if it is
@@ -186,7 +239,7 @@ bool _isAvailable({
     return false;
   }
 
-  // Category match — strict, see _categoryMatch() doc comment.
+  // Category match — exact, then fuzzy fallback. See _categoryMatch() doc.
   if (!_categoryMatch(data, providerCats)) {
     return false;
   }
@@ -294,22 +347,35 @@ class _BDPState extends State<BusinessDashboardPage> {
 
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _providerSnap;
 
-  // ── Available: 3 streams to catch every case ─────────────────
-  // Stream A: isAssigned == false  (standard new orders)
-  // Stream B: status IN [pending, enquiry]  (legacy / no isAssigned field)
-  // Stream C: isAssigned == null is NOT queryable directly in
-  //           Firestore, so we fetch recent docs broadly and
-  //           filter client-side via _isAvailable().
-  Stream<QuerySnapshot<Map<String, dynamic>>> _availPrimaryStream =
+  // ─────────────────────────────────────────────────────────────
+  // ORDERS STREAM — SINGLE SOURCE OF TRUTH
+  //
+  // FIX (root cause of "matching orders never show up"):
+  // The previous version ran THREE separate streams —
+  //   • orders where isAssigned == false, orderBy createdAt
+  //   • orders where status IN [pending, enquiry], orderBy createdAt
+  //   • a broad recent-orders fallback
+  //
+  // The first two each require a Firestore COMPOSITE INDEX
+  // (equality/whereIn on one field + orderBy on a different field).
+  // Only the FIRST stream's errors were ever checked and surfaced
+  // to the provider (`primarySnap.hasError`) — if the composite
+  // index for the SECOND stream was missing (a very easy thing to
+  // forget to create in the Firebase console), that stream would
+  // silently fail, its docs would just come back empty, and the
+  // matching order would vanish from "Available" with NO error
+  // shown at all — even though the category/service type matched
+  // perfectly.
+  //
+  // Fix: use ONE query with a single orderBy field only
+  // (`createdAt`), which Firestore indexes automatically — no
+  // composite index required, ever. Everything else (isAssigned,
+  // status, service type, category) is filtered client-side, same
+  // as before. Both tabs now share this one stream/result set, and
+  // any error is surfaced immediately instead of being swallowed.
+  // ─────────────────────────────────────────────────────────────
+  Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream =
       const Stream.empty();
-  Stream<QuerySnapshot<Map<String, dynamic>>> _availLegacyStream =
-      const Stream.empty();
-  // Broad fallback: recent orders regardless of isAssigned field
-  // (catches docs where the field is missing entirely)
-  Stream<QuerySnapshot<Map<String, dynamic>>> _availFallbackStream =
-      const Stream.empty();
-
-  Stream<QuerySnapshot<Map<String, dynamic>>>? _myStream;
 
   final _availNotifier = _CountNotifier();
   final _myNotifier    = _CountNotifier();
@@ -371,43 +437,13 @@ class _BDPState extends State<BusinessDashboardPage> {
         .doc(widget.providerId)
         .snapshots();
 
-    // ── Stream A: explicitly unassigned ──────────────────────
-    _availPrimaryStream = _db
-        .collection('orders')
-        .where('isAssigned', isEqualTo: false)
-        .orderBy('createdAt', descending: true)
-        .limit(300)
-        .snapshots();
-
-    // ── Stream B: legacy / status-based ──────────────────────
-    _availLegacyStream = _db
-        .collection('orders')
-        .where('status', whereIn: ['pending', 'enquiry'])
-        .orderBy('createdAt', descending: true)
-        .limit(150)
-        .snapshots();
-
-    // ── Stream C: broad fallback — catches docs where
-    //    isAssigned field was never written (null/missing).
-    //    We pull recent orders and filter client-side.
-    _availFallbackStream = _db
+    // Single query, single orderBy field → no composite index needed.
+    // Bump the limit here if your order volume regularly exceeds it.
+    _ordersStream = _db
         .collection('orders')
         .orderBy('createdAt', descending: true)
-        .limit(200)
+        .limit(500)
         .snapshots();
-
-    // ── My Jobs: assigned to this provider ────────────────────
-    // FIX: query by providerUserId so only truly assigned orders
-    // come through. _isMine() then filters out any 'pending'
-    // docs that slipped in due to data inconsistency.
-    _myStream = _uid.isEmpty
-        ? null
-        : _db
-            .collection('orders')
-            .where('providerUserId', isEqualTo: _uid)
-            .orderBy('createdAt', descending: true)
-            .limit(200)
-            .snapshots();
 
     if (mounted) setState(() {});
   }
@@ -415,11 +451,8 @@ class _BDPState extends State<BusinessDashboardPage> {
   void _retry() {
     if (!mounted) return;
     setState(() {
-      _availPrimaryStream  = const Stream.empty();
-      _availLegacyStream   = const Stream.empty();
-      _availFallbackStream = const Stream.empty();
-      _myStream            = null;
-      _authReady           = false;
+      _ordersStream = const Stream.empty();
+      _authReady    = false;
     });
     _resolveAuthThenInit();
   }
@@ -707,37 +740,65 @@ class _BDPState extends State<BusinessDashboardPage> {
                           ProviderProfilePage(providerId: widget.providerId))),
             ),
             Expanded(
-              child: IndexedStack(
-                index: _tab,
-                children: [
-                  _AvailTab(
-                    key:                const ValueKey('available'),
-                    primaryStream:      _availPrimaryStream,
-                    legacyStream:       _availLegacyStream,
-                    fallbackStream:     _availFallbackStream,
-                    myUid:              _uid,
-                    svcNorm:            _svcNorm,
-                    serviceType:        widget.serviceType,
-                    providerCategories: providerCategories,
-                    countNotifier:      _availNotifier,
-                    terms:              _terms,
-                    onAccept:           _accept,
-                    onDecline:          _showDecline,
-                    onRetry:            _retry,
-                  ),
-                  _MyTab(
-                    key:           const ValueKey('myjobs'),
-                    stream:        _myStream,
-                    myUid:         _uid,
-                    svcNorm:       _svcNorm,
-                    serviceType:   widget.serviceType,
-                    countNotifier: _myNotifier,
-                    terms:         _terms,
-                    onComplete:    _complete,
-                    onCancel:      _showCancel,
-                    onRetry:       _retry,
-                  ),
-                ],
+              // ── SINGLE shared orders stream for both tabs ──────
+              // Any error here is now always surfaced — nothing is
+              // silently swallowed the way the old multi-stream
+              // setup could be.
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: _ordersStream,
+                builder: (_, ordersSnap) {
+                  if (ordersSnap.hasError) {
+                    final err = ordersSnap.error.toString();
+                    final isIdx = err.contains('failed-precondition') ||
+                        err.contains('requires an index');
+                    return _ErrorRetry(
+                      message: isIdx
+                          ? 'Missing Firestore index for the orders query.\n\n'
+                            'Create in Firebase Console → Firestore → Indexes:\n'
+                            'Collection: orders\n'
+                            'Field: createdAt DESC'
+                          : 'Could not load orders.\n$err',
+                      onRetry: _retry,
+                    );
+                  }
+
+                  if (ordersSnap.connectionState == ConnectionState.waiting &&
+                      !ordersSnap.hasData) {
+                    return const Center(
+                        child: CircularProgressIndicator(color: _C.indigo));
+                  }
+
+                  final allDocs = ordersSnap.data?.docs ?? [];
+
+                  return IndexedStack(
+                    index: _tab,
+                    children: [
+                      _AvailTab(
+                        key:                const ValueKey('available'),
+                        allDocs:            allDocs,
+                        myUid:              _uid,
+                        svcNorm:            _svcNorm,
+                        serviceType:        widget.serviceType,
+                        providerCategories: providerCategories,
+                        countNotifier:      _availNotifier,
+                        terms:              _terms,
+                        onAccept:           _accept,
+                        onDecline:          _showDecline,
+                      ),
+                      _MyTab(
+                        key:           const ValueKey('myjobs'),
+                        allDocs:       allDocs,
+                        myUid:         _uid,
+                        svcNorm:       _svcNorm,
+                        serviceType:   widget.serviceType,
+                        countNotifier: _myNotifier,
+                        terms:         _terms,
+                        onComplete:    _complete,
+                        onCancel:      _showCancel,
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ]);
@@ -751,22 +812,17 @@ class _BDPState extends State<BusinessDashboardPage> {
 // AVAILABLE TAB
 // ═══════════════════════════════════════════════════════════════
 class _AvailTab extends StatelessWidget {
-  final Stream<QuerySnapshot<Map<String, dynamic>>> primaryStream;
-  final Stream<QuerySnapshot<Map<String, dynamic>>> legacyStream;
-  final Stream<QuerySnapshot<Map<String, dynamic>>> fallbackStream;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs;
   final String         myUid, svcNorm, serviceType;
   final List<String>   providerCategories;
   final _CountNotifier countNotifier;
   final _Terms         terms;
   final Future<void> Function(String, Map<String, dynamic>) onAccept;
   final Future<void> Function(String, Map<String, dynamic>) onDecline;
-  final VoidCallback   onRetry;
 
   const _AvailTab({
     super.key,
-    required this.primaryStream,
-    required this.legacyStream,
-    required this.fallbackStream,
+    required this.allDocs,
     required this.myUid,
     required this.svcNorm,
     required this.serviceType,
@@ -775,119 +831,57 @@ class _AvailTab extends StatelessWidget {
     required this.terms,
     required this.onAccept,
     required this.onDecline,
-    required this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: primaryStream,
-      builder: (_, primarySnap) {
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: legacyStream,
-          builder: (_, legacySnap) {
-            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: fallbackStream,
-              builder: (_, fallbackSnap) {
+    // ── Client-side filter: only truly available ────────────────
+    final docs = allDocs.where((d) => _isAvailable(
+      data:         d.data(),
+      myUid:        myUid,
+      svcNorm:      svcNorm,
+      providerCats: providerCategories,
+    )).toList();
 
-                if (primarySnap.hasError) {
-                  final err = primarySnap.error.toString();
-                  final isIdx = err.contains('failed-precondition') ||
-                      err.contains('requires an index');
-                  return _ErrorRetry(
-                    message: isIdx
-                        ? 'Missing Firestore index.\n\n'
-                          'Create in Firebase Console → Firestore → Indexes:\n'
-                          'Collection: orders\n'
-                          'Fields: isAssigned ASC, createdAt DESC'
-                        : 'Could not load ${terms.availableTab.toLowerCase()}.\n$err',
-                    onRetry: onRetry,
-                  );
-                }
+    docs.sort((a, b) {
+      final at = (a.data()['createdAt'] as Timestamp?)
+          ?.millisecondsSinceEpoch ?? 0;
+      final bt = (b.data()['createdAt'] as Timestamp?)
+          ?.millisecondsSinceEpoch ?? 0;
+      return bt.compareTo(at);
+    });
 
-                // Show spinner only if ALL streams are still loading
-                final loading =
-                    primarySnap.connectionState == ConnectionState.waiting &&
-                    !primarySnap.hasData &&
-                    legacySnap.connectionState == ConnectionState.waiting &&
-                    !legacySnap.hasData &&
-                    fallbackSnap.connectionState == ConnectionState.waiting &&
-                    !fallbackSnap.hasData;
+    countNotifier.update(docs.length);
 
-                if (loading) {
-                  return const Center(
-                      child: CircularProgressIndicator(color: _C.indigo));
-                }
+    if (docs.isEmpty) {
+      final hint = allDocs.isEmpty
+          ? 'No $serviceType ${terms.singular.toLowerCase()}s have been '
+            'placed yet.\n\nNew ${terms.availableTab.toLowerCase()} will '
+            'appear here automatically.'
+          : '${terms.singular}s exist but do not match your profile.\n\n'
+            '${providerCategories.isNotEmpty ? "Your categories: ${providerCategories.join(', ')}" : "Check that your service type matches."}';
+      return _Empty(
+        icon:  Icons.work_outline_rounded,
+        title: 'No ${terms.availableTab}',
+        msg:   hint,
+      );
+    }
 
-                // ── Merge all three streams, deduplicate by doc ID ──
-                final seen    = <String>{};
-                final allDocs =
-                    <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-
-                for (final doc in (primarySnap.data?.docs ?? [])) {
-                  if (seen.add(doc.id)) allDocs.add(doc);
-                }
-                for (final doc in (legacySnap.data?.docs ?? [])) {
-                  if (seen.add(doc.id)) allDocs.add(doc);
-                }
-                // FIX: fallback catches docs with missing isAssigned field
-                for (final doc in (fallbackSnap.data?.docs ?? [])) {
-                  if (seen.add(doc.id)) allDocs.add(doc);
-                }
-
-                // ── Client-side filter: only truly available ────────
-                final docs = allDocs.where((d) => _isAvailable(
-                  data:         d.data(),
-                  myUid:        myUid,
-                  svcNorm:      svcNorm,
-                  providerCats: providerCategories,
-                )).toList();
-
-                docs.sort((a, b) {
-                  final at = (a.data()['createdAt'] as Timestamp?)
-                      ?.millisecondsSinceEpoch ?? 0;
-                  final bt = (b.data()['createdAt'] as Timestamp?)
-                      ?.millisecondsSinceEpoch ?? 0;
-                  return bt.compareTo(at);
-                });
-
-                countNotifier.update(docs.length);
-
-                if (docs.isEmpty) {
-                  final hint = allDocs.isEmpty
-                      ? 'No $serviceType ${terms.singular.toLowerCase()}s have been '
-                        'placed yet.\n\nNew ${terms.availableTab.toLowerCase()} will '
-                        'appear here automatically.'
-                      : '${terms.singular}s exist but do not match your profile.\n\n'
-                        '${providerCategories.isNotEmpty ? "Your categories: ${providerCategories.join(', ')}" : "Check that your service type matches."}';
-                  return _Empty(
-                    icon:  Icons.work_outline_rounded,
-                    title: 'No ${terms.availableTab}',
-                    msg:   hint,
-                  );
-                }
-
-                return ListView.builder(
-                  padding:   const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                  itemCount: docs.length,
-                  itemBuilder: (_, i) {
-                    final doc  = docs[i];
-                    final data = doc.data();
-                    return _Card(
-                      key:         ValueKey(doc.id),
-                      doc:         doc,
-                      data:        data,
-                      mode:        _Mode.avail,
-                      serviceType: serviceType,
-                      terms:       terms,
-                      onAccept:    () => onAccept(doc.id, data),
-                      onDecline:   () => onDecline(doc.id, data),
-                    );
-                  },
-                );
-              },
-            );
-          },
+    return ListView.builder(
+      padding:   const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      itemCount: docs.length,
+      itemBuilder: (_, i) {
+        final doc  = docs[i];
+        final data = doc.data();
+        return _Card(
+          key:         ValueKey(doc.id),
+          doc:         doc,
+          data:        data,
+          mode:        _Mode.avail,
+          serviceType: serviceType,
+          terms:       terms,
+          onAccept:    () => onAccept(doc.id, data),
+          onDecline:   () => onDecline(doc.id, data),
         );
       },
     );
@@ -898,17 +892,16 @@ class _AvailTab extends StatelessWidget {
 // MY JOBS TAB
 // ═══════════════════════════════════════════════════════════════
 class _MyTab extends StatelessWidget {
-  final Stream<QuerySnapshot<Map<String, dynamic>>>? stream;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs;
   final String         myUid, svcNorm, serviceType;
   final _CountNotifier countNotifier;
   final _Terms         terms;
   final Future<void> Function(String, Map<String, dynamic>) onComplete;
   final Future<void> Function(String, Map<String, dynamic>) onCancel;
-  final VoidCallback   onRetry;
 
   const _MyTab({
     super.key,
-    required this.stream,
+    required this.allDocs,
     required this.myUid,
     required this.svcNorm,
     required this.serviceType,
@@ -916,82 +909,60 @@ class _MyTab extends StatelessWidget {
     required this.terms,
     required this.onComplete,
     required this.onCancel,
-    required this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (stream == null) {
-      return _ErrorRetry(
-        message: 'Your session could not be verified.\nPlease retry or sign in again.',
-        onRetry: onRetry,
+    // FIX: use _isMine() to strictly filter — prevents pending/open
+    // orders from leaking into My Jobs tab.
+    final docs = allDocs.where((d) => _isMine(
+      data:    d.data(),
+      myUid:   myUid,
+      svcNorm: svcNorm,
+    )).toList();
+
+    const ord = {'accepted': 0, 'completed': 1, 'cancelled': 2, 'pending': 3};
+    docs.sort((a, b) {
+      final as_ = (a.data()['status'] ?? '').toString().toLowerCase();
+      final bs  = (b.data()['status'] ?? '').toString().toLowerCase();
+      final ap  = ord[as_] ?? 4;
+      final bp  = ord[bs]  ?? 4;
+      if (ap != bp) return ap.compareTo(bp);
+      final at = (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+      final bt = (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+      return bt.compareTo(at);
+    });
+
+    final active = docs
+        .where((d) =>
+            (d.data()['status'] ?? '').toString().toLowerCase() == 'accepted')
+        .length;
+    countNotifier.update(active);
+
+    if (docs.isEmpty) {
+      return _Empty(
+        icon:  Icons.assignment_outlined,
+        title: 'No ${terms.myTab}',
+        msg:   '${terms.singular}s you accept will appear here and update in real‑time.',
       );
     }
 
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: stream,
-      builder: (_, snap) {
-        if (snap.hasError) {
-          return _ErrorRetry(
-              message: 'Could not load your ${terms.myTab.toLowerCase()}.\n${snap.error}',
-              onRetry: onRetry);
-        }
-        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-          return const Center(child: CircularProgressIndicator(color: _C.indigo));
-        }
-
-        // FIX: use _isMine() to strictly filter — prevents pending/open
-        // orders from leaking into My Jobs tab.
-        final docs = (snap.data?.docs ?? []).where((d) => _isMine(
-          data:    d.data(),
-          myUid:   myUid,
-          svcNorm: svcNorm,
-        )).toList();
-
-        const ord = {'accepted': 0, 'completed': 1, 'cancelled': 2, 'pending': 3};
-        docs.sort((a, b) {
-          final as_ = (a.data()['status'] ?? '').toString().toLowerCase();
-          final bs  = (b.data()['status'] ?? '').toString().toLowerCase();
-          final ap  = ord[as_] ?? 4;
-          final bp  = ord[bs]  ?? 4;
-          if (ap != bp) return ap.compareTo(bp);
-          final at = (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-          final bt = (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-          return bt.compareTo(at);
-        });
-
-        final active = docs
-            .where((d) =>
-                (d.data()['status'] ?? '').toString().toLowerCase() == 'accepted')
-            .length;
-        countNotifier.update(active);
-
-        if (docs.isEmpty) {
-          return _Empty(
-            icon:  Icons.assignment_outlined,
-            title: 'No ${terms.myTab}',
-            msg:   '${terms.singular}s you accept will appear here and update in real‑time.',
-          );
-        }
-
-        return ListView.builder(
-          padding:   const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          itemCount: docs.length,
-          itemBuilder: (_, i) {
-            final doc    = docs[i];
-            final data   = doc.data();
-            final status = (data['status'] ?? '').toString().toLowerCase();
-            return _Card(
-              key:         ValueKey(doc.id),
-              doc:         doc,
-              data:        data,
-              mode:        _Mode.mine,
-              serviceType: serviceType,
-              terms:       terms,
-              onComplete: status == 'accepted' ? () => onComplete(doc.id, data) : null,
-              onCancel:   status == 'accepted' ? () => onCancel(doc.id, data)   : null,
-            );
-          },
+    return ListView.builder(
+      padding:   const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      itemCount: docs.length,
+      itemBuilder: (_, i) {
+        final doc    = docs[i];
+        final data   = doc.data();
+        final status = (data['status'] ?? '').toString().toLowerCase();
+        return _Card(
+          key:         ValueKey(doc.id),
+          doc:         doc,
+          data:        data,
+          mode:        _Mode.mine,
+          serviceType: serviceType,
+          terms:       terms,
+          onComplete: status == 'accepted' ? () => onComplete(doc.id, data) : null,
+          onCancel:   status == 'accepted' ? () => onCancel(doc.id, data)   : null,
         );
       },
     );

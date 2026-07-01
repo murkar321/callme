@@ -20,12 +20,17 @@ import '../Admin/approve_providers_page.dart';
 //   • NotificationService._listenBackgroundTap / _checkColdStart (FCM tap)
 //
 // BUG FIXES vs previous version:
-//   1. registrationApproved/Rejected: payload never reliably contained
-//      businessName/serviceType — now fetches the provider doc from Firestore
-//      using the current user's UID so the dashboard always opens with real data.
-//   2. MyOrdersPage used phoneNumber (null for email-auth) → now uses email.
-//   3. FeedbackPage is `const` — was being constructed without const.
-//   4. Navigator retry loop: on cold-start the navigator isn't mounted for
+//   1. registrationApproved: ApproveProvidersPage now stamps providerId /
+//      businessName / serviceType directly onto the notification + FCM
+//      payload, so we route straight to BusinessDashboardPage without a
+//      Firestore round trip. Falls back to the old Firestore lookup only
+//      if an older notification doc doesn't have that data.
+//   2. registrationRejected no longer opens BusinessDashboardPage (a
+//      rejected provider isn't active) — it now opens BusinessPage so they
+//      can see their status / reapply.
+//   3. MyOrdersPage used phoneNumber (null for email-auth) → now uses email.
+//   4. FeedbackPage is `const` — was being constructed without const.
+//   5. Navigator retry loop: on cold-start the navigator isn't mounted for
 //      ~1-2 s; retries up to 10× at 300 ms intervals.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -87,13 +92,19 @@ Future<void> _doRoute(NavigatorState navigator, Map<String, dynamic> data) async
       );
       break;
 
-    // ── Provider: registration approved/rejected → open their dashboard ───────
-    // FIX: businessName and serviceType were never reliably present in the
-    // notification payload. Instead we look up the provider document from
-    // Firestore using the current user's UID, which is always available.
+    // ── Provider: registration approved → open their dashboard ────────────────
     case NotificationType.registrationApproved:
+      await _routeToApprovedDashboard(navigator, data);
+      break;
+
+    // ── Provider: registration rejected → back to the registration/status page ─
+    // FIX: this used to also open BusinessDashboardPage, which is wrong —
+    // a rejected provider shouldn't land on the active provider dashboard.
     case NotificationType.registrationRejected:
-      await _routeToDashboard(navigator);
+      debugPrint('[NOTIF-ROUTE] → BusinessPage (registration rejected)');
+      navigator.push(
+        MaterialPageRoute(builder: (_) => const BusinessPage()),
+      );
       break;
 
     // ── Customer: service completed → leave a review ──────────────────────────
@@ -120,20 +131,55 @@ Future<void> _doRoute(NavigatorState navigator, Map<String, dynamic> data) async
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _routeToDashboard
+// _routeToApprovedDashboard
+// ─────────────────────────────────────────────────────────────────────────────
+// Fast path: ApproveProvidersPage.approveProvider() now stamps providerId,
+// businessName, and serviceType directly onto the notification doc / FCM
+// payload, so `data` already has everything BusinessDashboardPage needs —
+// no extra Firestore read, no chance of a UID/doc-ID mismatch.
+//
+// Falls back to the old Firestore lookup (_routeToDashboard) only for
+// notifications saved before this update, which won't carry those fields.
+// ─────────────────────────────────────────────────────────────────────────────
+Future<void> _routeToApprovedDashboard(
+  NavigatorState navigator,
+  Map<String, dynamic> data,
+) async {
+  final providerId   = data['providerId']?.toString().trim() ?? '';
+  final businessName = data['businessName']?.toString().trim() ?? '';
+  final serviceType  = data['serviceType']?.toString().trim() ?? '';
+
+  if (providerId.isNotEmpty && businessName.isNotEmpty && serviceType.isNotEmpty) {
+    debugPrint(
+      '[NOTIF-ROUTE] → BusinessDashboardPage (fast path) '
+      'providerId=$providerId businessName=$businessName serviceType=$serviceType',
+    );
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => BusinessDashboardPage(
+          providerId:   providerId,
+          businessName: businessName,
+          serviceType:  serviceType,
+        ),
+      ),
+    );
+    return;
+  }
+
+  debugPrint(
+    '[NOTIF-ROUTE] Payload missing providerId/businessName/serviceType '
+    '— falling back to Firestore lookup',
+  );
+  await _routeToDashboard(navigator);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _routeToDashboard (fallback)
 // ─────────────────────────────────────────────────────────────────────────────
 // Fetches the provider document for the current user from Firestore, then
-// opens BusinessDashboardPage with real data.
-//
-// Why Firestore fetch instead of payload fields?
-//   The Cloud Function sends a short FCM payload (title + body + type +
-//   receiverId). Adding businessName/serviceType to every notification payload
-//   is fragile — they can be missing or stale. Fetching from Firestore is
-//   always accurate and costs one read.
-//
-// Firestore query: providers where userId == currentUser.uid
-// Falls back to a loading indicator route while the fetch is in-flight,
-// then replaces it once data arrives.
+// opens BusinessDashboardPage with real data. Only used when the
+// notification payload doesn't already carry providerId/businessName/
+// serviceType (e.g. older notifications).
 // ─────────────────────────────────────────────────────────────────────────────
 Future<void> _routeToDashboard(NavigatorState navigator) async {
   final uid = FirebaseAuth.instance.currentUser?.uid;

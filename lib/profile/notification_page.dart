@@ -277,6 +277,12 @@ class _NotificationPageState extends State<NotificationPage> {
               final isRead = data['read'] == true;
               final style  = _style(data['type'] as String?);
 
+              // ✅ Show which business/service this notification is about,
+              // when the doc carries it (approvals now stamp this on).
+              final businessName = (data['businessName'] ?? '').toString().trim();
+              final serviceType  = (data['serviceType'] ?? '').toString().trim();
+              final hasServiceInfo = businessName.isNotEmpty || serviceType.isNotEmpty;
+
               return Dismissible(
                 key: ValueKey(docId),
                 direction: DismissDirection.endToStart,
@@ -350,6 +356,19 @@ class _NotificationPageState extends State<NotificationPage> {
                     children: [
                       const SizedBox(height: 4),
                       Text(data['body'] as String? ?? ''),
+                      if (hasServiceInfo) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            if (serviceType.isNotEmpty)
+                              _serviceChip(Icons.miscellaneous_services_rounded, serviceType),
+                            if (businessName.isNotEmpty)
+                              _serviceChip(Icons.storefront_rounded, businessName),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         _relativeTime(data['createdAt']),
@@ -363,6 +382,29 @@ class _NotificationPageState extends State<NotificationPage> {
             },
           );
         },
+      ),
+    );
+  }
+
+  // ✅ Small chip used to surface which service/business a notification
+  // (booking, approval, rejection) relates to.
+  Widget _serviceChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.indigo.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: Colors.indigo),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: Colors.indigo, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }

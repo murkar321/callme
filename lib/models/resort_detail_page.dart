@@ -54,6 +54,11 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
           children: [
 
             /// ================= IMAGE CAROUSEL =================
+            // FIX: removed the large "RESORT TITLE OVERLAY" text that used to
+            // sit at bottom:48 — it visually collided with the image label
+            // chip right above it (bottom:52). The AppBar already shows the
+            // resort name, so it was redundant. Gradient + label chip now
+            // have the full image height to themselves.
             Stack(
               children: [
 
@@ -92,9 +97,11 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                             ),
                           ),
 
+                          // ✅ Label chip now sits comfortably near the
+                          // bottom with no competing overlay text behind it.
                           Positioned(
                             left: 16,
-                            bottom: 52,
+                            bottom: 18,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6),
@@ -141,27 +148,9 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                     ),
                   ),
 
-                /// RESORT TITLE OVERLAY
-                Positioned(
-                  left: 18,
-                  right: 18,
-                  bottom: 48,
-                  child: Text(
-                    resort.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      height: 1.2,
-                    ),
-                  ),
-                ),
-
                 /// DOT INDICATORS
                 Positioned(
-                  bottom: 14,
+                  bottom: 4,
                   left: 0,
                   right: 0,
                   child: Row(

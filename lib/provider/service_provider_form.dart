@@ -166,6 +166,11 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   List<String> get _requiredDocs =>
       (_config.requiredDocuments as List<dynamic>).cast<String>();
 
+  static final RegExp _emailRe =
+      RegExp(r'^[\w\.\+\-]+@[\w\-]+\.[a-z]{2,}$');
+  static final RegExp _ifscRe =
+      RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$');
+
   // ─────────────────────────────────────────────────────────────────────────────
   @override
   void dispose() {
@@ -175,39 +180,123 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   }
 
   // ── Step validation ──────────────────────────────────────────────────────────
+  //
+  // Each of these returns a list of *specific, human-readable* problems for
+  // the current step. An empty list means the step is complete. This powers
+  // both the inline field-level red errors (via the Form widgets) AND the
+  // summary sheet shown in [_showMissingSheet], so the provider always knows
+  // exactly what they still need to fix.
+  // ─────────────────────────────────────────────────────────────────────────────
 
-  String? _validateStep() {
-    switch (_step) {
+  List<String> _missingItemsForStep(int step) {
+    switch (step) {
       case 0:
-        if (_selectedCats.isEmpty) return 'Select at least one category.';
-        return null;
+        return _categoriesMissing();
       case 1:
-        if (!_businessFormKey.currentState!.validate()) return '';
-        return null;
+        return _businessMissing();
       case 2:
-        return null;
+        return const [];
       case 3:
-        if (!_bankFormKey.currentState!.validate()) return '';
-        return null;
+        return _bankMissing();
       case 4:
-        if (!_uploadedDocs.containsKey(_kCompulsoryDoc)) {
-          return '$_kCompulsoryDoc is required before submitting.';
-        }
-        return null;
+        return _documentsMissing();
       default:
-        return null;
+        return const [];
     }
+  }
+
+  List<String> _categoriesMissing() {
+    if (_selectedCats.isEmpty) {
+      return ['Select at least one service category to continue.'];
+    }
+    return const [];
+  }
+
+  List<String> _businessMissing() {
+    final issues = <String>[];
+
+    if (_businessCtrl.text.trim().isEmpty) issues.add('Business name is required.');
+    if (_ownerCtrl.text.trim().isEmpty) issues.add('Owner / manager name is required.');
+
+    final phone = _phoneCtrl.text.trim();
+    if (phone.isEmpty) {
+      issues.add('Phone number is required.');
+    } else if (phone.length != 10) {
+      issues.add('Phone number must be exactly 10 digits.');
+    }
+
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty) {
+      issues.add('Email address is required.');
+    } else if (!_emailRe.hasMatch(email)) {
+      issues.add('Email address is not valid (e.g. you@example.com).');
+    }
+
+    if (_addressCtrl.text.trim().isEmpty) issues.add('Business address is required.');
+    if (_cityCtrl.text.trim().isEmpty) issues.add('City is required.');
+    if (_stateCtrl.text.trim().isEmpty) issues.add('State is required.');
+
+    final pin = _pincodeCtrl.text.trim();
+    if (pin.isEmpty) {
+      issues.add('Pincode is required.');
+    } else if (pin.length != 6) {
+      issues.add('Pincode must be exactly 6 digits.');
+    }
+
+    return issues;
+  }
+
+  List<String> _bankMissing() {
+    final issues = <String>[];
+
+    if (_holderCtrl.text.trim().isEmpty) issues.add('Account holder name is required.');
+
+    final acc = _accountCtrl.text.trim();
+    if (acc.isEmpty) {
+      issues.add('Account number is required.');
+    } else if (acc.length < 9 || acc.length > 18) {
+      issues.add('Account number must be 9–18 digits.');
+    }
+
+    final ifsc = _ifscCtrl.text.trim().toUpperCase();
+    if (ifsc.isEmpty) {
+      issues.add('IFSC code is required.');
+    } else if (!_ifscRe.hasMatch(ifsc)) {
+      issues.add('IFSC code is not valid (e.g. SBIN0001234).');
+    }
+
+    final upi = _upiCtrl.text.trim();
+    if (upi.isEmpty) {
+      issues.add('UPI ID is required.');
+    } else if (!upi.contains('@')) {
+      issues.add('UPI ID is not valid (e.g. name@upi).');
+    }
+
+    return issues;
+  }
+
+  List<String> _documentsMissing() {
+    if (!_uploadedDocs.containsKey(_kCompulsoryDoc)) {
+      return ['$_kCompulsoryDoc must be uploaded before submitting.'];
+    }
+    return const [];
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────────
 
   Future<void> _next() async {
     FocusScope.of(context).unfocus();
-    final err = _validateStep();
-    if (err != null) {
-      if (err.isNotEmpty) _snackError(err);
+
+    final missing = _missingItemsForStep(_step);
+    if (missing.isNotEmpty) {
+      // Also light up per-field red errors so the exact field is obvious,
+      // in addition to the summary sheet.
+      if (_step == 1) _businessFormKey.currentState?.validate();
+      if (_step == 3) _bankFormKey.currentState?.validate();
+      _showMissingSheet(missing);
       return;
     }
+
     if (_step < 4) {
       setState(() => _step++);
       _pageCtrl.animateToPage(_step,
@@ -225,6 +314,93 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
           duration: const Duration(milliseconds: 320),
           curve: Curves.easeInOut);
     }
+  }
+
+  // ── Missing-fields summary sheet ─────────────────────────────────────────────
+
+  void _showMissingSheet(List<String> items) {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 16, right: 16, top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: _kCard,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: _kDanger.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.error_outline_rounded,
+                        color: _kDanger, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Please complete this step',
+                      style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: _kTextHigh),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 18),
+                ...items.map((issue) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 5),
+                            child: Icon(Icons.circle,
+                                size: 6, color: _kDanger),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              issue,
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  color: _kTextMid,
+                                  height: 1.4,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: _elevatedStyle(),
+                    child: const Text('Got it'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // ── Image pick ────────────────────────────────────────────────────────────────
@@ -331,11 +507,17 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
 
   // ── Submit ────────────────────────────────────────────────────────────────────
   //
-  // KEY CHANGE: the Firestore document ID is now a readable string like
-  // CIV-765791 generated by [_ensureUniqueProviderId], NOT the Firebase UID.
+  // The Firestore document ID is a readable string like CIV-765791,
+  // generated by [_ensureUniqueProviderId]. This is the ONLY document
+  // created for a provider — there is no separate lookup collection.
   //
-  // The UID is still stored inside the document as `userId` / `providerId`
-  // so security rules and queries that use the UID continue to work.
+  // The Firebase UID is still stored inside the document as `userId` /
+  // `uid`, so any screen that needs to find "my provider profile" from the
+  // logged-in user can simply query:
+  //
+  //   providers.where('userId', isEqualTo: currentUser.uid).limit(1)
+  //
+  // instead of reading a separate `provider_uid_lookup/{uid}` pointer doc.
   // ─────────────────────────────────────────────────────────────────────────────
 
   Future<void> _submitForm() async {
@@ -363,7 +545,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
         imageUrl = await ref.getDownloadURL();
       }
 
-      // ── 3. Write to providers/{readableId} ────────────────────────────────
+      // ── 3. Write to providers/{readableId} — the single source of truth ────
       await db.collection('providers').doc(readableId).set({
         // Readable document key is the doc ID itself; store it too for
         // easy access without knowing the document path.
@@ -415,13 +597,6 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-
-      // ── 4. Also write a lookup document so we can find the provider by UID ─
-      // Useful for queries that start from the logged-in user's UID.
-      await db
-          .collection('provider_uid_lookup')
-          .doc(user.uid)
-          .set({'providerId': readableId}, SetOptions(merge: true));
 
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -879,8 +1054,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
               helperText: 'e.g. you@example.com',
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Email is required.';
-                if (!RegExp(r'^[\w\.\+\-]+@[\w\-]+\.[a-z]{2,}$')
-                    .hasMatch(v.trim()))
+                if (!_emailRe.hasMatch(v.trim()))
                   return 'Enter a valid email address.';
                 return null;
               }),
@@ -1005,8 +1179,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
               helperText: 'e.g. SBIN0001234',
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'IFSC is required.';
-                if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$')
-                    .hasMatch(v.trim().toUpperCase()))
+                if (!_ifscRe.hasMatch(v.trim().toUpperCase()))
                   return 'Invalid IFSC (e.g. SBIN0001234).';
                 return null;
               }),

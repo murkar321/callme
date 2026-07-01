@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../profile/notification_service.dart' show NotificationType;
+
 class ApproveProvidersPage extends StatefulWidget {
   const ApproveProvidersPage({super.key});
 
@@ -25,6 +27,45 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   }
 
   // =====================================================
+  // FIELD EXTRACTION HELPER
+  // =====================================================
+  // Mirrors notification_router.dart's `_first()` so the businessName /
+  // serviceType we save on the notification always agree with what the
+  // dashboard route expects. Tries top-level keys, then nested business/
+  // service maps.
+  String _firstField(Map<String, dynamic> merged, List<String> keys) {
+    for (final k in keys) {
+      final v = merged[k]?.toString().trim() ?? '';
+      if (v.isNotEmpty) return v;
+    }
+    return '';
+  }
+
+  ({String businessName, String serviceType}) _extractIdentity(
+    Map<String, dynamic> data,
+  ) {
+    final business = (data["business"] as Map<String, dynamic>?) ?? {};
+    final service = (data["service"] as Map<String, dynamic>?) ?? {};
+
+    final merged = <String, dynamic>{
+      ...data,
+      ...business,
+      ...service,
+    };
+
+    final businessName = _firstField(
+      merged,
+      ['businessName', 'business_name', 'name', 'providerName'],
+    );
+    final serviceType = _firstField(
+      merged,
+      ['serviceType', 'service_type', 'service', 'category'],
+    );
+
+    return (businessName: businessName, serviceType: serviceType);
+  }
+
+  // =====================================================
   // SEND FCM HELPER
   // =====================================================
 
@@ -35,6 +76,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     required String providerId,
     required String userId,     // ✅ needed for fcm_queue rules
     required String type,
+    String? businessName,
+    String? serviceType,
     String? reason,
   }) async {
     if (token.trim().isEmpty) return;
@@ -51,6 +94,14 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       "sent":       false,
     };
 
+    // ✅ Carried through the FCM data payload so routeNotification() can
+    // open BusinessDashboardPage instantly, without a second Firestore read.
+    if (businessName != null && businessName.trim().isNotEmpty) {
+      payload["businessName"] = businessName.trim();
+    }
+    if (serviceType != null && serviceType.trim().isNotEmpty) {
+      payload["serviceType"] = serviceType.trim();
+    }
     if (reason != null && reason.trim().isNotEmpty) {
       payload["reason"] = reason.trim();
     }
@@ -66,16 +117,36 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     required String userId,     // ✅ receiverId for notifications rules
     required String title,
     required String body,
+    required String type,       // ✅ FIX: this was never being saved before,
+                                 // so NotificationPage's onNotificationTap
+                                 // always got a null `type` and routing fell
+                                 // through to the default case.
+    String? providerId,
+    String? businessName,
+    String? serviceType,
     String? reason,
   }) async {
     final Map<String, dynamic> notification = {
       "title":      title,
       "body":       body,
+      "type":       type,       // ✅ now present — this is what
+                                 // routeNotification()'s switch matches on
       "read":       false,
       "receiverId": userId,     // ✅ notifications rule: receiverId == uid()
       "createdAt":  FieldValue.serverTimestamp(),
     };
 
+    // ✅ So the notification list (and the dashboard route) both know
+    // exactly which provider + which service this notification is about.
+    if (providerId != null && providerId.trim().isNotEmpty) {
+      notification["providerId"] = providerId.trim();
+    }
+    if (businessName != null && businessName.trim().isNotEmpty) {
+      notification["businessName"] = businessName.trim();
+    }
+    if (serviceType != null && serviceType.trim().isNotEmpty) {
+      notification["serviceType"] = serviceType.trim();
+    }
     if (reason != null && reason.trim().isNotEmpty) {
       notification["reason"] = reason.trim();
     }
@@ -135,9 +206,19 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
         return;
       }
 
-      const String title = "🎉 Account Approved!";
-      final String body  =
-          "Congratulations $ownerName! Your provider account has been approved. You can now start receiving bookings.";
+      // ✅ Pull businessName + serviceType so the approval message says
+      // *which* service was approved, and so the notification carries
+      // everything BusinessDashboardPage needs.
+      final identity = _extractIdentity(data);
+      final businessName = identity.businessName.isNotEmpty
+          ? identity.businessName
+          : "your business";
+      final serviceType = identity.serviceType;
+
+      final String title = "🎉 Account Approved!";
+      final String body = serviceType.isNotEmpty
+          ? "Congratulations $ownerName! Your $serviceType business \"$businessName\" has been approved. You can now start receiving $serviceType bookings."
+          : "Congratulations $ownerName! Your provider account has been approved. You can now start receiving bookings.";
 
       // 1 — Update provider doc status
       await firestore.collection("providers").doc(providerId).update({
@@ -149,17 +230,27 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       // 2 — ✅ Set role: "provider" on users/{uid} so Firestore rules allow access
       await _updateUserRole(userId, "provider");
 
-      // 3 — In-app notification
-      await _saveNotification(userId: userId, title: title, body: body);
+      // 3 — In-app notification (now carries type + providerId + businessName + serviceType)
+      await _saveNotification(
+        userId:       userId,
+        title:        title,
+        body:         body,
+        type:         NotificationType.registrationApproved,
+        providerId:   providerId,
+        businessName: identity.businessName,
+        serviceType:  serviceType,
+      );
 
-      // 4 — FCM push
+      // 4 — FCM push (same enriched payload, so a cold-start tap works too)
       await _sendFcm(
-        token:      fcmToken,
-        title:      title,
-        body:       body,
-        providerId: providerId,
-        userId:     userId,
-        type:       "approved",
+        token:        fcmToken,
+        title:        title,
+        body:         body,
+        providerId:   providerId,
+        userId:       userId,
+        type:         NotificationType.registrationApproved,
+        businessName: identity.businessName,
+        serviceType:  serviceType,
       );
 
       if (!mounted) return;
@@ -304,6 +395,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
       // ✅ Read userId from provider doc
       final String userId = (data["userId"] ?? "").toString();
+      final identity = _extractIdentity(data);
 
       const String title = "Account Not Approved";
       final String body  = reason.isNotEmpty
@@ -323,22 +415,34 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
         await _updateUserRole(userId, "user");
       }
 
-      // 3 — In-app notification
+      // 3 — In-app notification (now correctly typed as registrationRejected,
+      // not the plain "rejected" string, so the router matches it properly
+      // and sends the person back to BusinessPage — not the dashboard).
       if (userId.isNotEmpty) {
         await _saveNotification(
-            userId: userId, title: title, body: body, reason: reason);
+          userId:       userId,
+          title:        title,
+          body:         body,
+          type:         NotificationType.registrationRejected,
+          providerId:   providerId,
+          businessName: identity.businessName,
+          serviceType:  identity.serviceType,
+          reason:       reason,
+        );
       }
 
       // 4 — FCM push
       if (userId.isNotEmpty) {
         await _sendFcm(
-          token:      fcmToken,
-          title:      title,
-          body:       body,
-          providerId: providerId,
-          userId:     userId,
-          type:       "rejected",
-          reason:     reason,
+          token:        fcmToken,
+          title:        title,
+          body:         body,
+          providerId:   providerId,
+          userId:       userId,
+          type:         NotificationType.registrationRejected,
+          businessName: identity.businessName,
+          serviceType:  identity.serviceType,
+          reason:       reason,
         );
       }
 

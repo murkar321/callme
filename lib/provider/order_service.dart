@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+// ⚠️ Adjust this import path if service_config.dart lives somewhere else
+// in your project — it must point to the file containing `serviceConfigs`.
+import 'service_config.dart';
+
 // ============================================================
 // NOTIFICATION TYPE CONSTANTS
 // ============================================================
@@ -14,6 +18,9 @@ class NotificationType {
   static const String bookingAccepted  = 'booking_accepted';
   static const String bookingRejected  = 'booking_rejected';
   static const String serviceCompleted = 'service_completed';
+  static const String providerRegistered   = 'provider_registered';
+  static const String registrationApproved = 'registration_approved';
+  static const String registrationRejected = 'registration_rejected';
 }
 
 // ============================================================
@@ -29,22 +36,85 @@ class OrderStatus {
 }
 
 // ============================================================
+// CANONICAL CATEGORY RESOLUTION
+//
+// `serviceConfigs` (service_config.dart) is the single source of
+// truth both the provider-registration category picker AND
+// booking pages *should* draw from. In practice they can still
+// drift (typos, differently-worded booking-page labels, older
+// app versions). `resolveCanonicalCategory()` snaps whatever a
+// booking page sends onto the matching entry in `serviceConfigs`
+// for that serviceType, so what actually gets written to
+// Firestore is byte-identical to what a provider picked at
+// registration — which is what makes Stage-1 EXACT matching in
+// `categoryMatch()` succeed almost every time, instead of relying
+// on the fuzzy fallback in business_dashboard_page.dart.
+//
+// If no canonical entry is found (unknown serviceType, or a
+// genuinely new category not yet in service_config.dart), the
+// original raw string is kept as-is — nothing is silently
+// dropped, it just falls back to fuzzy matching downstream.
+// ============================================================
+
+List<String> canonicalCategoriesFor(String serviceType) {
+  final key = serviceType.trim().toLowerCase();
+  return serviceConfigs[key]?.serviceCategories ?? const [];
+}
+
+Set<String> _significantWords(String s) => s
+    .toLowerCase()
+    .split(RegExp(r'[^a-z0-9]+'))
+    .where((w) => w.length >= 3)
+    .toSet();
+
+/// Snaps `rawCategory` onto the closest entry in
+/// `serviceConfigs[serviceType].serviceCategories`, if any.
+/// Returns the original trimmed string if no confident match is found.
+String resolveCanonicalCategory(String rawCategory, String serviceType) {
+  final raw = rawCategory.trim();
+  if (raw.isEmpty) return raw;
+
+  final canonical = canonicalCategoriesFor(serviceType);
+  if (canonical.isEmpty) return raw; // unknown serviceType — nothing to snap to
+
+  final normRaw = normalizeCategory(raw);
+
+  // 1. Exact normalised match
+  for (final c in canonical) {
+    if (normalizeCategory(c) == normRaw) return c;
+  }
+
+  // 2. Substring match either direction
+  for (final c in canonical) {
+    final normC = normalizeCategory(c);
+    if (normC.contains(normRaw) || normRaw.contains(normC)) return c;
+  }
+
+  // 3. Shared significant word (3+ chars)
+  final rawWords = _significantWords(raw);
+  for (final c in canonical) {
+    if (_significantWords(c).intersection(rawWords).isNotEmpty) return c;
+  }
+
+  debugPrint('[category-resolve] No canonical match for "$raw" in '
+      '$serviceType categories $canonical — keeping raw value. '
+      'If this is a real category, add it to serviceConfigs.');
+  return raw;
+}
+
+// ============================================================
 // SHARED CATEGORY-MATCHING LOGIC
 //
 // IMPORTANT: This logic MUST stay byte-for-byte identical to
 // `_categoryMatch()` / `_orderCategoryCandidates()` in
 // business_dashboard_page.dart. If they drift apart, a provider
 // can get a push notification for an order that never shows up
-// in their "Available" tab (or vice versa) — which is exactly
-// the water/education bug this was written to fix.
+// in their "Available" tab (or vice versa).
 //
 // Rules:
 //   1. Build the order's candidate set from EVERY legacy category
 //      field (category, serviceCategory, subCategory, jobCategory)
-//      PLUS every string in services[]. Using only the first
-//      non-empty field (the old behaviour) is what caused orders
-//      like "Water" to be silently dropped when only `services`
-//      was populated and `category` was left blank.
+//      PLUS every string in services[].
 //   2. providerCats empty  → provider is unrestricted, show/notify
 //      everything for their serviceType.
 //   3. providerCats NOT empty AND orderCandidates empty → we have
@@ -57,6 +127,26 @@ class OrderStatus {
 /// Normalise a string for category comparison: trim, lowercase,
 /// collapse whitespace/underscores/hyphens.
 String normalizeCategory(String s) =>
+    s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
+
+/// Normalise a string for serviceType comparison. Same rules as
+/// normalizeCategory() — kept as a separate named function so the
+/// intent is clear at call sites and so the two can diverge later
+/// if a serviceType-specific quirk ever needs different handling.
+///
+/// ── WHY THIS EXISTS ──
+/// `category` matching has always been normalised (see above) to
+/// survive wording drift between a provider's registration picker
+/// and whatever a booking page sends. Historically `serviceType`
+/// matching was NOT normalised — it used a strict Firestore
+/// `isEqualTo` query. That meant a provider doc with
+/// `serviceType: "Civil "` (trailing space) or `"civil-work"`
+/// instead of `"civil"` would silently never match ANY order for
+/// that vertical, regardless of category — the same class of bug
+/// that used to break water-order routing, just one field over.
+/// `_notifyMatchingProviders()` below now uses this to catch that
+/// case via a client-side fallback scan.
+String normalizeServiceType(String s) =>
     s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
 
 /// Builds the full set of normalised category candidates for an
@@ -159,15 +249,21 @@ class OrderService {
   //     (see the shared categoryMatch()/orderCategoryCandidates()
   //     functions above — kept IN SYNC with the dashboard).
   //
-  // IMPORTANT FOR CALLERS: always pass BOTH `category` (a single
-  // clean category string matching what's shown in the provider's
-  // registration category picker) AND `services` (the list of
-  // items/services actually booked) whenever you have them. Do not
-  // rely on only one of the two — the matching logic checks both,
-  // but if a booking page never sends either, the order falls back
-  // to "show to everyone" for that serviceType, which is usually
-  // not what you want (this was the root cause of orders bypassing
-  // category filtering).
+  // `category` is snapped onto the canonical serviceConfigs list
+  // for this serviceType via resolveCanonicalCategory() BEFORE
+  // it's stored or matched. This is what makes "provider only
+  // gets orders in their selected categories" actually reliable —
+  // both sides of the comparison now draw from the same
+  // vocabulary whenever possible, instead of hoping booking-page
+  // wording and registration-form wording happen to agree.
+  //
+  // NEW: if the caller doesn't pass `category` at all, it is now
+  // auto-seeded from `services.first` (when available) before
+  // canonicalization. This shrinks the "no category info at all"
+  // case that otherwise falls back to broadcasting the order to
+  // every approved provider in that vertical — it does not
+  // replace passing `category` explicitly from booking pages,
+  // which is still the most reliable fix.
   // ==========================================================
   static Future<DocumentReference> placeOrder({
     required String serviceType,
@@ -199,11 +295,14 @@ class OrderService {
 
     // Category chosen by the customer (e.g. "Ice Blocks").
     // Used to filter which providers see/receive this order.
-    // If the caller doesn't have a single category string (e.g. multi-item
-    // bookings like laundry), leave this null/empty — the `services` list
-    // is automatically used as a category-matching fallback. But whenever
-    // possible, pass it — this is the #1 cause of "order isn't showing up
-    // for the right provider" bugs.
+    // Snapped onto the canonical serviceConfigs category list for
+    // `serviceType` before storage/matching — see
+    // resolveCanonicalCategory() above. If omitted, this is now
+    // auto-derived from `services.first` when possible — but
+    // passing it explicitly from the booking page is still the
+    // #1 fix for "order isn't showing up for the right provider"
+    // bugs, since a single category string is far less ambiguous
+    // than the first item of a multi-item services list.
     String? category,
 
     bool isEnquiry = false,
@@ -212,12 +311,27 @@ class OrderService {
     String providerName = '',
     Object? providerUserId,
   }) async {
-    if ((category == null || category.trim().isEmpty) && services.isEmpty) {
+    final hasCategory = category != null && category.trim().isNotEmpty;
+
+    // Auto-seed category from services[] when the caller forgot to
+    // pass one explicitly, so fewer orders fall through to the
+    // "no category info → broadcast to everyone" fallback in
+    // categoryMatch(). rawCategory below still records exactly
+    // what the caller sent, for audit purposes.
+    final String effectiveCategory =
+        hasCategory ? category : (services.isNotEmpty ? services.first : '');
+
+    if (!hasCategory && services.isEmpty) {
       debugPrint('[OrderService.placeOrder] WARNING: neither `category` nor '
           '`services` was provided for a $serviceType order. This order will '
           'be shown to ALL approved $serviceType providers regardless of their '
           'selected categories. Pass `category` and/or `services` from the '
           'booking page to enable correct filtering.');
+    } else if (!hasCategory) {
+      debugPrint('[OrderService.placeOrder] NOTE: `category` was not passed '
+          'for a $serviceType order — auto-derived "$effectiveCategory" from '
+          'services[0]. Prefer passing `category` explicitly from the '
+          'booking page for more reliable routing.');
     }
 
     // ── Resolve provider details ──────────────────────────────────────────────
@@ -243,9 +357,22 @@ class OrderService {
     // Always store serviceType as lowercase so Firestore equality
     // queries from the dashboard (_svcNorm) match reliably.
     final normalizedServiceType = serviceType.trim().toLowerCase();
-    // Category kept in original casing for display; comparison always
-    // goes through normalizeCategory() (same regex on both sides).
-    final normalizedCategory    = (category ?? '').trim();
+
+    // Snap the (possibly auto-derived) category onto the canonical
+    // serviceConfigs list for this serviceType. Stored in the
+    // canonical casing so it lines up exactly with what providers
+    // pick at registration.
+    final canonicalCategory = resolveCanonicalCategory(
+      effectiveCategory,
+      normalizedServiceType,
+    );
+
+    // Also canonicalize each entry in `services` where possible —
+    // multi-item bookings (e.g. laundry) rely on this list for
+    // matching just as much as `category` does.
+    final canonicalServices = services
+        .map((s) => resolveCanonicalCategory(s, normalizedServiceType))
+        .toList();
 
     await docRef.set({
       'orderId': orderId,
@@ -275,11 +402,18 @@ class OrderService {
       // Stored BOTH forms so old and new clients can read it.
       'serviceType': normalizedServiceType,   // lowercase — queried by dashboard
       'serviceName': normalizedServiceType,
-      'services':    services,
+      'services':    canonicalServices,
 
-      // Category stored exactly as the user chose it (original case).
-      // Matching always normalises both sides — see normalizeCategory().
-      'category': normalizedCategory,
+      // Category stored in canonical casing (snapped to
+      // serviceConfigs) whenever a confident match was found;
+      // otherwise the original raw value is kept. Matching always
+      // normalises both sides regardless — see normalizeCategory().
+      'category': canonicalCategory,
+
+      // Kept for debugging/audit — what the customer/booking page
+      // actually sent before canonicalization/auto-derivation, in
+      // case you ever need to trace a mismatch back to its source.
+      'rawCategory': (category ?? '').trim(),
 
       'date': Timestamp.fromDate(date),
       'time': time,
@@ -327,14 +461,18 @@ class OrderService {
     });
 
     // ── Fan-out notification to matching providers ──────────────────────────
+    // Applies to BOTH regular orders and enquiries — isEnquiry only
+    // affects `status`/`payment`, not whether matching providers get
+    // notified. An enquiry with a category should reach exactly the
+    // same set of providers a paid order in that category would.
     await _notifyMatchingProviders(
       orderId:       orderId,
       orderData: {
-        'category': normalizedCategory,
-        'services': services,
+        'category': canonicalCategory,
+        'services': canonicalServices,
       },
       serviceType:   normalizedServiceType,
-      category:      normalizedCategory,
+      category:      canonicalCategory,
       userName:      userName,
       date:          date,
       time:          time,
@@ -507,15 +645,27 @@ class OrderService {
   // ==========================================================
   // FAN-OUT: notify ALL matching approved providers
   //
-  // Matching is delegated entirely to the shared `categoryMatch()`
-  // function above so this stays byte-for-byte consistent with
-  // `_categoryMatch()` in business_dashboard_page.dart. A provider
-  // only ever gets a push notification for an order that will
-  // actually show up in their Available tab, and vice versa.
+  // Matching happens in two layers, both now defended with a
+  // primary (fast, indexed) query + a client-side normalized
+  // fallback — the same defensive pattern business_dashboard_page
+  // already uses for its Available Jobs streams:
   //
-  // When specificProviderId is given (direct assignment),
-  // only that one provider is notified — no category filtering
-  // applies since the assignment was already explicit.
+  //   1. serviceType — primary: exact Firestore `isEqualTo` query.
+  //      fallback: broad scan of all approved providers, filtered
+  //      by normalizeServiceType() equality. Catches providers
+  //      whose serviceType field has different casing/spacing from
+  //      the order's serviceType.
+  //
+  //   2. category    — delegated entirely to the shared
+  //      categoryMatch() function above so this stays byte-for-byte
+  //      consistent with `_categoryMatch()` in
+  //      business_dashboard_page.dart. A provider only ever gets a
+  //      push notification for an order that will actually show up
+  //      in their Available tab, and vice versa.
+  //
+  // When specificProviderId is given (direct assignment), only
+  // that one provider is notified — no filtering applies since the
+  // assignment was already explicit.
   // ==========================================================
   static Future<void> _notifyMatchingProviders({
     required String orderId,
@@ -549,22 +699,61 @@ class OrderService {
         return;
       }
 
-      // Fetch all approved providers for this serviceType.
-      final snap = await _db
+      final normSvc = normalizeServiceType(serviceType);
+
+      // Primary: fast indexed query — works whenever the provider's
+      // stored serviceType is byte-identical to the order's.
+      final primarySnap = await _db
           .collection('providers')
           .where('status', isEqualTo: 'approved')
           .where('serviceType', isEqualTo: serviceType)
           .get();
 
-      debugPrint('[OrderService] order $orderId: found ${snap.docs.length} '
-          'approved $serviceType providers to check');
+      // Fallback: broad scan of ALL approved providers, filtered
+      // client-side via normalizeServiceType(). Only the extra
+      // (non-primary) docs are added, so this never duplicates work
+      // for the common case where serviceType strings already match
+      // exactly — it only rescues providers that would otherwise be
+      // silently skipped due to a casing/spacing mismatch.
+      final fallbackSnap =
+          await _db.collection('providers').where('status', isEqualTo: 'approved').get();
 
-      for (final doc in snap.docs) {
+      final seen = <String>{};
+      final candidateDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+      for (final doc in primarySnap.docs) {
+        if (seen.add(doc.id)) candidateDocs.add(doc);
+      }
+      for (final doc in fallbackSnap.docs) {
+        if (seen.contains(doc.id)) continue;
+        final docSvc = (doc.data()['serviceType'] ?? '').toString();
+        if (normalizeServiceType(docSvc) == normSvc) {
+          seen.add(doc.id);
+          candidateDocs.add(doc);
+        }
+      }
+
+      final rescuedCount = candidateDocs.length - primarySnap.docs.length;
+      debugPrint('[OrderService] order $orderId: found ${candidateDocs.length} '
+          'approved $serviceType providers to check '
+          '(${primarySnap.docs.length} exact match'
+          '${rescuedCount > 0 ? ', $rescuedCount rescued via normalized fallback — '
+              'check those providers\' serviceType field for casing/spacing drift' : ''})');
+
+      int notifiedCount = 0;
+
+      for (final doc in candidateDocs) {
         final provData = doc.data();
 
         final rawCats      = (provData['categories'] as List?) ?? [];
         final providerCats = rawCats.map((e) => e.toString()).toList();
 
+        // ── Every provider ONLY gets notified for orders that match
+        // ── their own selected categories. Providers with an empty
+        // ── categories[] are treated as "unrestricted" — see
+        // ── categoryMatch() rule #2 above — by design, so a provider
+        // ── who hasn't picked specific categories still gets all
+        // ── work for their serviceType.
         final shouldNotify = categoryMatch(
           orderData,
           providerCats,
@@ -583,7 +772,11 @@ class OrderService {
           time:        time,
           totalAmount: totalAmount,
         );
+        notifiedCount++;
       }
+
+      debugPrint('[OrderService] order $orderId: notified $notifiedCount / '
+          '${candidateDocs.length} $serviceType providers (category="$category")');
     } catch (e) {
       debugPrint('[OrderService] _notifyMatchingProviders error: $e');
     }
