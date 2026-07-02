@@ -48,7 +48,7 @@ final List<EducationService> educationServices = [
     description: "Build strong basics with activity-based learning",
 
     includes: [
-      "All subjects (Maths, English, EVS, Hindi)",
+      "All subjects",
       "Basic reading & writing skills",
       "Homework help",
       "Activity-based learning",
@@ -81,7 +81,7 @@ final List<EducationService> educationServices = [
     description: "Concept building and subject strengthening",
 
     includes: [
-      "Maths, Science, English, SST",
+      "All Subjects",
       "Concept building sessions",
       "Weekly tests",
       "Doubt solving",

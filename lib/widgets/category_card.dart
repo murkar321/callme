@@ -6,7 +6,8 @@ class CategoryCard extends StatelessWidget {
   /// HomePage
   final String? imagePath;
 
-  /// BusinessPage
+  /// BusinessPage / service-specific icon (used as fallback when the
+  /// image asset fails to load, and as the leading icon on vertical cards)
   final IconData? icon;
 
   /// Layout
@@ -15,6 +16,10 @@ class CategoryCard extends StatelessWidget {
   /// 🔥 NEW: navigation callback
   final VoidCallback? onTap;
 
+  /// 🔥 NEW: adaptive width for the horizontal chip card.
+  /// Falls back to 90 (original fixed width) if not provided.
+  final double? cardWidth;
+
   const CategoryCard({
     super.key,
     required this.name,
@@ -22,6 +27,7 @@ class CategoryCard extends StatelessWidget {
     this.icon,
     this.showName = true,
     this.onTap,
+    this.cardWidth,
   });
 
   @override
@@ -30,8 +36,9 @@ class CategoryCard extends StatelessWidget {
 
     /// 🔹 HORIZONTAL CARD
     if (showName) {
+      final width = cardWidth ?? 90.0;
       content = Container(
-        width: 90,
+        width: width,
         margin: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -49,16 +56,21 @@ class CategoryCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: _buildImageOrIcon(context, 55),
+              child: _buildImageOrIcon(context, width * 0.6),
             ),
             const SizedBox(height: 6),
-            Text(
-              name,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -93,7 +105,10 @@ class CategoryCard extends StatelessWidget {
                     radius: 18,
                     backgroundColor: Theme.of(context).primaryColor,
                     child: Icon(
-                      icon ?? Icons.miscellaneous_services,
+                      // 🔥 FIX: previously always fell back to the same
+                      // generic icon because callers never passed `icon`.
+                      // Now every service gets its own icon from HomePage.
+                      icon ?? Icons.miscellaneous_services_rounded,
                       size: 18,
                       color: Colors.white,
                     ),
@@ -152,7 +167,8 @@ class CategoryCard extends StatelessWidget {
         width: size == double.infinity ? double.infinity : size,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => Icon(
-          icon ?? Icons.miscellaneous_services,
+          // 🔥 FIX: fallback now uses the service-specific icon too.
+          icon ?? Icons.miscellaneous_services_rounded,
           size: 40,
           color: Theme.of(context).primaryColor,
         ),
@@ -160,7 +176,7 @@ class CategoryCard extends StatelessWidget {
     }
 
     return Icon(
-      icon ?? Icons.miscellaneous_services,
+      icon ?? Icons.miscellaneous_services_rounded,
       size: 40,
       color: Theme.of(context).primaryColor,
     );

@@ -39,6 +39,26 @@ class _HomePageState extends State<HomePage> {
     ServiceCategory(name: 'Civil Services', imagePath: 'assets/civil.jpeg'),
   ];
 
+  /// 🔥 NEW: service-specific icon map.
+  /// Used as the fallback icon whenever an asset image fails to load,
+  /// AND as the icon shown in the vertical card's leading avatar
+  /// (previously this always fell back to the same generic icon
+  /// because HomePage never passed an `icon` to CategoryCard).
+  static const Map<String, IconData> _categoryIcons = {
+    'Education':      Icons.school_rounded,
+    'Salon':          Icons.content_cut_rounded,
+    'Cleaning':       Icons.cleaning_services_rounded,
+    'Resorts':        Icons.beach_access_rounded,
+    'Plumbing':       Icons.plumbing_rounded,
+    'Laundry':        Icons.local_laundry_service_rounded,
+    'Hotel':          Icons.hotel_rounded,
+    'Water':          Icons.water_drop_rounded,
+    'Civil Services': Icons.engineering_rounded,
+  };
+
+  IconData _iconFor(String name) =>
+      _categoryIcons[name] ?? Icons.miscellaneous_services_rounded;
+
   String searchQuery = '';
   String selectedCategory = '';
 
@@ -172,165 +192,211 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+    // 🔥 NEW: adaptive metrics based on available width.
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= 600;
+    // Horizontal chip card scales with screen width but stays within sane bounds.
+    final chipWidth = (screenWidth / (isTablet ? 7 : 4)).clamp(84.0, 130.0);
+    // Cap text scaling so very large system font settings don't break layout.
+    final textScaler = MediaQuery.of(context).textScaler.clamp(
+          minScaleFactor: 0.9,
+          maxScaleFactor: 1.2,
+        );
 
-      appBar: AppBar(
-        title: const Text(
-          'Callme Services',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color.fromARGB(255, 45, 19, 111),
-        elevation: 1,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: StreamBuilder<int>(
-              stream: _unreadCountStream,
-              builder: (context, snapshot) {
-                final unreadCount = snapshot.data ?? 0;
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.notifications_rounded, size: 28),
-                      onPressed: _openNotifications,
-                    ),
-                    if (unreadCount > 0)
-                      Positioned(
-                        right: 6,
-                        top: 6,
-                        child: IgnorePointer(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 4, vertical: 2),
-                            constraints: const BoxConstraints(
-                                minWidth: 18, minHeight: 18),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: Colors.white, width: 1.5),
-                            ),
-                            child: Text(
-                              unreadCount > 99 ? '99+' : '$unreadCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                height: 1,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F7FB),
+
+        appBar: AppBar(
+          title: const Text(
+            'Callme Services',
+            style: TextStyle(fontWeight: FontWeight.w600),
           ),
-        ],
-      ),
-
-      body: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-
-            // 🔍 SEARCH
-            TextField(
-              decoration: InputDecoration(
-                hintText: 'Search for a service...',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  searchQuery = value;
-                  selectedCategory = '';
-                });
-              },
-            ),
-
-            const SizedBox(height: 12),
-
-            // 🔹 HORIZONTAL SCROLL
-            SizedBox(
-              height: 110,
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (scroll) {
-                  setState(() => _offset = scroll.metrics.pixels);
-                  return true;
-                },
-                child: ListView.builder(
-                  controller: _scrollController,
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: filteredHorizontal.length,
-                  itemBuilder: (context, index) {
-                    final category = filteredHorizontal[index];
-                    final isSelected = selectedCategory == category.name;
-                    const width = 106.0;
-                    final scale = 1 -
-                        (((_offset / width) - index).abs() * 0.18)
-                            .clamp(0.0, 0.18);
-
-                    return Transform.scale(
-                      scale: scale,
-                      child: GestureDetector(
-                        onTap: () => setState(() {
-                          selectedCategory =
-                              isSelected ? '' : category.name;
-                        }),
-                        child: Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 6),
-                          child: CategoryCard(
-                            name: category.name,
-                            imagePath: category.imagePath,
-                            showName: true,
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          foregroundColor: const Color.fromARGB(255, 45, 19, 111),
+          elevation: 1,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: StreamBuilder<int>(
+                stream: _unreadCountStream,
+                builder: (context, snapshot) {
+                  final unreadCount = snapshot.data ?? 0;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications_rounded, size: 28),
+                        onPressed: _openNotifications,
+                      ),
+                      if (unreadCount > 0)
+                        Positioned(
+                          right: 6,
+                          top: 6,
+                          child: IgnorePointer(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4, vertical: 2),
+                              constraints: const BoxConstraints(
+                                  minWidth: 18, minHeight: 18),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: Colors.white, width: 1.5),
+                              ),
+                              child: Text(
+                                unreadCount > 99 ? '99+' : '$unreadCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // 🔹 VERTICAL LIST
-            Expanded(
-              child: ListView.builder(
-                itemCount: filteredCategories.length,
-                padding: const EdgeInsets.only(bottom: 12),
-                itemBuilder: (context, index) {
-                  final category = filteredCategories[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: GestureDetector(
-                      // ✅ FIXED: now calls async method that fetches providerId
-                      onTap: () => _navigateToService(category.name),
-                      child: CategoryCard(
-                        name: category.name,
-                        imagePath: category.imagePath,
-                        showName: false,
-                      ),
-                    ),
+                    ],
                   );
                 },
               ),
             ),
           ],
+        ),
+
+        body: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: isTablet ? 24 : 12,
+              vertical: 12,
+            ),
+            child: Column(
+              children: [
+
+                // 🔍 SEARCH
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search for a service...',
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      searchQuery = value;
+                      selectedCategory = '';
+                    });
+                  },
+                ),
+
+                const SizedBox(height: 12),
+
+                // 🔹 HORIZONTAL SCROLL
+                SizedBox(
+                  height: 110,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (scroll) {
+                      setState(() => _offset = scroll.metrics.pixels);
+                      return true;
+                    },
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: filteredHorizontal.length,
+                      itemBuilder: (context, index) {
+                        final category = filteredHorizontal[index];
+                        final isSelected = selectedCategory == category.name;
+                        final width = chipWidth + 12; // card + margin
+                        final scale = 1 -
+                            (((_offset / width) - index).abs() * 0.18)
+                                .clamp(0.0, 0.18);
+
+                        return Transform.scale(
+                          scale: scale,
+                          child: GestureDetector(
+                            onTap: () => setState(() {
+                              selectedCategory =
+                                  isSelected ? '' : category.name;
+                            }),
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
+                              child: CategoryCard(
+                                name: category.name,
+                                imagePath: category.imagePath,
+                                icon: _iconFor(category.name),
+                                showName: true,
+                                cardWidth: chipWidth,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // 🔹 VERTICAL LIST / GRID (adaptive: grid on wide screens)
+                Expanded(
+                  child: isTablet
+                      ? GridView.builder(
+                          itemCount: filteredCategories.length,
+                          padding: const EdgeInsets.only(bottom: 12),
+                          gridDelegate:
+                              const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 380,
+                            mainAxisExtent: 150,
+                            crossAxisSpacing: 14,
+                            mainAxisSpacing: 14,
+                          ),
+                          itemBuilder: (context, index) {
+                            final category = filteredCategories[index];
+                            return GestureDetector(
+                              onTap: () => _navigateToService(category.name),
+                              child: CategoryCard(
+                                name: category.name,
+                                imagePath: category.imagePath,
+                                icon: _iconFor(category.name),
+                                showName: false,
+                              ),
+                            );
+                          },
+                        )
+                      : ListView.builder(
+                          itemCount: filteredCategories.length,
+                          padding: const EdgeInsets.only(bottom: 12),
+                          itemBuilder: (context, index) {
+                            final category = filteredCategories[index];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: GestureDetector(
+                                onTap: () =>
+                                    _navigateToService(category.name),
+                                child: CategoryCard(
+                                  name: category.name,
+                                  imagePath: category.imagePath,
+                                  icon: _iconFor(category.name),
+                                  showName: false,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

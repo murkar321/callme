@@ -97,94 +97,52 @@ bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 // ─────────────────────────────────────────────────────────────
 // CATEGORY MATCH
 //
-// STAGE 1 — delegate to the shared `categoryMatch()` in
-// order_service.dart. Orders now have their `category` snapped
-// onto the canonical serviceConfigs list at creation time (see
-// resolveCanonicalCategory() in order_service.dart), so this
-// exact-match stage now succeeds for the large majority of
-// correctly-categorized orders — a provider only ever sees/gets
-// notified for orders inside the categories they selected at
-// registration.
+// FIX: This used to keep its OWN duplicate fuzzy-matching stage
+// (_fuzzyOverlap / _wordsOf) that word-split the OUTPUT of
+// normalizeCategory() — which has already had every space/hyphen/
+// underscore stripped. That collapsed a provider category like
+// "Software And Programming" into one solid blob
+// ("softwareandprogramming") BEFORE word-splitting ever ran, so it
+// could only ever match as a single giant token. An order category
+// like "programming & software course (basic)" was silently
+// rejected even though it obviously shares the word "programming",
+// because by the time this file split it into words, the word
+// boundaries were already gone.
 //
-// STAGE 2 — FUZZY FALLBACK.
-// Kept as a safety net for orders placed before canonicalization
-// was added, or from any booking page that still sends free-text
-// category strings. Only runs when Stage 1 fails AND both sides
-// actually have non-empty category data — it never loosens the
-// "no data at all -> show anyway" fallback, and never turns ON
-// restriction where there wasn't any.
-//
-// Debug console lines starting with "[catMatch]" or
-// "[catMatch:fuzzy]" explain exactly why a given order was shown
-// or skipped for a given provider.
+// order_service.dart's categoryMatchFuzzy() was already written
+// correctly (it works off RAW, un-stripped strings for the fuzzy
+// stage) — this file just wasn't actually calling it, despite the
+// comments here previously claiming it was "byte-identical". Now
+// it genuinely delegates to the shared function, so a provider's
+// Available tab and their push notifications are guaranteed to
+// agree on every order, including fuzzy-matched ones.
 // ─────────────────────────────────────────────────────────────
-
-Set<String> _wordsOf(String normalized) => normalized
-    .split(RegExp(r'[^a-z0-9]+'))
-    .where((w) => w.length >= 3)
-    .toSet();
-
-bool _fuzzyOverlap(Set<String> orderCandidates, Set<String> providerCats) {
-  for (final o in orderCandidates) {
-    for (final p in providerCats) {
-      if (o.isEmpty || p.isEmpty) continue;
-      if (o == p) return true;
-      if (o.contains(p) || p.contains(o)) return true;
-      final oWords = _wordsOf(o);
-      final pWords = _wordsOf(p);
-      if (oWords.intersection(pWords).isNotEmpty) return true;
-    }
-  }
-  return false;
-}
-
 bool _categoryMatch(
   Map<String, dynamic> orderData,
   List<String> providerCats,
 ) {
   final orderId = (orderData['orderId'] ?? '').toString();
-
-  // Stage 1: exact shared logic (kept byte-identical to notifier).
-  final exact = categoryMatch(orderData, providerCats, debugOrderId: orderId);
-  if (exact) return true;
-
-  // providerCats is non-empty here (categoryMatch() would already have
-  // returned true above otherwise), and exact match failed.
-  final orderCandidates = orderCategoryCandidates(orderData);
-
-  // No category data on the order at all → categoryMatch() already
-  // returned true. Reaching here means we DO have order candidates
-  // but none matched exactly — try fuzzy matching before giving up.
-  if (orderCandidates.isEmpty) return false;
-
-  final normProviderCats = providerCats
-      .map(normalizeCategory)
-      .where((s) => s.isNotEmpty)
-      .toSet();
-
-  final fuzzy = _fuzzyOverlap(orderCandidates, normProviderCats);
-
-  if (fuzzy) {
-    debugPrint('[catMatch:fuzzy] $orderId: MATCHED via fuzzy fallback — '
-        'order candidates $orderCandidates ~ provider categories '
-        '$normProviderCats (no exact match). This order was likely placed '
-        'before category canonicalization, or from a booking page sending '
-        'free-text category strings.');
-  } else {
-    debugPrint('[catMatch:fuzzy] $orderId: SKIP — no exact OR fuzzy overlap. '
-        'order candidates $orderCandidates vs provider categories '
-        '$normProviderCats. Genuinely unrelated categories — nothing more '
-        'to do here.');
-  }
-
-  return fuzzy;
+  return categoryMatchFuzzy(orderData, providerCats, debugOrderId: orderId);
 }
+
 // ─────────────────────────────────────────────────────────────
-// FIX: isAssigned can be null/missing in Firestore (treated as
-// "not yet set" = unassigned).  We only block if it is
-// explicitly true AND a real providerUserId is present.
+// AVAILABILITY CHECK — single source of truth.
+//
+// This used to be a plain bool-returning function (`_isAvailable`)
+// that duplicated its reasoning in ad-hoc debugPrint() calls. That
+// meant the *displayed* "why can't I see orders?" hint in the UI
+// could never explain anything beyond "doesn't match your
+// profile" — a developer had to attach a debug console to see the
+// real reason.
+//
+// It's now a single function that returns WHY an order is
+// unavailable (or null if it's available). `_isAvailable()` below
+// is a thin bool wrapper around it, and the empty-state UI in
+// `_AvailTab` uses the reason strings directly to show a live
+// breakdown to whoever is looking at the dashboard — no console
+// access needed.
 // ─────────────────────────────────────────────────────────────
-bool _isAvailable({
+String? _unavailableReason({
   required Map<String, dynamic> data,
   required String myUid,
   required String svcNorm,
@@ -202,49 +160,72 @@ bool _isAvailable({
 
   // Already firmly taken by someone else → skip
   if (isAssigned && provUid.isNotEmpty && provUid != myUid) {
-    debugPrint('[avail] SKIP ${data['orderId'] ?? ''}: assigned to $provUid');
-    return false;
+    return 'Already assigned to another provider';
   }
 
   // ── Open-status check ───────────────────────────────────────
-  // An order is open if:
-  //   • status is pending or enquiry (brand-new, not yet taken)
-  //   • status is cancelled AND reopenForOthers == true
-  //   • status is accepted BUT no provider yet (edge-case recovery)
-  //   • isAssigned is null/false (Firestore field missing → open)
-  final bool hasRealProvider = provUid.isNotEmpty && provUid != myUid;
+  // FIX: the old `hasRealProvider` check was `provUid.isNotEmpty &&
+  // provUid != myUid` — i.e. it only counted an order as "taken" if
+  // it belonged to SOMEONE ELSE. That meant when THIS provider
+  // accepted an order (providerUserId == myUid, status ==
+  // 'accepted'), hasRealProvider evaluated to false, so the
+  // 'accepted' branch below still marked it "open" — the provider's
+  // own just-accepted order kept reappearing in Available instead of
+  // moving cleanly to My Orders/Enquiries/Bookings.
+  //
+  // The 'accepted' branch should only reopen an order when it is
+  // genuinely ORPHANED data (status says accepted but no provider is
+  // actually attached — a data inconsistency, not a real assignment).
+  // Any order with a provider attached, whether that's this provider
+  // or another one, is no longer "available" — it just isn't already
+  // covered above if it happens to be assigned to *me*.
+  final bool isOrphanedAccept = status == 'accepted' && provUid.isEmpty;
   final bool isOpen = status == 'pending'
       || status == 'enquiry'
       || (status == 'cancelled' && reopened)
-      || (status == 'accepted' && !hasRealProvider)
-      || assignedRaw == null; // ← FIX: field missing means unassigned
+      || isOrphanedAccept
+      || assignedRaw == null; // field missing means unassigned
 
   if (!isOpen) {
-    debugPrint('[avail] SKIP status="$status" reopened=$reopened '
-        'isAssigned=$assignedRaw provUid=$provUid');
-    return false;
+    return provUid == myUid && provUid.isNotEmpty
+        ? 'You already accepted this — it now lives in your "My" tab'
+        : 'Status "$status" is not open (isAssigned=$assignedRaw)';
   }
 
   // Already declined by this provider → skip
   final declined = (data['declinedBy'] as List?) ?? [];
   if (myUid.isNotEmpty && declined.contains(myUid)) {
-    debugPrint('[avail] SKIP: already declined by me');
-    return false;
+    return 'You already declined this order';
   }
 
   // Service-type match
   final orderSvc = (data['serviceType'] ?? '').toString().trim();
   if (orderSvc.isNotEmpty && !_svcEq(orderSvc, svcNorm)) {
-    debugPrint('[avail] SKIP svc mismatch: "$orderSvc" vs "$svcNorm"');
-    return false;
+    return 'Service type mismatch: order="$orderSvc" vs your profile="$svcNorm"';
   }
 
-  // Category match — exact, then fuzzy fallback. See _categoryMatch() doc.
+  // Category match — exact, then fuzzy fallback.
   if (!_categoryMatch(data, providerCats)) {
-    return false;
+    final cands = orderCategoryCandidates(data);
+    return 'Category mismatch: order categories=$cands vs your categories=$providerCats';
   }
 
-  return true;
+  return null; // available
+}
+
+bool _isAvailable({
+  required Map<String, dynamic> data,
+  required String myUid,
+  required String svcNorm,
+  required List<String> providerCats,
+}) {
+  final reason = _unavailableReason(
+    data: data, myUid: myUid, svcNorm: svcNorm, providerCats: providerCats,
+  );
+  if (reason != null) {
+    debugPrint('[avail] SKIP ${data['orderId'] ?? ''}: $reason');
+  }
+  return reason == null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -373,6 +354,20 @@ class _BDPState extends State<BusinessDashboardPage> {
   // status, service type, category) is filtered client-side, same
   // as before. Both tabs now share this one stream/result set, and
   // any error is surfaced immediately instead of being swallowed.
+  //
+  // NOTE: because this query reads the WHOLE `orders` collection
+  // (filtering happens client-side), it only returns data if your
+  // Firestore Security Rules allow an authenticated user to READ
+  // the `orders` collection with NO per-document field conditions
+  // (Firestore rejects the whole query wholesale if any branch of
+  // the read rule depends on resource.data for a field this query
+  // doesn't filter by). With `provider_uid_lookup` removed there is
+  // no way for rules to verify "is this uid an approved provider"
+  // without a query-by-field capability rules don't have — so the
+  // orders rule must be a flat `allow read: if signedIn();` (see
+  // firestore.rules). Real access control lives in the app instead:
+  // the accept() transaction below guards isAssigned/providerUserId,
+  // and category/service-type matching decides what's ever shown.
   // ─────────────────────────────────────────────────────────────
   Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream =
       const Stream.empty();
@@ -702,9 +697,18 @@ class _BDPState extends State<BusinessDashboardPage> {
         stream: _providerSnap,
         builder: (ctx, snap) {
           if (snap.hasError) {
+            final err = snap.error.toString();
+            final isPerm = err.contains('permission-denied') ||
+                err.contains('PERMISSION_DENIED') ||
+                err.contains('insufficient permissions');
             return _ErrorRetry(
-              message: 'Could not load your provider profile.\n'
-                       'Check your connection and try again.',
+              message: isPerm
+                  ? 'Firestore security rules are blocking this provider from '
+                    'reading their own profile document.\n\n'
+                    'Check that your rules allow: providers/{providerId} to be '
+                    'read by the signed-in user that owns it.'
+                  : 'Could not load your provider profile.\n'
+                    'Check your connection and try again.',
               onRetry: _retry,
             );
           }
@@ -751,13 +755,33 @@ class _BDPState extends State<BusinessDashboardPage> {
                     final err = ordersSnap.error.toString();
                     final isIdx = err.contains('failed-precondition') ||
                         err.contains('requires an index');
+                    final isPerm = err.contains('permission-denied') ||
+                        err.contains('PERMISSION_DENIED') ||
+                        err.contains('insufficient permissions');
                     return _ErrorRetry(
                       message: isIdx
                           ? 'Missing Firestore index for the orders query.\n\n'
                             'Create in Firebase Console → Firestore → Indexes:\n'
                             'Collection: orders\n'
                             'Field: createdAt DESC'
-                          : 'Could not load orders.\n$err',
+                          : isPerm
+                              ? 'Firestore security rules are blocking providers '
+                                'from reading the "orders" collection.\n\n'
+                                'This dashboard reads all recent orders and '
+                                'filters them on-device, so your rules must '
+                                'allow a signed-in user to READ the "orders" '
+                                'collection with NO per-document field '
+                                'conditions — Firestore rejects a query '
+                                'wholesale if any rule branch depends on '
+                                'resource.data for a field this query doesn\'t '
+                                'filter by. The rule needs to simply be:\n\n'
+                                'match /orders/{orderId} {\n'
+                                '  allow read: if request.auth != null;\n'
+                                '}\n\n'
+                                'Until this is fixed, providers will NEVER see '
+                                'any orders here, even ones that match them '
+                                'perfectly.'
+                              : 'Could not load orders.\n$err',
                       onRetry: _retry,
                     );
                   }
@@ -854,16 +878,24 @@ class _AvailTab extends StatelessWidget {
     countNotifier.update(docs.length);
 
     if (docs.isEmpty) {
-      final hint = allDocs.isEmpty
-          ? 'No $serviceType ${terms.singular.toLowerCase()}s have been '
-            'placed yet.\n\nNew ${terms.availableTab.toLowerCase()} will '
-            'appear here automatically.'
-          : '${terms.singular}s exist but do not match your profile.\n\n'
-            '${providerCategories.isNotEmpty ? "Your categories: ${providerCategories.join(', ')}" : "Check that your service type matches."}';
+      // FIX: this used to show a full diagnostic breakdown to the
+      // provider ("39 order(s) exist but none match your profile:
+      // • 12x — Already assigned to another provider • 10x —
+      // Service type mismatch..." etc). That's internal debugging
+      // noise — a provider doesn't need to know how many orders
+      // exist for OTHER service types or categories, and it reads
+      // like an error even when everything is working correctly.
+      // The UI now always shows one simple, calm message. The full
+      // per-reason breakdown is still written to the debug console
+      // via _logSkipSummary() below, so it's there whenever you
+      // (the developer) need to diagnose a real mismatch — it's
+      // just never shown to the provider.
+      _logSkipSummary();
       return _Empty(
         icon:  Icons.work_outline_rounded,
         title: 'No ${terms.availableTab}',
-        msg:   hint,
+        msg:   'New ${terms.availableTab.toLowerCase()} matching your '
+               'categories will appear here automatically.',
       );
     }
 
@@ -885,6 +917,37 @@ class _AvailTab extends StatelessWidget {
         );
       },
     );
+  }
+
+  // ── Debug-console-only diagnostic summary ───────────────────
+  // Same per-reason breakdown that used to be rendered in the UI,
+  // now only ever written via debugPrint — visible in `flutter
+  // run` / Logcat / Xcode console during development, never shown
+  // to the provider. Grouped and sorted by frequency so a real
+  // mismatch is still easy to spot without scrolling through
+  // dozens of individual per-order lines.
+  void _logSkipSummary() {
+    if (allDocs.isEmpty) {
+      debugPrint('[avail] No $serviceType ${terms.singular.toLowerCase()}s '
+          'exist yet.');
+      return;
+    }
+    final reasonCounts = <String, int>{};
+    for (final d in allDocs) {
+      final reason = _unavailableReason(
+        data:         d.data(),
+        myUid:        myUid,
+        svcNorm:      svcNorm,
+        providerCats: providerCategories,
+      );
+      if (reason == null) continue;
+      reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
+    }
+    final entries = reasonCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final lines = entries.map((e) => '  ${e.value}x — ${e.key}').join('\n');
+    debugPrint('[avail] ${allDocs.length} ${terms.singular.toLowerCase()}(s) '
+        'exist, 0 match provider categories $providerCategories:\n$lines');
   }
 }
 
@@ -1158,6 +1221,22 @@ class _CardState extends State<_Card> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
           // ── Status bar ──────────────────────────────────────────
+          // FIX: this used to be a plain Row with a Spacer — on a
+          // narrow phone, a long category name (e.g. "Software And
+          // Programming") plus the date label at the end pushed the
+          // total content wider than the card, producing the
+          // "OVERFLOWED BY N PIXELS" black/yellow strip on the right
+          // edge. It also showed "ENQUIRY" TWICE: once as the status
+          // pill text (dispStatus already reads "ENQUIRY" whenever
+          // rawStatus == 'enquiry') and again as a separate orange
+          // tag badge right next to it — redundant.
+          //
+          // Fixed by: (1) dropping the duplicate ENQUIRY tag badge
+          // entirely, (2) switching from Row+Spacer to a Wrap, which
+          // simply flows extra content onto a second line instead of
+          // overflowing horizontally, and (3) capping the category
+          // badge's width with an ellipsis so one very long category
+          // name can't dominate the whole row by itself.
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -1167,28 +1246,31 @@ class _CardState extends State<_Card> {
                 topRight: Radius.circular(20),
               ),
             ),
-            child: Row(children: [
-              _Pill(icon: icon, color: sc),
-              const SizedBox(width: 8),
-              Text(dispStatus.toUpperCase(),
-                  style: TextStyle(color: sc, fontWeight: FontWeight.w800,
-                      fontSize: 11, letterSpacing: 1)),
-              if (isEnquiry) ...[
-                const SizedBox(width: 6),
-                _TagBadge(label: 'ENQUIRY', color: _C.orange,
-                    icon: Icons.help_outline_rounded),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing:    8,
+              runSpacing: 6,
+              children: [
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  _Pill(icon: icon, color: sc),
+                  const SizedBox(width: 8),
+                  Text(dispStatus.toUpperCase(),
+                      style: TextStyle(color: sc, fontWeight: FontWeight.w800,
+                          fontSize: 11, letterSpacing: 1)),
+                ]),
+                if (category.isNotEmpty)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 170),
+                    child: _TagBadge(label: category, color: _C.indigo),
+                  ),
+                if (dateLbl.isNotEmpty)
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.access_time_rounded, size: 11, color: _C.sub),
+                    const SizedBox(width: 4),
+                    Text(dateLbl, style: const TextStyle(color: _C.sub, fontSize: 11)),
+                  ]),
               ],
-              if (category.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                _TagBadge(label: category, color: _C.indigo),
-              ],
-              const Spacer(),
-              if (dateLbl.isNotEmpty) ...[
-                const Icon(Icons.access_time_rounded, size: 11, color: _C.sub),
-                const SizedBox(width: 4),
-                Text(dateLbl, style: const TextStyle(color: _C.sub, fontSize: 11)),
-              ],
-            ]),
+            ),
           ),
 
           // ── Body ────────────────────────────────────────────────
@@ -1430,6 +1512,7 @@ class _CardState extends State<_Card> {
 
 class _TagBadge extends StatelessWidget {
   final String label; final Color color; final IconData? icon;
+  // ignore: unused_element_parameter
   const _TagBadge({required this.label, required this.color, this.icon});
   @override
   Widget build(BuildContext context) => Container(
@@ -1438,13 +1521,19 @@ class _TagBadge extends StatelessWidget {
       color: color.withOpacity(0.15),
       borderRadius: BorderRadius.circular(20),
     ),
+   
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       if (icon != null) ...[
         Icon(icon, color: color, size: 10),
         const SizedBox(width: 4),
       ],
-      Text(label, style: TextStyle(
-          color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+      Flexible(
+        child: Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+      ),
     ]),
   );
 }
@@ -1545,58 +1634,82 @@ class _StatusBadge extends StatelessWidget {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════
 class _Empty extends StatelessWidget {
   final IconData icon; final String title, msg;
   const _Empty({required this.icon, required this.title, required this.msg});
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
       padding: const EdgeInsets.all(40),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-            padding: const EdgeInsets.all(28),
-            decoration: const BoxDecoration(color: _C.indigoSft, shape: BoxShape.circle),
-            child: Icon(icon, size: 48, color: _C.indigo)),
-        const SizedBox(height: 20),
-        Text(title, style: const TextStyle(
-            fontSize: 21, fontWeight: FontWeight.w700, color: _C.text)),
-        const SizedBox(height: 8),
-        Text(msg, textAlign: TextAlign.center,
-            style: const TextStyle(color: _C.sub, fontSize: 13, height: 1.6)),
-      ]),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+            minHeight: constraints.maxHeight),
+        child: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+                padding: const EdgeInsets.all(28),
+                decoration: const BoxDecoration(color: _C.indigoSft, shape: BoxShape.circle),
+                child: Icon(icon, size: 48, color: _C.indigo)),
+            const SizedBox(height: 20),
+            Text(title, textAlign: TextAlign.center, style: const TextStyle(
+                fontSize: 21, fontWeight: FontWeight.w700, color: _C.text)),
+            const SizedBox(height: 8),
+            Text(msg, textAlign: TextAlign.center,
+                style: const TextStyle(color: _C.sub, fontSize: 13, height: 1.6)),
+          ]),
+        ),
+      ),
     ),
   );
 }
 
+
+// ═══════════════════════════════════════════════════════════════
 class _ErrorRetry extends StatelessWidget {
   final String message; final VoidCallback onRetry;
   const _ErrorRetry({required this.message, required this.onRetry});
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: const BoxDecoration(color: _C.redSft, shape: BoxShape.circle),
-          child: const Icon(Icons.wifi_off_rounded, size: 42, color: _C.red),
-        ),
-        const SizedBox(height: 20),
-        Text(message, textAlign: TextAlign.center,
-            style: const TextStyle(color: _C.sub, fontSize: 14, height: 1.5)),
-        const SizedBox(height: 18),
-        ElevatedButton.icon(
-          onPressed: onRetry,
-          icon:  const Icon(Icons.refresh_rounded, size: 18),
-          label: const Text('Retry'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _C.indigo, foregroundColor: Colors.white,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  Widget build(BuildContext context) => SafeArea(
+    child: LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              minHeight: constraints.maxHeight - 64),
+          child: Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                    color: _C.redSft, shape: BoxShape.circle),
+                child: const Icon(Icons.wifi_off_rounded,
+                    size: 42, color: _C.red),
+              ),
+              const SizedBox(height: 20),
+              Text(message, textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: _C.sub, fontSize: 14, height: 1.5)),
+              const SizedBox(height: 18),
+              ElevatedButton.icon(
+                onPressed: onRetry,
+                icon:  const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _C.indigo, foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 22, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ]),
           ),
         ),
-      ]),
+      ),
     ),
   );
 }

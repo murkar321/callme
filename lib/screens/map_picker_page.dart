@@ -160,7 +160,7 @@ class _MapPickerPageState extends State<MapPickerPage>
   }
 
   // ──────────────────────────────────────────
-  //  REVERSE GEOCODING  (no region restriction)
+  //  REVERSE GEOCODING  (no region restriction, EXACT AREA)
   // ──────────────────────────────────────────
 
   String _fallbackAddress(LatLng latlng) =>
@@ -183,12 +183,47 @@ class _MapPickerPageState extends State<MapPickerPage>
       final res = await http.get(url).timeout(const Duration(seconds: 10));
       final data = jsonDecode(res.body) as Map<String, dynamic>;
 
-      if (data['status'] == 'OK' &&
-          (data['results'] as List).isNotEmpty) {
-        final result = (data['results'] as List)[0];
-        final components = result['address_components'] as List<dynamic>;
+      if (data['status'] == 'OK' && (data['results'] as List).isNotEmpty) {
+        final results = data['results'] as List<dynamic>;
 
-        String sublocality = '';
+        // ── Pick the most precise result available ──
+        // Google's results aren't reliably ordered "most specific first" —
+        // the first entry is sometimes a plus_code. We explicitly walk
+        // through a priority list of types so we land on street/building
+        // level detail (the EXACT area) rather than just city/sublocality.
+        const preferredTypesOrder = [
+          'street_address',
+          'premise',
+          'subpremise',
+          'point_of_interest',
+          'route',
+          'neighborhood',
+          'sublocality',
+          'sublocality_level_1',
+        ];
+
+        Map<String, dynamic>? best;
+        for (final wantedType in preferredTypesOrder) {
+          for (final r in results) {
+            final types = List<String>.from(r['types'] as List);
+            if (types.contains(wantedType)) {
+              best = r as Map<String, dynamic>;
+              break;
+            }
+          }
+          if (best != null) break;
+        }
+        best ??= results[0] as Map<String, dynamic>;
+
+        final components = best['address_components'] as List<dynamic>;
+
+        String streetNumber = '';
+        String route = '';
+        String premise = '';
+        String subpremise = '';
+        String neighborhood = '';
+        String sublocality2 = '';
+        String sublocality1 = '';
         String locality = '';
         String city = '';
         String state = '';
@@ -197,43 +232,85 @@ class _MapPickerPageState extends State<MapPickerPage>
 
         for (final c in components) {
           final types = List<String>.from(c['types'] as List);
-          if (types.contains('sublocality_level_1') ||
+          final name = c['long_name'] as String;
+          if (types.contains('street_number')) {
+            streetNumber = name;
+          } else if (types.contains('route')) {
+            route = name;
+          } else if (types.contains('premise')) {
+            premise = name;
+          } else if (types.contains('subpremise')) {
+            subpremise = name;
+          } else if (types.contains('neighborhood')) {
+            neighborhood = name;
+          } else if (types.contains('sublocality_level_2')) {
+            sublocality2 = name;
+          } else if (types.contains('sublocality_level_1') ||
               types.contains('sublocality')) {
-            sublocality = c['long_name'] as String;
+            sublocality1 = name;
           } else if (types.contains('locality')) {
-            locality = c['long_name'] as String;
+            locality = name;
           } else if (types.contains('administrative_area_level_2')) {
-            city = c['long_name'] as String;
+            city = name;
           } else if (types.contains('administrative_area_level_1')) {
-            state = c['long_name'] as String;
+            state = name;
           } else if (types.contains('country')) {
-            country = c['long_name'] as String;
+            country = name;
           } else if (types.contains('postal_code')) {
-            postalCode = c['long_name'] as String;
+            postalCode = name;
           }
         }
 
-        final short = [sublocality, locality.isNotEmpty ? locality : city]
-            .where((s) => s.isNotEmpty)
-            .join(', ');
+        // ── Build the EXACT AREA (short) label ──
+        // Priority: building/unit → street → neighborhood → sublocality
+        final streetLine =
+            [streetNumber, route].where((s) => s.isNotEmpty).join(' ');
 
-        final full = [
-          sublocality,
-          locality,
-          (city.isNotEmpty && city != locality) ? city : '',
-          state,
-          postalCode,
-          country,
-        ].where((s) => s.isNotEmpty).join(', ');
+        final exactAreaParts = [
+          subpremise,
+          premise,
+          streetLine,
+          neighborhood,
+          sublocality2,
+          sublocality1,
+        ].where((s) => s.isNotEmpty).toList();
+
+        String short;
+        if (exactAreaParts.isNotEmpty) {
+          // Most granular 2 pieces, e.g. "Flat 302, MG Road" or
+          // "Sunshine Apartments, Andheri West"
+          short = exactAreaParts.take(2).join(', ');
+        } else if (locality.isNotEmpty || city.isNotEmpty) {
+          short = locality.isNotEmpty ? locality : city;
+        } else {
+          short = 'Selected location';
+        }
+
+        // ── Full address: Google's formatted_address is already the
+        // precise, correctly ordered exact address — prefer it, and only
+        // fall back to manual concatenation if it's missing ──
+        final formatted = best['formatted_address'] as String?;
+        final full = (formatted != null && formatted.isNotEmpty)
+            ? formatted
+            : [
+                streetLine,
+                subpremise,
+                premise,
+                neighborhood,
+                sublocality1,
+                locality,
+                (city.isNotEmpty && city != locality) ? city : '',
+                state,
+                postalCode,
+                country,
+              ].where((s) => s.isNotEmpty).join(', ');
 
         if (mounted) {
           setState(() {
             _pickedLatLng = latlng;
             _lastGeocodedLatLng = latlng;
-            _shortAddress = short.isNotEmpty ? short : 'Selected location';
-            _fullAddress = full.isNotEmpty
-                ? full
-                : (result['formatted_address'] as String? ?? '');
+            _shortAddress = short;
+            _fullAddress = full;
           });
         }
       } else {

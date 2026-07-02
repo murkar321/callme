@@ -48,7 +48,7 @@ class OrderStatus {
 // Firestore is byte-identical to what a provider picked at
 // registration — which is what makes Stage-1 EXACT matching in
 // `categoryMatch()` succeed almost every time, instead of relying
-// on the fuzzy fallback in business_dashboard_page.dart.
+// on the fuzzy fallback below.
 //
 // If no canonical entry is found (unknown serviceType, or a
 // genuinely new category not yet in service_config.dart), the
@@ -67,12 +67,70 @@ Set<String> _significantWords(String s) => s
     .where((w) => w.length >= 3)
     .toSet();
 
+// ============================================================
+// SUB-SERVICE → CANONICAL CATEGORY REVERSE LOOKUP
+//
+// See the big comment on `ServiceConfig.subServices` in
+// service_config.dart for the full story. Short version: a
+// customer often books a SPECIFIC item ("20L Water Jar Exchange",
+// "Residential House Construction") that lives inside a broader
+// category a provider actually registers under ("Jar
+// Exchange/Return", "New Build"). Those two strings frequently
+// share zero significant words, so plain fuzzy word-overlap
+// matching alone can't connect them — this bridges that gap by
+// checking `serviceConfigs[serviceType].subServices` for a known
+// item that matches `rawSubService`.
+// ============================================================
+String? parentCategoryForSubService(String rawSubService, String serviceType) {
+  final raw = rawSubService.trim();
+  if (raw.isEmpty) return null;
+
+  final key = serviceType.trim().toLowerCase();
+  final config = serviceConfigs[key];
+  if (config == null || config.subServices.isEmpty) return null;
+
+  final normRaw  = normalizeCategory(raw);
+  final rawWords = _significantWords(raw);
+
+  for (final entry in config.subServices.entries) {
+    final parentCategory = entry.key;
+    for (final item in entry.value) {
+      final normItem = normalizeCategory(item);
+
+      // Exact / substring match first — most precise.
+      if (normItem == normRaw ||
+          normItem.contains(normRaw) ||
+          normRaw.contains(normItem)) {
+        return parentCategory;
+      }
+
+      // Word-level fuzzy match as a fallback.
+      if (_significantWords(item).intersection(rawWords).isNotEmpty) {
+        return parentCategory;
+      }
+    }
+  }
+
+  return null;
+}
+
 /// Snaps `rawCategory` onto the closest entry in
 /// `serviceConfigs[serviceType].serviceCategories`, if any.
 /// Returns the original trimmed string if no confident match is found.
 String resolveCanonicalCategory(String rawCategory, String serviceType) {
   final raw = rawCategory.trim();
   if (raw.isEmpty) return raw;
+
+  // Stage 0: is `raw` actually a SPECIFIC bookable item (e.g. "20L
+  // Water Jar Exchange") rather than a top-level category? If so,
+  // snap straight to its parent canonical category (e.g. "Jar
+  // Exchange/Return") — see parentCategoryForSubService() above.
+  // This runs before the exact/substring/fuzzy stages below because
+  // a specific item name can otherwise fail all three (it may share
+  // no words at all with its own parent category — e.g. "Residential
+  // House Construction" vs "New Build").
+  final subParent = parentCategoryForSubService(raw, serviceType);
+  if (subParent != null) return subParent;
 
   final canonical = canonicalCategoriesFor(serviceType);
   if (canonical.isEmpty) return raw; // unknown serviceType — nothing to snap to
@@ -105,13 +163,16 @@ String resolveCanonicalCategory(String rawCategory, String serviceType) {
 // ============================================================
 // SHARED CATEGORY-MATCHING LOGIC
 //
-// IMPORTANT: This logic MUST stay byte-for-byte identical to
-// `_categoryMatch()` / `_orderCategoryCandidates()` in
-// business_dashboard_page.dart. If they drift apart, a provider
-// can get a push notification for an order that never shows up
-// in their "Available" tab (or vice versa).
+// IMPORTANT: This logic MUST stay byte-for-byte identical between
+// business_dashboard_page.dart (what a provider SEES in Available
+// Enquiries/Orders) and this file's _notifyMatchingProviders() (what
+// a provider is PUSH NOTIFIED about). Both now call
+// categoryMatchFuzzy() below — neither file re-implements its own
+// copy of the fuzzy stage anymore. If they ever drift apart again, a
+// provider can get a push notification for an order that never shows
+// up in their "Available" tab, or vice versa.
 //
-// Rules:
+// Rules for the exact stage (categoryMatch()):
 //   1. Build the order's candidate set from EVERY legacy category
 //      field (category, serviceCategory, subCategory, jobCategory)
 //      PLUS every string in services[].
@@ -122,10 +183,28 @@ String resolveCanonicalCategory(String rawCategory, String serviceType) {
 //      showing/notifying (can't restrict what we can't read).
 //   4. Otherwise → require at least one overlap between the two
 //      normalised sets.
+//
+// Rules for the fuzzy stage (categoryMatchFuzzy()), only reached
+// when the exact stage above fails AND both sides have real data:
+//   5. Split each RAW (non-normalized, space/punctuation-preserving)
+//      category string into significant words (3+ chars) and require
+//      at least one shared word between order and provider.
 // ============================================================
 
 /// Normalise a string for category comparison: trim, lowercase,
 /// collapse whitespace/underscores/hyphens.
+///
+/// ── IMPORTANT CAVEAT ──
+/// This strips ALL separators, so a multi-word category like
+/// "Software And Programming" collapses into one solid blob:
+/// "softwareandprogramming". That's fine (even desirable) for Stage-1
+/// EXACT matching — it makes "software_and_programming",
+/// "Software And Programming", and "software-and-programming" all
+/// compare equal regardless of formatting drift. But it is NOT safe
+/// to word-split a normalizeCategory() output for fuzzy matching,
+/// because the word boundaries are already gone by the time you'd
+/// try to split it — see categoryMatchFuzzy() below, which
+/// deliberately works off RAW (un-normalized) strings instead.
 String normalizeCategory(String s) =>
     s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
 
@@ -149,9 +228,41 @@ String normalizeCategory(String s) =>
 String normalizeServiceType(String s) =>
     s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
 
-/// Builds the full set of normalised category candidates for an
-/// order: every legacy category-ish field + every entry in
-/// `services`.
+/// ── REAL BUG FOUND, FIXED HERE ──
+/// Some provider documents store `serviceType` as a TOP-LEVEL field
+/// (e.g. `{ serviceType: "plumbing", ... }`), while others store it
+/// NESTED under a `service` map instead
+/// (e.g. `{ service: { serviceType: "civil", ownTools: true }, ... }`
+/// — confirmed present in production data for provider CIV-118139).
+///
+/// `_notifyMatchingProviders()` below used to query/compare ONLY the
+/// top-level `serviceType` field. For any provider stored using the
+/// nested shape, that field is simply missing — so the primary query
+/// AND the normalized fallback scan both silently found nothing, and
+/// that provider NEVER received a new-order notification, regardless
+/// of category match. This is very likely the root cause of
+/// "providers aren't receiving orders" for at least some providers.
+///
+/// This helper checks both shapes so a provider is matched correctly
+/// no matter which one its document uses. It does NOT change what's
+/// written to Firestore — it only makes reading more tolerant. For a
+/// permanent fix, consider migrating all provider docs to store
+/// `serviceType` at the top level consistently.
+String providerServiceType(Map<String, dynamic> providerData) {
+  final direct = (providerData['serviceType'] ?? '').toString().trim();
+  if (direct.isNotEmpty) return direct;
+
+  final svc = providerData['service'];
+  if (svc is Map) {
+    final nested = (svc['serviceType'] ?? '').toString().trim();
+    if (nested.isNotEmpty) return nested;
+  }
+  return '';
+}
+
+/// Builds the full set of NORMALISED (separator-stripped) category
+/// candidates for an order — used for Stage-1 exact matching, and as
+/// the "do we even have data to check" gate before Stage-2 fuzzy runs.
 Set<String> orderCategoryCandidates(Map<String, dynamic> orderData) {
   final candidates = <String>{};
 
@@ -171,8 +282,34 @@ Set<String> orderCategoryCandidates(Map<String, dynamic> orderData) {
   return candidates;
 }
 
+/// Builds the full set of RAW (trimmed + lowercased, but NOT
+/// separator-stripped) category strings for an order — used ONLY by
+/// categoryMatchFuzzy() below, since word-splitting requires the
+/// original spaces/punctuation that normalizeCategory() destroys.
+Set<String> orderCategoryCandidatesRaw(Map<String, dynamic> orderData) {
+  final candidates = <String>{};
+
+  for (final k in ['category', 'serviceCategory', 'subCategory', 'jobCategory']) {
+    final v = (orderData[k] ?? '').toString().trim().toLowerCase();
+    if (v.isNotEmpty) candidates.add(v);
+  }
+
+  final services = orderData['services'];
+  if (services is List) {
+    for (final s in services) {
+      final v = s.toString().trim().toLowerCase();
+      if (v.isNotEmpty) candidates.add(v);
+    }
+  }
+
+  return candidates;
+}
+
 /// Returns true if `orderData` should be visible/notified to a
-/// provider who has selected `providerCats`.
+/// provider who has selected `providerCats` — STAGE 1 (exact) only.
+/// Kept separate from categoryMatchFuzzy() below because
+/// resolveCanonicalCategory() and a few other call sites only ever
+/// need the strict version.
 bool categoryMatch(
   Map<String, dynamic> orderData,
   List<String> providerCats, {
@@ -201,6 +338,114 @@ bool categoryMatch(
         'do not overlap with provider categories $normProviderCats');
   }
   return matched;
+}
+
+/// Word-level fuzzy overlap between two sets of RAW (un-normalized)
+/// category strings. Splits on ANY non-alphanumeric character (spaces,
+/// &, (), -, etc.) so multi-word categories keep their word
+/// boundaries — this is the piece normalizeCategory() cannot safely
+/// provide, since it strips whitespace before word-splitting would
+/// ever run.
+Set<String> _significantRawWords(String raw) => raw
+    .toLowerCase()
+    .split(RegExp(r'[^a-z0-9]+'))
+    .where((w) => w.length >= 3)
+    .toSet();
+
+/// STAGE 2 — fuzzy fallback, only reached when categoryMatch() (Stage
+/// 1, exact) fails AND both sides have real category data to compare.
+///
+/// ── THE BUG THIS FIXES ──
+/// The previous fuzzy implementation (formerly duplicated inside
+/// business_dashboard_page.dart) word-split the OUTPUT of
+/// normalizeCategory(), which has already stripped every space. That
+/// meant a provider category like "Software And Programming"
+/// collapsed into a single 23-character blob — "softwareandprogramming"
+/// — BEFORE it was ever split into words, so it could only ever match
+/// as one giant token. An order with category
+/// "programming & software course (basic)" was silently rejected
+/// even though it obviously shares the word "programming", because
+/// the word boundaries needed to see that were already gone.
+///
+/// This version splits the RAW strings (orderCategoryCandidatesRaw() /
+/// providerCats as given, both merely lowercased+trimmed) so
+/// "Software And Programming" correctly yields the words
+/// {"software", "and", "programming"} and can be found to overlap
+/// with {"programming", "softwarecourse", "basic"} from the order.
+///
+/// This is now the ONLY place fuzzy category logic lives — both
+/// business_dashboard_page.dart's availability check AND
+/// _notifyMatchingProviders() below call this same function, so a
+/// provider's "Available" tab and their push notifications are
+/// guaranteed to agree on every order, not just the exact-match ones.
+bool categoryMatchFuzzy(
+  Map<String, dynamic> orderData,
+  List<String> providerCats, {
+  String debugOrderId = '',
+}) {
+  // Stage 1: exact — handles the large majority of correctly
+  // canonicalized orders without ever reaching fuzzy logic.
+  if (categoryMatch(orderData, providerCats, debugOrderId: debugOrderId)) {
+    return true;
+  }
+
+  // categoryMatch() already returns true when providerCats is empty
+  // or when the order has no category/services data at all — reaching
+  // here means BOTH sides have real data, but Stage 1 found no exact
+  // overlap. Try word-level fuzzy before giving up.
+  final orderWords = orderCategoryCandidatesRaw(orderData)
+      .expand(_significantRawWords)
+      .toSet();
+  final providerWords = providerCats
+      .expand(_significantRawWords)
+      .toSet();
+
+  if (orderWords.intersection(providerWords).isNotEmpty) {
+    debugPrint('[catMatch:fuzzy] $debugOrderId: MATCHED via fuzzy word overlap — '
+        'order words $orderWords ~ provider words $providerWords (no exact '
+        'match). This order was likely placed before category '
+        'canonicalization, or from a booking page sending free-text '
+        'category strings.');
+    return true;
+  }
+
+  // Stage 3 — sub-service reverse lookup.
+  //
+  // Bridges the case where the order's `category`/`services` values
+  // are a SPECIFIC bookable item ("20L Water Jar Exchange",
+  // "Residential House Construction") that was stored as-is (e.g. an
+  // order placed before resolveCanonicalCategory()'s Stage 0 fix, or
+  // from a booking page that bypasses placeOrder()'s canonicalization
+  // entirely), while the provider registered under the BROADER
+  // category it belongs to ("Jar Exchange/Return", "New Build"). Those
+  // two strings can share zero significant words, so Stage 2 above
+  // cannot connect them — this uses serviceConfigs' subServices map
+  // (see service_config.dart) to resolve the item to its parent
+  // category and compare that against the provider's categories.
+  final serviceType = (orderData['serviceType'] ?? '').toString();
+  if (serviceType.isNotEmpty) {
+    final normProviderCats = providerCats
+        .map(normalizeCategory)
+        .where((s) => s.isNotEmpty)
+        .toSet();
+
+    for (final rawCandidate in orderCategoryCandidatesRaw(orderData)) {
+      final parent = parentCategoryForSubService(rawCandidate, serviceType);
+      if (parent == null) continue;
+      if (normProviderCats.contains(normalizeCategory(parent))) {
+        debugPrint('[catMatch:fuzzy] $debugOrderId: MATCHED via sub-service '
+            'lookup — order item "$rawCandidate" resolves to parent category '
+            '"$parent", which is in provider categories $providerCats.');
+        return true;
+      }
+    }
+  }
+
+  debugPrint('[catMatch:fuzzy] $debugOrderId: SKIP — no exact, fuzzy, OR '
+      'sub-service match. order words $orderWords vs provider words '
+      '$providerWords. Genuinely unrelated categories — nothing more to do '
+      'here.');
+  return false;
 }
 
 class OrderService {
@@ -245,8 +490,8 @@ class OrderService {
   // After writing the order, this fans out a notification to
   // every APPROVED provider whose:
   //   • serviceType  matches the order's serviceType
-  //   • categories[] overlaps with categoryMatch() candidates
-  //     (see the shared categoryMatch()/orderCategoryCandidates()
+  //   • categories[] overlaps with categoryMatchFuzzy() candidates
+  //     (see the shared categoryMatch()/categoryMatchFuzzy()
   //     functions above — kept IN SYNC with the dashboard).
   //
   // `category` is snapped onto the canonical serviceConfigs list
@@ -468,8 +713,15 @@ class OrderService {
     await _notifyMatchingProviders(
       orderId:       orderId,
       orderData: {
-        'category': canonicalCategory,
-        'services': canonicalServices,
+        'category':    canonicalCategory,
+        'services':    canonicalServices,
+        // Needed by categoryMatchFuzzy()'s Stage 3 sub-service
+        // reverse lookup (parentCategoryForSubService()) — without
+        // this, notification matching couldn't resolve a specific
+        // booked item back to its parent category the way the
+        // dashboard's Available tab already can (it reads the full
+        // order doc, which always has serviceType).
+        'serviceType': normalizedServiceType,
       },
       serviceType:   normalizedServiceType,
       category:      canonicalCategory,
@@ -657,11 +909,14 @@ class OrderService {
   //      the order's serviceType.
   //
   //   2. category    — delegated entirely to the shared
-  //      categoryMatch() function above so this stays byte-for-byte
-  //      consistent with `_categoryMatch()` in
-  //      business_dashboard_page.dart. A provider only ever gets a
-  //      push notification for an order that will actually show up
-  //      in their Available tab, and vice versa.
+  //      categoryMatchFuzzy() function above (exact + word-level
+  //      fuzzy fallback), so this stays byte-for-byte consistent
+  //      with `_categoryMatch()` in business_dashboard_page.dart,
+  //      which now also calls categoryMatchFuzzy() directly rather
+  //      than keeping its own copy of the fuzzy stage. A provider
+  //      only ever gets a push notification for an order that will
+  //      actually show up in their Available tab, and vice versa —
+  //      including the fuzzy-matched ones.
   //
   // When specificProviderId is given (direct assignment), only
   // that one provider is notified — no filtering applies since the
@@ -749,12 +1004,13 @@ class OrderService {
         final providerCats = rawCats.map((e) => e.toString()).toList();
 
         // ── Every provider ONLY gets notified for orders that match
-        // ── their own selected categories. Providers with an empty
-        // ── categories[] are treated as "unrestricted" — see
-        // ── categoryMatch() rule #2 above — by design, so a provider
-        // ── who hasn't picked specific categories still gets all
-        // ── work for their serviceType.
-        final shouldNotify = categoryMatch(
+        // ── their own selected categories, via the SAME exact+fuzzy
+        // ── logic the dashboard uses to decide what's visible.
+        // ── Providers with an empty categories[] are treated as
+        // ── "unrestricted" — see categoryMatch() rule #2 above — by
+        // ── design, so a provider who hasn't picked specific
+        // ── categories still gets all work for their serviceType.
+        final shouldNotify = categoryMatchFuzzy(
           orderData,
           providerCats,
           debugOrderId: '$orderId -> provider ${doc.id}',

@@ -110,7 +110,7 @@ class EducationDetailPage extends StatelessWidget {
                           title: "What you'll learn",
                           items: service.includes,
                           iconColor: accent,
-                          sp: sp,
+                          sp: sp, iconData: Icons.check,
                         ),
                         const SizedBox(height: 16),
                       ],
@@ -144,18 +144,6 @@ class EducationDetailPage extends StatelessWidget {
                           title: "Support",
                           body: service.warranty,
                           accent: accent,
-                          sp: sp,
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Not included
-                      if (service.excludes.isNotEmpty) ...[
-                        _BulletCard(
-                          title: "Not included",
-                          items: service.excludes,
-                          iconColor: Colors.red.shade300,
-                          iconData: Icons.close,
                           sp: sp,
                         ),
                       ],
@@ -308,7 +296,7 @@ class _SectionTitle extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// BULLET CARD  (What you'll learn / Not included)
+// BULLET CARD  (What you'll learn)
 // ──────────────────────────────────────────────────────────────────────────────
 
 class _BulletCard extends StatelessWidget {
@@ -322,7 +310,7 @@ class _BulletCard extends StatelessWidget {
     required this.title,
     required this.items,
     required this.iconColor,
-    this.iconData = Icons.check,
+    required this.iconData,
     required this.sp,
   });
 
