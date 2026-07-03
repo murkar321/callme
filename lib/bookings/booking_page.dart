@@ -10,9 +10,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
-
 import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 import 'package:callme/screens/map_picker_page.dart';
 
@@ -30,6 +27,8 @@ const _kSuccess    = Color(0xFF34C759);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BOOKING PAGE
+//
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 class BookingPage extends StatefulWidget {
@@ -69,7 +68,6 @@ class _BookingPageState extends State<BookingPage>
 
   bool _isLoading         = false;
   bool _isSuccess         = false;
-  bool _isGettingLocation = false;
   bool _isLoadingProvider = true;
   bool _phoneComplete     = false;
   bool _summaryExpanded   = true;
@@ -77,6 +75,8 @@ class _BookingPageState extends State<BookingPage>
   LatLng? _pickedLatLng;
   String  _bookingId = '';
 
+  // Preview match only — see class-level comment above. This is NOT
+  // automatically who the order gets assigned to.
   String? _providerId;
   String? _providerName;
   String? _noProviderMessage;
@@ -111,7 +111,7 @@ class _BookingPageState extends State<BookingPage>
     _pageAnim.forward();
     _phoneCtrl.addListener(_onPhoneChanged);
 
-    if (widget.initialProviderId?.isNotEmpty == true) {
+    if (_isPinnedProvider) {
       _providerId        = widget.initialProviderId;
       _isLoadingProvider = false;
       _fetchProviderName(widget.initialProviderId!);
@@ -143,7 +143,51 @@ class _BookingPageState extends State<BookingPage>
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // PROVIDER
+  // PIN vs PREVIEW
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// True only when the CALLER explicitly resolved a specific provider
+  /// (e.g. navigated here from that provider's own profile page). This
+  /// is the ONLY case where we should force direct assignment.
+  bool get _isPinnedProvider => widget.initialProviderId?.isNotEmpty == true;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  
+
+  String get _normalizedServiceType => widget.serviceName.trim().toLowerCase();
+
+  String get _category {
+    if (_isCart && _cartItems.isNotEmpty) {
+      return resolveCanonicalCategory(
+          _cartItems.first.category, _normalizedServiceType);
+    }
+    if (_isSingle && widget.product != null) {
+      return resolveCanonicalCategory(
+          widget.product!.service, _normalizedServiceType);
+    }
+    return '';
+  }
+
+  /// Only meaningful for a single specific item — the exact thing being
+  /// booked, one level more specific than `_category`. Left blank for
+  /// multi-item carts (the `services[]` list already carries per-item
+  /// detail, and each entry gets canonicalized individually server-side).
+  String get _subCategory {
+    if (_isCart && _cartItems.length == 1) {
+      return resolveCanonicalCategory(
+          _cartItems.first.name, _normalizedServiceType);
+    }
+    if (_isSingle && widget.product != null) {
+      return resolveCanonicalCategory(
+          widget.product!.name, _normalizedServiceType);
+    }
+    return '';
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PROVIDER PREVIEW LOOKUP
+  //
+
   // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _fetchProviderName(String id) async {
@@ -161,29 +205,62 @@ class _BookingPageState extends State<BookingPage>
   Future<void> _loadProvider() async {
     setState(() { _isLoadingProvider = true; _noProviderMessage = null; });
     try {
-      final norm = widget.serviceName.trim().toLowerCase();
-      final snap = await FirebaseFirestore.instance
-          .collection('providers')
-          .where('serviceType', isEqualTo: norm)
-          .where('status',      isEqualTo: 'approved')
-          .limit(1).get();
+      final normSvc = _normalizedServiceType;
 
-      if (snap.docs.isNotEmpty) {
-        _setProvider(snap.docs.first.id, snap.docs.first.data());
-        return;
+      // Synthetic "order" used only to run it through the exact same
+      // matcher that real orders are matched against — guarantees the
+      // preview agrees with what will actually happen on submit.
+      final syntheticOrderData = <String, dynamic>{
+        'category':    _category,
+        'subCategory': _subCategory,
+        'services':    _servicesForOrder,
+        'serviceType': normSvc,
+      };
+
+      final approved = await FirebaseFirestore.instance
+          .collection('providers')
+          .where('status', isEqualTo: 'approved')
+          .get();
+
+      QueryDocumentSnapshot<Map<String, dynamic>>? svcOnlyMatch;
+      QueryDocumentSnapshot<Map<String, dynamic>>? categoryMatchDoc;
+      QueryDocumentSnapshot<Map<String, dynamic>>? unrestrictedLegacy;
+
+      for (final doc in approved.docs) {
+        final data = doc.data();
+
+        // Tolerant of both top-level and nested serviceType shapes.
+        final docSvc = providerServiceType(data);
+        if (docSvc.isEmpty ||
+            normalizeServiceType(docSvc) != normalizeServiceType(normSvc)) {
+          continue;
+        }
+
+        svcOnlyMatch ??= doc;
+
+        final cats    = providerCategories(data);
+        final subCats = providerSubCategories(data);
+
+        if (cats.isEmpty && subCats.isEmpty) {
+          // Legacy/unrestricted — no categories saved at all.
+          unrestrictedLegacy ??= doc;
+          continue;
+        }
+
+        if (categoryMatchDoc == null &&
+            categoryMatchFuzzy(syntheticOrderData, cats,
+                providerSubCats: subCats)) {
+          categoryMatchDoc = doc;
+        }
       }
 
-      final all = await FirebaseFirestore.instance
-          .collection('providers')
-          .where('status', isEqualTo: 'approved').get();
-      final match = all.docs.where((d) =>
-          (d.data()['serviceType'] ?? '').toString().toLowerCase() == norm
-      ).firstOrNull;
+    
+      final best = categoryMatchDoc ?? unrestrictedLegacy ?? svcOnlyMatch;
 
-      if (match != null) {
-        _setProvider(match.id, match.data());
-      } else {
-        if (mounted) setState(() {
+      if (best != null) {
+        _setPreviewProvider(best.id, best.data());
+      } else if (mounted) {
+        setState(() {
           _noProviderMessage =
               'No approved provider for "${widget.serviceName}" yet.\nTry again later.';
           _isLoadingProvider = false;
@@ -197,7 +274,7 @@ class _BookingPageState extends State<BookingPage>
     }
   }
 
-  void _setProvider(String id, Map<String, dynamic> d) {
+  void _setPreviewProvider(String id, Map<String, dynamic> d) {
     if (!mounted) return;
     final b = (d['business'] as Map<String, dynamic>?) ?? {};
     setState(() {
@@ -220,7 +297,6 @@ class _BookingPageState extends State<BookingPage>
   bool get _isCart   => _cartItems.isNotEmpty;
   bool get _isSingle => widget.product != null;
 
-  // FIX: explicit .toDouble() so the fold always returns double
   double get _total => _isCart
       ? _cartItems.fold(
           0.0, (s, i) => s + (i.price * i.quantity).toDouble())
@@ -242,6 +318,8 @@ class _BookingPageState extends State<BookingPage>
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: _kBg,
+        extendBody: true,
+        resizeToAvoidBottomInset: true,
         body: _isSuccess ? _buildSuccessView() : _buildMainView(),
         bottomNavigationBar: _isSuccess ? null : _buildBottomBar(),
       ),
@@ -311,7 +389,10 @@ class _BookingPageState extends State<BookingPage>
               ],
             ),
           ),
-          if (_providerName?.isNotEmpty == true)
+          // Only show a specific provider's name when this is a genuine
+          // pinned assignment — otherwise showing one name would wrongly
+          // imply that specific provider is guaranteed to get this order.
+          if (_isPinnedProvider && _providerName?.isNotEmpty == true)
             _providerChip(_providerName!),
         ],
       ),
@@ -366,9 +447,11 @@ class _BookingPageState extends State<BookingPage>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildBody() {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return ListView(
       controller: _scrollCtrl,
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, 18, 16, 16 + bottomInset),
       children: [
 
         // ── SERVICES SUMMARY (always visible, collapsible) ──────────────
@@ -465,25 +548,13 @@ class _BookingPageState extends State<BookingPage>
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _OutlineBtn(
-                  icon:    _isGettingLocation ? null : Icons.my_location_rounded,
-                  label:   _isGettingLocation ? 'Detecting…' : 'Use GPS',
-                  loading: _isGettingLocation,
-                  onTap:   _isGettingLocation ? null : _getCurrentLocation,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _OutlineBtn(
-                  icon:  Icons.map_outlined,
-                  label: 'Pick on Map',
-                  onTap: _openMapPicker,
-                ),
-              ),
-            ],
+          SizedBox(
+            width: double.infinity,
+            child: _OutlineBtn(
+              icon:  Icons.map_outlined,
+              label: 'Pick on Map',
+              onTap: _openMapPicker,
+            ),
           ),
         ],
       ),
@@ -495,30 +566,43 @@ class _BookingPageState extends State<BookingPage>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildDateTimeRow() {
-    return Row(
-      children: [
-        Expanded(
-          child: _PickerTile(
-            icon:     Icons.calendar_month_rounded,
-            label:    'Date',
-            value:    _date == null
-                ? 'Tap to pick'
-                : DateFormat('dd MMM yyyy').format(_date!),
-            selected: _date != null,
-            onTap:    _pickDate,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _PickerTile(
-            icon:     Icons.access_time_rounded,
-            label:    'Time',
-            value:    _time == null ? 'Tap to pick' : _time!.format(context),
-            selected: _time != null,
-            onTap:    _pickTime,
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 320;
+        final dateTile = _PickerTile(
+          icon:     Icons.calendar_month_rounded,
+          label:    'Date',
+          value:    _date == null
+              ? 'Tap to pick'
+              : DateFormat('dd MMM yyyy').format(_date!),
+          selected: _date != null,
+          onTap:    _pickDate,
+        );
+        final timeTile = _PickerTile(
+          icon:     Icons.access_time_rounded,
+          label:    'Time',
+          value:    _time == null ? 'Tap to pick' : _time!.format(context),
+          selected: _time != null,
+          onTap:    _pickTime,
+        );
+
+        if (narrow) {
+          return Column(
+            children: [
+              dateTile,
+              const SizedBox(height: 12),
+              timeTile,
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: dateTile),
+            const SizedBox(width: 12),
+            Expanded(child: timeTile),
+          ],
+        );
+      },
     );
   }
 
@@ -538,11 +622,11 @@ class _BookingPageState extends State<BookingPage>
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // BOTTOM BAR  (safe-area aware)
+  // BOTTOM BAR
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildBottomBar() {
-    final bottom     = MediaQuery.of(context).padding.bottom;
+    final bottom     = MediaQuery.of(context).viewPadding.bottom;
     final canProceed =
         !_isLoading && !_isLoadingProvider && _providerId != null;
 
@@ -551,67 +635,70 @@ class _BookingPageState extends State<BookingPage>
         _addressCtrl.text.trim().isNotEmpty;
     final step2Done = _date != null && _time != null;
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(16, 14, 16, 14 + bottom),
-      decoration: const BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x12000000),
-            blurRadius: 20,
-            offset: Offset(0, -4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ProgressRow(step1: _phoneComplete, step2: step1Done && step2Done),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
-              onPressed:
-                  (canProceed && _phoneComplete) ? _validateAndPay : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor:         _kAccent,
-                disabledBackgroundColor: const Color(0xFFD0CBEE),
-                foregroundColor:         Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18)),
-              ),
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 22, height: 22,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2.5))
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('Proceed to Payment',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text('₹${_total.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14)),
-                        ),
-                      ],
-                    ),
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(16, 14, 16, 14 + bottom),
+        decoration: const BoxDecoration(
+          color: _kCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x12000000),
+              blurRadius: 20,
+              offset: Offset(0, -4),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ProgressRow(step1: _phoneComplete, step2: step1Done && step2Done),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed:
+                    (canProceed && _phoneComplete) ? _validateAndPay : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:         _kAccent,
+                  disabledBackgroundColor: const Color(0xFFD0CBEE),
+                  foregroundColor:         Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18)),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2.5))
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Proceed to Payment',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text('₹${_total.toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14)),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -621,77 +708,82 @@ class _BookingPageState extends State<BookingPage>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildSuccessView() {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottom = MediaQuery.of(context).viewPadding.bottom;
     final top    = MediaQuery.of(context).padding.top;
-    return Container(
+    return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(32, top + 32, 32, bottom + 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 110, height: 110,
-            decoration: BoxDecoration(
-              color: _kSuccess.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.check_rounded,
-                color: _kSuccess, size: 60),
-          ),
-          const SizedBox(height: 28),
-          const Text('All Done!',
-              style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5)),
-          const SizedBox(height: 8),
-          Text(
-            'Your booking has been confirmed.\n'
-            'We\'ll notify you once the provider accepts.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: Colors.grey.shade500, fontSize: 14, height: 1.6),
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0EEF9),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.confirmation_number_outlined,
-                    size: 15, color: _kAccent),
-                const SizedBox(width: 6),
-                Text('ID: $_bookingId',
-                    style: const TextStyle(
-                        color: _kAccent,
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 40),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
-              onPressed: _goHome,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _kAccent,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.of(context).size.height - top - bottom - 64,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 110, height: 110,
+              decoration: BoxDecoration(
+                color: _kSuccess.withOpacity(0.1),
+                shape: BoxShape.circle,
               ),
-              child: const Text('Back to Home',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold)),
+              child: const Icon(Icons.check_rounded,
+                  color: _kSuccess, size: 60),
             ),
-          ),
-        ],
+            const SizedBox(height: 28),
+            const Text('All Done!',
+                style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5)),
+            const SizedBox(height: 8),
+            Text(
+              'Your booking has been confirmed.\n'
+              'We\'ll notify you once a provider accepts.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: Colors.grey.shade500, fontSize: 14, height: 1.6),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0EEF9),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.confirmation_number_outlined,
+                      size: 15, color: _kAccent),
+                  const SizedBox(width: 6),
+                  Text('ID: $_bookingId',
+                      style: const TextStyle(
+                          color: _kAccent,
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _goHome,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kAccent,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18)),
+                ),
+                child: const Text('Back to Home',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -788,43 +880,6 @@ class _BookingPageState extends State<BookingPage>
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // GPS
-  // ─────────────────────────────────────────────────────────────────────────
-
-  Future<void> _getCurrentLocation() async {
-    setState(() => _isGettingLocation = true);
-    try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        throw Exception('Location services disabled');
-      }
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.deniedForever) {
-        throw Exception(
-            'Location permission denied permanently. Enable in Settings.');
-      }
-      final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      final places =
-          await placemarkFromCoordinates(pos.latitude, pos.longitude);
-      final p = places.first;
-      if (!mounted) return;
-      _addressCtrl.text =
-          '${p.street ?? ''}, ${p.locality ?? ''}, '
-          '${p.administrativeArea ?? ''} ${p.postalCode ?? ''}'
-              .replaceAll(RegExp(r',\s*,'), ',')
-              .trim();
-      setState(() => _pickedLatLng = LatLng(pos.latitude, pos.longitude));
-    } catch (e) {
-      if (mounted) _showSnack('$e');
-    } finally {
-      if (mounted) setState(() => _isGettingLocation = false);
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
   // MAP PICKER
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -893,8 +948,9 @@ class _BookingPageState extends State<BookingPage>
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not logged in');
+
       final ref = await OrderService.placeOrder(
-        serviceType:   widget.serviceName.trim().toLowerCase(),
+        serviceType:   _normalizedServiceType,
         services:      _servicesForOrder,
         userId:        user.uid,
         userName:      _nameCtrl.text.trim(),
@@ -907,9 +963,25 @@ class _BookingPageState extends State<BookingPage>
         totalAmount:   _total,
         createdBy:     user.uid,
         createdByRole: 'user',
-        providerId:    _providerId!,
-        providerName:  _providerName ?? '',
+
+        // NOW passed explicitly, properly canonicalized — this is the
+        // #1 fix for reliable routing (see resolveCanonicalCategory()
+        // in order_service.dart).
+        category:      _category,
+        subCategory:   _subCategory,
+
+        // THE KEY FIX: only pin a provider when the caller explicitly
+        // chose one. Otherwise omit providerId so placeOrder() fans out
+        // to every approved provider whose categories/subCategories
+        // actually match — instead of silently notifying only whoever
+        // _loadProvider()'s preview search happened to land on.
+        providerId:    _isPinnedProvider ? _providerId : null,
+        providerName:  _isPinnedProvider ? (_providerName ?? '') : '',
       );
+
+      // Booking succeeded — clear this service's cart.
+      Cart.clear(widget.serviceName);
+
       if (!mounted) return;
       setState(() {
         _bookingId = ref.id;
@@ -1005,7 +1077,6 @@ class _ServicesSummaryCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Header
           InkWell(
             borderRadius: BorderRadius.circular(20),
             onTap: onToggle,
@@ -1046,8 +1117,6 @@ class _ServicesSummaryCard extends StatelessWidget {
               ),
             ),
           ),
-
-          // Expandable list
           AnimatedSize(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
@@ -1064,8 +1133,6 @@ class _ServicesSummaryCard extends StatelessWidget {
                         const Divider(color: Colors.white24, height: 1),
                         const SizedBox(height: 12),
                         if (hasItems)
-                          // FIX: (item.price * item.quantity) is int * int = int.
-                          // Cast to double so _SummaryRow receives a num (double).
                           ...cartItems!.map((item) => _SummaryRow(
                                 name:  item.name,
                                 qty:   item.quantity,
@@ -1075,7 +1142,7 @@ class _ServicesSummaryCard extends StatelessWidget {
                           _SummaryRow(
                             name:  productName!,
                             qty:   1,
-                            price: total, // already double
+                            price: total,
                           ),
                         const SizedBox(height: 6),
                         const Divider(color: Colors.white24, height: 1),
@@ -1108,14 +1175,12 @@ class _ServicesSummaryCard extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUMMARY ROW
-// FIX: price type changed from `double` → `num`
-//      This accepts both int and double without any cast at call sites.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SummaryRow extends StatelessWidget {
   final String name;
   final int    qty;
-  final num    price; // ← KEY FIX: was `double`, now `num`
+  final num    price;
 
   const _SummaryRow({
     required this.name,
@@ -1425,9 +1490,9 @@ class _OutlineBtn extends StatelessWidget {
   const _OutlineBtn({
     required this.label,
     this.icon,
-    this.loading = false,
+    bool loading = false,
     this.onTap,
-  });
+  }) : loading = loading;
 
   @override
   Widget build(BuildContext context) {

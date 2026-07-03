@@ -8,40 +8,28 @@ class ServiceConfig {
   final bool showBankDetails;
 
   // ============================================================
-  // NEW: SUB-SERVICE → CATEGORY MAP
+  // SUB-SERVICE → CATEGORY MAP
   //
   // `serviceCategories` above is the BROAD list a provider picks
   // from at registration (e.g. "Jar Exchange/Return", "New Build").
-  // Booking pages, however, often let a customer book a much more
-  // SPECIFIC item within one of those categories — e.g. under the
-  // "Jar Exchange / Return" sidebar tab, the actual bookable cards
-  // are "20L Water Jar Exchange" and "Empty Jar Return Pickup"; under
-  // the civil "New Build" tab, the cards are "Residential House
-  // Construction", "Commercial Building Construction", etc.
+  // Booking pages let a customer book a much more SPECIFIC item
+  // within one of those categories — e.g. under "Jar Exchange /
+  // Return", the actual bookable cards are "20L Water Jar Exchange"
+  // and "Empty Jar Return Pickup"; under civil's "New Build", the
+  // cards are "Residential House Construction", etc.
   //
-  // When an order is placed for one of those specific items, the
-  // `category`/`services` values booking pages send are the SPECIFIC
-  // item name, not the broad category — and a specific item name like
-  // "Residential House Construction" shares literally no words with
-  // "New Build", so plain word-overlap fuzzy matching (see
-  // categoryMatchFuzzy() in order_service.dart) cannot bridge the two
-  // and the order silently never matches any provider.
+  // `subServices` maps: canonical category name -> [specific
+  // bookable item names]. `parentCategoryForSubService()` in
+  // order_service.dart uses this to resolve a specific item straight
+  // back to its parent category, both when an order is first placed
+  // (resolveCanonicalCategory()) AND at match time
+  // (categoryMatchFuzzy()'s Stage 3).
   //
-  // `subServices` fixes this: it's a map of
-  //   canonical category name -> [specific bookable item names]
-  // `parentCategoryForSubService()` in order_service.dart uses this to
-  // resolve a specific item straight back to its parent category, both
-  // when an order is first placed (resolveCanonicalCategory()) AND at
-  // match time for orders that were already stored with the raw item
-  // name (categoryMatchFuzzy()'s Stage 3).
-  //
-  // ⚠️ IMPORTANT: this is only populated for the categories/items
-  // confirmed from actual booking-page screenshots so far (water's
-  // "Jar Exchange/Return" and civil's "New Build"). Add entries here
-  // as you audit each booking page's card titles — an empty/missing
-  // list just means that category falls back to plain fuzzy word
-  // matching, which still works fine when item names happen to share
-  // a word with the category (e.g. "Pipe Repair" booking items).
+  // ⚠️ Only populated for categories/items confirmed from actual
+  // booking-page screenshots so far (water's "Jar Exchange/Return"
+  // and civil's "New Build"). Add entries here as you audit each
+  // booking page's card titles — an empty/missing list just means
+  // that category falls back to plain fuzzy word matching.
   // ============================================================
   final Map<String, List<String>> subServices;
 
@@ -128,7 +116,7 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "Educator Certificates",
     ],
   ),
-      
+
 
 
   "plumbing": ServiceConfig(
@@ -223,8 +211,6 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "PAN Card",
       "Business License",
     ],
-    // Confirmed from the "Jar Exchange / Return" booking-page tab —
-    // add the other tabs' card titles here as you audit them.
     subServices: {
       "Jar Exchange/Return": [
         "20L Water Jar Exchange",
@@ -266,21 +252,12 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "GST",
       "Contractor License",
     ],
-    // Confirmed from the "New Build" booking-page tab — add the
-    // other tabs' (Renovation, Painting, etc.) card titles here as
-    // you audit them.
     subServices: {
       "New Build": [
         "Residential House Construction",
         "Commercial Building Construction",
         "Bungalow / Villa Construction",
         "Apartment / Flat Construction",
-        "Toilet Construction",
-      ],
-      "Renovation": [
-        "Basic Package",
-        "Standard Package",
-        "Premium Pacakage",
       ],
     },
   ),

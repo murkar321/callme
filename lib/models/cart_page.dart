@@ -517,10 +517,7 @@ class _CartPageState extends State<CartPage>
   Future<void> _onProceed(List<CartItem> items) async {
     if (_isCivil) {
       // ── Civil: enquiry flow, no payment ──────────────────────────────────
-      // Pass widget.service (short key = "Civil") as serviceName so the
-      // booking page normalises it to "civil" and matches Firestore correctly.
-      // Also pass providerId as initialProviderId so the lookup is skipped
-      // entirely when the caller already resolved the provider.
+   
       await Navigator.push(
         context,
         MaterialPageRoute(

@@ -1512,8 +1512,7 @@ class _CardState extends State<_Card> {
 
 class _TagBadge extends StatelessWidget {
   final String label; final Color color; final IconData? icon;
-  // ignore: unused_element_parameter
-  const _TagBadge({required this.label, required this.color, this.icon});
+  const _TagBadge({required this.label, required this.color, IconData? icon}) : icon = icon;
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1521,7 +1520,13 @@ class _TagBadge extends StatelessWidget {
       color: color.withOpacity(0.15),
       borderRadius: BorderRadius.circular(20),
     ),
-   
+    // FIX: mainAxisSize.min + no overflow handling meant that when a
+    // caller wraps this in a ConstrainedBox(maxWidth: ...) — as the
+    // status bar now does for long category names — the label text
+    // just kept rendering at full width and clipped/overflowed
+    // instead of shrinking gracefully. Wrapping the Text in a
+    // Flexible with an ellipsis means it now truncates cleanly to
+    // whatever width is available, however narrow.
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       if (icon != null) ...[
         Icon(icon, color: color, size: 10),
@@ -1635,7 +1640,15 @@ class _StatusBadge extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-
+// EMPTY STATE
+//
+// The provider-facing message here is always short and simple now
+// (see _AvailTab — the old per-reason diagnostic breakdown moved to
+// debugPrint-only via _logSkipSummary()). This is still wrapped in
+// a SingleChildScrollView, same pattern as `_ErrorRetry` below, as
+// a defensive measure: on tall screens it renders centered (via the
+// ConstrainedBox min-height trick), and it can never overflow no
+// matter how long a future `msg` ends up being.
 // ═══════════════════════════════════════════════════════════════
 class _Empty extends StatelessWidget {
   final IconData icon; final String title, msg;
@@ -1666,7 +1679,13 @@ class _Empty extends StatelessWidget {
   );
 }
 
-
+// ═══════════════════════════════════════════════════════════════
+// ERROR RETRY  (FIX: scroll-safe — was a plain Column that could
+// overflow on smaller screens with longer messages, e.g. the
+// permission-denied hint text above. Now wrapped in a
+// SingleChildScrollView with a min-height constraint so it still
+// centers vertically on tall screens but scrolls instead of
+// overflowing on short ones.)
 // ═══════════════════════════════════════════════════════════════
 class _ErrorRetry extends StatelessWidget {
   final String message; final VoidCallback onRetry;
