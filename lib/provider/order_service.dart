@@ -137,25 +137,36 @@ String cleanSubCategory(String raw) => raw.trim();
 // from HERE — neither file should re-implement its own copy.
 //
 // ─────────────────────────────────────────────────────────────
-// FIX (this revision): a PREVIOUS revision of this file stopped
-// merging in `providerSubCategories()` before calling
-// categoryMatchFuzzy() from _notifyMatchingProviders(), while
-// business_dashboard_page.dart's `_categoryMatch()` kept passing
-// `providerSubCats` in. That divergence meant: a provider who only
-// matched an order via their subCategories[] (not their main
-// categories[]) would still SEE the order live in their dashboard
-// (client-side check includes subCats) and get an instant local
-// alert while the dashboard was open (same client-side check) — but
-// would NEVER get a `notifications` Firestore doc or an FCM
-// `fcm_queue` entry created for that order, because the server-side
-// fan-out (this file, at order-creation time) silently skipped them.
-// That is exactly the "notification received once but never saved /
-// never arrives when the app is closed" bug, and it disproportionately
-// hits provider types (e.g. resort, civil) whose registration tends to
-// rely on subCategories rather than a broad main category.
+// FIX (this revision): category matching is now STRICT / EXACT ONLY.
 //
-// Both call sites now pass BOTH categories AND subCategories again —
-// see `_notifyMatchingProviders()` below.
+// A previous revision of categoryMatchFuzzy() ran three stages:
+//   1) exact normalized match
+//   2) "fuzzy" match on ANY shared word ≥3 letters between the order's
+//      category/services strings and the provider's categories
+//   3) a sub-service reverse lookup against serviceConfigs' static
+//      subServices map
+//
+// Stage 2 in particular was far too loose in practice: an order
+// categorized as "Hair Styling" would also match a provider who only
+// registered under "Hair Treatments" or "Hair Color", purely because
+// they share the single word "hair". That caused orders to become
+// visible to (and get push-notified to) providers whose category did
+// NOT actually match, while providing no guarantee the correct
+// provider would see it either.
+//
+// Per the product requirement — "match exactly against the provider's
+// main category selected from serviceConfigs; if it doesn't match, the
+// order must not be assigned/visible to that provider at all" — Stage
+// 2 and Stage 3 have been removed. categoryMatchFuzzy() now performs
+// ONLY an exact, normalized match against the provider's own
+// categories[] + subCategories[] pool (both of which are things the
+// provider explicitly selected at registration — merging them is not
+// "fuzzy", it's still an exact match, just against a slightly larger
+// pool of the provider's own choices).
+//
+// The function name is kept as `categoryMatchFuzzy` only so existing
+// call sites (business_dashboard_page.dart) don't need to change their
+// import — its behavior is now strict-exact.
 // ─────────────────────────────────────────────────────────────
 
 String normalizeCategory(String s) =>
@@ -215,7 +226,7 @@ List<String> providerCategoryPool(
 }
 
 /// Builds the full set of NORMALISED (separator-stripped) MAIN category
-/// candidates for an order — used for Stage-1 exact matching.
+/// candidates for an order — used for exact matching.
 Set<String> orderCategoryCandidates(Map<String, dynamic> orderData) {
   final candidates = <String>{};
 
@@ -236,7 +247,7 @@ Set<String> orderCategoryCandidates(Map<String, dynamic> orderData) {
 }
 
 /// Same as above but RAW (trimmed + lowercased, not separator-stripped)
-/// — used for Stage 2/3 fuzzy + sub-service matching.
+/// — kept for diagnostics/logging only.
 Set<String> orderCategoryCandidatesRaw(Map<String, dynamic> orderData) {
   final candidates = <String>{};
 
@@ -256,7 +267,15 @@ Set<String> orderCategoryCandidatesRaw(Map<String, dynamic> orderData) {
   return candidates;
 }
 
-/// STAGE 1 (exact) match only.
+/// EXACT (normalized) match — the ONLY stage now used for deciding
+/// whether an order is visible to / notifiable for a provider.
+///
+/// FIX: previously, when an order had no readable category/services
+/// info at all, this fell back to `return true` — i.e. showed the
+/// order to EVERY provider with categories selected. That is the
+/// opposite of the required behavior ("if it doesn't match, it must
+/// not be assigned to any provider"), so an order we cannot read a
+/// category for now fails closed (returns false) instead of open.
 bool categoryMatch(
   Map<String, dynamic> orderData,
   List<String> providerCats, {
@@ -272,35 +291,29 @@ bool categoryMatch(
   final orderCandidates = orderCategoryCandidates(orderData);
 
   if (orderCandidates.isEmpty) {
-    debugPrint('[catMatch] $debugOrderId: order has no category/services info '
-        '— provider has categories selected, falling back to SHOW (cannot restrict '
-        'what we cannot read). Fix the originating booking/enquiry page to pass '
-        '`category` or `services` if this should actually be filtered.');
-    return true;
+    debugPrint('[catMatch] $debugOrderId: order has no readable '
+        'category/services info — provider has categories selected. '
+        'FAILING CLOSED (order will NOT be shown to this provider). '
+        'Fix the originating booking/enquiry page to pass `category` '
+        'or `services` if this order should ever be matched to anyone.');
+    return false;
   }
 
   final matched = orderCandidates.any(normProviderCats.contains);
   if (!matched) {
-    debugPrint('[catMatch] $debugOrderId: SKIP — order candidates $orderCandidates '
-        'do not overlap with provider categories $normProviderCats');
+    debugPrint('[catMatch] $debugOrderId: SKIP — order categories $orderCandidates '
+        'do not EXACTLY match provider categories $normProviderCats');
   }
   return matched;
 }
 
-Set<String> _significantRawWords(String raw) => raw
-    .toLowerCase()
-    .split(RegExp(r'[^a-z0-9]+'))
-    .where((w) => w.length >= 3)
-    .toSet();
-
-/// Full pipeline: Stage 1 (exact) → Stage 2 (fuzzy word overlap) →
-/// Stage 3 (sub-service reverse lookup) — run against
-/// `providerCats` + `providerSubCats` merged.
-///
-/// This is the ONE function both the dashboard's "Available" tab
-/// visibility check and this file's push-notification fan-out call —
-/// never reimplement, and never let the two call sites drift apart
-/// on which arguments they pass (see the file-header note above).
+/// Public entry point used by both business_dashboard_page.dart (tab
+/// visibility) and _notifyMatchingProviders() below (push fan-out).
+/// Both call sites pass `providerCats` (main categories[]) and
+/// `providerSubCats` (subCategories[]) — they are merged into one pool
+/// and matched EXACTLY (normalized) against the order's category /
+/// services. No fuzzy word-overlap, no sub-service guessing: if it
+/// isn't an exact match, the order is not shown/notified.
 bool categoryMatchFuzzy(
   Map<String, dynamic> orderData,
   List<String> providerCats, {
@@ -311,52 +324,7 @@ bool categoryMatchFuzzy(
       ? providerCats
       : <String>{...providerCats, ...providerSubCats}.toList();
 
-  // Stage 1: exact.
-  if (categoryMatch(orderData, mergedProviderCats, debugOrderId: debugOrderId)) {
-    return true;
-  }
-
-  // Stage 2: fuzzy word-overlap on RAW strings.
-  final orderWords = orderCategoryCandidatesRaw(orderData)
-      .expand(_significantRawWords)
-      .toSet();
-  final providerWords = mergedProviderCats
-      .expand(_significantRawWords)
-      .toSet();
-
-  if (orderWords.intersection(providerWords).isNotEmpty) {
-    debugPrint('[catMatch:fuzzy] $debugOrderId: MATCHED via fuzzy word overlap — '
-        'order words $orderWords ~ provider words $providerWords (no exact '
-        'match).');
-    return true;
-  }
-
-  // Stage 3: sub-service reverse lookup (against serviceConfigs'
-  // static subServices map — NOT the provider's own subCategories[]).
-  final serviceType = (orderData['serviceType'] ?? '').toString();
-  if (serviceType.isNotEmpty) {
-    final normProviderCats = mergedProviderCats
-        .map(normalizeCategory)
-        .where((s) => s.isNotEmpty)
-        .toSet();
-
-    for (final rawCandidate in orderCategoryCandidatesRaw(orderData)) {
-      final parent = parentCategoryForSubService(rawCandidate, serviceType);
-      if (parent == null) continue;
-      if (normProviderCats.contains(normalizeCategory(parent))) {
-        debugPrint('[catMatch:fuzzy] $debugOrderId: MATCHED via sub-service '
-            'lookup — order item "$rawCandidate" resolves to parent category '
-            '"$parent", which is in provider categories $mergedProviderCats.');
-        return true;
-      }
-    }
-  }
-
-  debugPrint('[catMatch:fuzzy] $debugOrderId: SKIP — no exact, fuzzy, OR '
-      'sub-service match. order words $orderWords vs provider words '
-      '$providerWords. Genuinely unrelated categories — nothing more to do '
-      'here.');
-  return false;
+  return categoryMatch(orderData, mergedProviderCats, debugOrderId: debugOrderId);
 }
 
 class OrderService {
@@ -449,10 +417,10 @@ class OrderService {
 
     if (!hasCategory && services.isEmpty) {
       debugPrint('[OrderService.placeOrder] WARNING: neither `category` nor '
-          '`services` was provided for a $serviceType order. This order will '
-          'be shown to ALL approved $serviceType providers regardless of their '
-          'selected categories. Pass `category` and/or `services` from the '
-          'booking/enquiry page to enable correct filtering.');
+          '`services` was provided for a $serviceType order. With strict '
+          'exact-category matching, this order will NOT be shown to ANY '
+          '$serviceType provider (fails closed). Pass `category` and/or '
+          '`services` from the booking/enquiry page so it can be matched.');
     } else if (!hasCategory) {
       debugPrint('[OrderService.placeOrder] NOTE: `category` was not passed '
           'for a $serviceType order — auto-derived "$effectiveCategory" from '
@@ -801,15 +769,10 @@ class OrderService {
   // ==========================================================
   // FAN-OUT: notify ALL matching approved providers
   //
-  // FIX: restored `providerSubCategories()` into the match here so
-  // this call site is IDENTICAL to business_dashboard_page.dart's
-  // `_categoryMatch()`. A prior revision dropped subCategories from
-  // just this call site, which silently starved subCategory-only
-  // providers (a pattern common for resort/civil registrations) of
-  // both their `notifications` doc and their FCM push — while still
-  // letting them see the order live in an already-open dashboard.
-  // That mismatch is exactly what caused "received once, never
-  // saved, never arrives when the app is closed."
+  // Uses the shared, strict-exact categoryMatchFuzzy() — identical
+  // function and identical arguments (providerCats + providerSubCats)
+  // to business_dashboard_page.dart's `_categoryMatch()`, so "got
+  // notified" and "shows up in Available" can never disagree.
   // ==========================================================
   static Future<void> _notifyMatchingProviders({
     required String orderId,
@@ -826,6 +789,9 @@ class OrderService {
     try {
       if (specificProviderId != null && specificProviderId.isNotEmpty) {
         // Direct assignment — notify only this provider, no category check.
+        // The customer explicitly picked this provider, so category
+        // matching is irrelevant here (mirrors the dashboard's
+        // direct-assignment bypass in _unavailableReason()).
         final doc = await _db
             .collection('providers')
             .doc(specificProviderId)
@@ -914,7 +880,7 @@ class OrderService {
 
       debugPrint('[OrderService] order $orderId: notified $notifiedCount / '
           '${candidateDocs.length} $serviceType providers '
-          '(category="$category", subCategory="$subCategory")');
+          '(category="$category", subCategory="$subCategory") — EXACT match only');
     } catch (e) {
       debugPrint('[OrderService] _notifyMatchingProviders error: $e');
     }

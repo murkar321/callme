@@ -371,6 +371,22 @@ class NotificationService {
     );
   }
 
+  // ── FIX: CRITICAL BUG — this used to save the token ONLY under
+  // `users/{email}`. But OrderService.notifyUser() (order_service.dart)
+  // reads the token back with `users.doc(userId)` where `userId` is the
+  // Firebase Auth UID, NOT the email. Those are two different document
+  // IDs, so every single lookup by uid found nothing, `fcmToken` came
+  // back empty, and notifyUser() silently skipped writing an
+  // `fcm_queue` entry for the customer — every single time. That is
+  // the exact reason customers never rang / were never notified when a
+  // provider accepted, rejected, or completed their order: the token
+  // was never actually saved where the read path was looking for it.
+  //
+  // Fix: write (and later clear) the token under BOTH `users/{uid}`
+  // (what order_service.dart actually reads) AND `users/{email}` (kept
+  // for back-compat, in case something else in the app already reads
+  // by email). Both docs are merged, so this never overwrites other
+  // fields already on either doc.
   Future<void> _writeToken(String token) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -382,26 +398,30 @@ class NotificationService {
     final uid = user.uid;
     final platform = (!kIsWeb && Platform.isIOS) ? 'ios' : 'android';
 
+    final tokenData = {
+      'fcmToken': token,
+      'tokenUpdatedAt': FieldValue.serverTimestamp(),
+      'platform': platform,
+    };
+
+    // PRIMARY: doc(uid) — this is what OrderService.notifyUser() and
+    // every other uid-keyed lookup in the app actually reads.
+    await db.collection('users').doc(uid).set(tokenData, SetOptions(merge: true));
+    debugPrint('[FCM] Token saved -> users/$uid (primary, uid-keyed)');
+
+    // BACK-COMPAT MIRROR: doc(email) — kept so any older code path
+    // that still reads by email keeps working. Safe no-op duplication
+    // if nothing reads this anymore.
     final email = user.email;
     if (email != null && email.isNotEmpty) {
-      await db.collection('users').doc(email).set({
-        'fcmToken': token,
-        'tokenUpdatedAt': FieldValue.serverTimestamp(),
-        'platform': platform,
-      }, SetOptions(merge: true));
-      debugPrint('[FCM] Token saved -> users/$email');
-    } else {
-      debugPrint('[FCM] No email on current user - users/ token not saved');
+      await db.collection('users').doc(email).set(tokenData, SetOptions(merge: true));
+      debugPrint('[FCM] Token also mirrored -> users/$email (back-compat)');
     }
 
     try {
       final providerDocId = await _resolveProviderDocId(uid);
       if (providerDocId != null) {
-        await db.collection('providers').doc(providerDocId).set({
-          'fcmToken': token,
-          'tokenUpdatedAt': FieldValue.serverTimestamp(),
-          'platform': platform,
-        }, SetOptions(merge: true));
+        await db.collection('providers').doc(providerDocId).set(tokenData, SetOptions(merge: true));
         debugPrint('[FCM] Token also saved -> providers/$providerDocId');
       }
     } catch (e) {
@@ -437,6 +457,9 @@ class NotificationService {
 
   Future<void> refreshTokenAfterLogin() => _saveToken();
 
+  // ── FIX: clear the token from BOTH doc locations on logout, mirroring
+  // the dual-write above — otherwise a stale token would keep living
+  // under users/{uid} (or users/{email}) after logout.
   Future<void> clearTokenOnLogout() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -444,10 +467,18 @@ class NotificationService {
     final db = FirebaseFirestore.instance;
     final uid = user.uid;
 
+    await db.collection('users').doc(uid).update({
+      'fcmToken': FieldValue.delete(),
+    }).catchError((e) {
+      debugPrint('[FCM] users/$uid token clear error (may not exist): $e');
+    });
+
     final email = user.email;
     if (email != null && email.isNotEmpty) {
       await db.collection('users').doc(email).update({
         'fcmToken': FieldValue.delete(),
+      }).catchError((e) {
+        debugPrint('[FCM] users/$email token clear error (may not exist): $e');
       });
     }
 

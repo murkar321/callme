@@ -176,6 +176,15 @@ class _ProvidersPageState extends State<ProvidersPage> {
   String _fmt(Timestamp? t, {String pattern = 'dd MMM yyyy'}) =>
       t == null ? '-' : DateFormat(pattern).format(t.toDate());
 
+  /// Real-device adaptive scale factor, based on a 390-logical-pixel design
+  /// width (iPhone 12/13 / most mid-range Android reference), clamped so
+  /// very small or very large screens don't blow proportions out. Matches
+  /// the scale convention used elsewhere in the app.
+  double _scale(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    return (w / 390).clamp(0.85, 1.25);
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -219,48 +228,69 @@ class _ProvidersPageState extends State<ProvidersPage> {
       statusBarIconBrightness: Brightness.light,
     ));
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FC),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _providersStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              _allDocs.isEmpty) {
-            return const Center(
-                child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
-          }
-          if (snapshot.hasError) {
-            return _errorState(snapshot.error.toString());
-          }
+    // Clamp the system/user font-scale for this screen. This is the actual
+    // fix for the "bottom overflowed" error that only showed up on real
+    // devices: emulators/previews typically run at 1.0x text scale, but
+    // real devices with accessibility "Large text" settings (1.3x–2.0x)
+    // pushed the fixed-height chip/pill rows past their bounds. Clamping
+    // keeps layout predictable while still respecting some user preference.
+    final mq = MediaQuery.of(context);
+    final clampedTextScaler =
+        mq.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.15);
 
-          if (snapshot.hasData) {
-            _syncDocs(List<QueryDocumentSnapshot>.from(snapshot.data!.docs));
-          }
+    return MediaQuery(
+      data: mq.copyWith(textScaler: clampedTextScaler),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF4F7FC),
+        body: StreamBuilder<QuerySnapshot>(
+          stream: _providersStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                _allDocs.isEmpty) {
+              return const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+            }
+            if (snapshot.hasError) {
+              return _errorState(snapshot.error.toString());
+            }
 
-          if (_allDocs.isEmpty) return _emptyState();
+            if (snapshot.hasData) {
+              _syncDocs(List<QueryDocumentSnapshot>.from(snapshot.data!.docs));
+            }
 
-          final filtered  = _filtered;
-          final typeCounts = _typeCounts;
+            if (_allDocs.isEmpty) return _emptyState();
 
-          return Column(
-            children: [
-              _buildHeader(filtered.length, typeCounts),
-              Expanded(
-                child: filtered.isEmpty
-                    ? _noMatch()
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
-                        physics: const BouncingScrollPhysics(),
-                        itemCount: filtered.length,
-                        itemBuilder: (_, i) => _providerCard(
-                          filtered[i].data() as Map<String, dynamic>,
-                          filtered[i].id,
+            final filtered  = _filtered;
+            final typeCounts = _typeCounts;
+
+            return Column(
+              children: [
+                _buildHeader(filtered.length, typeCounts),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? _noMatch()
+                      : ListView.builder(
+                          // Extra bottom padding clears Android's gesture
+                          // nav bar / iOS home indicator on real devices so
+                          // the last card's action button is never hidden.
+                          padding: EdgeInsets.fromLTRB(
+                            14,
+                            14,
+                            14,
+                            32 + MediaQuery.of(context).padding.bottom,
+                          ),
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: filtered.length,
+                          itemBuilder: (_, i) => _providerCard(
+                            filtered[i].data() as Map<String, dynamic>,
+                            filtered[i].id,
+                          ),
                         ),
-                      ),
-              ),
-            ],
-          );
-        },
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -268,6 +298,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
   // ── Header ─────────────────────────────────────────────────────────────────
   Widget _buildHeader(int shown, Map<String, int> typeCounts) {
     final topPad = MediaQuery.of(context).padding.top;
+    final scale = _scale(context);
 
     return Container(
       decoration: const BoxDecoration(
@@ -281,6 +312,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
       child: Padding(
         padding: EdgeInsets.only(top: topPad),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Title row
@@ -289,22 +321,25 @@ class _ProvidersPageState extends State<ProvidersPage> {
               child: Row(
                 children: [
                   Container(
-                    width: 46,
-                    height: 46,
+                    width: 46 * scale,
+                    height: 46 * scale,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(.18),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.storefront_rounded,
-                        color: Colors.white, size: 24),
+                    child: Icon(Icons.storefront_rounded,
+                        color: Colors.white, size: 24 * scale),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
                           'Providers',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -314,6 +349,8 @@ class _ProvidersPageState extends State<ProvidersPage> {
                         ),
                         Text(
                           '$shown ${shown == 1 ? 'provider' : 'providers'} shown',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white60, fontSize: 12),
                         ),
                       ],
@@ -365,8 +402,12 @@ class _ProvidersPageState extends State<ProvidersPage> {
             const SizedBox(height: 12),
 
             // Provider type chips
+            // Height is generous (84 vs the old 72) and every internal
+            // block is wrapped in FittedBox(scaleDown) so if a device's
+            // font/DPI settings ever push the intrinsic content taller
+            // than the box, it shrinks to fit instead of overflowing.
             SizedBox(
-              height: 72,
+              height: 84 * scale,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -381,8 +422,9 @@ class _ProvidersPageState extends State<ProvidersPage> {
                     onTap: () => setState(() => _typeFilter = k),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
-                      width: 66,
+                      width: 66 * scale,
                       margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
                       decoration: BoxDecoration(
                         color: selected
                             ? Colors.white
@@ -392,50 +434,54 @@ class _ProvidersPageState extends State<ProvidersPage> {
                             ? Border.all(color: Colors.white, width: 1.5)
                             : null,
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(t['icon'] as IconData,
-                              size: 20,
-                              color: selected
-                                  ? const Color(0xFF4F46E5)
-                                  : Colors.white70),
-                          const SizedBox(height: 3),
-                          Text(
-                            t['label'] as String,
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: selected
-                                  ? const Color(0xFF4F46E5)
-                                  : Colors.white70,
-                            ),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (k != 'all') ...[
-                            const SizedBox(height: 3),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(t['icon'] as IconData,
+                                size: 20,
                                 color: selected
                                     ? const Color(0xFF4F46E5)
-                                    : Colors.white.withOpacity(.22),
-                                borderRadius: BorderRadius.circular(6),
+                                    : Colors.white70),
+                            const SizedBox(height: 3),
+                            Text(
+                              t['label'] as String,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: selected
+                                    ? const Color(0xFF4F46E5)
+                                    : Colors.white70,
                               ),
-                              child: Text(
-                                '$cnt',
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold,
-                                  color: selected ? Colors.white : Colors.white70,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (k != 'all') ...[
+                              const SizedBox(height: 3),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? const Color(0xFF4F46E5)
+                                      : Colors.white.withOpacity(.22),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '$cnt',
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                    color: selected ? Colors.white : Colors.white70,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   );
@@ -447,7 +493,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
 
             // Status pills
             SizedBox(
-              height: 38,
+              height: 42 * scale,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -471,12 +517,16 @@ class _ProvidersPageState extends State<ProvidersPage> {
                             : Colors.white.withOpacity(.14),
                         borderRadius: BorderRadius.circular(40),
                       ),
-                      child: Text(
-                        (s['label'] as String).toUpperCase(),
-                        style: TextStyle(
-                          color: selected ? color : Colors.white70,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          (s['label'] as String).toUpperCase(),
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: selected ? color : Colors.white70,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                     ),
@@ -505,7 +555,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
     final phone             = (biz['phone']         ?? data['phone'] ?? '').toString();
     final email             = (biz['email']         ?? '').toString();
     final city              = (biz['city']          ?? '').toString();
-    final state             = (biz['state']         ?? '').toString();
+    final state              = (biz['state']         ?? '').toString();
     final address           = (biz['address']       ?? '').toString();
     final pincode           = (biz['pincode']       ?? '').toString();
     final image             = (biz['image']         ?? '').toString();
@@ -545,6 +595,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
           ],
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Coloured strip ──
@@ -582,6 +633,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
@@ -631,6 +683,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── Status banner ──
@@ -647,30 +700,38 @@ class _ProvidersPageState extends State<ProvidersPage> {
                         Icon(_statusIcon(status),
                             color: _statusColor(status), size: 18),
                         const SizedBox(width: 10),
-                        Text(
-                          status.toUpperCase(),
-                          style: TextStyle(
-                            color: _statusColor(status),
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13,
-                            letterSpacing: .4,
+                        Flexible(
+                          child: Text(
+                            status.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _statusColor(status),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                              letterSpacing: .4,
+                            ),
                           ),
                         ),
                         const Spacer(),
                         if (serviceType.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: svcColor.withOpacity(.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              serviceType,
-                              style: TextStyle(
-                                color: svcColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 11,
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: svcColor.withOpacity(.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                serviceType,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: svcColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                ),
                               ),
                             ),
                           ),
@@ -836,12 +897,14 @@ class _ProvidersPageState extends State<ProvidersPage> {
                               Icon(Icons.warning_amber_rounded,
                                   color: Color(0xFFF59E0B), size: 15),
                               SizedBox(width: 8),
-                              Text(
-                                'No documents uploaded yet',
-                                style: TextStyle(
-                                  color: Color(0xFFB45309),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
+                              Expanded(
+                                child: Text(
+                                  'No documents uploaded yet',
+                                  style: TextStyle(
+                                    color: Color(0xFFB45309),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                             ],
@@ -860,6 +923,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
                       border: Border.all(color: const Color(0xFFE5E7EB)),
                     ),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         _bankRow('Holder',  (bank['accountHolder'] ?? '-').toString()),
                         _bankRow('Account', (bank['accountNumber'] ?? '-').toString()),
@@ -895,12 +959,15 @@ class _ProvidersPageState extends State<ProvidersPage> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 agreementAccepted
                                     ? 'Agreement Accepted'
                                     : 'Agreement Not Accepted',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 13,
@@ -915,6 +982,8 @@ class _ProvidersPageState extends State<ProvidersPage> {
                                 Text(
                                   _fmt(agreementAcceptedAt,
                                       pattern: 'dd MMM yyyy • hh:mm a'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       fontSize: 11,
                                       color: Color(0xFF16A34A)),
@@ -998,6 +1067,8 @@ class _ProvidersPageState extends State<ProvidersPage> {
                       icon: const Icon(Icons.open_in_new_rounded, size: 17),
                       label: const Text(
                         'Open Provider Profile',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 14),
                       ),
@@ -1023,6 +1094,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
   Widget _pill(IconData icon, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      constraints: const BoxConstraints(maxWidth: 140),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(.2),
         borderRadius: BorderRadius.circular(40),
@@ -1032,10 +1104,14 @@ class _ProvidersPageState extends State<ProvidersPage> {
         children: [
           Icon(icon, size: 11, color: Colors.white),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700, fontSize: 9),
+            ),
           ),
         ],
       ),
@@ -1054,12 +1130,16 @@ class _ProvidersPageState extends State<ProvidersPage> {
           ),
         ),
         const SizedBox(width: 7),
-        Text(
-          title,
-          style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1F2937)),
+        Flexible(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1F2937)),
+          ),
         ),
       ],
     );
@@ -1074,6 +1154,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
@@ -1082,6 +1163,8 @@ class _ProvidersPageState extends State<ProvidersPage> {
             Expanded(
               child: Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: Color(0xFF9CA3AF),
                     fontSize: 10,
@@ -1112,6 +1195,8 @@ class _ProvidersPageState extends State<ProvidersPage> {
             width: 72,
             child: Text(
               title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: Color(0xFF9CA3AF),
                   fontSize: 12,
@@ -1121,6 +1206,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
           Expanded(
             child: Text(
               isEmpty ? '—' : value,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 13,
@@ -1147,6 +1233,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
             children: [
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       width: 32,
@@ -1178,6 +1265,8 @@ class _ProvidersPageState extends State<ProvidersPage> {
                     const SizedBox(height: 4),
                     Text(
                       item.$1,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           fontSize: 9,
                           color: Color(0xFF6B7280),
@@ -1187,6 +1276,8 @@ class _ProvidersPageState extends State<ProvidersPage> {
                     const SizedBox(height: 2),
                     Text(
                       item.$2,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w700,
@@ -1217,6 +1308,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
   Widget _emptyState() {
     return Center(
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
@@ -1245,6 +1337,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
   Widget _noMatch() {
     return Center(
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
@@ -1271,6 +1364,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFDC2626)),

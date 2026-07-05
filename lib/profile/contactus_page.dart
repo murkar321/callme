@@ -16,6 +16,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
   bool _isSending = false;
 
   static const String _phoneNumber = '918668425211'; // WhatsApp: country code + number
+  static const String _callNumber = '+918668425211'; // Direct dialer format
   static const String _emailAddress = 'allinone@gmail.com';
 
   @override
@@ -31,6 +32,14 @@ class _ContactUsPageState extends State<ContactUsPage> {
     final Uri uri = Uri.parse('https://wa.me/$_phoneNumber');
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       _showSnack('Could not open WhatsApp. Please check your installation.');
+    }
+  }
+
+  // ── Direct Call ──────────────────────────────────────────────────────────────
+  Future<void> _makeCall() async {
+    final Uri uri = Uri(scheme: 'tel', path: _callNumber);
+    if (!await launchUrl(uri)) {
+      _showSnack('Could not open dialer. Please call manually.');
     }
   }
 
@@ -144,7 +153,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Have questions or need support? Reach out directly via WhatsApp, email, or send us a message below.',
+                    'Have questions or need support? Reach out directly via call, WhatsApp, email, or send us a message below.',
                     style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
@@ -153,9 +162,18 @@ class _ContactUsPageState extends State<ContactUsPage> {
 
             const SizedBox(height: 20),
 
-            // ── Quick Action Buttons ─────────────────────────────────────────
+            // ── Quick Action Buttons (Call + WhatsApp + Email) ───────────────
             Row(
               children: [
+                Expanded(
+                  child: _actionButton(
+                    icon: Icons.call,
+                    label: 'Call',
+                    color: const Color(0xFF1E88E5),
+                    onTap: _makeCall,
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _actionButton(
                     icon: Icons.chat,
@@ -164,11 +182,11 @@ class _ContactUsPageState extends State<ContactUsPage> {
                     onTap: _openWhatsApp,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _actionButton(
                     icon: Icons.email_outlined,
-                    label: 'Email Us',
+                    label: 'Email',
                     color: const Color(0xFF1565C0),
                     onTap: _openEmail,
                   ),
@@ -184,14 +202,13 @@ class _ContactUsPageState extends State<ContactUsPage> {
               title: 'Phone / WhatsApp',
               value: '+91 86684 25211',
               onTap: _openWhatsApp,
-              tapLabel: 'Open WhatsApp',
+              trailingCallButton: true,
             ),
             _infoCard(
               icon: Icons.email,
               title: 'Email',
               value: _emailAddress,
               onTap: _openEmail,
-              tapLabel: 'Open Email',
             ),
             _infoCard(
               icon: Icons.location_on,
@@ -325,17 +342,17 @@ class _ContactUsPageState extends State<ContactUsPage> {
             ),
           ],
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
+            const SizedBox(height: 4),
             Text(
               label,
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
-                fontSize: 14,
+                fontSize: 12,
               ),
             ),
           ],
@@ -349,61 +366,84 @@ class _ContactUsPageState extends State<ContactUsPage> {
     required String title,
     required String value,
     VoidCallback? onTap,
-    String? tapLabel,
+    bool trailingCallButton = false,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: onTap != null
-              ? Border.all(color: Colors.blue.shade50, width: 1.5)
-              : null,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: Colors.blue.withOpacity(0.1),
-              child: Icon(icon, color: Colors.blue),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: onTap != null
+            ? Border.all(color: Colors.blue.shade50, width: 1.5)
+            : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: onTap,
+              behavior: HitTestBehavior.opaque,
+              child: Row(
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: Colors.blue.withOpacity(0.1),
+                    child: Icon(icon, color: Colors.blue),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          value,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  if (onTap != null && !trailingCallButton) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.arrow_forward_ios_rounded,
+                        size: 14, color: Colors.grey.shade400),
+                  ],
                 ],
               ),
             ),
-            if (onTap != null) ...[
-              const SizedBox(width: 8),
-              Icon(Icons.arrow_forward_ios_rounded,
-                  size: 14, color: Colors.grey.shade400),
-            ],
+          ),
+          // ── Direct call icon button beside this card ──
+          if (trailingCallButton) ...[
+            const SizedBox(width: 8),
+            InkWell(
+              borderRadius: BorderRadius.circular(30),
+              onTap: _makeCall,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.call, color: Colors.green, size: 20),
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }

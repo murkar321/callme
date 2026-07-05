@@ -149,21 +149,8 @@ final Map<String, ServiceConfig> serviceConfigs = {
   "resort": ServiceConfig(
     businessLabel: "Resort Name",
     serviceCategories: [
-      "Day Package",
-      "Night Stay",
-      "Wedding Event",
-      "Corporate Event",
-      "Family Stay",
-    ],
-    amenities: [
-      "Swimming Pool",
-      "Free WiFi",
-      "Parking",
-      "Garden Area",
-      "Kids Play Area",
-      "Rain Dance",
-      "Event Hall",
-      "Bar",
+      "Anand Resort",
+      "Alexon Resort",
     ],
     requiredDocuments: [
       "Aadhaar Card",

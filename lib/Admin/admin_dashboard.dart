@@ -131,29 +131,48 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // =====================================================
   // SAVE ADMIN FCM TOKEN
+  //
+  // FIX: previously wrote to a bespoke `admin_config/fcm` document that
+  // NOTHING else in the app reads from — every other role (customers in
+  // notification_service.dart, providers in order_service.dart) stores
+  // its FCM token on its OWN `users/{uid}` doc. That meant admin push
+  // ran on a completely separate, one-off pipeline that only the
+  // provider-registration alert below knew how to use — any other part
+  // of the app that wanted to notify an admin (e.g. order accepted /
+  // rejected / completed) had no way to find that token at all.
+  //
+  // Now the admin's token lives in EXACTLY the same place a customer's
+  // or provider's does: `users/{adminUid}`, with the same field names
+  // (`fcmToken`, `tokenUpdatedAt`, `platform`), plus a `role: 'admin'`
+  // marker so OrderService.notifyAdmins() (order_service.dart) can find
+  // every admin with one simple query — no second collection, no second
+  // queuing function, no admin-only special case anywhere.
   // =====================================================
 
   Future<void> _saveAdminFcmToken() async {
     try {
+      final uid = _adminUser?.uid;
+      if (uid == null || uid.isEmpty) return;
+
       final token = await FirebaseMessaging.instance.getToken();
       if (token == null || token.isEmpty) return;
 
-      await _db.doc('admin_config/fcm').set({
-        'token': token,
-        'adminUid': _adminUser?.uid ?? '',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await _writeAdminTokenDoc(uid, token);
 
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-        _db.doc('admin_config/fcm').set({
-          'token': newToken,
-          'adminUid': _adminUser?.uid ?? '',
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        _writeAdminTokenDoc(uid, newToken);
       });
     } catch (e) {
       debugPrint('[Admin] FCM token save error: $e');
     }
+  }
+
+  Future<void> _writeAdminTokenDoc(String uid, String token) {
+    return _db.collection('users').doc(uid).set({
+      'fcmToken': token,
+      'tokenUpdatedAt': FieldValue.serverTimestamp(),
+      'role': 'admin',
+    }, SetOptions(merge: true));
   }
 
   // =====================================================
@@ -270,9 +289,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
           });
         }
 
-        await _writeNotification(
-          receiverId: _adminUser?.uid ?? '',
-          role: 'admin',
+        // FIX: single call does both the in-app `notifications` doc AND
+        // the `fcm_queue` push entry, reading the admin's token from the
+        // SAME `users/{adminUid}` doc every other role uses — no more
+        // separate `_queueAdminFcm()` / `admin_config/fcm` round trip.
+        await _notifyAdmin(
           title: title,
           body: body,
           type: 'provider_registered',
@@ -284,17 +305,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
             'phone': phone,
           },
         );
-
-        await _queueAdminFcm(
-          title: title,
-          body: body,
-          type: 'provider_registered',
-          providerId: id,
-          businessName: businessName,
-          ownerName: ownerName,
-          serviceType: serviceType,
-          phone: phone,
-        );
       }
     }, onError: (e) {
       debugPrint('[Admin] providers listener error: $e');
@@ -302,19 +312,30 @@ class _AdminDashboardState extends State<AdminDashboard> {
     });
   }
 
-  Future<void> _writeNotification({
-    required String receiverId,
-    required String role,
+  // =====================================================
+  // NOTIFY ADMIN — ONE shared path for every admin alert.
+  //
+  // Writes the `notifications` doc (read by whatever in-app notification
+  // list the admin uses) and, if a token is saved, one `fcm_queue` entry —
+  // reading that token from `users/{adminUid}`, the exact same doc/field
+  // shape OrderService.notifyUser() already reads for customers. This
+  // replaces the old `_writeNotification` + `_queueAdminFcm` pair with a
+  // single call site so nothing can drift out of sync again.
+  // =====================================================
+
+  Future<void> _notifyAdmin({
     required String title,
     required String body,
     required String type,
     Map<String, dynamic> extraData = const {},
   }) async {
-    if (receiverId.isEmpty) return;
+    final uid = _adminUser?.uid ?? '';
+    if (uid.isEmpty) return;
+
     try {
       await _db.collection('notifications').add({
-        'receiverId': receiverId,
-        'role': role,
+        'receiverId': uid,
+        'role': 'admin',
         'title': title,
         'body': body,
         'type': type,
@@ -323,42 +344,34 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ...extraData,
       });
     } catch (e) {
-      debugPrint('[Admin] _writeNotification error: $e');
+      debugPrint('[Admin] notifications write error: $e');
     }
-  }
 
-  Future<void> _queueAdminFcm({
-    required String title,
-    required String body,
-    required String type,
-    required String providerId,
-    required String businessName,
-    required String ownerName,
-    required String serviceType,
-    required String phone,
-  }) async {
     try {
-      final configDoc = await _db.doc('admin_config/fcm').get();
-      final adminToken = (configDoc.data()?['token'] ?? '').toString().trim();
-      if (adminToken.isEmpty) return;
+      final userDoc = await _db.collection('users').doc(uid).get();
+      final token = (userDoc.data()?['fcmToken'] ?? '').toString().trim();
+      if (token.isEmpty) {
+        debugPrint('[Admin] No fcmToken saved on users/$uid — push skipped '
+            '(in-app notification was still saved).');
+        return;
+      }
 
       await _db.collection('fcm_queue').add({
-        'token': adminToken,
-        'receiverId': _adminUser?.uid ?? '',
+        'token': token,
+        'receiverId': uid,
         'title': title,
         'body': body,
         'type': type,
-        'providerId': providerId,
-        'businessName': businessName,
-        'ownerName': ownerName,
-        'serviceType': serviceType,
-        'phone': phone,
-        'data': {'type': type, 'providerId': providerId},
+        'data': {
+          'type': type,
+          'receiverId': uid,
+          ...extraData.map((k, v) => MapEntry(k, v.toString())),
+        },
         'sent': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      debugPrint('[Admin] FCM queue error: $e');
+      debugPrint('[Admin] fcm_queue write error: $e');
     }
   }
 

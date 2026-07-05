@@ -121,6 +121,14 @@ bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 // ONLY under `subCategories[]` (no matching main category) will
 // still see the order here — the same merged-pool pipeline is used
 // on both the "who gets notified" side and the "what do I see" side.
+//
+// NOTE: categoryMatchFuzzy() itself is STRICT/EXACT ONLY (see
+// order_service.dart) — it does not do fuzzy word-overlap matching
+// across categories. "Hair Styling" will never match a provider
+// registered only under "Hair Treatments". The only thing "fuzzy"
+// about this pipeline is that it checks the provider's categories[]
+// AND subCategories[] pool — both of which the provider explicitly
+// selected themselves — not that it guesses based on shared words.
 // ─────────────────────────────────────────────────────────────
 bool _categoryMatch(
   Map<String, dynamic> orderData,
@@ -150,10 +158,40 @@ bool _categoryMatch(
 // to someone else), every OTHER provider's live listener re-runs this
 // check and the order disappears from their Available tab in
 // real time — no polling, no manual refresh needed.
+//
+// ─────────────────────────────────────────────────────────────
+// FIX (THIS REVISION): MULTI-PROFILE-PER-LOGIN ISOLATION.
+//
+// One Firebase Auth account (`userId`) can own MULTIPLE provider
+// profiles across different verticals — e.g. the same login
+// registered both a Salon business (providerId="SAL-118697") AND a
+// Resort/Civil business (providerId="RES-457227"). Firestore's
+// `providerUserId` field on an order only ever stores the Auth UID,
+// which is IDENTICAL for both of that person's dashboards.
+//
+// Previously, the "direct-assignment bypass" (for orders where the
+// customer picked a specific provider by name at booking time) keyed
+// itself ONLY on `providerUserId == myUid`. That meant: the instant
+// ANY of that login's provider profiles got a direct-assigned order,
+// the bypass fired on *every* dashboard that login could open —
+// leaking a resort booking into the Salon dashboard's "Available"
+// tab and vice versa, completely skipping the service-type/category
+// checks that would otherwise have filtered it out.
+//
+// The fix: every ownership check in this file now ALSO compares the
+// order's `providerId` (the specific business profile, e.g.
+// "SAL-118697") against `myProviderId` (this dashboard instance's own
+// providerId, passed in from BusinessDashboardPage's constructor).
+// An order can only be treated as "mine" / bypass category checks
+// when BOTH the login (`providerUserId`) AND the exact business
+// profile (`providerId`) match. Broadcast/pool orders (no providerId
+// set at creation) are unaffected — they still go through the full
+// service-type + category pipeline exactly as before.
 // ─────────────────────────────────────────────────────────────
 String? _unavailableReason({
   required Map<String, dynamic> data,
   required String myUid,
+  required String myProviderId,
   required String svcNorm,
   required List<String> providerCats,
   required List<String> providerSubCats,
@@ -164,13 +202,40 @@ String? _unavailableReason({
 
   final provUid =
       (data['providerUserId'] ?? '').toString().trim();
+  final orderProviderId =
+      (data['providerId'] ?? '').toString().trim();
   final status  =
       (data['status'] ?? '').toString().toLowerCase().trim();
   final reopened = data['reopenForOthers'] == true;
 
-  // Already firmly taken by someone else → skip
-  if (isAssigned && provUid.isNotEmpty && provUid != myUid) {
-    return 'Already assigned to another provider';
+  // "Belongs to me" now requires BOTH the same login AND the same
+  // exact provider profile. Legacy orders with no providerId saved
+  // (orderProviderId.isEmpty) still fall back to UID-only matching
+  // so old data doesn't suddenly become invisible.
+  final bool assignedToMe = isAssigned &&
+      provUid.isNotEmpty &&
+      provUid == myUid &&
+      (orderProviderId.isEmpty || orderProviderId == myProviderId);
+
+  // Already firmly taken by someone else (different login), OR taken
+  // by the SAME login but a DIFFERENT one of their business profiles
+  // → skip on this dashboard either way.
+  if (isAssigned && provUid.isNotEmpty && !assignedToMe) {
+    return provUid == myUid
+        ? 'Assigned to a different provider profile under this login (order providerId="$orderProviderId", this dashboard="$myProviderId")'
+        : 'Already assigned to another provider';
+  }
+
+  // ── DIRECT-ASSIGNMENT BYPASS ─────────────────────────────────
+  // Customer explicitly picked THIS exact provider profile at
+  // booking time. Still "pending" (not yet accepted) → always show
+  // it to the assigned provider profile, skip service-type/category
+  // checks entirely. Once they Accept, status flips to "accepted"
+  // and it moves to the "My" tab via _isMine() instead.
+  final bool isDirectAssignmentToMe = assignedToMe &&
+      status == OrderStatus.pending;
+  if (isDirectAssignmentToMe) {
+    return null; // available — no further checks needed
   }
 
   // ── Open-status check ───────────────────────────────────────
@@ -206,8 +271,11 @@ String? _unavailableReason({
     return 'Service type mismatch: order="$orderSvc" vs your profile="$svcNorm"';
   }
 
-  // Category match — exact, then fuzzy, then sub-service fallback,
-  // run against the MERGED categories + subCategories pool.
+  // Category match — EXACT ONLY (see categoryMatchFuzzy() in
+  // order_service.dart), run against the MERGED categories +
+  // subCategories pool. No fuzzy word-overlap: a provider under
+  // "Hair Treatments" will never match an order categorized as
+  // "Hair Styling" just because both contain the word "hair".
   if (!_categoryMatch(data, providerCats, providerSubCats: providerSubCats)) {
     final cands      = orderCategoryCandidates(data);
     final mergedCats = providerCategoryPool(providerCats, providerSubCats);
@@ -220,15 +288,17 @@ String? _unavailableReason({
 bool _isAvailable({
   required Map<String, dynamic> data,
   required String myUid,
+  required String myProviderId,
   required String svcNorm,
   required List<String> providerCats,
   required List<String> providerSubCats,
 }) {
   final reason = _unavailableReason(
-    data:         data,
-    myUid:        myUid,
-    svcNorm:      svcNorm,
-    providerCats: providerCats,
+    data:            data,
+    myUid:           myUid,
+    myProviderId:    myProviderId,
+    svcNorm:         svcNorm,
+    providerCats:    providerCats,
     providerSubCats: providerSubCats,
   );
   if (reason != null) {
@@ -240,18 +310,34 @@ bool _isAvailable({
 // ─────────────────────────────────────────────────────────────
 // "My Jobs" must ONLY show orders that are explicitly and firmly
 // assigned to this provider — not pending/open ones.
+//
+// FIX: also scoped to the exact provider profile (myProviderId), not
+// just the login (myUid) — for the same multi-profile-per-login
+// reason documented above _unavailableReason(). Without this, a
+// resort booking accepted under RES-457227 could also show up in the
+// "My Jobs" tab of the Salon dashboard (SAL-118697) opened from the
+// same login.
 // ─────────────────────────────────────────────────────────────
 bool _isMine({
   required Map<String, dynamic> data,
   required String myUid,
+  required String myProviderId,
   required String svcNorm,
 }) {
   final provUid  = (data['providerUserId'] ?? '').toString().trim();
+  final orderProviderId = (data['providerId'] ?? '').toString().trim();
   final status   = (data['status'] ?? '').toString().toLowerCase().trim();
   final dynamic assignedRaw = data['isAssigned'];
 
-  // Must belong to this provider
+  // Must belong to this login
   if (provUid != myUid) return false;
+
+  // Must belong to THIS exact business profile — unless the order has
+  // no providerId saved at all (legacy data), in which case fall back
+  // to UID-only matching so old orders don't vanish.
+  if (orderProviderId.isNotEmpty && orderProviderId != myProviderId) {
+    return false;
+  }
 
   // Service type must match (allow empty for legacy docs)
   final orderSvc = (data['serviceType'] ?? '').toString().trim();
@@ -346,17 +432,17 @@ class _BDPState extends State<BusinessDashboardPage> {
   //
   // One query, single orderBy field (`createdAt`) → no composite
   // index required, ever. Everything else (isAssigned, status,
-  // service type, category) is filtered client-side. Both tabs
-  // share this one stream/result set, and any error is surfaced
-  // immediately instead of being swallowed.
+  // service type, category, AND provider profile) is filtered
+  // client-side. Both tabs share this one stream/result set, and any
+  // error is surfaced immediately instead of being swallowed.
   //
   // NOTE: because this query reads the WHOLE `orders` collection
   // (filtering happens client-side), your Firestore Security Rules
   // must allow an authenticated user to READ the `orders` collection
   // with NO per-document field conditions. Real access control lives
   // in the app instead: the accept() transaction below guards
-  // isAssigned/providerUserId, and category/service-type matching
-  // decides what's ever shown.
+  // isAssigned/providerUserId/providerId, and category/service-type/
+  // provider-profile matching decides what's ever shown.
   // ─────────────────────────────────────────────────────────────
   Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream =
       const Stream.empty();
@@ -500,8 +586,8 @@ class _BDPState extends State<BusinessDashboardPage> {
   // ─────────────────────────────────────────────────────────────
   // FIX: called once per orders-stream emission with the set of
   // orders that are currently AVAILABLE to this provider (already
-  // category/service/status filtered via _isAvailable()). Diffs
-  // against what we saw last time and fires a local alert for
+  // category/service/status/profile filtered via _isAvailable()).
+  // Diffs against what we saw last time and fires a local alert for
   // anything genuinely new.
   //
   // Safe to call on every rebuild: if nothing changed since last
@@ -545,6 +631,11 @@ class _BDPState extends State<BusinessDashboardPage> {
 
   // ─── Firestore actions ────────────────────────────────────────
 
+  // FIX: the accept transaction now also checks that an order which
+  // is already assigned to "me" (by UID) is assigned to THIS exact
+  // provider profile too — so a Salon dashboard can never be used to
+  // accidentally accept an order that a Resort profile under the same
+  // login was directly assigned.
   Future<void> _accept(String id, Map<String, dynamic> data) async {
     if (_uid.isEmpty) {
       _snack('Session error — please restart the app.', _C.red, Icons.error_outline);
@@ -558,11 +649,21 @@ class _BDPState extends State<BusinessDashboardPage> {
         if (!snap.exists) throw Exception('not_found');
         final cur = snap.data()!;
 
-        // Already taken by someone else
-        final curProvider = (cur['providerUserId'] ?? '').toString().trim();
+        final curProvider   = (cur['providerUserId'] ?? '').toString().trim();
+        final curProviderId = (cur['providerId'] ?? '').toString().trim();
+
+        // Already taken by someone else — either a different login,
+        // OR the same login but a DIFFERENT one of their own business
+        // profiles (e.g. this order was direct-assigned to the Resort
+        // profile, but we're accepting from the Salon dashboard).
+        final belongsToDifferentProfile = curProvider.isNotEmpty &&
+            curProvider == _uid &&
+            curProviderId.isNotEmpty &&
+            curProviderId != widget.providerId;
+
         if (cur['isAssigned'] == true &&
             curProvider.isNotEmpty &&
-            curProvider != _uid) {
+            (curProvider != _uid || belongsToDifferentProfile)) {
           throw Exception('taken');
         }
 
@@ -807,6 +908,13 @@ class _BDPState extends State<BusinessDashboardPage> {
           // (specific) off the provider doc via order_service.dart's
           // shared helpers — the exact same helpers
           // _notifyMatchingProviders() uses for push notifications.
+          //
+          // Because this comes from a live `snapshots()` listener on
+          // the provider's own doc, editing categories in
+          // ProviderProfilePage / registration-edit flow updates
+          // `mainCats` / `subCats` here IMMEDIATELY — no re-login or
+          // manual refresh needed — and every order in `_ordersStream`
+          // is re-filtered against the new list on the next rebuild.
           final mainCats    = providerCategories(prov);
           final subCats     = providerSubCategories(prov);
           final displayCats = providerCategoryPool(mainCats, subCats);
@@ -881,11 +989,13 @@ class _BDPState extends State<BusinessDashboardPage> {
 
                   // ── FIX: instant local alert for newly-arrived orders.
                   // Computed with the exact same _isAvailable() filter the
-                  // Available tab itself uses, so "got an alert" and
+                  // Available tab itself uses (now including the
+                  // per-provider-profile check), so "got an alert" and
                   // "shows up in Available" can never disagree.
                   final availableForAlert = allDocs.where((d) => _isAvailable(
                     data:            d.data(),
                     myUid:           _uid,
+                    myProviderId:    widget.providerId,
                     svcNorm:         _svcNorm,
                     providerCats:    mainCats,
                     providerSubCats: subCats,
@@ -899,6 +1009,7 @@ class _BDPState extends State<BusinessDashboardPage> {
                         key:             const ValueKey('available'),
                         allDocs:         allDocs,
                         myUid:           _uid,
+                        myProviderId:    widget.providerId,
                         svcNorm:         _svcNorm,
                         serviceType:     widget.serviceType,
                         providerCats:    mainCats,
@@ -912,6 +1023,7 @@ class _BDPState extends State<BusinessDashboardPage> {
                         key:           const ValueKey('myjobs'),
                         allDocs:       allDocs,
                         myUid:         _uid,
+                        myProviderId:  widget.providerId,
                         svcNorm:       _svcNorm,
                         serviceType:   widget.serviceType,
                         countNotifier: _myNotifier,
@@ -936,7 +1048,7 @@ class _BDPState extends State<BusinessDashboardPage> {
 // ═══════════════════════════════════════════════════════════════
 class _AvailTab extends StatelessWidget {
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs;
-  final String         myUid, svcNorm, serviceType;
+  final String         myUid, myProviderId, svcNorm, serviceType;
   final List<String>   providerCats;
   final List<String>   providerSubCats;
   final _CountNotifier countNotifier;
@@ -948,6 +1060,7 @@ class _AvailTab extends StatelessWidget {
     super.key,
     required this.allDocs,
     required this.myUid,
+    required this.myProviderId,
     required this.svcNorm,
     required this.serviceType,
     required this.providerCats,
@@ -960,10 +1073,12 @@ class _AvailTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── Client-side filter: only truly available ────────────────
+    // ── Client-side filter: only truly available (scoped to THIS
+    // exact provider profile, not just this login) ────────────────
     final docs = allDocs.where((d) => _isAvailable(
       data:            d.data(),
       myUid:           myUid,
+      myProviderId:    myProviderId,
       svcNorm:         svcNorm,
       providerCats:    providerCats,
       providerSubCats: providerSubCats,
@@ -1027,6 +1142,7 @@ class _AvailTab extends StatelessWidget {
       final reason = _unavailableReason(
         data:            d.data(),
         myUid:           myUid,
+        myProviderId:    myProviderId,
         svcNorm:         svcNorm,
         providerCats:    providerCats,
         providerSubCats: providerSubCats,
@@ -1048,7 +1164,7 @@ class _AvailTab extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════
 class _MyTab extends StatelessWidget {
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs;
-  final String         myUid, svcNorm, serviceType;
+  final String         myUid, myProviderId, svcNorm, serviceType;
   final _CountNotifier countNotifier;
   final _Terms         terms;
   final Future<void> Function(String, Map<String, dynamic>) onComplete;
@@ -1058,6 +1174,7 @@ class _MyTab extends StatelessWidget {
     super.key,
     required this.allDocs,
     required this.myUid,
+    required this.myProviderId,
     required this.svcNorm,
     required this.serviceType,
     required this.countNotifier,
@@ -1069,11 +1186,13 @@ class _MyTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Use _isMine() to strictly filter — prevents pending/open
-    // orders from leaking into My Jobs tab.
+    // orders (and orders belonging to a DIFFERENT provider profile
+    // under the same login) from leaking into My Jobs tab.
     final docs = allDocs.where((d) => _isMine(
-      data:    d.data(),
-      myUid:   myUid,
-      svcNorm: svcNorm,
+      data:         d.data(),
+      myUid:        myUid,
+      myProviderId: myProviderId,
+      svcNorm:      svcNorm,
     )).toList();
 
     const ord = {
@@ -1254,30 +1373,79 @@ class _CardState extends State<_Card> {
     return 0;
   }
 
-  // ── FIX: payment method + paid/unpaid status.
-  // Previously only the raw amount was ever surfaced on the card —
-  // a provider had no way to see HOW the customer paid (or whether
-  // they'd paid at all) without opening Firestore directly.
+  // ── FIX: payment method + paid/unpaid status — now reads from
+  // several possible field shapes (not just `payment.method`), and
+  // recognizes offline/COD-style methods as a DISTINCT state instead
+  // of lumping them in with "payment pending", since being unpaid at
+  // booking time is expected/normal for those, not a warning sign.
+  //
+  // A provider previously had no way to see HOW the customer paid (or
+  // whether they'd paid at all) without opening Firestore directly,
+  // and any method not in the old fixed switch (e.g. "offline", "cod",
+  // "netbanking") either showed blank or an ugly raw string.
   Map<String, dynamic> _payment() {
     final p = widget.data['payment'];
     return p is Map ? p.cast<String, dynamic>() : <String, dynamic>{};
   }
 
-  String _paymentMethodRaw() =>
-      (_payment()['method'] ?? '').toString().trim().toLowerCase();
-
-  String _paymentMethodLabel() {
-    switch (_paymentMethodRaw()) {
-      case 'upi':     return 'UPI';
-      case 'cash':    return 'Cash';
-      case 'card':    return 'Card';
-      case 'wallet':  return 'Wallet';
-      case 'enquiry': return 'Enquiry';
-      default:
-        final raw = _paymentMethodRaw();
-        if (raw.isEmpty) return '';
-        return raw[0].toUpperCase() + raw.substring(1);
+  // Checks every field shape a booking/enquiry page might have used to
+  // store the chosen method, in priority order, so a real method never
+  // silently shows up blank just because it landed in a slightly
+  // different field than expected.
+  String _paymentMethodRaw() {
+    final candidates = <String>[
+      (_payment()['method'] ?? '').toString(),
+      (_payment()['paymentMethod'] ?? '').toString(),
+      (widget.data['paymentMethod'] ?? '').toString(),
+      (widget.data['method'] ?? '').toString(),
+    ];
+    for (final c in candidates) {
+      final v = c.trim().toLowerCase();
+      if (v.isNotEmpty) return v;
     }
+    return '';
+  }
+
+  static const Map<String, String> _methodLabels = {
+    'upi':               'UPI',
+    'cash':              'Cash',
+    'card':              'Card',
+    'wallet':            'Wallet',
+    'enquiry':           'Enquiry',
+    'cod':               'Cash on Delivery',
+    'cash_on_delivery':  'Cash on Delivery',
+    'offline':           'Pay Offline',
+    'pay_offline':       'Pay Offline',
+    'netbanking':        'Net Banking',
+    'net_banking':       'Net Banking',
+    'banktransfer':      'Bank Transfer',
+    'bank_transfer':     'Bank Transfer',
+    'online':            'Online Payment',
+  };
+
+  // Human-readable label for ANY payment method string. Known methods
+  // get a friendly name from `_methodLabels`; anything else (a new
+  // method type added later, a typo, whatever) is automatically
+  // title-cased instead of being dropped or shown raw/blank.
+  String _paymentMethodLabel() {
+    final raw = _paymentMethodRaw();
+    if (raw.isEmpty) return '';
+    final key = raw.replaceAll(RegExp(r'[\s\-]+'), '_');
+    final known = _methodLabels[key] ?? _methodLabels[raw];
+    if (known != null) return known;
+    return raw
+        .split(RegExp(r'[\s_\-]+'))
+        .where((w) => w.isNotEmpty)
+        .map((w) => w[0].toUpperCase() + w.substring(1))
+        .join(' ');
+  }
+
+  // "Offline" methods are collected by the provider in person, so
+  // unpaid-at-booking-time is the NORMAL state for these — the badge
+  // below treats that differently from an unpaid online payment.
+  bool get _isOfflineMethod {
+    const offline = {'cash', 'cod', 'cash_on_delivery', 'offline', 'pay_offline'};
+    return offline.contains(_paymentMethodRaw().replaceAll(RegExp(r'[\s\-]+'), '_'));
   }
 
   bool _isPaid() => _payment()['paid'] == true;
@@ -1309,26 +1477,38 @@ class _CardState extends State<_Card> {
   bool get _isEnquiry =>
       (widget.data['status'] ?? '').toString().toLowerCase() == OrderStatus.enquiry;
 
-  // ── FIX: dedicated payment status strip shown on every card.
+  // ── FIX: dedicated payment status strip shown on every card, now
+  // with a distinct "collect in person" state for offline methods
+  // (cash / COD / pay-offline) instead of showing them as a payment
+  // warning the way an unpaid UPI/card order would be.
   Widget _paymentBadge() {
     final methodLabel = _paymentMethodLabel();
     if (methodLabel.isEmpty) return const SizedBox.shrink();
 
     final isEnquiryPayment = _paymentMethodRaw() == 'enquiry';
-    final paid = _isPaid();
+    final paid    = _isPaid();
+    final offline = _isOfflineMethod;
 
     final Color color = isEnquiryPayment
         ? _C.grey
-        : (paid ? _C.green : _C.amber);
+        : (paid ? _C.green : (offline ? _C.blue : _C.amber));
     final Color bg = isEnquiryPayment
         ? _C.greySft
-        : (paid ? _C.greenSft : _C.amberSft);
+        : (paid ? _C.greenSft : (offline ? _C.blueSft : _C.amberSft));
     final IconData icon = isEnquiryPayment
         ? Icons.info_outline_rounded
-        : (paid ? Icons.verified_rounded : Icons.hourglass_bottom_rounded);
+        : (paid
+            ? Icons.verified_rounded
+            : (offline
+                ? Icons.payments_rounded
+                : Icons.hourglass_bottom_rounded));
     final String label = isEnquiryPayment
         ? 'No payment required — enquiry only'
-        : (paid ? 'Paid via $methodLabel' : 'Payment pending • $methodLabel');
+        : (paid
+            ? 'Paid via $methodLabel'
+            : (offline
+                ? 'Collect payment in person • $methodLabel'
+                : 'Payment pending • $methodLabel'));
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
