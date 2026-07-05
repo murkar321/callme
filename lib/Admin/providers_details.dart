@@ -16,6 +16,11 @@ class _ProvidersPageState extends State<ProvidersPage> {
   final CollectionReference _providersRef =
       FirebaseFirestore.instance.collection('providers');
 
+  // Created once and held — not recreated inside build() — so typing in the
+  // search box or tapping a filter chip doesn't tear down and resubscribe
+  // to the whole `providers` collection on every keystroke.
+  late final Stream<QuerySnapshot> _providersStream = _providersRef.snapshots();
+
   // ── Search & Filter State ─────────────────────────────────────────────────
   String _search = '';
   String _statusFilter = 'all';
@@ -26,6 +31,12 @@ class _ProvidersPageState extends State<ProvidersPage> {
 
   // ── Cached docs ────────────────────────────────────────────────────────────
   List<QueryDocumentSnapshot> _allDocs = [];
+
+  // ── Buffers the latest snapshot so no update is ever dropped, and so a
+  //    status/field change on a provider shows up immediately even when the
+  //    total number of provider documents hasn't changed. ───────────────────
+  List<QueryDocumentSnapshot>? _pendingDocs;
+  bool _syncScheduled = false;
 
   // ── Constants ─────────────────────────────────────────────────────────────
   static const List<Map<String, dynamic>> _kTypes = [
@@ -42,6 +53,19 @@ class _ProvidersPageState extends State<ProvidersPage> {
     {'key': 'rejected', 'label': 'Rejected', 'color': Color(0xFFDC2626)},
   ];
 
+  /// Provider documents aren't consistently shaped: `serviceType` shows up
+  /// as a top-level field on some docs and nested under `service.serviceType`
+  /// on others (confirmed on production provider CIV-118139). Every place
+  /// that reads a provider's service category goes through this helper so
+  /// filtering, counts, and the card itself always agree with each other
+  /// regardless of which shape a given document happens to use.
+  String _providerServiceType(Map<String, dynamic> d) {
+    final top = (d['serviceType'] ?? '').toString().trim();
+    if (top.isNotEmpty) return top;
+    final nested = (d['service'] as Map?)?['serviceType'];
+    return (nested ?? '').toString().trim();
+  }
+
   // ── Computed filtered list ─────────────────────────────────────────────────
   List<QueryDocumentSnapshot> get _filtered {
     final q = _search.toLowerCase().trim();
@@ -52,10 +76,10 @@ class _ProvidersPageState extends State<ProvidersPage> {
       final name   = (biz['businessName'] ?? '').toString().toLowerCase();
       final phone  = (biz['phone'] ?? d['phone'] ?? '').toString().toLowerCase();
       final owner  = (biz['ownerName'] ?? d['ownerName'] ?? '').toString().toLowerCase();
-      final svcT   = (d['serviceType'] ?? '').toString().toLowerCase();
+      final svcT   = _providerServiceType(d).toLowerCase();
       final pid    = (d['providerId'] ?? '').toString().toLowerCase();
-      final status = (d['status'] ?? '').toString().toLowerCase();
-      final ptype  = (d['providerType'] ?? '').toString().toLowerCase();
+      final status = (d['status'] ?? '').toString().trim().toLowerCase();
+      final ptype  = (d['providerType'] ?? '').toString().trim().toLowerCase();
 
       final matchSearch = q.isEmpty ||
           name.contains(q)  ||
@@ -75,10 +99,8 @@ class _ProvidersPageState extends State<ProvidersPage> {
     for (final t in _kTypes.skip(1)) {
       final k = t['key'] as String;
       counts[k] = _allDocs.where((doc) {
-        return (doc.data() as Map<String, dynamic>)['providerType']
-                ?.toString()
-                .toLowerCase() ==
-            k;
+        final d = doc.data() as Map<String, dynamic>;
+        return (d['providerType'] ?? '').toString().trim().toLowerCase() == k;
       }).length;
     }
     return counts;
@@ -161,6 +183,34 @@ class _ProvidersPageState extends State<ProvidersPage> {
     super.dispose();
   }
 
+  /// Same no-drop sync pattern used on the Orders page: always cache the
+  /// freshest snapshot, sorted, via a single scheduled setState — instead of
+  /// only updating when the document *count* changes. The previous
+  /// count-based check meant a provider's status flipping from "pending" to
+  /// "approved" (no change in total document count) could leave the list
+  /// showing stale data until some other unrelated add/remove happened.
+  void _syncDocs(List<QueryDocumentSnapshot> docs) {
+    docs.sort((a, b) {
+      final aT = (a.data() as Map)['createdAt'];
+      final bT = (b.data() as Map)['createdAt'];
+      if (aT is Timestamp && bT is Timestamp) {
+        return bT.toDate().compareTo(aT.toDate());
+      }
+      return 0;
+    });
+
+    _pendingDocs = docs;
+    if (_syncScheduled) return;
+    _syncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncScheduled = false;
+      final latest = _pendingDocs;
+      if (mounted && latest != null) {
+        setState(() => _allDocs = latest);
+      }
+    });
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -172,7 +222,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FC),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _providersRef.snapshots(),
+        stream: _providersStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               _allDocs.isEmpty) {
@@ -180,32 +230,11 @@ class _ProvidersPageState extends State<ProvidersPage> {
                 child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
           }
           if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child:
-                    Text(snapshot.error.toString(), textAlign: TextAlign.center),
-              ),
-            );
+            return _errorState(snapshot.error.toString());
           }
 
           if (snapshot.hasData) {
-            final docs = List<QueryDocumentSnapshot>.from(snapshot.data!.docs);
-            docs.sort((a, b) {
-              final aT = (a.data() as Map)['createdAt'];
-              final bT = (b.data() as Map)['createdAt'];
-              if (aT is Timestamp && bT is Timestamp) {
-                return bT.toDate().compareTo(aT.toDate());
-              }
-              return 0;
-            });
-            if (docs.length != _allDocs.length) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() => _allDocs = docs);
-              });
-            } else {
-              _allDocs = docs;
-            }
+            _syncDocs(List<QueryDocumentSnapshot>.from(snapshot.data!.docs));
           }
 
           if (_allDocs.isEmpty) return _emptyState();
@@ -482,7 +511,7 @@ class _ProvidersPageState extends State<ProvidersPage> {
     final image             = (biz['image']         ?? '').toString();
     final providerType      = (data['providerType'] ?? 'Provider').toString();
     final status            = (data['status']       ?? 'pending').toString();
-    final serviceType       = (data['serviceType']  ?? '').toString();
+    final serviceType       = _providerServiceType(data);
     final userId            = (data['userId']       ?? '').toString();
     final ownTools          = svc['ownTools'] ?? false;
     final isActive          = data['isActive'] ?? false;
@@ -1233,6 +1262,23 @@ class _ProvidersPageState extends State<ProvidersPage> {
             style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _errorState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFDC2626)),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
+          ],
+        ),
       ),
     );
   }

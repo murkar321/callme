@@ -73,10 +73,7 @@ class UniversalDetailPage extends StatelessWidget {
       isCleaning ? (data as CleaningService).includes
                  : (data as ServiceProduct).safeIncludes;
 
-  /// What's excluded
-  List<String> get excludes =>
-      isCleaning ? (data as CleaningService).excludes
-                 : (data as ServiceProduct).safeExcludes;
+
 
   /// Step-by-step list
   List<String> get steps =>
@@ -300,7 +297,6 @@ class UniversalDetailPage extends StatelessWidget {
                     ),
 
                   if (includes.isNotEmpty) _listSection('Includes', includes),
-                  if (excludes.isNotEmpty) _listSection('Excludes', excludes),
                   if (process.isNotEmpty)  _listSection('Process',  process),
                   if (steps.isNotEmpty)    _listSection('Steps',    steps),
 

@@ -4,7 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 class AdminOrdersPage extends StatefulWidget {
-  const AdminOrdersPage({super.key});
+  /// Optional query to pre-fill the search box with — used when arriving
+  /// here from the dashboard's header search so the two feel connected
+  /// instead of the search box being decorative.
+  final String initialSearch;
+
+  const AdminOrdersPage({super.key, this.initialSearch = ''});
 
   @override
   State<AdminOrdersPage> createState() => _AdminOrdersPageState();
@@ -13,15 +18,34 @@ class AdminOrdersPage extends StatefulWidget {
 class _AdminOrdersPageState extends State<AdminOrdersPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // The stream is created exactly once and held here — NOT inside build().
+  // Creating a fresh `.snapshots()` call inside build() (as StreamBuilder's
+  // `stream:` argument often ends up being written) makes Firestore tear
+  // down and re-establish a brand new listener on every rebuild, which
+  // includes every keystroke typed into the search box. That's what made
+  // the page feel laggy/flickery and re-fetch the whole collection
+  // repeatedly. Holding a single stream instance fixes both.
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream =
+      _firestore.collection('orders').snapshots();
+
   // ── Search & Filter State ─────────────────────────────────────────────────
   String _search = '';
   String _statusFilter = 'all';
   String _serviceFilter = 'all';
-  final TextEditingController _searchController = TextEditingController();
+  late final TextEditingController _searchController =
+      TextEditingController(text: widget.initialSearch);
   final FocusNode _searchFocus = FocusNode();
 
   // ── Cached docs from stream (so filters don't require stream rebuild) ─────
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _allDocs = [];
+
+  // ── Buffers the latest snapshot so no update is ever dropped even if
+  //    several snapshots arrive before a frame has rendered. Previously the
+  //    sync was skipped entirely while a callback was pending, which could
+  //    leave the list showing a stale snapshot until the next Firestore
+  //    event happened to arrive. ─────────────────────────────────────────────
+  List<QueryDocumentSnapshot<Map<String, dynamic>>>? _pendingDocs;
+  bool _syncScheduled = false;
 
   // ─── Services ─────────────────────────────────────────────────────────────
   static const List<Map<String, dynamic>> _kServices = [
@@ -47,7 +71,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     return _allDocs.where((doc) {
       final d = doc.data();
       final svc    = (d['serviceType'] ?? d['serviceName'] ?? '').toString().toLowerCase();
-      final status = (d['status'] ?? 'pending').toString().toLowerCase();
+      final status = _statusOf(d);
       final uname  = _userName(d).toLowerCase();
       final email  = (d['email']  ?? d['user']?['email']  ?? '').toString().toLowerCase();
       final phone  = (d['phone']  ?? d['user']?['phone']  ?? '').toString().toLowerCase();
@@ -83,6 +107,24 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
+
+  /// Status read tolerantly — matches the same fallback chain used on the
+  /// dashboard so a card's badge and the dashboard's counts never disagree.
+  String _statusOf(Map<String, dynamic> d) {
+    final candidates = <dynamic>[
+      d['status'],
+      d['orderStatus'],
+      d['order_status'],
+      d['bookingStatus'],
+      (d['order'] is Map) ? (d['order'] as Map)['status'] : null,
+    ];
+    for (final c in candidates) {
+      final s = c?.toString().trim().toLowerCase();
+      if (s != null && s.isNotEmpty) return s;
+    }
+    return 'pending';
+  }
+
   Color _statusColor(String s) {
     switch (s.toLowerCase()) {
       case 'accepted':  return const Color(0xFF16A34A);
@@ -162,6 +204,31 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     super.dispose();
   }
 
+  /// Syncs `_allDocs` from a fresh snapshot on every emission — not just
+  /// when the document count changes, and never silently drops a snapshot.
+  /// Sorting happens up front so the cached list is always render-ready.
+  void _syncDocs(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    docs.sort((a, b) {
+      final aT = a.data()['createdAt'];
+      final bT = b.data()['createdAt'];
+      if (aT is Timestamp && bT is Timestamp) {
+        return bT.toDate().compareTo(aT.toDate());
+      }
+      return 0;
+    });
+
+    _pendingDocs = docs;
+    if (_syncScheduled) return;
+    _syncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncScheduled = false;
+      final latest = _pendingDocs;
+      if (mounted && latest != null) {
+        setState(() => _allDocs = latest);
+      }
+    });
+  }
+
   // ─── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -174,41 +241,19 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5FB),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _firestore.collection('orders').snapshots(),
+        stream: _ordersStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting && _allDocs.isEmpty) {
             return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
           }
           if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(snapshot.error.toString(), textAlign: TextAlign.center),
-              ),
-            );
+            return _errorState(snapshot.error.toString());
           }
 
-          // Update cached docs only when stream emits
           if (snapshot.hasData) {
-            final docs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
+            _syncDocs(List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
               snapshot.data!.docs,
-            );
-            docs.sort((a, b) {
-              final aT = a.data()['createdAt'];
-              final bT = b.data()['createdAt'];
-              if (aT is Timestamp && bT is Timestamp) {
-                return bT.toDate().compareTo(aT.toDate());
-              }
-              return 0;
-            });
-            // Only update if changed to avoid unnecessary rebuilds
-            if (docs.length != _allDocs.length) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() => _allDocs = docs);
-              });
-            } else {
-              _allDocs = docs;
-            }
+            ));
           }
 
           if (_allDocs.isEmpty) return _emptyState();
@@ -290,13 +335,32 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                       ],
                     ),
                   ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.circle, size: 8, color: Colors.greenAccent),
+                        SizedBox(width: 5),
+                        Text('Live',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
 
             const SizedBox(height: 14),
 
-            // ── Search bar ── KEY FIX: outside StreamBuilder rebuilds
+            // ── Search bar ── lives outside the StreamBuilder's rebuild path
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Material(
@@ -460,7 +524,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     final service      = (d['serviceType'] ?? d['serviceName'] ?? 'Service').toString();
     final providerName = _providerName(d);
     final address      = _address(d);
-    final status       = (d['status'] ?? 'pending').toString();
+    final status       = _statusOf(d);
     final paid         = d['payment']?['paid'] ?? false;
     final payMethod    = (d['payment']?['method'] ?? '-').toString().toUpperCase();
     final amount       = d['totalAmount'] ?? d['payment']?['totalAmount'] ?? 0;
@@ -888,7 +952,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     );
   }
 
-  // ─── Empty / No Match ──────────────────────────────────────────────────────
+  // ─── Empty / No Match / Error ──────────────────────────────────────────────
   Widget _emptyState() {
     return Center(
       child: Column(
@@ -934,6 +998,23 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
             style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _errorState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFDC2626)),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
+          ],
+        ),
       ),
     );
   }

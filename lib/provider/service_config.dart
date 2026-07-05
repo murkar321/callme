@@ -8,28 +8,7 @@ class ServiceConfig {
   final bool showBankDetails;
 
   // ============================================================
-  // SUB-SERVICE → CATEGORY MAP
-  //
-  // `serviceCategories` above is the BROAD list a provider picks
-  // from at registration (e.g. "Jar Exchange/Return", "New Build").
-  // Booking pages let a customer book a much more SPECIFIC item
-  // within one of those categories — e.g. under "Jar Exchange /
-  // Return", the actual bookable cards are "20L Water Jar Exchange"
-  // and "Empty Jar Return Pickup"; under civil's "New Build", the
-  // cards are "Residential House Construction", etc.
-  //
-  // `subServices` maps: canonical category name -> [specific
-  // bookable item names]. `parentCategoryForSubService()` in
-  // order_service.dart uses this to resolve a specific item straight
-  // back to its parent category, both when an order is first placed
-  // (resolveCanonicalCategory()) AND at match time
-  // (categoryMatchFuzzy()'s Stage 3).
-  //
-  // ⚠️ Only populated for categories/items confirmed from actual
-  // booking-page screenshots so far (water's "Jar Exchange/Return"
-  // and civil's "New Build"). Add entries here as you audit each
-  // booking page's card titles — an empty/missing list just means
-  // that category falls back to plain fuzzy word matching.
+  
   // ============================================================
   final Map<String, List<String>> subServices;
 
@@ -211,12 +190,8 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "PAN Card",
       "Business License",
     ],
-    subServices: {
-      "Jar Exchange/Return": [
-        "20L Water Jar Exchange",
-        "Empty Jar Return Pickup",
-      ],
-    },
+   
+  
   ),
 
   "laundry": ServiceConfig(
@@ -252,13 +227,6 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "GST",
       "Contractor License",
     ],
-    subServices: {
-      "New Build": [
-        "Residential House Construction",
-        "Commercial Building Construction",
-        "Bungalow / Villa Construction",
-        "Apartment / Flat Construction",
-      ],
-    },
+   
   ),
 };

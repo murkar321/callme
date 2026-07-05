@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +10,15 @@ import 'package:url_launcher/url_launcher.dart';
 import 'provider_profile_page.dart';
 import '../provider/order_service.dart';
 // ⚠️ Adjust path if service_config.dart lives elsewhere.
+
+// FIX: only import NotificationService from notification_service.dart —
+// NOT the whole file. notification_service.dart also declares its own
+// `class NotificationType`, and order_service.dart (imported above)
+// already declares a DIFFERENT `class NotificationType`. Importing both
+// files unqualified would make `NotificationType` ambiguous and fail to
+// compile. `show NotificationService` sidesteps that entirely.
+import '../profile/notification_service.dart' show NotificationService;
+// ⚠️ Adjust path above if notification_service.dart lives elsewhere.
 
 // ═══════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -88,65 +99,64 @@ class _Terms {
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
+//
+// FIX: _norm() used to keep its own private copy of the
+// space/hyphen/underscore-stripping regex. order_service.dart
+// already exposes the exact same logic as normalizeServiceType() —
+// having two independent copies is exactly the kind of drift that
+// caused the earlier category-matching bugs (one file's regex
+// silently diverging from the other's). _norm() now just delegates,
+// so there is only ever ONE definition of "normalized" in the app.
 // ═══════════════════════════════════════════════════════════════
-String _norm(String s) =>
-    s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
+String _norm(String s) => normalizeServiceType(s);
 
 bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 
 // ─────────────────────────────────────────────────────────────
 // CATEGORY MATCH
 //
-// FIX: This used to keep its OWN duplicate fuzzy-matching stage
-// (_fuzzyOverlap / _wordsOf) that word-split the OUTPUT of
-// normalizeCategory() — which has already had every space/hyphen/
-// underscore stripped. That collapsed a provider category like
-// "Software And Programming" into one solid blob
-// ("softwareandprogramming") BEFORE word-splitting ever ran, so it
-// could only ever match as a single giant token. An order category
-// like "programming & software course (basic)" was silently
-// rejected even though it obviously shares the word "programming",
-// because by the time this file split it into words, the word
-// boundaries were already gone.
-//
-// order_service.dart's categoryMatchFuzzy() was already written
-// correctly (it works off RAW, un-stripped strings for the fuzzy
-// stage) — this file just wasn't actually calling it, despite the
-// comments here previously claiming it was "byte-identical". Now
-// it genuinely delegates to the shared function, so a provider's
-// Available tab and their push notifications are guaranteed to
-// agree on every order, including fuzzy-matched ones.
+// This also accepts `providerSubCats` and forwards it to
+// categoryMatchFuzzy() exactly like order_service.dart's
+// _notifyMatchingProviders() does. A provider who is registered
+// ONLY under `subCategories[]` (no matching main category) will
+// still see the order here — the same merged-pool pipeline is used
+// on both the "who gets notified" side and the "what do I see" side.
 // ─────────────────────────────────────────────────────────────
 bool _categoryMatch(
   Map<String, dynamic> orderData,
-  List<String> providerCats,
-) {
+  List<String> providerCats, {
+  List<String> providerSubCats = const [],
+}) {
   final orderId = (orderData['orderId'] ?? '').toString();
-  return categoryMatchFuzzy(orderData, providerCats, debugOrderId: orderId);
+  return categoryMatchFuzzy(
+    orderData,
+    providerCats,
+    providerSubCats: providerSubCats,
+    debugOrderId: orderId,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
 // AVAILABILITY CHECK — single source of truth.
 //
-// This used to be a plain bool-returning function (`_isAvailable`)
-// that duplicated its reasoning in ad-hoc debugPrint() calls. That
-// meant the *displayed* "why can't I see orders?" hint in the UI
-// could never explain anything beyond "doesn't match your
-// profile" — a developer had to attach a debug console to see the
-// real reason.
+// Returns WHY an order is unavailable (or null if it's available).
+// `_isAvailable()` below is a thin bool wrapper around it, and the
+// empty-state UI in `_AvailTab` uses the reason strings directly
+// (via the debug-only summary) to explain a live breakdown — no
+// console access needed to diagnose a mismatch.
 //
-// It's now a single function that returns WHY an order is
-// unavailable (or null if it's available). `_isAvailable()` below
-// is a thin bool wrapper around it, and the empty-state UI in
-// `_AvailTab` uses the reason strings directly to show a live
-// breakdown to whoever is looking at the dashboard — no console
-// access needed.
+// This is also the ONE function that decides FCFS visibility: once
+// any provider accepts an order (isAssigned=true, providerUserId set
+// to someone else), every OTHER provider's live listener re-runs this
+// check and the order disappears from their Available tab in
+// real time — no polling, no manual refresh needed.
 // ─────────────────────────────────────────────────────────────
 String? _unavailableReason({
   required Map<String, dynamic> data,
   required String myUid,
   required String svcNorm,
   required List<String> providerCats,
+  required List<String> providerSubCats,
 }) {
   final dynamic assignedRaw = data['isAssigned'];
   // Treat null / missing as false (order not yet taken)
@@ -164,25 +174,17 @@ String? _unavailableReason({
   }
 
   // ── Open-status check ───────────────────────────────────────
-  // FIX: the old `hasRealProvider` check was `provUid.isNotEmpty &&
-  // provUid != myUid` — i.e. it only counted an order as "taken" if
-  // it belonged to SOMEONE ELSE. That meant when THIS provider
-  // accepted an order (providerUserId == myUid, status ==
-  // 'accepted'), hasRealProvider evaluated to false, so the
-  // 'accepted' branch below still marked it "open" — the provider's
-  // own just-accepted order kept reappearing in Available instead of
-  // moving cleanly to My Orders/Enquiries/Bookings.
-  //
-  // The 'accepted' branch should only reopen an order when it is
-  // genuinely ORPHANED data (status says accepted but no provider is
-  // actually attached — a data inconsistency, not a real assignment).
-  // Any order with a provider attached, whether that's this provider
-  // or another one, is no longer "available" — it just isn't already
-  // covered above if it happens to be assigned to *me*.
-  final bool isOrphanedAccept = status == 'accepted' && provUid.isEmpty;
-  final bool isOpen = status == 'pending'
-      || status == 'enquiry'
-      || (status == 'cancelled' && reopened)
+  // Any order with a provider attached, whether that's this
+  // provider or another one, is no longer "available" — the
+  // 'accepted' branch below only reopens an order when it is
+  // genuinely ORPHANED data (status says accepted but no provider
+  // is actually attached — a data inconsistency, not a real
+  // assignment).
+  final bool isOrphanedAccept =
+      status == OrderStatus.accepted && provUid.isEmpty;
+  final bool isOpen = status == OrderStatus.pending
+      || status == OrderStatus.enquiry
+      || (status == OrderStatus.cancelled && reopened)
       || isOrphanedAccept
       || assignedRaw == null; // field missing means unassigned
 
@@ -204,10 +206,12 @@ String? _unavailableReason({
     return 'Service type mismatch: order="$orderSvc" vs your profile="$svcNorm"';
   }
 
-  // Category match — exact, then fuzzy fallback.
-  if (!_categoryMatch(data, providerCats)) {
-    final cands = orderCategoryCandidates(data);
-    return 'Category mismatch: order categories=$cands vs your categories=$providerCats';
+  // Category match — exact, then fuzzy, then sub-service fallback,
+  // run against the MERGED categories + subCategories pool.
+  if (!_categoryMatch(data, providerCats, providerSubCats: providerSubCats)) {
+    final cands      = orderCategoryCandidates(data);
+    final mergedCats = providerCategoryPool(providerCats, providerSubCats);
+    return 'Category mismatch: order categories=$cands vs your categories=$mergedCats';
   }
 
   return null; // available
@@ -218,9 +222,14 @@ bool _isAvailable({
   required String myUid,
   required String svcNorm,
   required List<String> providerCats,
+  required List<String> providerSubCats,
 }) {
   final reason = _unavailableReason(
-    data: data, myUid: myUid, svcNorm: svcNorm, providerCats: providerCats,
+    data:         data,
+    myUid:        myUid,
+    svcNorm:      svcNorm,
+    providerCats: providerCats,
+    providerSubCats: providerSubCats,
   );
   if (reason != null) {
     debugPrint('[avail] SKIP ${data['orderId'] ?? ''}: $reason');
@@ -229,8 +238,8 @@ bool _isAvailable({
 }
 
 // ─────────────────────────────────────────────────────────────
-// FIX: "My Jobs" must ONLY show orders that are explicitly and
-// firmly assigned to this provider — not pending/open ones.
+// "My Jobs" must ONLY show orders that are explicitly and firmly
+// assigned to this provider — not pending/open ones.
 // ─────────────────────────────────────────────────────────────
 bool _isMine({
   required Map<String, dynamic> data,
@@ -250,12 +259,16 @@ bool _isMine({
 
   // Only show statuses that mean "this job is mine"
   // 'pending' without assignment = available job, not mine
-  const mineStatuses = {'accepted', 'completed', 'cancelled'};
+  const mineStatuses = {
+    OrderStatus.accepted,
+    OrderStatus.completed,
+    OrderStatus.cancelled,
+  };
   if (!mineStatuses.contains(status)) return false;
 
   // Extra guard: if isAssigned is explicitly false and status is
   // somehow 'accepted', treat as available (data inconsistency)
-  if (assignedRaw == false && status == 'accepted') {
+  if (assignedRaw == false && status == OrderStatus.accepted) {
     debugPrint('[mine] SKIP: isAssigned=false but status=accepted, '
         'treating as available');
     return false;
@@ -331,43 +344,19 @@ class _BDPState extends State<BusinessDashboardPage> {
   // ─────────────────────────────────────────────────────────────
   // ORDERS STREAM — SINGLE SOURCE OF TRUTH
   //
-  // FIX (root cause of "matching orders never show up"):
-  // The previous version ran THREE separate streams —
-  //   • orders where isAssigned == false, orderBy createdAt
-  //   • orders where status IN [pending, enquiry], orderBy createdAt
-  //   • a broad recent-orders fallback
-  //
-  // The first two each require a Firestore COMPOSITE INDEX
-  // (equality/whereIn on one field + orderBy on a different field).
-  // Only the FIRST stream's errors were ever checked and surfaced
-  // to the provider (`primarySnap.hasError`) — if the composite
-  // index for the SECOND stream was missing (a very easy thing to
-  // forget to create in the Firebase console), that stream would
-  // silently fail, its docs would just come back empty, and the
-  // matching order would vanish from "Available" with NO error
-  // shown at all — even though the category/service type matched
-  // perfectly.
-  //
-  // Fix: use ONE query with a single orderBy field only
-  // (`createdAt`), which Firestore indexes automatically — no
-  // composite index required, ever. Everything else (isAssigned,
-  // status, service type, category) is filtered client-side, same
-  // as before. Both tabs now share this one stream/result set, and
-  // any error is surfaced immediately instead of being swallowed.
+  // One query, single orderBy field (`createdAt`) → no composite
+  // index required, ever. Everything else (isAssigned, status,
+  // service type, category) is filtered client-side. Both tabs
+  // share this one stream/result set, and any error is surfaced
+  // immediately instead of being swallowed.
   //
   // NOTE: because this query reads the WHOLE `orders` collection
-  // (filtering happens client-side), it only returns data if your
-  // Firestore Security Rules allow an authenticated user to READ
-  // the `orders` collection with NO per-document field conditions
-  // (Firestore rejects the whole query wholesale if any branch of
-  // the read rule depends on resource.data for a field this query
-  // doesn't filter by). With `provider_uid_lookup` removed there is
-  // no way for rules to verify "is this uid an approved provider"
-  // without a query-by-field capability rules don't have — so the
-  // orders rule must be a flat `allow read: if signedIn();` (see
-  // firestore.rules). Real access control lives in the app instead:
-  // the accept() transaction below guards isAssigned/providerUserId,
-  // and category/service-type matching decides what's ever shown.
+  // (filtering happens client-side), your Firestore Security Rules
+  // must allow an authenticated user to READ the `orders` collection
+  // with NO per-document field conditions. Real access control lives
+  // in the app instead: the accept() transaction below guards
+  // isAssigned/providerUserId, and category/service-type matching
+  // decides what's ever shown.
   // ─────────────────────────────────────────────────────────────
   Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream =
       const Stream.empty();
@@ -376,6 +365,36 @@ class _BDPState extends State<BusinessDashboardPage> {
   final _myNotifier    = _CountNotifier();
 
   ScaffoldMessengerState? _messenger;
+
+  // ─────────────────────────────────────────────────────────────
+  // FIX: INSTANT NEW-ORDER ALERT.
+  //
+  // This is a SECOND, best-effort delivery path on top of the
+  // server-side push: while THIS dashboard instance is open and
+  // listening to the live `orders` stream, the instant a NEW order
+  // shows up that matches this provider (and wasn't already known
+  // from the first load), we fire a local sound+vibration alert
+  // directly — no round trip needed.
+  //
+  // IMPORTANT: this is purely a local, on-device heads-up. It does
+  // NOT write anything to Firestore. The actual `notifications`
+  // collection doc (the one NotificationPage reads, and the one that
+  // triggers a real push via `fcm_queue`) is written once, at order
+  // creation time, by OrderService._notifyMatchingProviders() in
+  // order_service.dart — using the exact same categoryMatchFuzzy()
+  // pipeline as `_isAvailable()` below. As long as both stay in sync
+  // (see the note on categoryMatchFuzzy() in order_service.dart),
+  // "shows up locally" and "has a saved notification" will always
+  // agree. Do NOT add a second Firestore write here — that would
+  // create duplicate notification docs for orders that already got
+  // one at creation time.
+  //
+  // `_isFirstOrdersLoad` prevents falsely "alerting" on every order
+  // that already existed when the dashboard was opened; only orders
+  // that arrive AFTER that first snapshot trigger a notification.
+  // ─────────────────────────────────────────────────────────────
+  final Set<String> _knownAvailableOrderIds = {};
+  bool _isFirstOrdersLoad = true;
 
   String get _svcNorm => _norm(widget.serviceType);
   late final _Terms _terms = _Terms.forService(widget.serviceType);
@@ -448,6 +467,10 @@ class _BDPState extends State<BusinessDashboardPage> {
     setState(() {
       _ordersStream = const Stream.empty();
       _authReady    = false;
+      // Reset the new-order tracker too — otherwise a retry could
+      // treat every already-existing order as "new" and spam alerts.
+      _knownAvailableOrderIds.clear();
+      _isFirstOrdersLoad = true;
     });
     _resolveAuthThenInit();
   }
@@ -472,6 +495,52 @@ class _BDPState extends State<BusinessDashboardPage> {
         margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 3),
       ));
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // FIX: called once per orders-stream emission with the set of
+  // orders that are currently AVAILABLE to this provider (already
+  // category/service/status filtered via _isAvailable()). Diffs
+  // against what we saw last time and fires a local alert for
+  // anything genuinely new.
+  //
+  // Safe to call on every rebuild: if nothing changed since last
+  // time, `newIds` is empty and this is a no-op.
+  // ─────────────────────────────────────────────────────────────
+  void _checkForNewOrders(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> availableDocs,
+  ) {
+    final currentIds = availableDocs.map((d) => d.id).toSet();
+
+    if (_isFirstOrdersLoad) {
+      // Baseline only — don't alert for orders that already existed
+      // before this dashboard session started.
+      _knownAvailableOrderIds
+        ..clear()
+        ..addAll(currentIds);
+      _isFirstOrdersLoad = false;
+      return;
+    }
+
+    final newIds = currentIds.difference(_knownAvailableOrderIds);
+    if (newIds.isNotEmpty) {
+      for (final doc in availableDocs) {
+        if (!newIds.contains(doc.id)) continue;
+        final data = doc.data();
+        final custName = (data['userName'] ?? '').toString().trim();
+        final label = _terms.singular;
+        NotificationService.showLocalAlert(
+          title: '📦 New $label Available',
+          body: '${custName.isEmpty ? "A customer" : custName} has a new '
+              '${widget.serviceType} $label waiting — first to accept gets it.',
+          payload: jsonEncode({'type': 'new_booking', 'orderId': doc.id}),
+        );
+      }
+    }
+
+    _knownAvailableOrderIds
+      ..clear()
+      ..addAll(currentIds);
   }
 
   // ─── Firestore actions ────────────────────────────────────────
@@ -502,10 +571,10 @@ class _BDPState extends State<BusinessDashboardPage> {
         final dynamic assignedRaw = cur['isAssigned'];
         final hasNoProvider = curProvider.isEmpty;
 
-        final canAccept = st == 'pending'
-            || st == 'enquiry'
-            || (st == 'cancelled' && reopened)
-            || (st == 'accepted' && hasNoProvider)
+        final canAccept = st == OrderStatus.pending
+            || st == OrderStatus.enquiry
+            || (st == OrderStatus.cancelled && reopened)
+            || (st == OrderStatus.accepted && hasNoProvider)
             || assignedRaw == null; // missing field = open
 
         if (!canAccept) throw Exception('taken');
@@ -515,7 +584,7 @@ class _BDPState extends State<BusinessDashboardPage> {
           'providerUserId':  _uid,
           'providerName':    widget.businessName,
           'serviceType':     _svcNorm,
-          'status':          'accepted',
+          'status':          OrderStatus.accepted,
           'isAssigned':      true,          // always written on accept
           'reopenForOthers': false,
           'acceptedAt':      FieldValue.serverTimestamp(),
@@ -564,7 +633,7 @@ class _BDPState extends State<BusinessDashboardPage> {
         'providerName':    null,
         'isAssigned':      false,
         'reopenForOthers': true,
-        'status':          'pending',
+        'status':          OrderStatus.pending,
         'lastActionBy':    'provider',
       });
       _notify(custId, id,
@@ -582,7 +651,7 @@ class _BDPState extends State<BusinessDashboardPage> {
     final custId = (data['userId'] ?? '').toString();
     try {
       await _db.collection('orders').doc(id).update({
-        'status':       'completed',
+        'status':       OrderStatus.completed,
         'isCompleted':  true,
         'isAssigned':   false,
         'completedAt':  FieldValue.serverTimestamp(),
@@ -605,7 +674,7 @@ class _BDPState extends State<BusinessDashboardPage> {
     final custId = (data['userId'] ?? '').toString();
     try {
       await _db.collection('orders').doc(id).update({
-        'status':             'cancelled',
+        'status':             OrderStatus.cancelled,
         'isAssigned':         false,
         'reopenForOthers':    true,
         'providerCancelNote': note.isEmpty ? 'Provider cancelled' : note,
@@ -636,11 +705,22 @@ class _BDPState extends State<BusinessDashboardPage> {
     }
   }
 
+  // FIX: now forwards `businessName` / `serviceType` / `providerId`
+  // into OrderService.notifyUser() so the saved notification doc
+  // carries this as STRUCTURED data — not just baked into `body` text.
+  // NotificationPage already renders a chip for `businessName` /
+  // `serviceType` when present on the doc; before this fix those
+  // fields were never written, so the chip never showed and there was
+  // no reliable way to tell "which order got completed by which
+  // provider" from the Notifications screen alone.
   void _notify(String uid, String orderId, String title, String body, String type) {
     if (uid.isEmpty) return;
     OrderService.notifyUser(
       userId: uid, orderId: orderId,
       title: title, body: body, type: type,
+      businessName: widget.businessName,
+      serviceType:  widget.serviceType,
+      providerId:   widget.providerId,
     ).catchError((e) => debugPrint('[notify] $e'));
   }
 
@@ -720,10 +800,16 @@ class _BDPState extends State<BusinessDashboardPage> {
           final prov = snap.data?.data() ?? {};
           if (prov['status'] != 'approved') return const _PendingBody();
 
-          final business           = (prov['business'] as Map?)?.cast<String, dynamic>() ?? {};
-          final photoUrl           = (business['image'] ?? '').toString().trim();
-          final rawCats            = (prov['categories'] as List?) ?? [];
-          final providerCategories = rawCats.map((e) => e.toString()).toList();
+          final business = (prov['business'] as Map?)?.cast<String, dynamic>() ?? {};
+          final photoUrl = (business['image'] ?? '').toString().trim();
+
+          // ── Read BOTH `categories` (main) and `subCategories`
+          // (specific) off the provider doc via order_service.dart's
+          // shared helpers — the exact same helpers
+          // _notifyMatchingProviders() uses for push notifications.
+          final mainCats    = providerCategories(prov);
+          final subCats     = providerSubCategories(prov);
+          final displayCats = providerCategoryPool(mainCats, subCats);
 
           return Column(children: [
             _Header(
@@ -734,7 +820,7 @@ class _BDPState extends State<BusinessDashboardPage> {
               availCount:       _availNotifier.value,
               myCount:          _myNotifier.value,
               photoUrl:         photoUrl,
-              activeCategories: providerCategories,
+              activeCategories: displayCats,
               terms:            _terms,
               onTab:            _goTab,
               onProfile: () => Navigator.push(
@@ -745,9 +831,8 @@ class _BDPState extends State<BusinessDashboardPage> {
             ),
             Expanded(
               // ── SINGLE shared orders stream for both tabs ──────
-              // Any error here is now always surfaced — nothing is
-              // silently swallowed the way the old multi-stream
-              // setup could be.
+              // Any error here is always surfaced — nothing is
+              // silently swallowed.
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: _ordersStream,
                 builder: (_, ordersSnap) {
@@ -794,20 +879,34 @@ class _BDPState extends State<BusinessDashboardPage> {
 
                   final allDocs = ordersSnap.data?.docs ?? [];
 
+                  // ── FIX: instant local alert for newly-arrived orders.
+                  // Computed with the exact same _isAvailable() filter the
+                  // Available tab itself uses, so "got an alert" and
+                  // "shows up in Available" can never disagree.
+                  final availableForAlert = allDocs.where((d) => _isAvailable(
+                    data:            d.data(),
+                    myUid:           _uid,
+                    svcNorm:         _svcNorm,
+                    providerCats:    mainCats,
+                    providerSubCats: subCats,
+                  )).toList();
+                  _checkForNewOrders(availableForAlert);
+
                   return IndexedStack(
                     index: _tab,
                     children: [
                       _AvailTab(
-                        key:                const ValueKey('available'),
-                        allDocs:            allDocs,
-                        myUid:              _uid,
-                        svcNorm:            _svcNorm,
-                        serviceType:        widget.serviceType,
-                        providerCategories: providerCategories,
-                        countNotifier:      _availNotifier,
-                        terms:              _terms,
-                        onAccept:           _accept,
-                        onDecline:          _showDecline,
+                        key:             const ValueKey('available'),
+                        allDocs:         allDocs,
+                        myUid:           _uid,
+                        svcNorm:         _svcNorm,
+                        serviceType:     widget.serviceType,
+                        providerCats:    mainCats,
+                        providerSubCats: subCats,
+                        countNotifier:   _availNotifier,
+                        terms:           _terms,
+                        onAccept:        _accept,
+                        onDecline:       _showDecline,
                       ),
                       _MyTab(
                         key:           const ValueKey('myjobs'),
@@ -838,7 +937,8 @@ class _BDPState extends State<BusinessDashboardPage> {
 class _AvailTab extends StatelessWidget {
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs;
   final String         myUid, svcNorm, serviceType;
-  final List<String>   providerCategories;
+  final List<String>   providerCats;
+  final List<String>   providerSubCats;
   final _CountNotifier countNotifier;
   final _Terms         terms;
   final Future<void> Function(String, Map<String, dynamic>) onAccept;
@@ -850,7 +950,8 @@ class _AvailTab extends StatelessWidget {
     required this.myUid,
     required this.svcNorm,
     required this.serviceType,
-    required this.providerCategories,
+    required this.providerCats,
+    required this.providerSubCats,
     required this.countNotifier,
     required this.terms,
     required this.onAccept,
@@ -861,10 +962,11 @@ class _AvailTab extends StatelessWidget {
   Widget build(BuildContext context) {
     // ── Client-side filter: only truly available ────────────────
     final docs = allDocs.where((d) => _isAvailable(
-      data:         d.data(),
-      myUid:        myUid,
-      svcNorm:      svcNorm,
-      providerCats: providerCategories,
+      data:            d.data(),
+      myUid:           myUid,
+      svcNorm:         svcNorm,
+      providerCats:    providerCats,
+      providerSubCats: providerSubCats,
     )).toList();
 
     docs.sort((a, b) {
@@ -878,18 +980,9 @@ class _AvailTab extends StatelessWidget {
     countNotifier.update(docs.length);
 
     if (docs.isEmpty) {
-      // FIX: this used to show a full diagnostic breakdown to the
-      // provider ("39 order(s) exist but none match your profile:
-      // • 12x — Already assigned to another provider • 10x —
-      // Service type mismatch..." etc). That's internal debugging
-      // noise — a provider doesn't need to know how many orders
-      // exist for OTHER service types or categories, and it reads
-      // like an error even when everything is working correctly.
-      // The UI now always shows one simple, calm message. The full
-      // per-reason breakdown is still written to the debug console
-      // via _logSkipSummary() below, so it's there whenever you
-      // (the developer) need to diagnose a real mismatch — it's
-      // just never shown to the provider.
+      // The provider-facing message stays short and calm. The full
+      // per-reason breakdown goes to debugPrint only via
+      // _logSkipSummary() below — never shown in the UI.
       _logSkipSummary();
       return _Empty(
         icon:  Icons.work_outline_rounded,
@@ -920,12 +1013,9 @@ class _AvailTab extends StatelessWidget {
   }
 
   // ── Debug-console-only diagnostic summary ───────────────────
-  // Same per-reason breakdown that used to be rendered in the UI,
-  // now only ever written via debugPrint — visible in `flutter
-  // run` / Logcat / Xcode console during development, never shown
-  // to the provider. Grouped and sorted by frequency so a real
-  // mismatch is still easy to spot without scrolling through
-  // dozens of individual per-order lines.
+  // Grouped and sorted by frequency so a real mismatch is still
+  // easy to spot without scrolling through dozens of per-order
+  // lines. Never shown to the provider.
   void _logSkipSummary() {
     if (allDocs.isEmpty) {
       debugPrint('[avail] No $serviceType ${terms.singular.toLowerCase()}s '
@@ -935,10 +1025,11 @@ class _AvailTab extends StatelessWidget {
     final reasonCounts = <String, int>{};
     for (final d in allDocs) {
       final reason = _unavailableReason(
-        data:         d.data(),
-        myUid:        myUid,
-        svcNorm:      svcNorm,
-        providerCats: providerCategories,
+        data:            d.data(),
+        myUid:           myUid,
+        svcNorm:         svcNorm,
+        providerCats:    providerCats,
+        providerSubCats: providerSubCats,
       );
       if (reason == null) continue;
       reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
@@ -946,8 +1037,9 @@ class _AvailTab extends StatelessWidget {
     final entries = reasonCounts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final lines = entries.map((e) => '  ${e.value}x — ${e.key}').join('\n');
+    final mergedCats = providerCategoryPool(providerCats, providerSubCats);
     debugPrint('[avail] ${allDocs.length} ${terms.singular.toLowerCase()}(s) '
-        'exist, 0 match provider categories $providerCategories:\n$lines');
+        'exist, 0 match provider categories $mergedCats:\n$lines');
   }
 }
 
@@ -976,7 +1068,7 @@ class _MyTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // FIX: use _isMine() to strictly filter — prevents pending/open
+    // Use _isMine() to strictly filter — prevents pending/open
     // orders from leaking into My Jobs tab.
     final docs = allDocs.where((d) => _isMine(
       data:    d.data(),
@@ -984,7 +1076,12 @@ class _MyTab extends StatelessWidget {
       svcNorm: svcNorm,
     )).toList();
 
-    const ord = {'accepted': 0, 'completed': 1, 'cancelled': 2, 'pending': 3};
+    const ord = {
+      OrderStatus.accepted:  0,
+      OrderStatus.completed: 1,
+      OrderStatus.cancelled: 2,
+      OrderStatus.pending:   3,
+    };
     docs.sort((a, b) {
       final as_ = (a.data()['status'] ?? '').toString().toLowerCase();
       final bs  = (b.data()['status'] ?? '').toString().toLowerCase();
@@ -997,8 +1094,8 @@ class _MyTab extends StatelessWidget {
     });
 
     final active = docs
-        .where((d) =>
-            (d.data()['status'] ?? '').toString().toLowerCase() == 'accepted')
+        .where((d) => (d.data()['status'] ?? '').toString().toLowerCase() ==
+            OrderStatus.accepted)
         .length;
     countNotifier.update(active);
 
@@ -1024,8 +1121,8 @@ class _MyTab extends StatelessWidget {
           mode:        _Mode.mine,
           serviceType: serviceType,
           terms:       terms,
-          onComplete: status == 'accepted' ? () => onComplete(doc.id, data) : null,
-          onCancel:   status == 'accepted' ? () => onCancel(doc.id, data)   : null,
+          onComplete: status == OrderStatus.accepted ? () => onComplete(doc.id, data) : null,
+          onCancel:   status == OrderStatus.accepted ? () => onCancel(doc.id, data)   : null,
         );
       },
     );
@@ -1072,21 +1169,25 @@ class _CardState extends State<_Card> {
   }
 
   static const _col = {
-    'pending':   _C.amber,  'enquiry':   _C.orange,
-    'accepted':  _C.green,  'completed': _C.blue,
-    'cancelled': _C.grey,
+    OrderStatus.pending:   _C.amber,
+    OrderStatus.enquiry:   _C.orange,
+    OrderStatus.accepted:  _C.green,
+    OrderStatus.completed: _C.blue,
+    OrderStatus.cancelled: _C.grey,
   };
   static const _bg = {
-    'pending':   _C.amberSft,  'enquiry':   _C.orangeSft,
-    'accepted':  _C.greenSft,  'completed': _C.blueSft,
-    'cancelled': _C.greySft,
+    OrderStatus.pending:   _C.amberSft,
+    OrderStatus.enquiry:   _C.orangeSft,
+    OrderStatus.accepted:  _C.greenSft,
+    OrderStatus.completed: _C.blueSft,
+    OrderStatus.cancelled: _C.greySft,
   };
   static const _ico = {
-    'pending':   Icons.schedule_rounded,
-    'enquiry':   Icons.help_rounded,
-    'accepted':  Icons.check_circle_rounded,
-    'completed': Icons.verified_rounded,
-    'cancelled': Icons.cancel_rounded,
+    OrderStatus.pending:   Icons.schedule_rounded,
+    OrderStatus.enquiry:   Icons.help_rounded,
+    OrderStatus.accepted:  Icons.check_circle_rounded,
+    OrderStatus.completed: Icons.verified_rounded,
+    OrderStatus.cancelled: Icons.cancel_rounded,
   };
 
   String _s(dynamic v, [String fb = '']) =>
@@ -1153,6 +1254,34 @@ class _CardState extends State<_Card> {
     return 0;
   }
 
+  // ── FIX: payment method + paid/unpaid status.
+  // Previously only the raw amount was ever surfaced on the card —
+  // a provider had no way to see HOW the customer paid (or whether
+  // they'd paid at all) without opening Firestore directly.
+  Map<String, dynamic> _payment() {
+    final p = widget.data['payment'];
+    return p is Map ? p.cast<String, dynamic>() : <String, dynamic>{};
+  }
+
+  String _paymentMethodRaw() =>
+      (_payment()['method'] ?? '').toString().trim().toLowerCase();
+
+  String _paymentMethodLabel() {
+    switch (_paymentMethodRaw()) {
+      case 'upi':     return 'UPI';
+      case 'cash':    return 'Cash';
+      case 'card':    return 'Card';
+      case 'wallet':  return 'Wallet';
+      case 'enquiry': return 'Enquiry';
+      default:
+        final raw = _paymentMethodRaw();
+        if (raw.isEmpty) return '';
+        return raw[0].toUpperCase() + raw.substring(1);
+    }
+  }
+
+  bool _isPaid() => _payment()['paid'] == true;
+
   String _note() {
     for (final k in ['note','notes','description','specialRequest']) {
       final v = _s(widget.data[k]); if (v.isNotEmpty) return v;
@@ -1173,16 +1302,58 @@ class _CardState extends State<_Card> {
   }
 
   String _displayStatus(String raw) =>
-      (raw == 'cancelled' && widget.data['reopenForOthers'] == true)
+      (raw == OrderStatus.cancelled && widget.data['reopenForOthers'] == true)
           ? 'reopened'
           : raw;
 
   bool get _isEnquiry =>
-      (widget.data['status'] ?? '').toString().toLowerCase() == 'enquiry';
+      (widget.data['status'] ?? '').toString().toLowerCase() == OrderStatus.enquiry;
+
+  // ── FIX: dedicated payment status strip shown on every card.
+  Widget _paymentBadge() {
+    final methodLabel = _paymentMethodLabel();
+    if (methodLabel.isEmpty) return const SizedBox.shrink();
+
+    final isEnquiryPayment = _paymentMethodRaw() == 'enquiry';
+    final paid = _isPaid();
+
+    final Color color = isEnquiryPayment
+        ? _C.grey
+        : (paid ? _C.green : _C.amber);
+    final Color bg = isEnquiryPayment
+        ? _C.greySft
+        : (paid ? _C.greenSft : _C.amberSft);
+    final IconData icon = isEnquiryPayment
+        ? Icons.info_outline_rounded
+        : (paid ? Icons.verified_rounded : Icons.hourglass_bottom_rounded);
+    final String label = isEnquiryPayment
+        ? 'No payment required — enquiry only'
+        : (paid ? 'Paid via $methodLabel' : 'Payment pending • $methodLabel');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.25)),
+        ),
+        child: Row(children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 8),
+          Expanded(child: Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 12, fontWeight: FontWeight.w700))),
+        ]),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final rawStatus  = (widget.data['status'] ?? 'pending').toString().toLowerCase();
+    final rawStatus  = (widget.data['status'] ?? OrderStatus.pending).toString().toLowerCase();
     final dispStatus = _displayStatus(rawStatus);
 
     final sc   = dispStatus == 'reopened' ? _C.orange : (_col[rawStatus] ?? _C.indigo);
@@ -1221,22 +1392,6 @@ class _CardState extends State<_Card> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
           // ── Status bar ──────────────────────────────────────────
-          // FIX: this used to be a plain Row with a Spacer — on a
-          // narrow phone, a long category name (e.g. "Software And
-          // Programming") plus the date label at the end pushed the
-          // total content wider than the card, producing the
-          // "OVERFLOWED BY N PIXELS" black/yellow strip on the right
-          // edge. It also showed "ENQUIRY" TWICE: once as the status
-          // pill text (dispStatus already reads "ENQUIRY" whenever
-          // rawStatus == 'enquiry') and again as a separate orange
-          // tag badge right next to it — redundant.
-          //
-          // Fixed by: (1) dropping the duplicate ENQUIRY tag badge
-          // entirely, (2) switching from Row+Spacer to a Wrap, which
-          // simply flows extra content onto a second line instead of
-          // overflowing horizontally, and (3) capping the category
-          // badge's width with an ellipsis so one very long category
-          // name can't dominate the whole row by itself.
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -1332,6 +1487,9 @@ class _CardState extends State<_Card> {
               const Divider(height: 1, color: _C.divider),
               const SizedBox(height: 12),
 
+              // Payment status — how (and whether) the customer paid.
+              _paymentBadge(),
+
               if (svcList.isNotEmpty)
                 _InfoRow(icon: Icons.miscellaneous_services_rounded,
                     value: svcList.join(', '), ic: _C.indigo, bg: _C.indigoSft),
@@ -1403,7 +1561,7 @@ class _CardState extends State<_Card> {
               ],
 
               // Cancel reason
-              if (rawStatus == 'cancelled' && cancelNote.isNotEmpty &&
+              if (rawStatus == OrderStatus.cancelled && cancelNote.isNotEmpty &&
                   widget.mode == _Mode.mine) ...[
                 const SizedBox(height: 10),
                 Container(
@@ -1467,7 +1625,7 @@ class _CardState extends State<_Card> {
                 ])
 
               else ...[
-                if (rawStatus == 'accepted')
+                if (rawStatus == OrderStatus.accepted)
                   Row(children: [
                     Expanded(child: _ActionBtn(
                       label: 'Mark Complete',
@@ -1489,11 +1647,11 @@ class _CardState extends State<_Card> {
                       ),
                     ),
                   ]),
-                if (rawStatus == 'completed')
+                if (rawStatus == OrderStatus.completed)
                   _StatusBadge(Icons.verified_rounded,
                       '${widget.terms.singular} Completed Successfully',
                       _C.blue, _C.blueSft),
-                if (rawStatus == 'cancelled')
+                if (rawStatus == OrderStatus.cancelled)
                   _StatusBadge(Icons.refresh_rounded,
                       'Cancelled — Reopened for Other Providers',
                       _C.orange, _C.orangeSft),
@@ -1520,13 +1678,6 @@ class _TagBadge extends StatelessWidget {
       color: color.withOpacity(0.15),
       borderRadius: BorderRadius.circular(20),
     ),
-    // FIX: mainAxisSize.min + no overflow handling meant that when a
-    // caller wraps this in a ConstrainedBox(maxWidth: ...) — as the
-    // status bar now does for long category names — the label text
-    // just kept rendering at full width and clipped/overflowed
-    // instead of shrinking gracefully. Wrapping the Text in a
-    // Flexible with an ellipsis means it now truncates cleanly to
-    // whatever width is available, however narrow.
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       if (icon != null) ...[
         Icon(icon, color: color, size: 10),
@@ -1641,14 +1792,6 @@ class _StatusBadge extends StatelessWidget {
 
 // ═══════════════════════════════════════════════════════════════
 // EMPTY STATE
-//
-// The provider-facing message here is always short and simple now
-// (see _AvailTab — the old per-reason diagnostic breakdown moved to
-// debugPrint-only via _logSkipSummary()). This is still wrapped in
-// a SingleChildScrollView, same pattern as `_ErrorRetry` below, as
-// a defensive measure: on tall screens it renders centered (via the
-// ConstrainedBox min-height trick), and it can never overflow no
-// matter how long a future `msg` ends up being.
 // ═══════════════════════════════════════════════════════════════
 class _Empty extends StatelessWidget {
   final IconData icon; final String title, msg;
@@ -1680,12 +1823,7 @@ class _Empty extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ERROR RETRY  (FIX: scroll-safe — was a plain Column that could
-// overflow on smaller screens with longer messages, e.g. the
-// permission-denied hint text above. Now wrapped in a
-// SingleChildScrollView with a min-height constraint so it still
-// centers vertically on tall screens but scrolls instead of
-// overflowing on short ones.)
+// ERROR RETRY
 // ═══════════════════════════════════════════════════════════════
 class _ErrorRetry extends StatelessWidget {
   final String message; final VoidCallback onRetry;

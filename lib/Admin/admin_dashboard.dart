@@ -44,11 +44,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
     'rejected': 0,
   };
 
-  // Raw status strings actually seen in the orders collection, with counts.
-  final Map<String, int> _rawStatusCounts = {};
-  bool _showDiagnostics = false;
-
   String? _newProviderBanner;
+
+  // Timestamp of the last successful data refresh — shown in the header so
+  // it's obvious the dashboard is actually live, not just static numbers.
+  DateTime? _lastUpdated;
 
   StreamSubscription<QuerySnapshot>? _usersSub;
   StreamSubscription<QuerySnapshot>? _providersSub;
@@ -58,6 +58,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // false "new provider" notifications firing on every cold start.
   final Set<String> _seenProviderIds = {};
   bool _providersSeedDone = false;
+
+  // ── Header search — a real, working search box. Submitting a query jumps
+  //    straight into the Orders page pre-filtered, since "search everything"
+  //    isn't a single Firestore query but orders is the most common lookup
+  //    (by customer name, phone, email, or order id).
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
 
   // =====================================================
   // INIT / DISPOSE
@@ -77,6 +84,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _providersSub?.cancel();
     _ordersSub?.cancel();
     _timeoutGuard?.cancel();
+    _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -157,7 +166,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _usersSub = _db.collection('users').snapshots().listen((snapshot) {
       if (!mounted) return;
       final validCount = snapshot.docs.where((doc) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final data = doc.data();
         return (data['uid'] ?? '').toString().trim().isNotEmpty;
       }).length;
 
@@ -165,6 +174,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         dashboardData['users'] = validCount;
         _loadingUsers = false;
         _timedOut = false;
+        _lastUpdated = DateTime.now();
       });
     }, onError: (e) {
       debugPrint('[Admin] users listener error: $e');
@@ -177,6 +187,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // One single stream drives all three, instead of separate queries —
   // fewer moving parts, fewer places for something to silently fail.
   // =====================================================
+
+  /// Provider documents aren't consistently shaped: some store the
+  /// service category as a top-level `serviceType` field, others nest it
+  /// under `service.serviceType`. Every place that needs this value goes
+  /// through this helper so notifications/banners never show "service"
+  /// as a fallback just because the schema shape differs for that doc.
+  String _providerServiceType(Map<String, dynamic> data) {
+    final top = (data['serviceType'] ?? '').toString().trim();
+    if (top.isNotEmpty) return top;
+    final nested = (data['service'] as Map?)?['serviceType'];
+    final nestedStr = (nested ?? '').toString().trim();
+    return nestedStr.isNotEmpty ? nestedStr : 'service';
+  }
 
   Future<void> _seedThenListenProviders() async {
     try {
@@ -198,7 +221,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
       int approvals = 0;
       for (final doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final data = doc.data();
         final status = (data['status'] ?? '').toString().trim().toLowerCase();
         if (status == 'pending') approvals++;
       }
@@ -208,6 +231,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         dashboardData['approvals'] = approvals;
         _loadingProviders = false;
         _timedOut = false;
+        _lastUpdated = DateTime.now();
       });
 
       // Only fire "new provider" alerts once the seed pass has completed,
@@ -219,8 +243,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
         final doc = change.doc;
         final id = doc.id;
-        // ignore: unnecessary_cast
-        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final data = doc.data() ?? {};
         final status = (data['status'] ?? '').toString().trim().toLowerCase();
         if (status != 'pending') continue;
         if (_seenProviderIds.contains(id)) continue;
@@ -232,10 +255,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 .toString();
         final ownerName =
             (business['ownerName'] ?? data['ownerName'] ?? '').toString();
-        final serviceType = (data['serviceType'] ?? 'service').toString();
+        final serviceType = _providerServiceType(data);
         final phone = (business['phone'] ?? data['phone'] ?? '').toString();
 
-        const title = '🆕 New Provider Registration';
+        const title = 'New Provider Registration';
         final body = '$businessName by $ownerName registered as a '
             '$serviceType provider and is awaiting approval.';
 
@@ -343,10 +366,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // LIVE ORDERS STREAM
   //
   // Status is read tolerantly (a few possible field names/locations,
-  // case/whitespace-insensitive) and bucketed with the same status set
-  // AdminOrdersPage uses: pending / accepted / completed / cancelled+rejected.
-  // The raw values actually seen are kept in _rawStatusCounts and are
-  // viewable via the Diagnostics panel (bug icon) if counts ever look off.
+  // case/whitespace-insensitive) and bucketed into the same four buckets
+  // AdminOrdersPage uses: pending / accepted / completed / rejected.
   // =====================================================
 
   void _listenOrders() {
@@ -354,12 +375,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
       if (!mounted) return;
 
       int pending = 0, accepted = 0, completed = 0, rejected = 0;
-      final rawCounts = <String, int>{};
 
       for (final doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final data = doc.data();
         final rawStatus = _statusOf(data);
-        rawCounts[rawStatus] = (rawCounts[rawStatus] ?? 0) + 1;
 
         switch (_bucketFor(rawStatus)) {
           case _OrderBucket.accepted:
@@ -383,11 +402,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
         dashboardData['accepted'] = accepted;
         dashboardData['completed'] = completed;
         dashboardData['rejected'] = rejected;
-        _rawStatusCounts
-          ..clear()
-          ..addAll(rawCounts);
         _loadingOrders = false;
         _timedOut = false;
+        _lastUpdated = DateTime.now();
       });
     }, onError: (e) {
       debugPrint('[Admin] orders listener error: $e');
@@ -433,6 +450,29 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
+  // ── Header search: jump into Orders pre-filtered by whatever was typed.
+  void _submitSearch(String value) {
+    final query = value.trim();
+    if (query.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminOrdersPage(initialSearch: query),
+      ),
+    );
+  }
+
+  String _lastUpdatedLabel() {
+    final t = _lastUpdated;
+    if (t == null) return '';
+    final diff = DateTime.now().difference(t);
+    if (diff.inSeconds < 10) return 'Updated just now';
+    if (diff.inMinutes < 1) return 'Updated ${diff.inSeconds}s ago';
+    if (diff.inHours < 1) return 'Updated ${diff.inMinutes}m ago';
+    return 'Updated ${diff.inHours}h ago';
+  }
+
   // =====================================================
   // BUILD
   // =====================================================
@@ -444,10 +484,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final _Breakpoint bp = width < 600
-                ? _Breakpoint.mobile
-                : (width < 1000 ? _Breakpoint.tablet : _Breakpoint.desktop);
+            final metrics = _ScreenMetrics.of(constraints.maxWidth);
 
             final int pending = dashboardData['pending'];
             final int accepted = dashboardData['accepted'];
@@ -468,45 +505,53 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHeroHeader(bp, pending),
+                    _buildHeroHeader(metrics, pending),
 
-                    if (_timedOut) _buildTimeoutBanner(),
+                    if (_timedOut) _buildTimeoutBanner(metrics),
 
                     AnimatedSize(
                       duration: const Duration(milliseconds: 250),
                       child: _newProviderBanner != null
-                          ? _buildNewProviderBanner()
+                          ? _buildNewProviderBanner(metrics)
                           : const SizedBox.shrink(),
                     ),
 
-                    if (_showDiagnostics) _buildDiagnosticsPanel(),
-
                     Padding(
                       padding: EdgeInsets.fromLTRB(
-                          bp == _Breakpoint.mobile ? 16 : 28,
-                          28,
-                          bp == _Breakpoint.mobile ? 16 : 28,
-                          0),
+                          metrics.pagePadding, 28, metrics.pagePadding, 0),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 1200),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _sectionLabel('Overview'),
+                            Row(
+                              children: [
+                                _sectionLabel('Overview'),
+                                const Spacer(),
+                                if (_lastUpdated != null)
+                                  Text(
+                                    _lastUpdatedLabel(),
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF94A3B8),
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                              ],
+                            ),
                             const SizedBox(height: 14),
-                            _buildStatsGrid(context, bp),
+                            _buildStatsGrid(context, metrics),
                             const SizedBox(height: 30),
                             _sectionLabel('Order Status Breakdown'),
                             const SizedBox(height: 14),
                             _buildStatusPills(
-                                bp, pending, accepted, completed, rejected),
+                                metrics, pending, accepted, completed, rejected),
                             const SizedBox(height: 28),
-                            _buildChart(bp, maxValue, pending, accepted,
+                            _buildChart(metrics, maxValue, pending, accepted,
                                 completed, rejected),
                             const SizedBox(height: 30),
                             _sectionLabel('Quick Actions'),
                             const SizedBox(height: 14),
-                            _buildQuickActions(context, bp),
+                            _buildQuickActions(context, metrics),
                             const SizedBox(height: 30),
                           ],
                         ),
@@ -524,9 +569,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // ─── Timeout banner ───────────────────────────────────────────────────
 
-  Widget _buildTimeoutBanner() {
+  Widget _buildTimeoutBanner(_ScreenMetrics m) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      margin: EdgeInsets.fromLTRB(m.pagePadding, 14, m.pagePadding, 0),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF5E5),
@@ -568,69 +613,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ─── Diagnostics ──────────────────────────────────────────────────────
-
-  Widget _buildDiagnosticsPanel() {
-    final entries = _rawStatusCounts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: const [
-              Icon(Icons.bug_report_rounded, color: Colors.amber, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'Diagnostics — raw status values in "orders"',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (entries.isEmpty)
-            const Text('No order documents found.',
-                style: TextStyle(color: Colors.white60, fontSize: 12))
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: entries.map((e) {
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '"${e.key}" × ${e.value}',
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
-                  ),
-                );
-              }).toList(),
-            ),
-        ],
-      ),
-    );
-  }
-
   // ─── Header ───────────────────────────────────────────────────────────
 
-  Widget _buildNewProviderBanner() {
+  Widget _buildNewProviderBanner(_ScreenMetrics m) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      margin: EdgeInsets.fromLTRB(m.pagePadding, 14, m.pagePadding, 0),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -705,9 +692,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildHeroHeader(_Breakpoint bp, int pending) {
-    final horizontalPad = bp == _Breakpoint.mobile ? 20.0 : 32.0;
-
+  Widget _buildHeroHeader(_ScreenMetrics m, int pending) {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -728,7 +713,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             Container(
               width: double.infinity,
               margin: EdgeInsets.fromLTRB(
-                  horizontalPad - 4, 16, horizontalPad - 4, 0),
+                  m.pagePadding - 4, 16, m.pagePadding - 4, 0),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.15),
@@ -750,12 +735,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Expanded(
                     child: Text(
                       '$pending pending order${pending == 1 ? '' : 's'} require your attention',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                           fontSize: 13),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -774,58 +762,56 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ],
               ),
             ),
+
+          // Title row — icon buttons sized down on mobile, and the title
+          // shrinks-to-fit on one line instead of wrapping onto 2-3 lines.
           Padding(
-            padding: EdgeInsets.fromLTRB(horizontalPad, 20, horizontalPad, 0),
+            padding: EdgeInsets.fromLTRB(m.pagePadding, 20, m.pagePadding, 0),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(13),
+                  padding: EdgeInsets.all(m.iconButtonPadding),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded,
-                      color: Colors.white, size: 26),
+                  child: Icon(Icons.admin_panel_settings_rounded,
+                      color: Colors.white, size: m.headerIconSize),
                 ),
-                const SizedBox(width: 14),
-                const Expanded(
+                SizedBox(width: m.isMobile ? 10 : 14),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Admin Dashboard',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Admin Dashboard',
+                          maxLines: 1,
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: m.titleFontSize,
+                              fontWeight: FontWeight.bold,
+                              height: 1.1),
+                        ),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
                         'Manage your platform',
-                        style: TextStyle(color: Colors.white60, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: Colors.white60, fontSize: m.subtitleFontSize),
                       ),
                     ],
                   ),
                 ),
-                GestureDetector(
-                  onTap: () => setState(() => _showDiagnostics = !_showDiagnostics),
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 10),
-                    padding: const EdgeInsets.all(11),
-                    decoration: BoxDecoration(
-                      color: _showDiagnostics
-                          ? Colors.amber.withOpacity(0.3)
-                          : Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      Icons.bug_report_rounded,
-                      color: _showDiagnostics ? Colors.amber : Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
+                SizedBox(width: m.isMobile ? 6 : 10),
                 Stack(
+                  clipBehavior: Clip.none,
                   children: [
                     GestureDetector(
                       onTap: () => Navigator.push(
@@ -834,22 +820,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             builder: (_) => const ApproveProvidersPage()),
                       ),
                       child: Container(
-                        padding: const EdgeInsets.all(11),
+                        padding: EdgeInsets.all(m.iconButtonPadding),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Icon(Icons.notifications_rounded,
-                            color: Colors.white, size: 20),
+                        child: Icon(Icons.notifications_rounded,
+                            color: Colors.white, size: m.headerIconSize),
                       ),
                     ),
                     if ((dashboardData['approvals'] ?? 0) > 0)
                       Positioned(
-                        top: 0,
-                        right: 0,
+                        top: -2,
+                        right: -2,
                         child: Container(
-                          width: 14,
-                          height: 14,
+                          width: 15,
+                          height: 15,
                           decoration: const BoxDecoration(
                               color: Colors.orange, shape: BoxShape.circle),
                           child: Center(
@@ -865,24 +851,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                   ],
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: m.isMobile ? 6 : 10),
                 GestureDetector(
                   onTap: _retryLoad,
                   child: Container(
-                    padding: const EdgeInsets.all(11),
+                    padding: EdgeInsets.all(m.iconButtonPadding),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.refresh_rounded,
-                        color: Colors.white, size: 20),
+                    child: Icon(Icons.refresh_rounded,
+                        color: Colors.white, size: m.headerIconSize),
                   ),
                 ),
               ],
             ),
           ),
+
           Padding(
-            padding: EdgeInsets.fromLTRB(horizontalPad, 20, horizontalPad, 28),
+            padding: EdgeInsets.fromLTRB(m.pagePadding, 20, m.pagePadding, 28),
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -894,13 +881,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       offset: const Offset(0, 4)),
                 ],
               ),
-              child: const TextField(
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocus,
+                textInputAction: TextInputAction.search,
+                onSubmitted: _submitSearch,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
                 decoration: InputDecoration(
-                  hintText: 'Search users, orders, providers...',
-                  hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-                  prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF6D28D9)),
+                  hintText: 'Search orders by name, phone, email, ID…',
+                  hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+                  prefixIcon:
+                      const Icon(Icons.search_rounded, color: Color(0xFF6D28D9)),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.arrow_forward_rounded,
+                        color: Color(0xFF6D28D9)),
+                    onPressed: () => _submitSearch(_searchController.text),
+                  ),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),
               ),
             ),
@@ -933,26 +931,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // ─── Stats grid (responsive) ────────────────────────────────────────
 
-  Widget _buildStatsGrid(BuildContext context, _Breakpoint bp) {
-    final crossAxisCount = switch (bp) {
-      _Breakpoint.mobile => 2,
-      _Breakpoint.tablet => 3,
-      _Breakpoint.desktop => 4,
-    };
-    final aspectRatio = switch (bp) {
-      _Breakpoint.mobile => 1.05,
-      _Breakpoint.tablet => 1.15,
-      _Breakpoint.desktop => 1.25,
-    };
-
+  Widget _buildStatsGrid(BuildContext context, _ScreenMetrics m) {
     return GridView(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
+        crossAxisCount: m.statsColumns,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: aspectRatio,
+        childAspectRatio: m.statsAspectRatio,
       ),
       children: [
         _statCard(context,
@@ -1024,6 +1011,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
                   child: Text(
                     '$count',
                     style: TextStyle(
@@ -1033,6 +1022,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 const SizedBox(height: 2),
                 Text(
                   title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -1049,7 +1040,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // ─── Status pills ─────────────────────────────────────────────────────
 
   Widget _buildStatusPills(
-      _Breakpoint bp, int pending, int accepted, int completed, int rejected) {
+      _ScreenMetrics m, int pending, int accepted, int completed, int rejected) {
     final pills = [
       _statusPill('Pending', pending, const Color(0xFFF59E0B)),
       _statusPill('Accepted', accepted, const Color(0xFF10B981)),
@@ -1057,7 +1048,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       _statusPill('Rejected', rejected, const Color(0xFFEF4444)),
     ];
 
-    if (bp == _Breakpoint.mobile) {
+    if (m.isMobile) {
       return GridView(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -1106,10 +1097,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // ─── Chart ────────────────────────────────────────────────────────────
 
-  Widget _buildChart(_Breakpoint bp, int maxValue, int pending, int accepted,
+  Widget _buildChart(_ScreenMetrics m, int maxValue, int pending, int accepted,
       int completed, int rejected) {
-    final isMobile = bp == _Breakpoint.mobile;
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
@@ -1180,7 +1169,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           const SizedBox(height: 28),
           SizedBox(
-            height: isMobile ? 220 : 300,
+            height: m.isMobile ? 220 : 300,
             child: maxValue == 0
                 ? const Center(
                     child: Text('No orders yet',
@@ -1204,7 +1193,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           sideTitles: SideTitles(
                             showTitles: true,
                             reservedSize: 28,
-                            getTitlesWidget: (v, m) => Text(
+                            getTitlesWidget: (v, mm) => Text(
                               v.toInt().toString(),
                               style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
                             ),
@@ -1213,14 +1202,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
-                            getTitlesWidget: (v, m) {
+                            getTitlesWidget: (v, mm) {
                               const labels = ['Pending', 'Accepted', 'Completed', 'Rejected'];
                               return Padding(
                                 padding: const EdgeInsets.only(top: 10),
                                 child: Text(
                                   labels[v.toInt()],
                                   style: TextStyle(
-                                    fontSize: isMobile ? 10 : 12,
+                                    fontSize: m.isMobile ? 10 : 12,
                                     fontWeight: FontWeight.w600,
                                     color: const Color(0xFF64748B),
                                   ),
@@ -1292,7 +1281,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // ─── Quick actions ────────────────────────────────────────────────────
 
-  Widget _buildQuickActions(BuildContext context, _Breakpoint bp) {
+  Widget _buildQuickActions(BuildContext context, _ScreenMetrics m) {
     final actions = [
       (
         label: 'Manage Users',
@@ -1314,7 +1303,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     ];
 
-    if (bp == _Breakpoint.mobile) {
+    if (m.isMobile) {
       return GridView(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -1393,6 +1382,61 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 }
 
-enum _Breakpoint { mobile, tablet, desktop }
-
 enum _OrderBucket { pending, accepted, completed, rejected }
+
+/// Centralized responsive sizing so every section of the dashboard reads
+/// off the same breakpoint logic instead of each widget guessing its own
+/// numbers. Covers phone / tablet / desktop consistently.
+class _ScreenMetrics {
+  final double width;
+  final bool isMobile;
+  final bool isTablet;
+  final bool isDesktop;
+
+  final double pagePadding;
+  final double titleFontSize;
+  final double subtitleFontSize;
+  final double headerIconSize;
+  final double iconButtonPadding;
+  final int statsColumns;
+  final double statsAspectRatio;
+
+  _ScreenMetrics._({
+    required this.width,
+    required this.isMobile,
+    required this.isTablet,
+    required this.isDesktop,
+    required this.pagePadding,
+    required this.titleFontSize,
+    required this.subtitleFontSize,
+    required this.headerIconSize,
+    required this.iconButtonPadding,
+    required this.statsColumns,
+    required this.statsAspectRatio,
+  });
+
+  factory _ScreenMetrics.of(double width) {
+    final isMobile = width < 600;
+    final isTablet = width >= 600 && width < 1000;
+    final isDesktop = width >= 1000;
+
+    // Extra-narrow phones (e.g. small Android devices, ~340-360px) get a
+    // slightly smaller title and tighter icon buttons so "Admin Dashboard"
+    // still comfortably fits on one line without needing to shrink too far.
+    final isNarrowPhone = width < 380;
+
+    return _ScreenMetrics._(
+      width: width,
+      isMobile: isMobile,
+      isTablet: isTablet,
+      isDesktop: isDesktop,
+      pagePadding: isMobile ? 16 : (isTablet ? 24 : 28),
+      titleFontSize: isNarrowPhone ? 20 : (isMobile ? 22 : 24),
+      subtitleFontSize: isMobile ? 12 : 13,
+      headerIconSize: isMobile ? 20 : 24,
+      iconButtonPadding: isNarrowPhone ? 9 : (isMobile ? 10 : 12),
+      statsColumns: isMobile ? 2 : (isTablet ? 3 : 4),
+      statsAspectRatio: isMobile ? 1.05 : (isTablet ? 1.15 : 1.25),
+    );
+  }
+}

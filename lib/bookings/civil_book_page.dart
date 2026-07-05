@@ -9,9 +9,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
-
 import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 
 import 'package:intl/intl.dart';
@@ -55,7 +52,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
 
   bool _isLoading         = false;
   bool _isSuccess         = false;
-  bool _isGettingLocation = false;
   bool _isLoadingProvider = true;
   bool _phoneComplete     = false;
 
@@ -65,6 +61,13 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   String? _providerId;
   String? _providerName;
   String? _noProviderMessage;
+
+  // ✅ The canonical category resolved during provider lookup — reused as-is
+  // when the order is placed, so what we matched a provider on is exactly
+  // what gets stored on the order (and later re-matched by the dashboard /
+  // FCM fan-out via the same resolveCanonicalCategory()/categoryMatchFuzzy()
+  // pipeline in order_service.dart).
+  String _resolvedCategory = '';
 
   late final AnimationController _pageAnim;
   late final AnimationController _revealAnim;
@@ -142,33 +145,31 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     } catch (_) {}
   }
 
-  /// Build lookup variants from [widget.serviceType] (NOT serviceName).
-  /// For renovation packages this will always be 'civil', so all variants
-  /// of "civil" are produced — guaranteeing a match.
-  List<String> _serviceVariants() {
-    final raw = widget.serviceType.trim();
-    return <String>{
-      raw,
-      raw.toLowerCase(),
-      raw.toUpperCase(),
-      raw.toLowerCase().replaceAll(' ', '_'),
-      raw.toLowerCase().replaceAll(' ', '-'),
-      raw.toLowerCase().replaceAll(' ', ''),
-      raw.replaceAll(' ', '_'),
-      raw.replaceAll(' ', '-'),
-      raw.split(' ').first,
-      raw.split(' ').first.toLowerCase(),
-      raw.split(' ').last,
-      raw.split(' ').last.toLowerCase(),
-    }.toList();
-  }
+  /// Everything this booking is "about", in the shape order_service.dart's
+  /// categoryMatchFuzzy()/orderCategoryCandidates() expect — i.e. exactly
+  /// what will end up on the order document itself. Built ONCE per lookup
+  /// so the provider we match here is guaranteed to be the same provider
+  /// the dashboard/FCM fan-out would independently pick for this order.
+  Map<String, dynamic> _buildOrderLikeData(String normalizedServiceType) {
+    final serviceNames = _hasCartItems
+        ? _cartItems.map((e) => e.name).toList()
+        : (widget.selectedRenovationItems?.isNotEmpty ?? false)
+            ? widget.selectedRenovationItems!
+            : [widget.serviceName];
 
-  bool _isMatch(String storedType) {
-    final s         = storedType.trim();
-    final rawLower  = widget.serviceType.trim().toLowerCase();
-    final sLower    = s.toLowerCase();
-    if (_serviceVariants().any((v) => v.toLowerCase() == sLower)) return true;
-    return sLower.contains(rawLower) || rawLower.contains(sLower);
+    final rawCategoryInput = serviceNames.isNotEmpty ? serviceNames.first : widget.serviceName;
+
+    // resolveCanonicalCategory() snaps whatever the user picked onto the
+    // exact category string providers register under (serviceConfigs),
+    // including recognizing a specific sub-service and mapping it to its
+    // parent category — the SAME resolver OrderService.placeOrder() uses.
+    _resolvedCategory = resolveCanonicalCategory(rawCategoryInput, normalizedServiceType);
+
+    return <String, dynamic>{
+      'category':    _resolvedCategory,
+      'services':    serviceNames,
+      'serviceType': normalizedServiceType,
+    };
   }
 
   Future<void> _loadProvider() async {
@@ -176,72 +177,83 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     setState(() { _isLoadingProvider = true; _noProviderMessage = null; });
 
     try {
-      final variants = _serviceVariants();
-      debugPrint('[Civil] serviceType="${widget.serviceType}" → variants: $variants');
+      final normalizedServiceType = widget.serviceType.trim().toLowerCase();
+      final orderLikeData         = _buildOrderLikeData(normalizedServiceType);
 
-      // Pass 1 – exact Firestore query per variant, with approved status
-      for (final v in variants) {
-        final snap = await FirebaseFirestore.instance
-            .collection('providers')
-            .where('serviceType', isEqualTo: v)
-            .where('status', isEqualTo: 'approved')
-            .limit(1)
-            .get();
-        if (snap.docs.isNotEmpty) {
-          debugPrint('[Civil] Pass1 matched "$v"');
-          _setProvider(snap.docs.first.id, snap.docs.first.data()); return;
-        }
-      }
+      debugPrint('[Civil] serviceType="$normalizedServiceType" '
+          'resolvedCategory="$_resolvedCategory"');
 
-      // Pass 2 – same but ignore status filter
-      for (final v in variants) {
-        final snap = await FirebaseFirestore.instance
-            .collection('providers')
-            .where('serviceType', isEqualTo: v)
-            .limit(1)
-            .get();
-        if (snap.docs.isNotEmpty) {
-          debugPrint('[Civil] Pass2 (no-status) matched "$v"');
-          _setProvider(snap.docs.first.id, snap.docs.first.data()); return;
-        }
-      }
+      // Primary: fast indexed query — exact serviceType + approved.
+      final primarySnap = await FirebaseFirestore.instance
+          .collection('providers')
+          .where('status', isEqualTo: 'approved')
+          .where('serviceType', isEqualTo: normalizedServiceType)
+          .get();
 
-      // Pass 3 – fetch ALL approved, fuzzy-match locally
-      final approvedSnap = await FirebaseFirestore.instance
+      // Fallback: broad scan of ALL approved providers, filtered
+      // client-side via normalizeServiceType() — rescues providers whose
+      // serviceType field has different casing/spacing. Same pattern
+      // OrderService._notifyMatchingProviders() uses, so lookup here and
+      // fan-out later never disagree on who counts as a "civil" provider.
+      final fallbackSnap = await FirebaseFirestore.instance
           .collection('providers')
           .where('status', isEqualTo: 'approved')
           .get();
-      final approvedMatch = approvedSnap.docs
-          .where((d) => _isMatch((d.data()['serviceType'] ?? '').toString()))
-          .firstOrNull;
-      if (approvedMatch != null) {
-        debugPrint('[Civil] Pass3 fuzzy approved: ${approvedMatch.id}');
-        _setProvider(approvedMatch.id, approvedMatch.data()); return;
+
+      final seen       = <String>{};
+      final candidates = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+      for (final doc in primarySnap.docs) {
+        if (seen.add(doc.id)) candidates.add(doc);
+      }
+      for (final doc in fallbackSnap.docs) {
+        if (seen.contains(doc.id)) continue;
+        final docSvc = providerServiceType(doc.data());
+        if (docSvc.isNotEmpty && normalizeServiceType(docSvc) == normalizedServiceType) {
+          seen.add(doc.id);
+          candidates.add(doc);
+        }
       }
 
-      // Pass 4 – fetch EVERY provider (any status), fuzzy-match locally
-      final allSnap = await FirebaseFirestore.instance.collection('providers').get();
-      debugPrint('[Civil] total providers in DB: ${allSnap.docs.length}');
-      for (final d in allSnap.docs) {
-        debugPrint('  id=${d.id}  serviceType=${d.data()['serviceType']}  status=${d.data()['status']}');
-      }
-      final anyMatch = allSnap.docs
-          .where((d) => _isMatch((d.data()['serviceType'] ?? '').toString()))
-          .firstOrNull;
-      if (anyMatch != null) {
-        debugPrint('[Civil] Pass4 fuzzy any-status: ${anyMatch.id}');
-        _setProvider(anyMatch.id, anyMatch.data()); return;
+      debugPrint('[Civil] ${candidates.length} approved $normalizedServiceType '
+          'provider(s) to check');
+
+      // Stage A — prefer a provider whose registered categories/subCategories
+      // actually match this booking, via the shared categoryMatchFuzzy()
+      // pipeline (exact → fuzzy word overlap → sub-service reverse lookup).
+      for (final doc in candidates) {
+        final data    = doc.data();
+        final cats    = providerCategories(data);
+        final subCats = providerSubCategories(data);
+        final pool    = providerCategoryPool(cats, subCats);
+
+        final matched = categoryMatchFuzzy(
+          orderLikeData,
+          pool,
+          debugOrderId: 'civil-lookup:${doc.id}',
+        );
+
+        if (matched) {
+          debugPrint('[Civil] category-matched provider: ${doc.id}');
+          _setProvider(doc.id, data);
+          return;
+        }
       }
 
-      // Nothing matched
+      // Stage B — no provider has this exact category configured yet.
+      // Fall back to any approved provider registered under this
+      // serviceType so the enquiry still reaches someone.
+      if (candidates.isNotEmpty) {
+        debugPrint('[Civil] no category match — falling back to first '
+            'approved $normalizedServiceType provider: ${candidates.first.id}');
+        _setProvider(candidates.first.id, candidates.first.data());
+        return;
+      }
+
+      // Nothing at all.
       if (mounted) {
-        final stored = allSnap.docs
-            .map((d) => '"${d.data()['serviceType'] ?? '–'}"')
-            .toSet().join(', ');
         setState(() {
           _noProviderMessage =
               'No Civil provider found.\n'
-              'Types in DB: $stored\n'
               'Check that a Civil provider has registered and been approved.';
           _isLoadingProvider = false;
         });
@@ -352,11 +364,8 @@ class _CivilBookingPageState extends State<CivilBookingPage>
                       _stepLabel('2', 'Schedule'),
                       const SizedBox(height: 10),
                       _buildDateTimeRow(),
-                      const SizedBox(height: 20),
-                      _stepLabel('3', 'Enquiry Summary'),
-                      const SizedBox(height: 10),
-                      _buildSummaryCard(),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+                      _buildProviderContactNote(),
                     ]),
                   ),
                 )
@@ -678,22 +687,11 @@ class _CivilBookingPageState extends State<CivilBookingPage>
       const SizedBox(height: 14),
       _field(controller: _addressController, hint: 'Project Address', icon: Icons.location_on_outlined, maxLines: 3),
       const SizedBox(height: 12),
-      Row(children: [
-        Expanded(child: OutlinedButton.icon(
-          onPressed: _isGettingLocation ? null : _getCurrentLocation,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: _accent, side: const BorderSide(color: _accent, width: 1.4),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          icon: _isGettingLocation
-              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: _accent, strokeWidth: 2))
-              : const Icon(Icons.my_location_rounded, size: 17),
-          label: Text(_isGettingLocation ? 'Detecting…' : 'GPS',
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        )),
-        const SizedBox(width: 10),
-        Expanded(child: OutlinedButton.icon(
+      // ✅ GPS auto-detect removed — Pick on Map is now the single,
+      // full-width way to set the project location.
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
           onPressed: _openMapPicker,
           style: OutlinedButton.styleFrom(
             foregroundColor: _accent, side: const BorderSide(color: _accent, width: 1.4),
@@ -702,8 +700,8 @@ class _CivilBookingPageState extends State<CivilBookingPage>
           ),
           icon: const Icon(Icons.map_outlined, size: 17),
           label: const Text('Pick on Map', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        )),
-      ]),
+        ),
+      ),
       const SizedBox(height: 14),
       _field(controller: _noteController, hint: 'Describe your requirement (optional)',
           icon: Icons.notes_rounded, maxLines: 3),
@@ -756,103 +754,29 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     );
   }
 
-  // ── Summary card (Step 3) ─────────────────────────────────────────────────
-  Widget _buildSummaryCard() {
-    final hasCartItems  = _hasCartItems;
-    final hasRenovItems = widget.selectedRenovationItems?.isNotEmpty ?? false;
-
-    return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          width: 42, height: 42,
-          decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [_accent, _accent2]),
-              borderRadius: BorderRadius.circular(12)),
-          child: const Icon(Icons.construction_rounded, color: Colors.white, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.serviceName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-          Text(
-            hasCartItems
-                ? '${_cartItems.length} item${_cartItems.length == 1 ? '' : 's'} · ₹$_cartTotal'
-                : hasRenovItems
-                    ? '${widget.selectedRenovationItems!.length} services selected'
-                    : 'Enquiry — no upfront payment',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-          ),
-        ])),
-      ]),
-      if (hasCartItems) ...[
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: const Color(0xFFF5F5FF), borderRadius: BorderRadius.circular(12)),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('ITEMS BOOKED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800,
-                color: Colors.grey.shade500, letterSpacing: 0.8)),
-            const SizedBox(height: 10),
-            ..._cartItems.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(children: [
-                Container(width: 5, height: 5, margin: const EdgeInsets.only(top: 1, right: 8),
-                    decoration: const BoxDecoration(color: _accent, shape: BoxShape.circle)),
-                Expanded(child: Text(item.name,
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF2D2D3A), height: 1.3))),
-                const SizedBox(width: 8),
-                Text('₹${item.price * (item.quantity)}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _accent)),
-              ]),
-            )),
-            const Divider(height: 14, color: Color(0xFFDDDDF5)),
-            Row(children: [
-              const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-              Text('₹$_cartTotal',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: _accent)),
-            ]),
-          ]),
-        ),
-      ],
-      if (!hasCartItems && hasRenovItems) ...[
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: const Color(0xFFF5F5FF), borderRadius: BorderRadius.circular(12)),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Included services', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                color: Colors.grey.shade500, letterSpacing: 0.5)),
-            const SizedBox(height: 8),
-            ...widget.selectedRenovationItems!.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 5),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Container(margin: const EdgeInsets.only(top: 5), width: 5, height: 5,
-                    decoration: const BoxDecoration(color: _accent, shape: BoxShape.circle)),
-                const SizedBox(width: 8),
-                Expanded(child: Text(item,
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF2D2D3A), height: 1.4))),
-              ]),
-            )),
-          ]),
-        ),
-      ],
-      const Padding(padding: EdgeInsets.symmetric(vertical: 14), child: Divider(height: 1)),
-      Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-            color: _accent.withOpacity(0.07),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _accent.withOpacity(0.18), width: 1)),
-        child: Row(children: [
-          Icon(Icons.info_outline_rounded, size: 16, color: _accent.withOpacity(0.8)),
-          const SizedBox(width: 8),
-          Expanded(child: Text(
-            'A provider will contact you with a quote after reviewing your enquiry.',
-            style: TextStyle(color: _accent.withOpacity(0.8), fontSize: 12, height: 1.4),
-          )),
-        ]),
+  // ── Provider contact note ─────────────────────────────────────────────────
+  // ✅ Replaces the old Step-3 "Enquiry Summary" card, which just repeated
+  // what _buildBookingSummaryCard() already shows at the top of the page.
+  // Only the one-line note is kept, since it's the only bit of information
+  // that card was adding beyond the top summary.
+  Widget _buildProviderContactNote() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _accent.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _accent.withOpacity(0.18), width: 1),
       ),
-    ]));
+      child: Row(children: [
+        Icon(Icons.info_outline_rounded, size: 16, color: _accent.withOpacity(0.8)),
+        const SizedBox(width: 8),
+        Expanded(child: Text(
+          'A provider will contact you with a quote after reviewing your enquiry.',
+          style: TextStyle(color: _accent.withOpacity(0.8), fontSize: 12, height: 1.4),
+        )),
+      ]),
+    );
   }
 
   // ── Bottom bar ────────────────────────────────────────────────────────────
@@ -1054,34 +978,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
-  // ── GPS ───────────────────────────────────────────────────────────────────
-  Future<void> _getCurrentLocation() async {
-    setState(() => _isGettingLocation = true);
-    try {
-      if (!await Geolocator.isLocationServiceEnabled()) throw Exception('Location services are disabled');
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.deniedForever)
-        throw Exception('Location permission permanently denied. Enable it in Settings.');
-
-      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
-      final place = placemarks.first;
-
-      if (!mounted) return;
-      _addressController.text =
-          '${place.street ?? ''}, ${place.locality ?? ''}, '
-          '${place.administrativeArea ?? ''} ${place.postalCode ?? ''}'
-              .replaceAll(RegExp(r',\s*,'), ',').trim();
-      setState(() => _pickedLatLng = LatLng(position.latitude, position.longitude));
-    } catch (e) {
-      if (!mounted) return;
-      _showSnack('$e');
-    } finally {
-      if (mounted) setState(() => _isGettingLocation = false);
-    }
-  }
-
   // ── Map picker ────────────────────────────────────────────────────────────
   Future<void> _openMapPicker() async {
     final result = await Navigator.push<MapPickerResult>(
@@ -1120,6 +1016,11 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         // ✅ Store serviceType ('civil') in Firestore, not the package name
         serviceType:   widget.serviceType.trim().toLowerCase(),
         services:      servicesList,
+        // ✅ Pass the canonical category resolved during provider lookup so
+        // the order is stored under the exact same category it was matched
+        // on — placeOrder() would otherwise re-derive it from services[0]
+        // and could (in theory) land on a different canonical value.
+        category:      _resolvedCategory.isNotEmpty ? _resolvedCategory : null,
         userId:        user?.uid ?? '',
         userName:      _nameController.text.trim(),
         phone:         _phoneController.text.trim(),

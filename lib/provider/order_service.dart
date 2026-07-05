@@ -36,16 +36,18 @@ class OrderStatus {
 }
 
 // ============================================================
+// PAYMENT METHOD CONSTANTS
+// ============================================================
+class PaymentMethod {
+  static const String upi     = 'upi';
+  static const String cash    = 'cash';
+  static const String card    = 'card';
+  static const String wallet  = 'wallet';
+  static const String enquiry = 'enquiry';
+}
+
+// ============================================================
 // CANONICAL CATEGORY RESOLUTION
-//
-// `serviceConfigs` (service_config.dart) is the single source of
-// truth both the provider-registration category picker AND
-// booking pages *should* draw from. `resolveCanonicalCategory()`
-// snaps whatever a booking page sends onto the matching entry in
-// `serviceConfigs` for that serviceType — including recognizing a
-// SPECIFIC bookable item (e.g. "20L Water Jar Exchange") and
-// snapping it to its PARENT category (e.g. "Jar Exchange/Return")
-// via `parentCategoryForSubService()` below (Stage 0).
 // ============================================================
 
 List<String> canonicalCategoriesFor(String serviceType) {
@@ -59,17 +61,6 @@ Set<String> _significantWords(String s) => s
     .where((w) => w.length >= 3)
     .toSet();
 
-// ============================================================
-// SUB-SERVICE → CANONICAL CATEGORY REVERSE LOOKUP
-//
-// See `ServiceConfig.subServices` in service_config.dart for the
-// full story. Short version: a customer often books a SPECIFIC
-// item ("20L Water Jar Exchange", "Residential House Construction")
-// that lives inside a broader category a provider registers under
-// ("Jar Exchange/Return", "New Build"). Those two strings frequently
-// share zero significant words, so plain fuzzy word-overlap matching
-// alone can't connect them — this bridges that gap.
-// ============================================================
 String? parentCategoryForSubService(String rawSubService, String serviceType) {
   final raw = rawSubService.trim();
   if (raw.isEmpty) return null;
@@ -101,22 +92,10 @@ String? parentCategoryForSubService(String rawSubService, String serviceType) {
   return null;
 }
 
-/// Snaps `rawCategory` onto the closest entry in
-/// `serviceConfigs[serviceType].serviceCategories`, if any.
-/// Returns the original trimmed string if no confident match is found.
-///
-/// Used for the `category` field. Deliberately NOT used for
-/// `subCategory` — see `cleanSubCategory()` below — since a
-/// subCategory's whole purpose is to preserve the SPECIFIC item
-/// being booked, and this function's Stage 0 would otherwise
-/// collapse it straight to its parent category, making it
-/// redundant with `category`.
 String resolveCanonicalCategory(String rawCategory, String serviceType) {
   final raw = rawCategory.trim();
   if (raw.isEmpty) return raw;
 
-  // Stage 0: is `raw` actually a SPECIFIC bookable item rather than
-  // a top-level category? If so, snap straight to its parent.
   final subParent = parentCategoryForSubService(raw, serviceType);
   if (subParent != null) return subParent;
 
@@ -125,18 +104,15 @@ String resolveCanonicalCategory(String rawCategory, String serviceType) {
 
   final normRaw = normalizeCategory(raw);
 
-  // 1. Exact normalised match
   for (final c in canonical) {
     if (normalizeCategory(c) == normRaw) return c;
   }
 
-  // 2. Substring match either direction
   for (final c in canonical) {
     final normC = normalizeCategory(c);
     if (normC.contains(normRaw) || normRaw.contains(normC)) return c;
   }
 
-  // 3. Shared significant word (3+ chars)
   final rawWords = _significantWords(raw);
   for (final c in canonical) {
     if (_significantWords(c).intersection(rawWords).isNotEmpty) return c;
@@ -148,52 +124,48 @@ String resolveCanonicalCategory(String rawCategory, String serviceType) {
   return raw;
 }
 
-/// Lightweight cleanup for `subCategory` — trims only. Deliberately
-/// does NOT run through resolveCanonicalCategory()'s Stage 0, which
-/// would collapse a specific item straight to its parent category
-/// and make `subCategory` redundant with `category`. The specific
-/// item name is exactly what makes `subCategory` useful for display
-/// and for matching against a provider's own `subCategories[]`
-/// selections (if your registration flow lets providers opt into
-/// specific items, not just broad categories).
+/// Lightweight cleanup for `subCategory` — trims only.
 String cleanSubCategory(String raw) => raw.trim();
 
 // ============================================================
 // SHARED CATEGORY-MATCHING LOGIC
 //
-// IMPORTANT: This logic MUST stay byte-for-byte identical between
-// business_dashboard_page.dart (what a provider SEES in Available
-// Enquiries/Orders/Bookings) and this file's
-// _notifyMatchingProviders() (what a provider is PUSH NOTIFIED
-// about). Both call categoryMatchFuzzy() below — neither file
-// re-implements its own copy. If they ever drift apart, a provider
-// can get a push notification for an order that never shows up in
-// their "Available" tab, or vice versa.
+// MUST stay byte-for-byte identical between business_dashboard_page.dart
+// (what a provider SEES in Available Enquiries/Orders/Bookings) and
+// this file's _notifyMatchingProviders() (who actually gets a
+// `notifications` doc + push). Both must call categoryMatchFuzzy()
+// from HERE — neither file should re-implement its own copy.
 //
-// categoryMatchFuzzy() now takes an OPTIONAL `providerSubCats` list
-// alongside `providerCats`, and merges the two into one pool before
-// running:
-//   Stage 1 — exact match (categoryMatch())
-//   Stage 2 — fuzzy word-overlap on RAW (un-normalized) strings
-//   Stage 3 — sub-service reverse lookup (parentCategoryForSubService())
-// This means a provider who only ever picked SPECIFIC subCategories
-// (never a broad top-level category) is matched correctly too, not
-// just providers who picked broad categories.
-// ============================================================
+// ─────────────────────────────────────────────────────────────
+// FIX (this revision): a PREVIOUS revision of this file stopped
+// merging in `providerSubCategories()` before calling
+// categoryMatchFuzzy() from _notifyMatchingProviders(), while
+// business_dashboard_page.dart's `_categoryMatch()` kept passing
+// `providerSubCats` in. That divergence meant: a provider who only
+// matched an order via their subCategories[] (not their main
+// categories[]) would still SEE the order live in their dashboard
+// (client-side check includes subCats) and get an instant local
+// alert while the dashboard was open (same client-side check) — but
+// would NEVER get a `notifications` Firestore doc or an FCM
+// `fcm_queue` entry created for that order, because the server-side
+// fan-out (this file, at order-creation time) silently skipped them.
+// That is exactly the "notification received once but never saved /
+// never arrives when the app is closed" bug, and it disproportionately
+// hits provider types (e.g. resort, civil) whose registration tends to
+// rely on subCategories rather than a broad main category.
+//
+// Both call sites now pass BOTH categories AND subCategories again —
+// see `_notifyMatchingProviders()` below.
+// ─────────────────────────────────────────────────────────────
 
-/// Normalise a string for category comparison: trim, lowercase,
-/// collapse whitespace/underscores/hyphens.
 String normalizeCategory(String s) =>
     s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
 
-/// Normalise a string for serviceType comparison.
 String normalizeServiceType(String s) =>
     s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
 
 /// Some provider documents store `serviceType` as a TOP-LEVEL field,
-/// others store it NESTED under a `service` map. This checks both
-/// shapes so a provider is matched correctly no matter which one
-/// its document uses.
+/// others store it NESTED under a `service` map. Checks both shapes.
 String providerServiceType(Map<String, dynamic> providerData) {
   final direct = (providerData['serviceType'] ?? '').toString().trim();
   if (direct.isNotEmpty) return direct;
@@ -206,8 +178,10 @@ String providerServiceType(Map<String, dynamic> providerData) {
   return '';
 }
 
-/// Reads a provider document's broad, top-level categories[] field —
-/// what a provider selects at registration (e.g. "Jar Exchange/Return").
+/// Reads a provider document's broad, top-level MAIN categories[]
+/// field — what a provider selects at registration, drawn directly
+/// from `serviceConfigs[serviceType].serviceCategories`
+/// (e.g. "New Build", "Renovation").
 List<String> providerCategories(Map<String, dynamic> providerData) {
   final raw = (providerData['categories'] as List?) ?? const [];
   return raw
@@ -216,12 +190,7 @@ List<String> providerCategories(Map<String, dynamic> providerData) {
       .toList();
 }
 
-/// Reads a provider document's SPECIFIC subCategories[] field, if
-/// your registration flow supports granular sub-service selection
-/// (e.g. "20L Water Jar Exchange"). Safe to call even if the field
-/// doesn't exist yet — just returns an empty list, so this is fully
-/// backward-compatible with providers who only ever picked broad
-/// categories.
+/// Reads a provider document's SPECIFIC subCategories[] field.
 List<String> providerSubCategories(Map<String, dynamic> providerData) {
   final raw = (providerData['subCategories'] as List?) ?? const [];
   return raw
@@ -230,11 +199,7 @@ List<String> providerSubCategories(Map<String, dynamic> providerData) {
       .toList();
 }
 
-/// Merges categories + subCategories into one de-duplicated display
-/// list (de-duped by normalized value, but keeping original casing
-/// of the first occurrence). Used for debug logs and anywhere the UI
-/// wants to show "everything this provider is matched on" as one
-/// combined pool rather than two separate lists.
+/// Merges categories + subCategories into one de-duplicated pool.
 List<String> providerCategoryPool(
   List<String> categories,
   List<String> subCategories,
@@ -249,10 +214,8 @@ List<String> providerCategoryPool(
   return pool;
 }
 
-/// Builds the full set of NORMALISED (separator-stripped) category
-/// candidates for an order — used for Stage-1 exact matching. Reads
-/// `category`, `serviceCategory`, `subCategory`, `jobCategory`, and
-/// every string in `services[]`.
+/// Builds the full set of NORMALISED (separator-stripped) MAIN category
+/// candidates for an order — used for Stage-1 exact matching.
 Set<String> orderCategoryCandidates(Map<String, dynamic> orderData) {
   final candidates = <String>{};
 
@@ -272,10 +235,8 @@ Set<String> orderCategoryCandidates(Map<String, dynamic> orderData) {
   return candidates;
 }
 
-/// Builds the full set of RAW (trimmed + lowercased, but NOT
-/// separator-stripped) category strings for an order — used for
-/// Stage 2/3 fuzzy + sub-service matching, since word-splitting
-/// requires the original spaces/punctuation.
+/// Same as above but RAW (trimmed + lowercased, not separator-stripped)
+/// — used for Stage 2/3 fuzzy + sub-service matching.
 Set<String> orderCategoryCandidatesRaw(Map<String, dynamic> orderData) {
   final candidates = <String>{};
 
@@ -295,8 +256,7 @@ Set<String> orderCategoryCandidatesRaw(Map<String, dynamic> orderData) {
   return candidates;
 }
 
-/// Returns true if `orderData` should be visible/notified to a
-/// provider who has selected `providerCats` — STAGE 1 (exact) only.
+/// STAGE 1 (exact) match only.
 bool categoryMatch(
   Map<String, dynamic> orderData,
   List<String> providerCats, {
@@ -314,8 +274,8 @@ bool categoryMatch(
   if (orderCandidates.isEmpty) {
     debugPrint('[catMatch] $debugOrderId: order has no category/services info '
         '— provider has categories selected, falling back to SHOW (cannot restrict '
-        'what we cannot read). Fix the originating booking page to pass `category` '
-        'or `services` if this should actually be filtered.');
+        'what we cannot read). Fix the originating booking/enquiry page to pass '
+        '`category` or `services` if this should actually be filtered.');
     return true;
   }
 
@@ -334,34 +294,29 @@ Set<String> _significantRawWords(String raw) => raw
     .toSet();
 
 /// Full pipeline: Stage 1 (exact) → Stage 2 (fuzzy word overlap) →
-/// Stage 3 (sub-service reverse lookup) — run against the MERGED
-/// pool of `providerCats` ∪ `providerSubCats`.
+/// Stage 3 (sub-service reverse lookup) — run against
+/// `providerCats` + `providerSubCats` merged.
 ///
-/// `providerSubCats` is optional and defaults to empty, so every
-/// existing call site that only ever passed broad categories keeps
-/// working exactly as before with zero changes required.
+/// This is the ONE function both the dashboard's "Available" tab
+/// visibility check and this file's push-notification fan-out call —
+/// never reimplement, and never let the two call sites drift apart
+/// on which arguments they pass (see the file-header note above).
 bool categoryMatchFuzzy(
   Map<String, dynamic> orderData,
   List<String> providerCats, {
   List<String> providerSubCats = const [],
   String debugOrderId = '',
 }) {
-  // Merge once, up front, so all three stages see the same pool —
-  // a provider matches if EITHER their broad categories OR their
-  // specific subCategories line up with the order.
   final mergedProviderCats = providerSubCats.isEmpty
       ? providerCats
       : <String>{...providerCats, ...providerSubCats}.toList();
 
-  // Stage 1: exact — handles the large majority of correctly
-  // canonicalized orders without ever reaching fuzzy logic.
+  // Stage 1: exact.
   if (categoryMatch(orderData, mergedProviderCats, debugOrderId: debugOrderId)) {
     return true;
   }
 
-  // Stage 2: fuzzy word-overlap on RAW (un-normalized) strings —
-  // reaching here means both sides have real data but Stage 1 found
-  // no exact overlap.
+  // Stage 2: fuzzy word-overlap on RAW strings.
   final orderWords = orderCategoryCandidatesRaw(orderData)
       .expand(_significantRawWords)
       .toSet();
@@ -376,12 +331,8 @@ bool categoryMatchFuzzy(
     return true;
   }
 
-  // Stage 3 — sub-service reverse lookup. Bridges the case where the
-  // order's category/subCategory/services values are a SPECIFIC
-  // bookable item ("20L Water Jar Exchange") while the provider
-  // registered under the BROADER category it belongs to ("Jar
-  // Exchange/Return") — those two strings can share zero significant
-  // words, so Stage 2 can't connect them.
+  // Stage 3: sub-service reverse lookup (against serviceConfigs'
+  // static subServices map — NOT the provider's own subCategories[]).
   final serviceType = (orderData['serviceType'] ?? '').toString();
   if (serviceType.isNotEmpty) {
     final normProviderCats = mergedProviderCats
@@ -427,10 +378,21 @@ class OrderService {
   static Future<String?> _getProviderDocId(String uid) async {
     if (uid.isEmpty) return null;
     try {
-      final snap =
-          await _db.collection('provider_uid_lookup').doc(uid).get();
-      final id = (snap.data()?['providerId'] ?? '').toString().trim();
-      return id.isNotEmpty ? id : null;
+      var snap = await _db
+          .collection('providers')
+          .where('userId', isEqualTo: uid)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isEmpty) {
+        snap = await _db
+            .collection('providers')
+            .where('uid', isEqualTo: uid)
+            .limit(1)
+            .get();
+      }
+
+      return snap.docs.isNotEmpty ? snap.docs.first.id : null;
     } catch (e) {
       debugPrint('[OrderService] _getProviderDocId error: $e');
       return null;
@@ -439,19 +401,6 @@ class OrderService {
 
   // ==========================================================
   // PLACE ORDER
-  //
-  // NEW: `subCategory` — the SPECIFIC item being booked (e.g. "20L
-  // Water Jar Exchange"), stored alongside the broader `category`
-  // (e.g. "Jar Exchange/Return"). Both are included in the
-  // notification fan-out's matching data, so a provider who only
-  // ever selected subCategories (never broad categories) still gets
-  // notified — see categoryMatchFuzzy()'s merged-pool matching above.
-  //
-  // `category` is canonicalized via resolveCanonicalCategory()
-  // (snaps onto serviceConfigs vocabulary, including resolving a
-  // specific item straight to its parent category). `subCategory` is
-  // only lightly cleaned via cleanSubCategory() — see that function's
-  // doc comment for why it's NOT run through the same canonicalizer.
   // ==========================================================
   static Future<DocumentReference> placeOrder({
     required String serviceType,
@@ -477,26 +426,17 @@ class OrderService {
     int? children,
     String? visitType,
 
-    // The readable provider doc ID (e.g. CIV-765791), not the Firebase UID.
-    // Only supplied when the caller already knows which provider to assign
-    // (a genuine pinned assignment) — see booking_page.dart's
-    // `_isPinnedProvider`. Passing this makes placeOrder() take the
-    // DIRECT-ASSIGNMENT path below, which skips category matching
-    // entirely and notifies ONLY this one provider.
     String? providerId,
 
-    // Broad category (e.g. "Jar Exchange/Return"). Snapped onto the
-    // canonical serviceConfigs category list for `serviceType` via
-    // resolveCanonicalCategory(). If omitted, auto-derived from
-    // `services.first` when possible.
     String? category,
 
-    // NEW: the SPECIFIC item being booked (e.g. "20L Water Jar
-    // Exchange"). Optional — omit for multi-item cart orders where
-    // `services[]` already carries per-item detail.
     String? subCategory,
 
     bool isEnquiry = false,
+
+    String? paymentMethod,
+
+    bool? isPaid,
 
     // Legacy positional params kept for call-site compat
     String providerName = '',
@@ -512,15 +452,31 @@ class OrderService {
           '`services` was provided for a $serviceType order. This order will '
           'be shown to ALL approved $serviceType providers regardless of their '
           'selected categories. Pass `category` and/or `services` from the '
-          'booking page to enable correct filtering.');
+          'booking/enquiry page to enable correct filtering.');
     } else if (!hasCategory) {
       debugPrint('[OrderService.placeOrder] NOTE: `category` was not passed '
           'for a $serviceType order — auto-derived "$effectiveCategory" from '
           'services[0]. Prefer passing `category` explicitly from the '
-          'booking page for more reliable routing.');
+          'booking/enquiry page for more reliable routing.');
     }
 
-    // ── Resolve provider details ──────────────────────────────────────────────
+    // ── Resolve payment info ────────────────────────────────────────────────
+    final String effectivePaymentMethod = isEnquiry
+        ? PaymentMethod.enquiry
+        : ((paymentMethod ?? '').trim().isNotEmpty
+            ? paymentMethod!.trim().toLowerCase()
+            : PaymentMethod.upi); // preserves old hardcoded default
+    final bool effectiveIsPaid = isEnquiry ? false : (isPaid ?? true);
+
+    if (!isEnquiry && paymentMethod == null) {
+      debugPrint('[OrderService.placeOrder] NOTE: `paymentMethod` was not '
+          'passed for a $serviceType order — defaulting to '
+          '"$effectivePaymentMethod". Pass the customer\'s actual choice '
+          '(PaymentMethod.upi/cash/card/wallet) from the booking page so '
+          'providers see accurate payment info on their dashboard.');
+    }
+
+    // ── Resolve provider details (direct-assignment only) ─────────────────────
     String resolvedProviderId     = providerId ?? '';
     String resolvedProviderName   = '';
     String resolvedProviderUserId = '';
@@ -540,24 +496,15 @@ class OrderService {
 
     final orderId               = generateOrderId(userName);
     final docRef                = _db.collection('orders').doc(orderId);
-    // Always store serviceType as lowercase so Firestore equality
-    // queries from the dashboard match reliably.
     final normalizedServiceType = serviceType.trim().toLowerCase();
 
-    // Snap the (possibly auto-derived) category onto the canonical
-    // serviceConfigs list for this serviceType.
     final canonicalCategory = resolveCanonicalCategory(
       effectiveCategory,
       normalizedServiceType,
     );
 
-    // Sub-category: lightly cleaned only, NOT canonicalized to a
-    // parent category — see cleanSubCategory()'s doc comment.
     final cleanedSubCategory = cleanSubCategory(subCategory ?? '');
 
-    // Also canonicalize each entry in `services` where possible —
-    // multi-item bookings (e.g. laundry) rely on this list for
-    // matching just as much as `category` does.
     final canonicalServices = services
         .map((s) => resolveCanonicalCategory(s, normalizedServiceType))
         .toList();
@@ -587,21 +534,12 @@ class OrderService {
         'providerName':   resolvedProviderName,
       },
 
-      'serviceType': normalizedServiceType,   // lowercase — queried by dashboard
+      'serviceType': normalizedServiceType,
       'serviceName': normalizedServiceType,
       'services':    canonicalServices,
 
-      // Category stored in canonical casing whenever a confident
-      // match was found; otherwise the original raw value is kept.
       'category': canonicalCategory,
-
-      // NEW: the specific item being booked, kept as-is (trimmed)
-      // so it stays distinct from `category` for display and for
-      // matching against a provider's subCategories[] selections.
       'subCategory': cleanedSubCategory,
-
-      // Kept for debugging/audit — what the customer/booking page
-      // actually sent before canonicalization/auto-derivation.
       'rawCategory': (category ?? '').trim(),
 
       'date': Timestamp.fromDate(date),
@@ -624,8 +562,8 @@ class OrderService {
 
       'payment': {
         'totalAmount': totalAmount,
-        'paid':        !isEnquiry,
-        'method':      isEnquiry ? 'enquiry' : 'upi',
+        'paid':        effectiveIsPaid,
+        'method':      effectivePaymentMethod,
       },
 
       'adults':    adults    ?? 0,
@@ -649,7 +587,7 @@ class OrderService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    // ── Fan-out notification to matching providers ──────────────────────────
+    // ── Fan-out order + notification to matching providers ─────────────────────
     await _notifyMatchingProviders(
       orderId:       orderId,
       orderData: {
@@ -675,6 +613,15 @@ class OrderService {
 
   // ==========================================================
   // PROVIDER ACTIONS
+  //
+  // FIX: every user-facing status-change notification below now also
+  // stores `businessName` + `serviceType` + `providerId` as structured
+  // fields on the notification doc (not just baked into the body
+  // text), so NotificationPage's existing chip UI — which already
+  // reads `data['businessName']` / `data['serviceType']` — actually
+  // has something to show. Previously these fields were never written
+  // at all, so "which order got completed by which provider" only
+  // ever existed inside the free-text body.
   // ==========================================================
 
   static Future<void> acceptOrder({
@@ -682,6 +629,7 @@ class OrderService {
     required String userId,
     required String providerName,
     required String serviceType,
+    String providerId = '',
   }) async {
     await _db.collection('orders').doc(orderId).update({
       'status':     OrderStatus.accepted,
@@ -696,6 +644,9 @@ class OrderService {
       body:    '$providerName has accepted your $serviceType booking. '
                'They will contact you soon.',
       type:    NotificationType.bookingAccepted,
+      businessName: providerName,
+      serviceType:  serviceType,
+      providerId:   providerId,
     );
   }
 
@@ -705,6 +656,7 @@ class OrderService {
     required String providerName,
     required String serviceType,
     required String reason,
+    String providerId = '',
   }) async {
     final trimmedReason = reason.trim();
 
@@ -724,6 +676,9 @@ class OrderService {
       body:    '$providerName has rejected your $serviceType booking. '
                'Reason: $trimmedReason',
       type:    NotificationType.bookingRejected,
+      businessName: providerName,
+      serviceType:  serviceType,
+      providerId:   providerId,
     );
   }
 
@@ -732,6 +687,7 @@ class OrderService {
     required String userId,
     required String providerName,
     required String serviceType,
+    String providerId = '',
   }) async {
     await _db.collection('orders').doc(orderId).update({
       'status':      OrderStatus.completed,
@@ -746,6 +702,9 @@ class OrderService {
       body:    'Your $serviceType service by $providerName has been '
                'marked as completed. Thank you!',
       type:    NotificationType.serviceCompleted,
+      businessName: providerName,
+      serviceType:  serviceType,
+      providerId:   providerId,
     );
   }
 
@@ -755,6 +714,7 @@ class OrderService {
     required String providerName,
     required String serviceType,
     required String reason,
+    String providerId = '',
   }) async {
     final trimmedReason = reason.trim();
 
@@ -774,6 +734,9 @@ class OrderService {
       body:    '$providerName cancelled your $serviceType booking. '
                'Reason: $trimmedReason',
       type:    NotificationType.bookingRejected,
+      businessName: providerName,
+      serviceType:  serviceType,
+      providerId:   providerId,
     );
   }
 
@@ -800,6 +763,7 @@ class OrderService {
         title:      '⚠️ Order Cancelled by User',
         body:       '$userName has cancelled their $serviceType booking.',
         type:       NotificationType.userCancelled,
+        serviceType: serviceType,
       );
 
       final docId = await _getProviderDocId(providerUserId);
@@ -826,6 +790,10 @@ class OrderService {
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
+      } else {
+        debugPrint('[OrderService] userCancelOrder: no providers doc found for '
+            'userId=$providerUserId — FCM push skipped (in-app notification '
+            'above was still saved).');
       }
     }
   }
@@ -833,12 +801,15 @@ class OrderService {
   // ==========================================================
   // FAN-OUT: notify ALL matching approved providers
   //
-  // UPDATED: now reads BOTH providerCategories() and
-  // providerSubCategories() for each candidate provider and passes
-  // both into categoryMatchFuzzy()'s merged-pool matching — a
-  // provider who only ever picked specific subCategories (never a
-  // broad category) is now notified correctly too, exactly matching
-  // what the dashboard's Available tab will show them.
+  // FIX: restored `providerSubCategories()` into the match here so
+  // this call site is IDENTICAL to business_dashboard_page.dart's
+  // `_categoryMatch()`. A prior revision dropped subCategories from
+  // just this call site, which silently starved subCategory-only
+  // providers (a pattern common for resort/civil registrations) of
+  // both their `notifications` doc and their FCM push — while still
+  // letting them see the order live in an already-open dashboard.
+  // That mismatch is exactly what caused "received once, never
+  // saved, never arrives when the app is closed."
   // ==========================================================
   static Future<void> _notifyMatchingProviders({
     required String orderId,
@@ -914,16 +885,10 @@ class OrderService {
       int notifiedCount = 0;
 
       for (final doc in candidateDocs) {
-        final provData    = doc.data();
+        final provData        = doc.data();
         final providerCats    = providerCategories(provData);
         final providerSubCats = providerSubCategories(provData);
 
-        // ── Every provider ONLY gets notified for orders that match
-        // ── their own categories AND/OR subCategories, via the SAME
-        // ── merged-pool exact+fuzzy+sub-service logic the dashboard
-        // ── uses to decide what's visible. Providers with BOTH lists
-        // ── empty are treated as "unrestricted" (categoryMatch()
-        // ── rule: providerCats.isEmpty → true) by design.
         final shouldNotify = categoryMatchFuzzy(
           orderData,
           providerCats,
@@ -985,9 +950,6 @@ class OrderService {
       return;
     }
 
-    // Prefer the more specific subCategory in the notification text
-    // when available, since that's what the provider actually cares
-    // about seeing at a glance; fall back to the broad category.
     final displayCat = subCategory.isNotEmpty ? subCategory : category;
     final catLabel    = displayCat.isNotEmpty ? ' ($displayCat)' : '';
     final title       = '📦 New Order Received';
@@ -996,7 +958,6 @@ class OrderService {
         'on ${_formatDate(date)} at $time.'
         '${totalAmount > 0 ? ' Amount ₹${totalAmount.toStringAsFixed(0)}' : ''}';
 
-    // In-app notification document
     await _sendNotification(
       receiverId: providerUserId,
       role:       'provider',
@@ -1004,9 +965,11 @@ class OrderService {
       title:      title,
       body:       body,
       type:       NotificationType.newBooking,
+      serviceType: serviceType,
+      category:    displayCat,
+      providerId:  providerId,
     );
 
-    // FCM push via Cloud Function queue
     final fcmToken = (provMap['fcmToken'] ?? '').toString().trim();
     if (fcmToken.isNotEmpty) {
       await _db.collection('fcm_queue').add({
@@ -1025,11 +988,21 @@ class OrderService {
         'sent':      false,
         'createdAt': FieldValue.serverTimestamp(),
       });
+    } else {
+      debugPrint('[OrderService] Provider $providerId ($providerUserId) has no '
+          'fcmToken saved — they will only ever see this order live while the '
+          'dashboard is open, never a background push. Check that '
+          'NotificationService successfully wrote a token to this provider doc.');
     }
   }
 
   // ==========================================================
   // NOTIFY USER — status updates from provider
+  //
+  // FIX: now accepts optional `businessName` / `serviceType` /
+  // `providerId` and forwards them into the stored notification doc
+  // (see `_sendNotification` below), instead of only ever encoding
+  // that info inside the free-text `body`.
   // ==========================================================
   static Future<void> notifyUser({
     required String userId,
@@ -1037,6 +1010,9 @@ class OrderService {
     required String title,
     required String body,
     required String type,
+    String? businessName,
+    String? serviceType,
+    String? providerId,
   }) async {
     if (userId.isEmpty) return;
 
@@ -1048,6 +1024,9 @@ class OrderService {
         title:      title,
         body:       body,
         type:       type,
+        businessName: businessName,
+        serviceType:  serviceType,
+        providerId:   providerId,
       );
 
       final userDoc  = await _db.collection('users').doc(userId).get();
@@ -1070,6 +1049,10 @@ class OrderService {
           'sent':      false,
           'createdAt': FieldValue.serverTimestamp(),
         });
+      } else {
+        debugPrint('[OrderService] notifyUser: user $userId has no fcmToken '
+            'saved — in-app notification was still written, but no background '
+            'push will be sent.');
       }
     } catch (e) {
       debugPrint('[OrderService] notifyUser error: $e');
@@ -1078,6 +1061,13 @@ class OrderService {
 
   // ==========================================================
   // INTERNAL: write to notifications collection
+  //
+  // FIX: now stores `businessName` / `serviceType` / `providerId` /
+  // `category` as their own structured fields (when provided) rather
+  // than leaving that information trapped inside `body` text.
+  // NotificationPage already has UI (`_serviceChip`) that reads
+  // `data['businessName']` / `data['serviceType']` — it just never
+  // had anything to read before this fix.
   // ==========================================================
   static Future<void> _sendNotification({
     required String receiverId,
@@ -1086,8 +1076,12 @@ class OrderService {
     required String title,
     required String body,
     required String type,
+    String? businessName,
+    String? serviceType,
+    String? providerId,
+    String? category,
   }) async {
-    await _db.collection('notifications').add({
+    final doc = <String, dynamic>{
       'receiverId': receiverId,
       'senderId':   '',
       'role':       role,
@@ -1097,7 +1091,21 @@ class OrderService {
       'type':       type,
       'read':       false,
       'createdAt':  FieldValue.serverTimestamp(),
-    });
+    };
+
+    final bn = businessName?.trim() ?? '';
+    if (bn.isNotEmpty) doc['businessName'] = bn;
+
+    final st = serviceType?.trim() ?? '';
+    if (st.isNotEmpty) doc['serviceType'] = st;
+
+    final pid = providerId?.trim() ?? '';
+    if (pid.isNotEmpty) doc['providerId'] = pid;
+
+    final cat = category?.trim() ?? '';
+    if (cat.isNotEmpty) doc['category'] = cat;
+
+    await _db.collection('notifications').add(doc);
   }
 
   // ==========================================================

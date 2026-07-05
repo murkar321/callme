@@ -2,13 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 
 import '../models/cart.dart';
 import '../provider/order_service.dart';
 import '../screens/bottom_nav_page.dart';
 import '../payment/payment_page.dart';
+
+import '../screens/map_picker_page.dart';
 
 class SalonBookingPage extends StatefulWidget {
   final List<CartItem> cartItems;
@@ -37,19 +38,26 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   final _formKey = GlobalKey<FormState>();
   AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
 
+  final _nameController    = TextEditingController();
   final _phoneController   = TextEditingController();
   final _emailController   = TextEditingController();
   final _addressController = TextEditingController();
   final _noteController    = TextEditingController();
 
   bool _isLoading          = false;
-  bool _isGettingLocation  = false;
+  bool _isPickingLocation  = false;
   bool _isLoadingProvider  = true;
 
   // Provider resolved from Firestore
   String? _providerId;
   String? _providerName;
   String? _noProviderMessage;
+
+  // FIX: keep the structured pick around too (not just the display text
+  // in _addressController) so re-opening the picker can seed it at the
+  // same spot, and so lat/lng + the "Flat/Floor/Building" details entered
+  // in the picker's bottom sheet aren't silently dropped on the floor.
+  LatLng? _pickedLatLng;
 
   late final AnimationController _animController;
   late final Animation<double>    _fadeIn;
@@ -68,11 +76,46 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   double get _totalAmount => widget.cartItems.fold(
       0.0, (sum, item) => sum + item.price * item.quantity);
 
-  // ── Services list for OrderService ─────────────────────────────────────
-  List<String> get _servicesForOrder => widget.cartItems
+  // ══════════════════════════════════════════════════════════════════════
+  // CATEGORY DATA FOR OrderService
+  //
+  // FIX: this used to build a single descriptive string per item like
+  // "Haircut (Home) x2" and hand the WHOLE thing to OrderService as the
+  // `services[]` list. That string then went straight into
+  // orderCategoryCandidates() in order_service.dart, which only strips
+  // separators/casing — it never strips out "(Home) x2" — so the exact
+  // and fuzzy category-match stages were being fed junk text instead of
+  // a clean category name, and provider matching silently degraded to
+  // best-effort fuzzy word overlap (or failed) even for salon categories
+  // that should have matched exactly.
+  //
+  // Now: `_categoriesForOrder` holds ONLY the clean category name for
+  // each cart item (e.g. "Haircut", "Facial") — these are the exact
+  // strings from serviceConfigs["salon"].serviceCategories, which is
+  // also what a provider's `categories[]` field is populated from at
+  // registration. That's what gets passed as `services:` AND as the
+  // primary `category:` hint to OrderService.placeOrder(), so
+  // categoryMatchFuzzy() gets to run Stage-1 EXACT matching the way it's
+  // meant to.
+  //
+  // The old descriptive text (visit type + quantity) isn't lost — it's
+  // now composed into the order's `note` field instead, purely for
+  // human/provider readability on the dashboard card, completely
+  // separate from what matching logic reads.
+  // ══════════════════════════════════════════════════════════════════════
+  List<String> get _categoriesForOrder => widget.cartItems
+      .map((e) => e.name.trim())
+      .where((s) => s.isNotEmpty)
+      .toSet()
+      .toList();
+
+  String get _primaryCategory =>
+      _categoriesForOrder.isNotEmpty ? _categoriesForOrder.first : '';
+
+  String get _itemsSummary => widget.cartItems
       .map((e) =>
           '${e.name} (${e.id.toString().contains("Home") ? "Home" : "Salon"}) x${e.quantity}')
-      .toList();
+      .join(', ');
 
   // ==========================================================================
   // INIT
@@ -88,8 +131,14 @@ class _SalonBookingPageState extends State<SalonBookingPage>
     _fadeIn = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
 
-    // Pre-fill phone from Firebase auth
     final user = FirebaseAuth.instance.currentUser;
+
+    // Pre-fill name from Firebase auth, if available.
+    if (user?.displayName != null && user!.displayName!.trim().isNotEmpty) {
+      _nameController.text = user.displayName!.trim();
+    }
+
+    // Pre-fill phone from Firebase auth
     if (user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty) {
       final digits = user.phoneNumber!.replaceAll(RegExp(r'[^\d]'), '');
       _phoneController.text =
@@ -116,6 +165,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   @override
   void dispose() {
     _animController.dispose();
+    _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _addressController.dispose();
@@ -532,6 +582,22 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         children: [
           _input(
             context,
+            controller: _nameController,
+            hint: 'Full Name',
+            icon: Icons.person_outline_rounded,
+            validator: (value) {
+              final v = (value ?? '').trim();
+              if (v.isEmpty) return 'Name is required';
+              return null;
+            },
+          ),
+          SizedBox(height: _sp(context, 16)),
+
+          // FIX: was `RegExp(r'^[6-9]\d{9}$')` (India-mobile-specific
+          // first-digit rule). Now just checks the digit count — exactly
+          // 10 digits, no other restriction.
+          _input(
+            context,
             controller: _phoneController,
             hint: 'Phone Number',
             icon: Icons.phone_outlined,
@@ -543,23 +609,23 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             validator: (value) {
               final v = (value ?? '').trim();
               if (v.isEmpty) return 'Phone number is required';
-              if (v.length != 10) return 'Enter a valid 10-digit phone number';
-              if (!RegExp(r'^[6-9]\d{9}$').hasMatch(v)) {
-                return 'Enter a valid Indian mobile number';
-              }
+              if (v.length != 10) return 'Enter exactly 10 digits';
               return null;
             },
           ),
           SizedBox(height: _sp(context, 16)),
+
+          // FIX: email is now OPTIONAL. Only validated for shape if the
+          // person actually types something in — an empty field is fine.
           _input(
             context,
             controller: _emailController,
-            hint: 'Email Address',
+            hint: 'Email Address (optional)',
             icon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
               final v = (value ?? '').trim();
-              if (v.isEmpty) return 'Email is required';
+              if (v.isEmpty) return null; // optional — no error when empty
               final emailRegex =
                   RegExp(r'^[\w\.\-]+@([\w\-]+\.)+[\w\-]{2,4}$');
               if (!emailRegex.hasMatch(v)) {
@@ -570,7 +636,9 @@ class _SalonBookingPageState extends State<SalonBookingPage>
           ),
           SizedBox(height: _sp(context, 16)),
 
-          // Address shown only for home-visit items
+          // Address shown only for home-visit items.
+          // Location is filled ONLY through "Pick on Map" — no GPS
+          // auto-fill on this field.
           if (_hasHome) ...[
             _input(
               context,
@@ -578,13 +646,12 @@ class _SalonBookingPageState extends State<SalonBookingPage>
               hint: 'Home Address',
               icon: Icons.location_on_outlined,
               maxLines: 3,
+              readOnly: true,
+              onTap: _pickOnMap,
               validator: (value) {
                 final v = (value ?? '').trim();
                 if (v.isEmpty) {
-                  return 'Home address is required for home-visit services';
-                }
-                if (v.length < 8) {
-                  return 'Please enter a more complete address';
+                  return 'Please pick your address on the map';
                 }
                 return null;
               },
@@ -593,7 +660,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _isGettingLocation ? null : _getCurrentLocation,
+                onPressed: _isPickingLocation ? null : _pickOnMap,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFB38BFA),
                   foregroundColor: Colors.white,
@@ -604,18 +671,16 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                   disabledBackgroundColor:
                       const Color(0xFFB38BFA).withOpacity(0.6),
                 ),
-                icon: _isGettingLocation
+                icon: _isPickingLocation
                     ? SizedBox(
                         height: _sp(context, 18),
                         width: _sp(context, 18),
                         child: const CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2),
                       )
-                    : Icon(Icons.my_location_rounded, size: _sp(context, 20)),
+                    : Icon(Icons.map_rounded, size: _sp(context, 20)),
                 label: Text(
-                  _isGettingLocation
-                      ? 'Getting Location…'
-                      : 'Use Current Location',
+                  _isPickingLocation ? 'Opening Map…' : 'Pick on Map',
                   style: TextStyle(fontSize: _sp(context, 14)),
                 ),
               ),
@@ -717,6 +782,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
       return;
     }
 
+    final name    = _nameController.text.trim();
     final phone   = _phoneController.text.trim();
     final email   = _emailController.text.trim();
     final address = _addressController.text.trim();
@@ -745,17 +811,31 @@ class _SalonBookingPageState extends State<SalonBookingPage>
 
     setState(() => _isLoading = true);
     try {
+      // Human-readable breakdown (visit type + quantity per item) is kept
+      // for the provider dashboard, but composed into `note` — completely
+      // separate from the clean category data used for matching below.
+      final userNote = _noteController.text.trim();
+      final composedNote = [
+        _itemsSummary,
+        if (userNote.isNotEmpty) userNote,
+      ].join(' — ');
+
       await OrderService.placeOrder(
         serviceType:   'salon',
-        services:      _servicesForOrder,
+        // Clean category names only — exactly what serviceConfigs["salon"]
+        // and a provider's registered categories[] use, so
+        // categoryMatchFuzzy() can do a real Stage-1 exact match instead
+        // of falling back to fuzzy word overlap.
+        services:      _categoriesForOrder,
+        category:      _primaryCategory,
         userId:        user.uid,
-        userName:      user.displayName ?? 'Salon User',
+        userName:      name,
         phone:         phone,
-        email:         email,
+        email:         email, // may be empty — that's fine, it's optional
         createdBy:     user.uid,
         createdByRole: 'user',
         address:       _hasHome ? address : 'Salon Visit',
-        note:          _noteController.text.trim(),
+        note:          composedNote,
         date:          DateTime.now(),
         time:          TimeOfDay.now().format(context),
         totalAmount:   _totalAmount,
@@ -794,45 +874,77 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   }
 
   // ==========================================================================
-  // LOCATION
+  // LOCATION — map picker only, no GPS
   // ==========================================================================
-
-  Future<void> _getCurrentLocation() async {
-    setState(() => _isGettingLocation = true);
+  //
+  // FIX: MapPickerPage's `_confirmLocation()` does:
+  //
+  //     Navigator.pop(context, MapPickerResult(
+  //       shortAddress: ..., fullAddress: ..., addressDetails: ..., latLng: ...,
+  //     ));
+  //
+  // i.e. it ALWAYS pops a `MapPickerResult` object — never a raw String,
+  // never a Map. The old code here only handled `result is String` and
+  // `result is Map`, so every real return value fell through both checks
+  // and hit the "Could not read the picked location" error branch. Location
+  // picking looked broken, but the picker page itself was working the whole
+  // time — this page just wasn't listening for the type it actually sends.
+  //
+  // Fixed by matching on `MapPickerResult` directly and building the
+  // address text from its fields (prefer the more precise `fullAddress`,
+  // fall back to `shortAddress`, and fold in any manually-typed
+  // `addressDetails` like a flat/floor/building name).
+  Future<void> _pickOnMap() async {
+    setState(() => _isPickingLocation = true);
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _showPopup('Location services are disabled', false);
-        return;
+      final result = await Navigator.push<dynamic>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MapPickerPage(initialLatLng: _pickedLatLng),
+        ),
+      );
+
+      if (result == null) return;
+
+      String? pickedAddress;
+      LatLng? pickedLatLng;
+
+      if (result is MapPickerResult) {
+        // The real, current return type from MapPickerPage.
+        final baseAddress = result.fullAddress.trim().isNotEmpty
+            ? result.fullAddress.trim()
+            : result.shortAddress.trim();
+        final details = result.addressDetails.trim();
+        pickedAddress =
+            details.isNotEmpty ? '$details, $baseAddress' : baseAddress;
+        pickedLatLng = result.latLng;
+      } else if (result is String) {
+        // Kept for backwards compatibility in case an older/alternate
+        // picker implementation is ever swapped in.
+        pickedAddress = result;
+      } else if (result is Map) {
+        final map = result.cast<String, dynamic>();
+        pickedAddress = (map['address'] ??
+                map['formattedAddress'] ??
+                map['fullAddress'] ??
+                '')
+            .toString();
       }
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.deniedForever ||
-          permission == LocationPermission.denied) {
-        _showPopup('Location permission denied', false);
-        return;
-      }
-      final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      final placemarks = await placemarkFromCoordinates(
-          position.latitude, position.longitude);
-      if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-        _addressController.text =
-            '${p.street ?? ''}, ${p.locality ?? ''}, '
-            '${p.administrativeArea ?? ''} ${p.postalCode ?? ''}'
-                .replaceAll(RegExp(r',\s*,'), ',')
-                .trim();
-        // Re-validate the address field now that it's been auto-filled.
+
+      if (pickedAddress != null && pickedAddress.trim().isNotEmpty) {
+        setState(() {
+          _addressController.text = pickedAddress!.trim();
+          _pickedLatLng = pickedLatLng ?? _pickedLatLng;
+        });
         _formKey.currentState?.validate();
+      } else {
+        _showPopup('Could not read the picked location. Please try again.', false);
       }
     } catch (e) {
-      debugPrint('[SalonBookingPage] location error: $e');
-      _showPopup('Could not fetch location: $e', false);
+      debugPrint('[SalonBookingPage] map picker error: $e');
+      _showPopup('Could not open the map. Please try again.', false);
     } finally {
-      if (mounted) setState(() => _isGettingLocation = false);
+      if (mounted) setState(() => _isPickingLocation = false);
     }
   }
 
@@ -955,6 +1067,8 @@ class _SalonBookingPageState extends State<SalonBookingPage>
     required IconData icon,
     int maxLines = 1,
     int? maxLength,
+    bool readOnly = false,
+    VoidCallback? onTap,
     TextInputType keyboardType = TextInputType.text,
     List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
@@ -963,6 +1077,8 @@ class _SalonBookingPageState extends State<SalonBookingPage>
       controller: controller,
       maxLines: maxLines,
       maxLength: maxLength,
+      readOnly: readOnly,
+      onTap: onTap,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       validator: validator,
@@ -998,6 +1114,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             TextStyle(color: Colors.grey.shade400, fontSize: _sp(context, 15)),
         prefixIcon: Icon(icon,
             color: const Color(0xFFB38BFA), size: _sp(context, 22)),
+        suffixIcon: readOnly ? const Icon(Icons.map_rounded, size: 18) : null,
         errorStyle: TextStyle(fontSize: _sp(context, 12)),
       ),
     );

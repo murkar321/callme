@@ -7,11 +7,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class EnquiryPage extends StatefulWidget {
   final String serviceName;
+  final String? subCategory;
   final List<dynamic>? cart;
 
   const EnquiryPage({
     super.key,
     required this.serviceName,
+    this.subCategory,
     this.cart,
   });
 
@@ -53,6 +55,10 @@ class _EnquiryPageState extends State<EnquiryPage>
   String? _providerId;
   String? _noProviderMessage;
 
+  // ─── ADAPTIVE SCALE (set each build) ─────────────────────────
+  double _scale = 1.0;
+  double _s(double v) => v * _scale;
+
   // ─── LIFECYCLE ──────────────────────────────────────────────
   @override
   void initState() {
@@ -77,7 +83,55 @@ class _EnquiryPageState extends State<EnquiryPage>
     super.dispose();
   }
 
-  // ─── PROVIDER LOOKUP ────────────────────────────────────────
+  // ─── CATEGORY HELPERS ───────────────────────────────────────
+  // Collapses whitespace/casing so "Home  Cleaning" and "home cleaning"
+  // both normalise to a comparable canonical form. This is separate
+  // from order_service.dart's normalizeServiceType()/normalizeCategory()
+  // (which strip ALL separators) — this one is only used to build the
+  // display-friendly / storage-friendly strings passed into
+  // OrderService.placeOrder(), matching exactly how placeOrder's own
+  // `serviceType.trim().toLowerCase()` normalizes things.
+  String _resolveCanonical(String raw) {
+    return raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  String get serviceType => _resolveCanonical(widget.serviceName);
+  String? get subCategoryNormalized =>
+      widget.subCategory == null || widget.subCategory!.trim().isEmpty
+          ? null
+          : _resolveCanonical(widget.subCategory!);
+
+  // ─── PROVIDER LOOKUP
+  //
+  // FIX: this used to query providers on a singular `subCategory`
+  // string field (`where('subCategory', isEqualTo: ...)`) that
+  // doesn't exist on provider documents at all — providers store
+  // their selected categories as TWO ARRAY fields, `categories[]`
+  // (main) and `subCategories[]` (specific), exactly like
+  // order_service.dart's providerCategories()/providerSubCategories()
+  // read. That query could never match anything, silently pushing
+  // every enquiry down to the serviceType-only fallback pass
+  // regardless of sub-category — meaning a provider's sub-category
+  // registration was completely ignored when routing enquiries.
+  //
+  // It also kept its own private fuzzy-matching copy
+  // (_categoryMatchFuzzy/_resolveCanonical-based), independent from
+  // order_service.dart's categoryMatchFuzzy() — the same kind of
+  // duplicated logic that has repeatedly drifted out of sync
+  // elsewhere in this app.
+  //
+  // Now this reads the SAME categories[] + subCategories[] arrays,
+  // runs them through the SAME categoryMatchFuzzy() pipeline
+  // (exact → fuzzy word overlap → sub-service reverse lookup) that
+  // both business_dashboard_page.dart's Available tab and
+  // order_service.dart's push-notification fan-out use — so the
+  // provider this page finds is guaranteed to be one who will
+  // actually see/be notified about the resulting order. The
+  // `matchData` map below is built exactly the way placeOrder()
+  // will populate the real order document (canonical category +
+  // canonical services), so there's no drift between "who we found"
+  // and "who gets shown this order".
+  // ─────────────────────────────────────────────────────────────
   Future<void> _loadProvider() async {
     if (!mounted) return;
     setState(() {
@@ -86,41 +140,109 @@ class _EnquiryPageState extends State<EnquiryPage>
     });
 
     try {
-      final normalised = serviceType;
+      final found = await _findMatchingProvider(approvedOnly: true) ??
+          await _findMatchingProvider(approvedOnly: false);
 
-      var snap = await FirebaseFirestore.instance
-          .collection('providers')
-          .where('serviceType', isEqualTo: normalised)
-          .where('status',      isEqualTo: 'approved')
-          .limit(1)
-          .get();
-
-      if (snap.docs.isEmpty) {
-        final allSnap = await FirebaseFirestore.instance
-            .collection('providers')
-            .where('status', isEqualTo: 'approved')
-            .get();
-
-        final match = allSnap.docs.where((doc) {
-          final st = (doc.data()['serviceType'] ?? '').toString().toLowerCase();
-          return st == normalised;
-        }).toList();
-
-        if (match.isEmpty) throw Exception('no_provider');
-        _setProvider(match.first.id);
-      } else {
-        _setProvider(snap.docs.first.id);
-      }
+      if (found == null) throw Exception('no_provider');
+      _setProvider(found);
     } catch (_) {
       if (mounted) {
         setState(() {
           _noProviderMessage =
-              'No approved provider found for "${widget.serviceName}".\n'
+              'No approved provider found for "${widget.serviceName}"'
+              '${widget.subCategory != null ? ' (${widget.subCategory})' : ''}.\n'
               'Please try again later.';
           isLoadingProvider = false;
         });
       }
     }
+  }
+
+  // Finds ONE provider doc id matching this enquiry's service type +
+  // category/sub-category, or null if none exists at this tier.
+  // Called first with approvedOnly=true, then (if that finds nothing)
+  // with approvedOnly=false as a last-resort fallback.
+  Future<String?> _findMatchingProvider({required bool approvedOnly}) async {
+    final category    = serviceType;             // e.g. "civil construction"
+    final subCategory = subCategoryNormalized;    // e.g. "structural assessment"
+    final normSvc     = normalizeServiceType(category);
+
+    final col = FirebaseFirestore.instance.collection('providers');
+
+    // Primary: fast indexed query — works whenever the provider's
+    // stored serviceType is byte-identical to ours.
+    Query<Map<String, dynamic>> primaryQuery =
+        col.where('serviceType', isEqualTo: category);
+    if (approvedOnly) {
+      primaryQuery = primaryQuery.where('status', isEqualTo: 'approved');
+    }
+    final primarySnap = await primaryQuery.get();
+
+    // Fallback: broad scan, filtered client-side via
+    // normalizeServiceType() — rescues providers whose serviceType
+    // field differs only in casing/spacing. Mirrors
+    // order_service.dart's _notifyMatchingProviders() fallback.
+    Query<Map<String, dynamic>> fallbackQuery = col;
+    if (approvedOnly) {
+      fallbackQuery = fallbackQuery.where('status', isEqualTo: 'approved');
+    }
+    final fallbackSnap = await fallbackQuery.get();
+
+    final seen = <String>{};
+    final candidates = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+    for (final doc in primarySnap.docs) {
+      if (seen.add(doc.id)) candidates.add(doc);
+    }
+    for (final doc in fallbackSnap.docs) {
+      if (seen.contains(doc.id)) continue;
+      final docSvc = providerServiceType(doc.data());
+      if (docSvc.isNotEmpty && normalizeServiceType(docSvc) == normSvc) {
+        seen.add(doc.id);
+        candidates.add(doc);
+      }
+    }
+
+    if (candidates.isEmpty) return null;
+
+    // Build an order-shaped map, canonicalized exactly the way
+    // placeOrder() will populate the real order — same category
+    // resolution, same services list — so matching here and
+    // matching once the order actually exists never disagree.
+    final effectiveCategory =
+        servicesList.isNotEmpty ? servicesList.first : category;
+    final canonicalCategory = resolveCanonicalCategory(effectiveCategory, category);
+    final canonicalServices =
+        servicesList.map((s) => resolveCanonicalCategory(s, category)).toList();
+
+    final matchData = <String, dynamic>{
+      'category':    canonicalCategory,
+      'subCategory': subCategory ?? '',
+      'services':    canonicalServices,
+      'serviceType': category,
+    };
+
+    // Prefer a provider whose categories[] / subCategories[] pool
+    // actually matches this enquiry — reads BOTH fields, merged, via
+    // the shared helpers, then runs the shared fuzzy pipeline.
+    for (final doc in candidates) {
+      final data            = doc.data();
+      final providerCats    = providerCategories(data);
+      final providerSubCats = providerSubCategories(data);
+
+      final matched = categoryMatchFuzzy(
+        matchData,
+        providerCats,
+        providerSubCats: providerSubCats,
+        debugOrderId: 'enquiry-lookup:${doc.id}',
+      );
+      if (matched) return doc.id;
+    }
+
+    // No category-level match among same-service-type providers —
+    // fall back to any of them rather than showing "no provider
+    // available" (same behaviour as before this fix).
+    return candidates.first.id;
   }
 
   void _setProvider(String id) {
@@ -133,8 +255,6 @@ class _EnquiryPageState extends State<EnquiryPage>
   }
 
   // ─── HELPERS ────────────────────────────────────────────────
-  String get serviceType => widget.serviceName.trim().toLowerCase();
-
   List<String> get servicesList {
     if (widget.cart != null && widget.cart!.isNotEmpty) {
       return widget.cart!.map((e) => '${e.name} x${e.quantity}').toList();
@@ -154,13 +274,21 @@ class _EnquiryPageState extends State<EnquiryPage>
     return null;
   }
 
+  // Strict 10-digit phone validation. Tolerates a leading +91/91
+  // country code by stripping it before the digit-count check.
   String? _validatePhone(String? v) {
-    if (v == null || v.trim().isEmpty)  return 'Phone number is required';
-    final digits = v.replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 7)             return 'Enter at least 7 digits';
-    if (digits.length > 15)            return 'Phone number is too long';
-    if (!RegExp(r'^\+?[\d\s\-\(\)]+$').hasMatch(v.trim())) {
-      return 'Enter a valid phone number';
+    if (v == null || v.trim().isEmpty) return 'Phone number is required';
+
+    var digits = v.replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 12 && digits.startsWith('91')) {
+      digits = digits.substring(2);
+    } else if (digits.length == 11 && digits.startsWith('0')) {
+      digits = digits.substring(1);
+    }
+
+    if (digits.length != 10) return 'Enter a valid 10-digit phone number';
+    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(digits)) {
+      return 'Enter a valid 10-digit phone number';
     }
     return null;
   }
@@ -204,6 +332,7 @@ class _EnquiryPageState extends State<EnquiryPage>
 
       await OrderService.placeOrder(
         serviceType:   serviceType,
+        subCategory:   subCategoryNormalized,
         services:      servicesList,
         userId:        user.uid,
         userName:      nameController.text.trim(),
@@ -245,10 +374,10 @@ class _EnquiryPageState extends State<EnquiryPage>
             Icon(
               isError ? Icons.error_outline : Icons.check_circle_outline,
               color: Colors.white,
-              size: 18,
+              size: _s(18),
             ),
-            const SizedBox(width: 10),
-            Expanded(child: Text(msg, style: const TextStyle(fontSize: 14))),
+            SizedBox(width: _s(10)),
+            Expanded(child: Text(msg, style: TextStyle(fontSize: _s(14)))),
           ],
         ),
         backgroundColor: isError ? _error : _success,
@@ -304,7 +433,9 @@ class _EnquiryPageState extends State<EnquiryPage>
   // ─── BUILD ──────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final mq     = MediaQuery.of(context);
+    final mq = MediaQuery.of(context);
+    // sw/390 baseline scale, clamped so tiny/huge screens stay usable.
+    _scale = (mq.size.width / 390).clamp(0.85, 1.25);
     final isWide = mq.size.width > 600;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -314,6 +445,7 @@ class _EnquiryPageState extends State<EnquiryPage>
       ),
       child: Scaffold(
         backgroundColor: _bg,
+        extendBody: true,
         extendBodyBehindAppBar: false,
         appBar: _buildAppBar(),
         body: SafeArea(
@@ -342,7 +474,7 @@ class _EnquiryPageState extends State<EnquiryPage>
       shadowColor:        _border,
       titleSpacing:       0,
       leading: IconButton(
-        icon:    const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+        icon:    Icon(Icons.arrow_back_ios_new_rounded, size: _s(20)),
         onPressed: () => Navigator.pop(context),
       ),
       title: Column(
@@ -350,19 +482,22 @@ class _EnquiryPageState extends State<EnquiryPage>
         children: [
           Text(
             'Enquiry',
-            style: const TextStyle(
-              fontSize:   17,
+            style: TextStyle(
+              fontSize:   _s(17),
               fontWeight: FontWeight.w700,
               color:      _textDark,
             ),
           ),
           Text(
-            widget.serviceName,
-            style: const TextStyle(
-              fontSize: 12,
+            widget.subCategory != null
+                ? '${widget.serviceName} • ${widget.subCategory}'
+                : widget.serviceName,
+            style: TextStyle(
+              fontSize: _s(12),
               color:    _textMid,
               fontWeight: FontWeight.w400,
             ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -375,14 +510,14 @@ class _EnquiryPageState extends State<EnquiryPage>
 
   // ─── LOADING ────────────────────────────────────────────────
   Widget _loadingState() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircularProgressIndicator(color: _primary, strokeWidth: 2.5),
-          SizedBox(height: 16),
+          const CircularProgressIndicator(color: _primary, strokeWidth: 2.5),
+          SizedBox(height: _s(16)),
           Text('Finding a provider…',
-              style: TextStyle(color: _textMid, fontSize: 14)),
+              style: TextStyle(color: _textMid, fontSize: _s(14))),
         ],
       ),
     );
@@ -392,45 +527,45 @@ class _EnquiryPageState extends State<EnquiryPage>
   Widget _noProviderState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 36),
+        padding: EdgeInsets.symmetric(horizontal: _s(36)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
+              padding: EdgeInsets.all(_s(20)),
+              decoration: const BoxDecoration(
                 color:  _primarySoft,
                 shape:  BoxShape.circle,
               ),
-              child: const Icon(Icons.store_outlined,
-                  size: 40, color: _primary),
+              child: Icon(Icons.store_outlined,
+                  size: _s(40), color: _primary),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: _s(20)),
             Text(
               'No Provider Available',
-              style: const TextStyle(
-                  fontSize:   18,
+              style: TextStyle(
+                  fontSize:   _s(18),
                   fontWeight: FontWeight.w700,
                   color:      _textDark),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: _s(10)),
             Text(
               _noProviderMessage ?? 'No approved provider found for this service.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 14,
+              style: TextStyle(
+                  fontSize: _s(14),
                   color:    _textMid,
                   height:   1.6),
             ),
-            const SizedBox(height: 28),
+            SizedBox(height: _s(28)),
             SizedBox(
-              width: 160,
-              height: 46,
+              width: _s(160),
+              height: _s(46),
               child: ElevatedButton.icon(
                 onPressed: _loadProvider,
-                icon:  const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Retry',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                icon:  Icon(Icons.refresh_rounded, size: _s(18)),
+                label: Text('Retry',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: _s(14))),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _primary,
                   foregroundColor: Colors.white,
@@ -450,7 +585,7 @@ class _EnquiryPageState extends State<EnquiryPage>
   Widget _narrowLayout(MediaQueryData mq) {
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
-        16, 16, 16, mq.padding.bottom + 24,
+        _s(16), _s(16), _s(16), mq.viewPadding.bottom + _s(24),
       ),
       child: _formCard(),
     );
@@ -460,7 +595,7 @@ class _EnquiryPageState extends State<EnquiryPage>
     return Center(
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
-          24, 24, 24, mq.padding.bottom + 32,
+          _s(24), _s(24), _s(24), mq.viewPadding.bottom + _s(32),
         ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
@@ -491,13 +626,13 @@ class _EnquiryPageState extends State<EnquiryPage>
           children: [
             _cardHeader(),
             if (_hasCart) _cartPreview(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: _SectionLabel(label: 'Your Details'),
-            ),
-            const SizedBox(height: 12),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.symmetric(horizontal: _s(20)),
+              child: _SectionLabel(label: 'Your Details', scale: _scale),
+            ),
+            SizedBox(height: _s(12)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: _s(20)),
               child: Column(
                 children: [
                   _inputField(
@@ -515,13 +650,14 @@ class _EnquiryPageState extends State<EnquiryPage>
                     focusNode:   _phoneFocus,
                     nextFocus:   _emailFocus,
                     label:       'Phone Number',
-                    hint:        'e.g. +91 98765 43210',
+                    hint:        '10-digit mobile number',
                     icon:        Icons.phone_outlined,
                     validator:   _validatePhone,
                     keyboard:    TextInputType.phone,
                     inputAction: TextInputAction.next,
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'[\d\+\-\(\)\s]')),
+                      LengthLimitingTextInputFormatter(15),
                     ],
                   ),
                   _inputField(
@@ -537,25 +673,25 @@ class _EnquiryPageState extends State<EnquiryPage>
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: _SectionLabel(label: 'Schedule'),
-            ),
-            const SizedBox(height: 12),
+            SizedBox(height: _s(20)),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.symmetric(horizontal: _s(20)),
+              child: _SectionLabel(label: 'Schedule', scale: _scale),
+            ),
+            SizedBox(height: _s(12)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: _s(20)),
               child: Row(
                 children: [
                   Expanded(child: _dateTile()),
-                  const SizedBox(width: 12),
+                  SizedBox(width: _s(12)),
                   Expanded(child: _timeTile()),
                 ],
               ),
             ),
-            const SizedBox(height: 28),
+            SizedBox(height: _s(28)),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              padding: EdgeInsets.fromLTRB(_s(20), 0, _s(20), _s(24)),
               child: _submitButton(),
             ),
           ],
@@ -567,7 +703,7 @@ class _EnquiryPageState extends State<EnquiryPage>
   // ─── CARD HEADER ────────────────────────────────────────────
   Widget _cardHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+      padding: EdgeInsets.fromLTRB(_s(20), _s(22), _s(20), _s(18)),
       decoration: const BoxDecoration(
         color: _primarySoft,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -575,30 +711,32 @@ class _EnquiryPageState extends State<EnquiryPage>
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: EdgeInsets.all(_s(10)),
             decoration: BoxDecoration(
               color:        _primary.withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.support_agent_rounded,
-                color: _primary, size: 22),
+            child: Icon(Icons.support_agent_rounded,
+                color: _primary, size: _s(22)),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: _s(14)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.serviceName,
-                  style: const TextStyle(
-                      fontSize:   16,
+                  widget.subCategory != null
+                      ? '${widget.serviceName} • ${widget.subCategory}'
+                      : widget.serviceName,
+                  style: TextStyle(
+                      fontSize:   _s(16),
                       fontWeight: FontWeight.w700,
                       color:      _textDark),
                 ),
-                const SizedBox(height: 2),
-                const Text(
+                SizedBox(height: _s(2)),
+                Text(
                   'Request a callback or home visit',
-                  style: TextStyle(fontSize: 12, color: _textMid),
+                  style: TextStyle(fontSize: _s(12), color: _textMid),
                 ),
               ],
             ),
@@ -611,8 +749,8 @@ class _EnquiryPageState extends State<EnquiryPage>
   // ─── CART PREVIEW ───────────────────────────────────────────
   Widget _cartPreview() {
     return Container(
-      margin:  const EdgeInsets.fromLTRB(20, 16, 20, 0),
-      padding: const EdgeInsets.all(14),
+      margin:  EdgeInsets.fromLTRB(_s(20), _s(16), _s(20), 0),
+      padding: EdgeInsets.all(_s(14)),
       decoration: BoxDecoration(
         color:        const Color(0xFFF3F0FB),
         borderRadius: BorderRadius.circular(12),
@@ -623,30 +761,30 @@ class _EnquiryPageState extends State<EnquiryPage>
         children: [
           Row(
             children: [
-              const Icon(Icons.receipt_long_outlined,
-                  size: 15, color: _primary),
-              const SizedBox(width: 6),
-              const Text(
+              Icon(Icons.receipt_long_outlined,
+                  size: _s(15), color: _primary),
+              SizedBox(width: _s(6)),
+              Text(
                 'Services selected',
                 style: TextStyle(
-                    fontSize:   12,
+                    fontSize:   _s(12),
                     fontWeight: FontWeight.w600,
                     color:      _primary),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: _s(8)),
           ...servicesList.map(
             (e) => Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: EdgeInsets.only(top: _s(4)),
               child: Row(
                 children: [
-                  const Icon(Icons.circle, size: 5, color: _textMid),
-                  const SizedBox(width: 8),
+                  Icon(Icons.circle, size: _s(5), color: _textMid),
+                  SizedBox(width: _s(8)),
                   Expanded(
                     child: Text(e,
-                        style: const TextStyle(
-                            fontSize: 13, color: _textDark)),
+                        style: TextStyle(
+                            fontSize: _s(13), color: _textDark)),
                   ),
                 ],
               ),
@@ -671,7 +809,7 @@ class _EnquiryPageState extends State<EnquiryPage>
     List<TextInputFormatter>? inputFormatters,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: EdgeInsets.only(bottom: _s(14)),
       child: TextFormField(
         controller:        controller,
         focusNode:         focusNode,
@@ -687,14 +825,14 @@ class _EnquiryPageState extends State<EnquiryPage>
             FocusScope.of(context).unfocus();
           }
         },
-        style: const TextStyle(
-            fontSize: 14, color: _textDark, fontWeight: FontWeight.w500),
+        style: TextStyle(
+            fontSize: _s(14), color: _textDark, fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           labelText:    label,
           hintText:     hint,
-          hintStyle:    const TextStyle(color: Color(0xFFB0ABCB), fontSize: 13),
-          labelStyle:   const TextStyle(color: _textMid, fontSize: 13),
-          prefixIcon:   Icon(icon, color: _primary, size: 20),
+          hintStyle:    TextStyle(color: const Color(0xFFB0ABCB), fontSize: _s(13)),
+          labelStyle:   TextStyle(color: _textMid, fontSize: _s(13)),
+          prefixIcon:   Icon(icon, color: _primary, size: _s(20)),
           filled:       true,
           fillColor:    const Color(0xFFFAF9FD),
           enabledBorder: OutlineInputBorder(
@@ -713,9 +851,9 @@ class _EnquiryPageState extends State<EnquiryPage>
             borderRadius: BorderRadius.circular(13),
             borderSide:   const BorderSide(color: _error, width: 1.6),
           ),
-          errorStyle: const TextStyle(fontSize: 11.5, color: _error),
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14, vertical: 14),
+          errorStyle: TextStyle(fontSize: _s(11.5), color: _error),
+          contentPadding: EdgeInsets.symmetric(
+              horizontal: _s(14), vertical: _s(14)),
         ),
       ),
     );
@@ -758,7 +896,7 @@ class _EnquiryPageState extends State<EnquiryPage>
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:  const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding:  EdgeInsets.symmetric(horizontal: _s(14), vertical: _s(13)),
         decoration: BoxDecoration(
           color:        selected ? _primarySoft : const Color(0xFFFAF9FD),
           borderRadius: BorderRadius.circular(13),
@@ -770,22 +908,22 @@ class _EnquiryPageState extends State<EnquiryPage>
         child: Row(
           children: [
             Icon(icon,
-                color: selected ? _primary : _textMid, size: 18),
-            const SizedBox(width: 8),
+                color: selected ? _primary : _textMid, size: _s(18)),
+            SizedBox(width: _s(8)),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(topLabel,
                       style: TextStyle(
-                          fontSize: 10,
+                          fontSize: _s(10),
                           color:    selected ? _primary : _textMid,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 0.3)),
-                  const SizedBox(height: 2),
+                  SizedBox(height: _s(2)),
                   Text(value,
                       style: TextStyle(
-                          fontSize:   13,
+                          fontSize:   _s(13),
                           color:      selected ? _textDark : _textMid,
                           fontWeight: selected
                               ? FontWeight.w600
@@ -804,7 +942,7 @@ class _EnquiryPageState extends State<EnquiryPage>
   Widget _submitButton() {
     return SizedBox(
       width:  double.infinity,
-      height: 52,
+      height: _s(52),
       child: ElevatedButton(
         onPressed: isLoading ? null : submitEnquiry,
         style: ElevatedButton.styleFrom(
@@ -817,21 +955,21 @@ class _EnquiryPageState extends State<EnquiryPage>
               borderRadius: BorderRadius.circular(14)),
         ),
         child: isLoading
-            ? const SizedBox(
-                width:  20,
-                height: 20,
-                child: CircularProgressIndicator(
+            ? SizedBox(
+                width:  _s(20),
+                height: _s(20),
+                child: const CircularProgressIndicator(
                     color:       Colors.white,
                     strokeWidth: 2.2),
               )
-            : const Row(
+            : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.send_rounded, size: 18),
-                  SizedBox(width: 10),
+                  Icon(Icons.send_rounded, size: _s(18)),
+                  SizedBox(width: _s(10)),
                   Text('Submit Enquiry',
                       style: TextStyle(
-                          fontSize:   15,
+                          fontSize:   _s(15),
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.3)),
                 ],
@@ -844,7 +982,8 @@ class _EnquiryPageState extends State<EnquiryPage>
 // ─── SECTION LABEL WIDGET ────────────────────────────────────
 class _SectionLabel extends StatelessWidget {
   final String label;
-  const _SectionLabel({required this.label});
+  final double scale;
+  const _SectionLabel({required this.label, this.scale = 1.0});
 
   @override
   Widget build(BuildContext context) {
@@ -852,13 +991,13 @@ class _SectionLabel extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style: const TextStyle(
-              fontSize:      11,
+          style: TextStyle(
+              fontSize:      11 * scale,
               fontWeight:    FontWeight.w700,
-              color:         Color(0xFF7C5CBF),
+              color:         const Color(0xFF7C5CBF),
               letterSpacing: 1.2),
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10 * scale),
         const Expanded(
           child: Divider(color: Color(0xFFE0DAF0), thickness: 1),
         ),
