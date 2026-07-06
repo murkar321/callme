@@ -29,10 +29,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   // =====================================================
   // FIELD EXTRACTION HELPER
   // =====================================================
-  // Mirrors notification_router.dart's `_first()` so the businessName /
-  // serviceType we save on the notification always agree with what the
-  // dashboard route expects. Tries top-level keys, then nested business/
-  // service maps.
+
   String _firstField(Map<String, dynamic> merged, List<String> keys) {
     for (final k in keys) {
       final v = merged[k]?.toString().trim() ?? '';
@@ -67,35 +64,47 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
   // =====================================================
   // SEND FCM HELPER
-  // =====================================================
+  //
 
-  Future<void> _sendFcm({
+
+  Future<bool> _sendFcm({
     required String token,
     required String title,
     required String body,
     required String providerId,
-    required String userId,     // ✅ needed for fcm_queue rules
+    required String userId,     // needed for fcm_queue rules
     required String type,
     String? businessName,
     String? serviceType,
     String? reason,
   }) async {
-    if (token.trim().isEmpty) return;
+    if (token.trim().isEmpty) {
+      debugPrint('[approve-fcm] No fcmToken saved for provider $providerId '
+          '($userId) — push skipped (in-app notification still saved).');
+      return false;
+    }
 
     final Map<String, dynamic> payload = {
       "token":      token.trim(),
       "title":      title,
       "body":       body,
       "providerId": providerId,
-      "userId":     userId,     // ✅ fcm_queue rule: userId == uid()
-      "receiverId": userId,     // ✅ fcm_queue rule: receiverId == uid()
+      "userId":     userId,     // fcm_queue rule: receiverId == uid()
+      "receiverId": userId,     // fcm_queue rule: receiverId == uid()
       "type":       type,
       "createdAt":  FieldValue.serverTimestamp(),
       "sent":       false,
+      // Nested `data` map — matches the shape used everywhere else in
+      // the app (order_service.dart's fcm_queue writes) so the Cloud
+      // Function's expected payload shape stays consistent across
+      // every write path, not just order-related ones.
+      "data": {
+        "type":       type,
+        "providerId": providerId,
+        "receiverId": userId,
+      },
     };
 
-    // ✅ Carried through the FCM data payload so routeNotification() can
-    // open BusinessDashboardPage instantly, without a second Firestore read.
     if (businessName != null && businessName.trim().isNotEmpty) {
       payload["businessName"] = businessName.trim();
     }
@@ -106,21 +115,36 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       payload["reason"] = reason.trim();
     }
 
-    await firestore.collection("fcm_queue").add(payload);
+    try {
+      await firestore.collection("fcm_queue").add(payload);
+      return true;
+    } catch (e) {
+      final msg = e.toString();
+      final isPerm = msg.contains('permission-denied') ||
+          msg.contains('PERMISSION_DENIED');
+      debugPrint('[approve-fcm] fcm_queue write FAILED for provider '
+          '$providerId ($userId): $e');
+      if (isPerm) {
+        debugPrint('[approve-fcm] This looks like a Firestore security '
+            'rules issue: the admin (not the provider) is writing this '
+            'doc, so a rule like "receiverId == request.auth.uid" will '
+            'always reject it. Update the fcm_queue rule to also allow '
+            'admin-initiated writes. See the note above _sendFcm() in '
+            'approve_providers_page.dart for the exact rule to add.');
+      }
+      return false;
+    }
   }
 
   // =====================================================
   // SAVE NOTIFICATION (in-app bell)
   // =====================================================
 
-  Future<void> _saveNotification({
-    required String userId,     // ✅ receiverId for notifications rules
+  Future<bool> _saveNotification({
+    required String userId,
     required String title,
     required String body,
-    required String type,       // ✅ FIX: this was never being saved before,
-                                 // so NotificationPage's onNotificationTap
-                                 // always got a null `type` and routing fell
-                                 // through to the default case.
+    required String type,
     String? providerId,
     String? businessName,
     String? serviceType,
@@ -129,15 +153,12 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     final Map<String, dynamic> notification = {
       "title":      title,
       "body":       body,
-      "type":       type,       // ✅ now present — this is what
-                                 // routeNotification()'s switch matches on
+      "type":       type,
       "read":       false,
-      "receiverId": userId,     // ✅ notifications rule: receiverId == uid()
+      "receiverId": userId,
       "createdAt":  FieldValue.serverTimestamp(),
     };
 
-    // ✅ So the notification list (and the dashboard route) both know
-    // exactly which provider + which service this notification is about.
     if (providerId != null && providerId.trim().isNotEmpty) {
       notification["providerId"] = providerId.trim();
     }
@@ -151,8 +172,14 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       notification["reason"] = reason.trim();
     }
 
-    // ✅ Top-level notifications collection — subcollection isn't covered by rules
-    await firestore.collection("notifications").add(notification);
+    try {
+      await firestore.collection("notifications").add(notification);
+      return true;
+    } catch (e) {
+      debugPrint('[approve-notif] notifications write FAILED for '
+          '$userId: $e');
+      return false;
+    }
   }
 
   // =====================================================
@@ -160,7 +187,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   // =====================================================
 
   Future<void> _updateUserRole(String userId, String role) async {
-    // users doc ID = email in your setup, so query by uid field
     final userQuery = await firestore
         .collection("users")
         .where("uid", isEqualTo: userId)
@@ -170,7 +196,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     if (userQuery.docs.isNotEmpty) {
       await userQuery.docs.first.reference.update({"role": role});
     } else {
-      // Fallback: if uid field not stored, try doc ID = uid
       await firestore
           .collection("users")
           .doc(userId)
@@ -180,22 +205,35 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
   // =====================================================
   // APPROVE
+  //
+  // FIX: the core action (flipping provider status to approved) and
+  // the notification/push delivery are now in SEPARATE try/catch
+  // blocks. A notification/push failure can never again roll back or
+  // mask the fact that the provider WAS approved — the admin instead
+  // gets an accurate "approved, but notification failed" snackbar so
+  // they know to check the provider's push settings / your Firestore
+  // rules, instead of a confusing raw exception that looks like the
+  // whole approval failed.
   // =====================================================
 
   Future<void> approveProvider(String providerId) async {
+    Map<String, dynamic> data;
+    String userId;
+    String ownerName;
+    ({String businessName, String serviceType}) identity;
+
+    // ── STEP 1 — the actual approval action ─────────────────────────
     try {
       final providerDoc =
           await firestore.collection("providers").doc(providerId).get();
 
       if (!providerDoc.exists) return;
 
-      final data      = providerDoc.data() ?? {};
-      final fcmToken  = (data["fcmToken"] ?? "").toString();
+      data      = providerDoc.data() ?? {};
       final business  = (data["business"] as Map<String, dynamic>?) ?? {};
-      final ownerName = (business["ownerName"] ?? "there").toString();
+      ownerName = (business["ownerName"] ?? "there").toString();
 
-      // ✅ Read userId (Firebase UID) stored inside the provider doc
-      final String userId = (data["userId"] ?? "").toString();
+      userId = (data["userId"] ?? "").toString();
       if (userId.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -206,54 +244,58 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
         return;
       }
 
-      // ✅ Pull businessName + serviceType so the approval message says
-      // *which* service was approved, and so the notification carries
-      // everything BusinessDashboardPage needs.
-      final identity = _extractIdentity(data);
-      final businessName = identity.businessName.isNotEmpty
-          ? identity.businessName
-          : "your business";
-      final serviceType = identity.serviceType;
+      identity = _extractIdentity(data);
 
-      final String title = "🎉 Account Approved!";
-      final String body = serviceType.isNotEmpty
-          ? "Congratulations $ownerName! Your $serviceType business \"$businessName\" has been approved. You can now start receiving $serviceType bookings."
-          : "Congratulations $ownerName! Your provider account has been approved. You can now start receiving bookings.";
-
-      // 1 — Update provider doc status
       await firestore.collection("providers").doc(providerId).update({
         "status":    "approved",
         "isActive":  true,
         "updatedAt": FieldValue.serverTimestamp(),
       });
 
-      // 2 — ✅ Set role: "provider" on users/{uid} so Firestore rules allow access
       await _updateUserRole(userId, "provider");
-
-      // 3 — In-app notification (now carries type + providerId + businessName + serviceType)
-      await _saveNotification(
-        userId:       userId,
-        title:        title,
-        body:         body,
-        type:         NotificationType.registrationApproved,
-        providerId:   providerId,
-        businessName: identity.businessName,
-        serviceType:  serviceType,
-      );
-
-      // 4 — FCM push (same enriched payload, so a cold-start tap works too)
-      await _sendFcm(
-        token:        fcmToken,
-        title:        title,
-        body:         body,
-        providerId:   providerId,
-        userId:       userId,
-        type:         NotificationType.registrationApproved,
-        businessName: identity.businessName,
-        serviceType:  serviceType,
-      );
-
+    } catch (e) {
+      debugPrint("APPROVE ERROR (core action): $e");
       if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
+      return;
+    }
+
+    // ── STEP 2 — notify (best-effort, never blocks the success state) ──
+    final fcmToken = (data["fcmToken"] ?? "").toString();
+    final businessName =
+        identity.businessName.isNotEmpty ? identity.businessName : "your business";
+    final serviceType = identity.serviceType;
+
+    final String title = "🎉 Account Approved!";
+    final String body = serviceType.isNotEmpty
+        ? "Congratulations $ownerName! Your $serviceType business \"$businessName\" has been approved. You can now start receiving $serviceType bookings."
+        : "Congratulations $ownerName! Your provider account has been approved. You can now start receiving bookings.";
+
+    final savedInApp = await _saveNotification(
+      userId:       userId,
+      title:        title,
+      body:         body,
+      type:         NotificationType.registrationApproved,
+      providerId:   providerId,
+      businessName: identity.businessName,
+      serviceType:  serviceType,
+    );
+
+    final pushQueued = await _sendFcm(
+      token:        fcmToken,
+      title:        title,
+      body:         body,
+      providerId:   providerId,
+      userId:       userId,
+      type:         NotificationType.registrationApproved,
+      businessName: identity.businessName,
+      serviceType:  serviceType,
+    );
+
+    if (!mounted) return;
+
+    if (savedInApp && pushQueued) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior:        SnackBarBehavior.floating,
@@ -273,11 +315,33 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
           ),
         ),
       );
-    } catch (e) {
-      debugPrint("APPROVE ERROR: $e");
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: $e")));
+    } else {
+      // FIX: the provider IS approved (step 1 succeeded) — this only
+      // warns that the notification/push delivery didn't fully go
+      // through, instead of silently failing or looking like the
+      // whole approval failed.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior:        SnackBarBehavior.floating,
+          backgroundColor: Colors.orange,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "Provider approved, but the notification/push may not have "
+                  "been delivered. Check debug logs and Firestore rules.",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
   }
 
@@ -382,27 +446,25 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
     final String reason = reasonController.text.trim();
 
+    Map<String, dynamic> data;
+    String userId;
+    String ownerName;
+    ({String businessName, String serviceType}) identity;
+
+    // ── STEP 1 — the actual rejection action ────────────────────────
     try {
       final providerDoc =
           await firestore.collection("providers").doc(providerId).get();
 
       if (!providerDoc.exists) return;
 
-      final data      = providerDoc.data() ?? {};
-      final fcmToken  = (data["fcmToken"] ?? "").toString();
+      data      = providerDoc.data() ?? {};
       final business  = (data["business"] as Map<String, dynamic>?) ?? {};
-      final ownerName = (business["ownerName"] ?? "there").toString();
+      ownerName = (business["ownerName"] ?? "there").toString();
 
-      // ✅ Read userId from provider doc
-      final String userId = (data["userId"] ?? "").toString();
-      final identity = _extractIdentity(data);
+      userId = (data["userId"] ?? "").toString();
+      identity = _extractIdentity(data);
 
-      const String title = "Account Not Approved";
-      final String body  = reason.isNotEmpty
-          ? "Hi $ownerName, your provider account was not approved. Reason: $reason"
-          : "Hi $ownerName, your provider account was not approved at this time. Please contact support.";
-
-      // 1 — Update provider doc status
       await firestore.collection("providers").doc(providerId).update({
         "status":       "rejected",
         "isActive":     false,
@@ -410,43 +472,56 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
         "updatedAt":    FieldValue.serverTimestamp(),
       });
 
-      // 2 — ✅ Reset role to "user" so provider access is revoked in rules
       if (userId.isNotEmpty) {
         await _updateUserRole(userId, "user");
       }
-
-      // 3 — In-app notification (now correctly typed as registrationRejected,
-      // not the plain "rejected" string, so the router matches it properly
-      // and sends the person back to BusinessPage — not the dashboard).
-      if (userId.isNotEmpty) {
-        await _saveNotification(
-          userId:       userId,
-          title:        title,
-          body:         body,
-          type:         NotificationType.registrationRejected,
-          providerId:   providerId,
-          businessName: identity.businessName,
-          serviceType:  identity.serviceType,
-          reason:       reason,
-        );
-      }
-
-      // 4 — FCM push
-      if (userId.isNotEmpty) {
-        await _sendFcm(
-          token:        fcmToken,
-          title:        title,
-          body:         body,
-          providerId:   providerId,
-          userId:       userId,
-          type:         NotificationType.registrationRejected,
-          businessName: identity.businessName,
-          serviceType:  identity.serviceType,
-          reason:       reason,
-        );
-      }
-
+    } catch (e) {
+      debugPrint("REJECT ERROR (core action): $e");
       if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
+      return;
+    }
+
+    // ── STEP 2 — notify (best-effort, never blocks the success state) ──
+    final fcmToken = (data["fcmToken"] ?? "").toString();
+
+    const String title = "Account Not Approved";
+    final String body  = reason.isNotEmpty
+        ? "Hi $ownerName, your provider account was not approved. Reason: $reason"
+        : "Hi $ownerName, your provider account was not approved at this time. Please contact support.";
+
+    bool savedInApp = true;
+    bool pushQueued = true;
+
+    if (userId.isNotEmpty) {
+      savedInApp = await _saveNotification(
+        userId:       userId,
+        title:        title,
+        body:         body,
+        type:         NotificationType.registrationRejected,
+        providerId:   providerId,
+        businessName: identity.businessName,
+        serviceType:  identity.serviceType,
+        reason:       reason,
+      );
+
+      pushQueued = await _sendFcm(
+        token:        fcmToken,
+        title:        title,
+        body:         body,
+        providerId:   providerId,
+        userId:       userId,
+        type:         NotificationType.registrationRejected,
+        businessName: identity.businessName,
+        serviceType:  identity.serviceType,
+        reason:       reason,
+      );
+    }
+
+    if (!mounted) return;
+
+    if (savedInApp && pushQueued) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior:        SnackBarBehavior.floating,
@@ -463,11 +538,28 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
           ),
         ),
       );
-    } catch (e) {
-      debugPrint("REJECT ERROR: $e");
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: $e")));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior:        SnackBarBehavior.floating,
+          backgroundColor: Colors.orange,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          content: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "Provider rejected, but the notification/push may not have "
+                  "been delivered. Check debug logs and Firestore rules.",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
   }
 
@@ -657,7 +749,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     final serviceType =
         service['serviceType'] ?? data['serviceType'] ?? "-";
     final providerType = data['providerType'] ?? "Provider";
-    // ✅ Show UID so admin can verify the link to users collection
     final userId = (data['userId'] ?? "-").toString();
 
     final String appliedDate = createdAt != null
@@ -771,7 +862,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                 _compactInfo(Icons.account_balance_rounded,
                     bank['accountHolder']?.toString() ?? "-"),
                 const SizedBox(height: 12),
-                // ✅ Show UID to help admin debug mismatches
                 _compactInfo(Icons.fingerprint_rounded, "UID: $userId"),
                 const SizedBox(height: 12),
                 _compactInfo(

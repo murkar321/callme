@@ -21,6 +21,12 @@ class NotificationType {
   static const String providerRegistered   = 'provider_registered';
   static const String registrationApproved = 'registration_approved';
   static const String registrationRejected = 'registration_rejected';
+
+  // FIX: NEW — sent to every OTHER matching provider the instant one
+  // provider accepts an order, so it doesn't just silently vanish from
+  // their Available tab with no explanation. See
+  // OrderService.notifyOthersOrderTaken() below.
+  static const String orderTakenByOther = 'order_taken_by_other';
 }
 
 // ============================================================
@@ -135,39 +141,7 @@ String cleanSubCategory(String raw) => raw.trim();
 // this file's _notifyMatchingProviders() (who actually gets a
 // `notifications` doc + push). Both must call categoryMatchFuzzy()
 // from HERE — neither file should re-implement its own copy.
-//
-// ─────────────────────────────────────────────────────────────
-// FIX (this revision): category matching is now STRICT / EXACT ONLY.
-//
-// A previous revision of categoryMatchFuzzy() ran three stages:
-//   1) exact normalized match
-//   2) "fuzzy" match on ANY shared word ≥3 letters between the order's
-//      category/services strings and the provider's categories
-//   3) a sub-service reverse lookup against serviceConfigs' static
-//      subServices map
-//
-// Stage 2 in particular was far too loose in practice: an order
-// categorized as "Hair Styling" would also match a provider who only
-// registered under "Hair Treatments" or "Hair Color", purely because
-// they share the single word "hair". That caused orders to become
-// visible to (and get push-notified to) providers whose category did
-// NOT actually match, while providing no guarantee the correct
-// provider would see it either.
-//
-// Per the product requirement — "match exactly against the provider's
-// main category selected from serviceConfigs; if it doesn't match, the
-// order must not be assigned/visible to that provider at all" — Stage
-// 2 and Stage 3 have been removed. categoryMatchFuzzy() now performs
-// ONLY an exact, normalized match against the provider's own
-// categories[] + subCategories[] pool (both of which are things the
-// provider explicitly selected at registration — merging them is not
-// "fuzzy", it's still an exact match, just against a slightly larger
-// pool of the provider's own choices).
-//
-// The function name is kept as `categoryMatchFuzzy` only so existing
-// call sites (business_dashboard_page.dart) don't need to change their
-// import — its behavior is now strict-exact.
-// ─────────────────────────────────────────────────────────────
+// ============================================================
 
 String normalizeCategory(String s) =>
     s.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]+'), '');
@@ -269,19 +243,22 @@ Set<String> orderCategoryCandidatesRaw(Map<String, dynamic> orderData) {
 
 /// EXACT (normalized) match — the ONLY stage now used for deciding
 /// whether an order is visible to / notifiable for a provider.
-///
-/// FIX: previously, when an order had no readable category/services
-/// info at all, this fell back to `return true` — i.e. showed the
-/// order to EVERY provider with categories selected. That is the
-/// opposite of the required behavior ("if it doesn't match, it must
-/// not be assigned to any provider"), so an order we cannot read a
-/// category for now fails closed (returns false) instead of open.
 bool categoryMatch(
   Map<String, dynamic> orderData,
   List<String> providerCats, {
   String debugOrderId = '',
 }) {
-  if (providerCats.isEmpty) return true;
+  // FIX: `providerCats.isEmpty` used to short-circuit straight to
+ 
+  // fixing it here fixes both places at once, by design.
+  if (providerCats.isEmpty) {
+    debugPrint('[catMatch] $debugOrderId: provider has NO categories or '
+        'subCategories registered in their profile — FAILING CLOSED '
+        '(this order will NOT be shown to or notify this provider). '
+        'The provider needs to select at least one category/service in '
+        'their profile before they can receive matching orders.');
+    return false;
+  }
 
   final normProviderCats = providerCats
       .map(normalizeCategory)
@@ -306,14 +283,12 @@ bool categoryMatch(
   }
   return matched;
 }
-
 /// Public entry point used by both business_dashboard_page.dart (tab
-/// visibility) and _notifyMatchingProviders() below (push fan-out).
-/// Both call sites pass `providerCats` (main categories[]) and
-/// `providerSubCats` (subCategories[]) — they are merged into one pool
-/// and matched EXACTLY (normalized) against the order's category /
-/// services. No fuzzy word-overlap, no sub-service guessing: if it
-/// isn't an exact match, the order is not shown/notified.
+/// visibility) and _notifyMatchingProviders() / notifyOthersOrderTaken()
+/// below (push fan-out). All call sites pass `providerCats` (main
+/// categories[]) and `providerSubCats` (subCategories[]) — merged into
+/// one pool and matched EXACTLY (normalized) against the order's
+/// category / services.
 bool categoryMatchFuzzy(
   Map<String, dynamic> orderData,
   List<String> providerCats, {
@@ -581,15 +556,6 @@ class OrderService {
 
   // ==========================================================
   // PROVIDER ACTIONS
-  //
-  // FIX: every user-facing status-change notification below now also
-  // stores `businessName` + `serviceType` + `providerId` as structured
-  // fields on the notification doc (not just baked into the body
-  // text), so NotificationPage's existing chip UI — which already
-  // reads `data['businessName']` / `data['serviceType']` — actually
-  // has something to show. Previously these fields were never written
-  // at all, so "which order got completed by which provider" only
-  // ever existed inside the free-text body.
   // ==========================================================
 
   static Future<void> acceptOrder({
@@ -789,9 +755,6 @@ class OrderService {
     try {
       if (specificProviderId != null && specificProviderId.isNotEmpty) {
         // Direct assignment — notify only this provider, no category check.
-        // The customer explicitly picked this provider, so category
-        // matching is irrelevant here (mirrors the dashboard's
-        // direct-assignment bypass in _unavailableReason()).
         final doc = await _db
             .collection('providers')
             .doc(specificProviderId)
@@ -886,6 +849,149 @@ class OrderService {
     }
   }
 
+  // ==========================================================
+  // FIX: NEW — FCFS "taken" notice to every OTHER matching provider.
+  //
+  // Previously, the instant one provider accepted an order, it just
+  // disappeared from every other matching provider's Available tab
+  // (via _isAvailable()'s isAssigned/providerUserId check) with zero
+  // explanation — the order's `notifications` doc from creation time
+  // stayed in their Notifications list forever, looking like a job
+  // that's still up for grabs. That's exactly the confusion reported:
+  // "message stays and provider gets confused."
+  //
+  // This runs the EXACT SAME candidate-gathering + categoryMatchFuzzy()
+  // pipeline as _notifyMatchingProviders() (so "who got the original
+  // alert" and "who gets the taken notice" always agree), skips the
+  // provider who just accepted, and sends both a `notifications` doc
+  // and an `fcm_queue` entry — so it rings on-screen (via
+  // FirebaseMessaging.onMessage) AND off-screen/terminated (via the
+  // background handler + Cloud Function), exactly like every other
+  // push in this app.
+  //
+  // Call this from the dashboard's `_accept()` right after the order
+  // is transactionally marked accepted.
+  // ==========================================================
+  static Future<void> notifyOthersOrderTaken({
+    required String orderId,
+    required String serviceType,
+    required String category,
+    String subCategory = '',
+    required String acceptedProviderId,
+    required String acceptedByBusinessName,
+  }) async {
+    try {
+      final normSvc = normalizeServiceType(serviceType);
+
+      final primarySnap = await _db
+          .collection('providers')
+          .where('status', isEqualTo: 'approved')
+          .where('serviceType', isEqualTo: serviceType)
+          .get();
+
+      final fallbackSnap = await _db
+          .collection('providers')
+          .where('status', isEqualTo: 'approved')
+          .get();
+
+      final seen = <String>{};
+      final candidateDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+      for (final doc in primarySnap.docs) {
+        if (seen.add(doc.id)) candidateDocs.add(doc);
+      }
+      for (final doc in fallbackSnap.docs) {
+        if (seen.contains(doc.id)) continue;
+        final docSvc = providerServiceType(doc.data());
+        if (docSvc.isNotEmpty && normalizeServiceType(docSvc) == normSvc) {
+          seen.add(doc.id);
+          candidateDocs.add(doc);
+        }
+      }
+
+      // Same shape categoryMatchFuzzy()/orderCategoryCandidates() expect.
+      final orderDataForMatch = <String, dynamic>{
+        'category':    category,
+        'subCategory': subCategory,
+        'services':    <String>[],
+        'serviceType': normSvc,
+      };
+
+      int notifiedCount = 0;
+
+      for (final doc in candidateDocs) {
+        // Never tell the provider who just accepted.
+        if (doc.id == acceptedProviderId) continue;
+
+        final provData        = doc.data();
+        final providerCats    = providerCategories(provData);
+        final providerSubCats = providerSubCategories(provData);
+
+        final wouldHaveSeenIt = categoryMatchFuzzy(
+          orderDataForMatch,
+          providerCats,
+          providerSubCats: providerSubCats,
+          debugOrderId: '$orderId -> taken-notice ${doc.id}',
+        );
+        if (!wouldHaveSeenIt) continue;
+
+        final providerUserId =
+            (provData['userId'] ?? provData['uid'] ?? '').toString().trim();
+        if (providerUserId.isEmpty) continue;
+
+        final displayCat = subCategory.isNotEmpty ? subCategory : category;
+        final catLabel    = displayCat.isNotEmpty ? ' ($displayCat)' : '';
+        const title = '⏰ Order No Longer Available';
+        final body =
+            'This $serviceType$catLabel job was accepted by another '
+            'provider ($acceptedByBusinessName) — no action needed on your end.';
+
+        await _sendNotification(
+          receiverId: providerUserId,
+          role:       'provider',
+          orderId:    orderId,
+          title:      title,
+          body:       body,
+          type:       NotificationType.orderTakenByOther,
+          serviceType: serviceType,
+          category:    displayCat,
+          providerId:  doc.id,
+        );
+
+        final fcmToken = (provData['fcmToken'] ?? '').toString().trim();
+        if (fcmToken.isNotEmpty) {
+          await _db.collection('fcm_queue').add({
+            'token':      fcmToken,
+            'receiverId': providerUserId,
+            'providerId': doc.id,
+            'orderId':    orderId,
+            'title':      title,
+            'body':       body,
+            'type':       NotificationType.orderTakenByOther,
+            'data': {
+              'type':       NotificationType.orderTakenByOther,
+              'orderId':    orderId,
+              'receiverId': providerUserId,
+            },
+            'sent':      false,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          debugPrint('[OrderService] notifyOthersOrderTaken: provider ${doc.id} '
+              '($providerUserId) has no fcmToken saved — in-app notification '
+              'was still written, but no background push will be sent.');
+        }
+        notifiedCount++;
+      }
+
+      debugPrint('[OrderService] order $orderId: told $notifiedCount other '
+          'matching provider(s) it was taken by $acceptedProviderId '
+          '($acceptedByBusinessName)');
+    } catch (e) {
+      debugPrint('[OrderService] notifyOthersOrderTaken error: $e');
+    }
+  }
+
   // ── Send notification + FCM queue entry for one provider doc ──────────────
   static Future<void> _sendProviderNotification({
     required String providerId,
@@ -964,11 +1070,6 @@ class OrderService {
 
   // ==========================================================
   // NOTIFY USER — status updates from provider
-  //
-  // FIX: now accepts optional `businessName` / `serviceType` /
-  // `providerId` and forwards them into the stored notification doc
-  // (see `_sendNotification` below), instead of only ever encoding
-  // that info inside the free-text `body`.
   // ==========================================================
   static Future<void> notifyUser({
     required String userId,
@@ -1027,13 +1128,6 @@ class OrderService {
 
   // ==========================================================
   // INTERNAL: write to notifications collection
-  //
-  // FIX: now stores `businessName` / `serviceType` / `providerId` /
-  // `category` as their own structured fields (when provided) rather
-  // than leaving that information trapped inside `body` text.
-  // NotificationPage already has UI (`_serviceChip`) that reads
-  // `data['businessName']` / `data['serviceType']` — it just never
-  // had anything to read before this fix.
   // ==========================================================
   static Future<void> _sendNotification({
     required String receiverId,

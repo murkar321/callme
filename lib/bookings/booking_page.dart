@@ -152,14 +152,50 @@ class _BookingPageState extends State<BookingPage>
   bool get _isPinnedProvider => widget.initialProviderId?.isNotEmpty == true;
 
   // ─────────────────────────────────────────────────────────────────────────
-  
+  // CATEGORY / SUBCATEGORY RESOLUTION
+  //
+  // FIX: for services like Laundry, the fabric-picker popup bakes the
+  // fabric choice straight into the cart item's display name, e.g.
+  // "Shirt (Cotton)". That's exactly what we WANT to show the customer
+  // and the provider — but it's the WRONG string to feed into category
+  // resolution: resolveCanonicalCategory() / categoryMatchFuzzy() try to
+  // match this text against the provider's registered categories, and
+  // "shirt (cotton)" normalizes to something like "shirtcotton", which
+  // will essentially never equal or overlap with a clean registered
+  // category like "Shirts". That mismatch was silently causing these
+  // orders to match NO provider at all — the order existed in Firestore,
+  // but no provider's dashboard ever showed it.
+  //
+  // `_cleanItemName()` strips a trailing " (Something)" annotation so
+  // category resolution runs against the plain base product name, while
+  // the fabric-annotated original text is still shown to the customer
+  // (in the summary card) and to the provider (via `_autoItemsNote()`
+  // below) — nothing about what the customer picked is lost, it's just
+  // no longer allowed to break provider matching.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  String _cleanItemName(String rawName) {
+    final match = RegExp(r'^(.*?)\s*\([^()]*\)\s*$').firstMatch(rawName.trim());
+    final cleaned = match?.group(1)?.trim() ?? '';
+    return cleaned.isNotEmpty ? cleaned : rawName.trim();
+  }
 
   String get _normalizedServiceType => widget.serviceName.trim().toLowerCase();
 
   String get _category {
     if (_isCart && _cartItems.isNotEmpty) {
+      // FIX: previously always used `_cartItems.first.category` — if
+      // that particular item somehow had an empty category (e.g. a
+      // legacy/edge-case cart entry), the WHOLE order fell back to an
+      // empty category and matched nobody. Now we scan for the first
+      // item that actually HAS a non-empty category, so one blank
+      // entry can't silently blank the whole order.
+      final firstWithCategory = _cartItems.firstWhere(
+        (i) => i.category.trim().isNotEmpty,
+        orElse: () => _cartItems.first,
+      );
       return resolveCanonicalCategory(
-          _cartItems.first.category, _normalizedServiceType);
+          firstWithCategory.category, _normalizedServiceType);
     }
     if (_isSingle && widget.product != null) {
       return resolveCanonicalCategory(
@@ -168,14 +204,22 @@ class _BookingPageState extends State<BookingPage>
     return '';
   }
 
-  /// Only meaningful for a single specific item — the exact thing being
-  /// booked, one level more specific than `_category`. Left blank for
-  /// multi-item carts (the `services[]` list already carries per-item
-  /// detail, and each entry gets canonicalized individually server-side).
+  /// One level more specific than `_category`.
+  ///
+  /// FIX: this used to only get populated when the cart held EXACTLY one
+  /// item, on the theory that `services[]` already carries per-item
+  /// detail for multi-item carts. In practice `services[]` was being fed
+  /// the fabric-annotated raw name (see `_cleanItemName()` above), which
+  /// broke canonical resolution — so multi-item laundry carts (almost
+  /// always 2+ items once a fabric+quantity picker is involved) ended up
+  /// with BOTH `subCategory` blank AND unmatchable `services[]` entries.
+  /// Now `subCategory` always carries the cleaned, matchable name of the
+  /// first cart item — one more independent chance for a provider match,
+  /// on top of the (now also cleaned) `services[]` list below.
   String get _subCategory {
-    if (_isCart && _cartItems.length == 1) {
+    if (_isCart && _cartItems.isNotEmpty) {
       return resolveCanonicalCategory(
-          _cartItems.first.name, _normalizedServiceType);
+          _cleanItemName(_cartItems.first.name), _normalizedServiceType);
     }
     if (_isSingle && widget.product != null) {
       return resolveCanonicalCategory(
@@ -304,9 +348,32 @@ class _BookingPageState extends State<BookingPage>
           ? widget.product!.calculatedFinalPrice.toDouble()
           : 0.0;
 
+  /// Clean, matchable names used ONLY for provider category resolution
+  /// (sent as the order's `services` field). See `_cleanItemName()` for
+  /// why the fabric annotation is stripped here — the full fabric detail
+  /// is never lost, it's preserved for humans in `_autoItemsNote()` and
+  /// in the on-screen summary card, which both use the raw cart item
+  /// name directly.
   List<String> get _servicesForOrder => _isCart
-      ? _cartItems.map((e) => '${e.name} x${e.quantity}').toList()
+      ? _cartItems.map((e) => _cleanItemName(e.name)).toList()
       : [widget.product?.name ?? widget.serviceName];
+
+  /// FIX: NEW — a human-readable line listing every cart item with its
+  /// full fabric annotation and quantity, e.g.
+  /// "Items: Shirt (Cotton) x2, Trousers (Denim) x1". This is prepended
+  /// to the booking note so the fabric/quantity choice from the popup is
+  /// GUARANTEED visible on the provider's dashboard card (which renders
+  /// the note prominently) — regardless of how category matching turns
+  /// out. This is what was actually missing before: the fabric choice
+  /// only ever lived in the cart item's `name`, which was never surfaced
+  /// anywhere the provider could see it.
+  String get _autoItemsNote {
+    if (!_isCart || _cartItems.isEmpty) return '';
+    final lines = _cartItems
+        .map((e) => '${e.name} x${e.quantity}')
+        .join(', ');
+    return 'Items: $lines';
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // BUILD
@@ -612,11 +679,48 @@ class _BookingPageState extends State<BookingPage>
 
   Widget _buildNoteCard() {
     return _Card(
-      child: _Field(
-        controller: _noteCtrl,
-        hint: 'Any special request? (optional)',
-        icon: Icons.notes_rounded,
-        maxLines: 3,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Field(
+            controller: _noteCtrl,
+            hint: 'Any special request? (optional)',
+            icon: Icons.notes_rounded,
+            maxLines: 3,
+          ),
+          // FIX: NEW — lets the customer see, before they even submit,
+          // exactly what will be sent to the provider as the item/fabric
+          // breakdown (see `_autoItemsNote`). Purely informational; it's
+          // appended to the note automatically in `_save()` regardless.
+          if (_isCart && _cartItems.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F2FB),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.checklist_rounded,
+                      size: 15, color: _kAccent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _autoItemsNote,
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          color: Colors.grey.shade600,
+                          height: 1.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -949,6 +1053,17 @@ class _BookingPageState extends State<BookingPage>
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not logged in');
 
+      // FIX: the fabric/quantity breakdown (`_autoItemsNote`) is always
+      // prepended to whatever the customer typed, so it reaches the
+      // provider guaranteed — via the `note` field, which the provider
+      // dashboard already renders prominently — instead of relying
+      // solely on category-matching machinery to carry that detail.
+      final userNote  = _noteCtrl.text.trim();
+      final itemsNote = _autoItemsNote;
+      final combinedNote = [itemsNote, userNote]
+          .where((s) => s.isNotEmpty)
+          .join('\n');
+
       final ref = await OrderService.placeOrder(
         serviceType:   _normalizedServiceType,
         services:      _servicesForOrder,
@@ -957,7 +1072,7 @@ class _BookingPageState extends State<BookingPage>
         phone:         _phoneCtrl.text.trim(),
         email:         user.email ?? '',
         address:       _addressCtrl.text.trim(),
-        note:          _noteCtrl.text.trim(),
+        note:          combinedNote,
         date:          _date!,
         time:          _time!.format(context),
         totalAmount:   _total,

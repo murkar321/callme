@@ -103,34 +103,37 @@ class _EnquiryPageState extends State<EnquiryPage>
 
   // ─── PROVIDER LOOKUP
   //
-  // FIX: this used to query providers on a singular `subCategory`
-  // string field (`where('subCategory', isEqualTo: ...)`) that
-  // doesn't exist on provider documents at all — providers store
-  // their selected categories as TWO ARRAY fields, `categories[]`
-  // (main) and `subCategories[]` (specific), exactly like
-  // order_service.dart's providerCategories()/providerSubCategories()
-  // read. That query could never match anything, silently pushing
-  // every enquiry down to the serviceType-only fallback pass
-  // regardless of sub-category — meaning a provider's sub-category
-  // registration was completely ignored when routing enquiries.
+  // This picks ONE provider to route the enquiry to (stored as
+  // `providerId` on the order, with `isAssigned: true` from the moment
+  // it's created — see OrderService.placeOrder()). It prefers an
+  // exact categories[]/subCategories[] match via categoryMatchFuzzy(),
+  // but if NONE of the same-service-type providers have a matching
+  // category, it still falls back to `candidates.first.id` rather than
+  // showing "no provider available".
   //
-  // It also kept its own private fuzzy-matching copy
-  // (_categoryMatchFuzzy/_resolveCanonical-based), independent from
-  // order_service.dart's categoryMatchFuzzy() — the same kind of
-  // duplicated logic that has repeatedly drifted out of sync
-  // elsewhere in this app.
+  // FIX (see business_dashboard_page.dart): that fallback used to be
+  // dangerous, because the provider it picked in the no-exact-match
+  // case would then fail business_dashboard_page.dart's category check
+  // and the resulting enquiry would become invisible on THAT
+  // provider's own dashboard — assigned in Firestore, but shown
+  // nowhere. That has been fixed on the dashboard side: any enquiry
+  // that is directly assigned to a provider (isAssigned=true +
+  // matching providerId/providerUserId) is now ALWAYS shown to that
+  // exact provider in their Available tab, regardless of category —
+  // exactly like a directly-assigned "pending" order already was. So
+  // the fallback here is safe again: whichever provider gets chosen
+  // (exact match or fallback) is now guaranteed to actually see the
+  // enquiry.
   //
-  // Now this reads the SAME categories[] + subCategories[] arrays,
-  // runs them through the SAME categoryMatchFuzzy() pipeline
-  // (exact → fuzzy word overlap → sub-service reverse lookup) that
-  // both business_dashboard_page.dart's Available tab and
-  // order_service.dart's push-notification fan-out use — so the
-  // provider this page finds is guaranteed to be one who will
-  // actually see/be notified about the resulting order. The
-  // `matchData` map below is built exactly the way placeOrder()
-  // will populate the real order document (canonical category +
-  // canonical services), so there's no drift between "who we found"
-  // and "who gets shown this order".
+  // Reads the SAME categories[] + subCategories[] arrays, through the
+  // SAME categoryMatchFuzzy() pipeline that both
+  // business_dashboard_page.dart's Available tab and
+  // order_service.dart's push-notification fan-out use — so "who we
+  // found" and "who gets shown this order" never disagree on the
+  // category-match tier. The `matchData` map below is built exactly
+  // the way placeOrder() will populate the real order document
+  // (canonical category + canonical services), so there's no drift
+  // between the lookup and the eventual order document.
   // ─────────────────────────────────────────────────────────────
   Future<void> _loadProvider() async {
     if (!mounted) return;
@@ -241,7 +244,10 @@ class _EnquiryPageState extends State<EnquiryPage>
 
     // No category-level match among same-service-type providers —
     // fall back to any of them rather than showing "no provider
-    // available" (same behaviour as before this fix).
+    // available". Safe now that business_dashboard_page.dart's
+    // direct-assignment bypass covers `enquiry` status too (see the
+    // FIX note on _loadProvider() above) — this provider WILL see the
+    // enquiry on their dashboard even without a category match.
     return candidates.first.id;
   }
 

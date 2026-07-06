@@ -146,11 +146,32 @@ final Map<String, ServiceConfig> serviceConfigs = {
     showRoomCount: true,
   ),
 
+  // ✅ UPDATED — amenities catalog added. This is the full pool of
+  // facilities a resort provider can register against (checked at
+  // onboarding). Each provider's `business.amenities` (or whatever field
+  // ServiceProviderForm writes) should be a subset of this list. The
+  // ResortBookingPage now reads the *specific* facilities registered
+  // against the resort (via resorts_data.dart's `facilities`) and lets
+  // the customer choose which of those they want for their visit.
   "resort": ServiceConfig(
     businessLabel: "Resort Name",
     serviceCategories: [
       "Anand Resort",
       "Alexon Resort",
+    ],
+    amenities: [
+      "Swimming Pool",
+      "Water Park",
+      "Wedding / Banquet Hall",
+      "Conference Hall",
+      "Restaurant & Bar",
+      "Fitness Center",
+      "Natural Waterfall",
+      "DJ / Rain Dance Floor",
+      "A/C Rooms",
+      "Free Parking",
+      "Kids Play Area",
+      "Beach Access",
     ],
     requiredDocuments: [
       "Aadhaar Card",

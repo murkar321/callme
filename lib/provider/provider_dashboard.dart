@@ -129,6 +129,17 @@ bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 // about this pipeline is that it checks the provider's categories[]
 // AND subCategories[] pool — both of which the provider explicitly
 // selected themselves — not that it guesses based on shared words.
+//
+// FIX: categoryMatchFuzzy() / categoryMatch() (in order_service.dart)
+// now FAILS CLOSED when a provider has NO categories/subCategories
+// registered at all, instead of the old fail-OPEN behavior that
+// silently matched such a provider against every order in their
+// vertical. That single shared-function fix is what stops
+// "providers who never selected this service still getting
+// notified" — see the comment on categoryMatch() in
+// order_service.dart for the full explanation. Nothing in THIS file
+// needed to change for that part; it was already delegating to the
+// shared function correctly.
 // ─────────────────────────────────────────────────────────────
 bool _categoryMatch(
   Map<String, dynamic> orderData,
@@ -148,10 +159,10 @@ bool _categoryMatch(
 // AVAILABILITY CHECK — single source of truth.
 //
 // Returns WHY an order is unavailable (or null if it's available).
-// `_isAvailable()` below is a thin bool wrapper around it, and the
-// empty-state UI in `_AvailTab` uses the reason strings directly
-// (via the debug-only summary) to explain a live breakdown — no
-// console access needed to diagnose a mismatch.
+// `_isAvailable()` below is a thin bool wrapper around it, and
+// `_AvailTab._buildSkipSummary()` uses these reason strings to log a
+// breakdown to the debug console only — the provider's dashboard UI
+// itself just shows a clean "No Available X" message.
 //
 // This is also the ONE function that decides FCFS visibility: once
 // any provider accepts an order (isAssigned=true, providerUserId set
@@ -160,7 +171,7 @@ bool _categoryMatch(
 // real time — no polling, no manual refresh needed.
 //
 // ─────────────────────────────────────────────────────────────
-// FIX (THIS REVISION): MULTI-PROFILE-PER-LOGIN ISOLATION.
+// FIX (PRIOR REVISION): MULTI-PROFILE-PER-LOGIN ISOLATION.
 //
 // One Firebase Auth account (`userId`) can own MULTIPLE provider
 // profiles across different verticals — e.g. the same login
@@ -169,24 +180,11 @@ bool _categoryMatch(
 // `providerUserId` field on an order only ever stores the Auth UID,
 // which is IDENTICAL for both of that person's dashboards.
 //
-// Previously, the "direct-assignment bypass" (for orders where the
-// customer picked a specific provider by name at booking time) keyed
-// itself ONLY on `providerUserId == myUid`. That meant: the instant
-// ANY of that login's provider profiles got a direct-assigned order,
-// the bypass fired on *every* dashboard that login could open —
-// leaking a resort booking into the Salon dashboard's "Available"
-// tab and vice versa, completely skipping the service-type/category
-// checks that would otherwise have filtered it out.
-//
-// The fix: every ownership check in this file now ALSO compares the
-// order's `providerId` (the specific business profile, e.g.
-// "SAL-118697") against `myProviderId` (this dashboard instance's own
-// providerId, passed in from BusinessDashboardPage's constructor).
-// An order can only be treated as "mine" / bypass category checks
-// when BOTH the login (`providerUserId`) AND the exact business
-// profile (`providerId`) match. Broadcast/pool orders (no providerId
-// set at creation) are unaffected — they still go through the full
-// service-type + category pipeline exactly as before.
+// Every ownership check in this file compares the order's
+// `providerId` (the specific business profile) against
+// `myProviderId` (this dashboard instance's own providerId) — NOT
+// just `providerUserId` — so a login with multiple business
+// profiles can never leak an order between them.
 // ─────────────────────────────────────────────────────────────
 String? _unavailableReason({
   required Map<String, dynamic> data,
@@ -228,12 +226,40 @@ String? _unavailableReason({
 
   // ── DIRECT-ASSIGNMENT BYPASS ─────────────────────────────────
   // Customer explicitly picked THIS exact provider profile at
-  // booking time. Still "pending" (not yet accepted) → always show
-  // it to the assigned provider profile, skip service-type/category
-  // checks entirely. Once they Accept, status flips to "accepted"
-  // and it moves to the "My" tab via _isMine() instead.
+  // booking time. Still "pending"/"enquiry" (not yet accepted) →
+  // always show it to the assigned provider profile, skip
+  // service-type/category checks entirely. Once they Accept, status
+  // flips to "accepted" and it moves to the "My" tab via _isMine()
+  // instead.
+  //
+  // FIX (CRITICAL): this used to only bypass when
+  // `status == OrderStatus.pending`. But EnquiryPage submits with
+  // `isEnquiry: true`, which makes placeOrder() write
+  // `status: OrderStatus.enquiry` (NOT "pending"), while still
+  // correctly setting isAssigned=true + providerId/providerUserId to
+  // the exact provider that _findMatchingProvider() picked for the
+  // enquiry. Because "enquiry" wasn't included in this check, every
+  // direct-assigned ENQUIRY fell straight through to the
+  // service-type/category checks further below — and if that
+  // provider had been chosen as a same-service-type fallback (NOT an
+  // exact category/subCategory match — see
+  // EnquiryPage._findMatchingProvider()'s final
+  // `return candidates.first.id;` fallback), the category check
+  // failed CLOSED and the enquiry became invisible EVERYWHERE: not
+  // "available" (category mismatch) and not "mine" either (status
+  // isn't accepted/completed/cancelled yet, see _isMine() below). It
+  // just silently vanished for the exact provider it was assigned
+  // to, even though Firestore had it correctly assigned the whole
+  // time. This is what produced dashboards showing "No Available
+  // Enquiries" while dozens of enquiries sat unreachable in
+  // Firestore.
+  //
+  // Fix: bypass for BOTH pending and enquiry status. A direct
+  // assignment already represents an intentional routing decision —
+  // it should never be re-litigated against category rules once the
+  // order/enquiry has been targeted at this exact provider profile.
   final bool isDirectAssignmentToMe = assignedToMe &&
-      status == OrderStatus.pending;
+      (status == OrderStatus.pending || status == OrderStatus.enquiry);
   if (isDirectAssignmentToMe) {
     return null; // available — no further checks needed
   }
@@ -271,14 +297,27 @@ String? _unavailableReason({
     return 'Service type mismatch: order="$orderSvc" vs your profile="$svcNorm"';
   }
 
-  // Category match — EXACT ONLY (see categoryMatchFuzzy() in
+  // ── Category match ───────────────────────────────────────────
+  // EXACT ONLY (see categoryMatchFuzzy() / categoryMatch() in
   // order_service.dart), run against the MERGED categories +
   // subCategories pool. No fuzzy word-overlap: a provider under
   // "Hair Treatments" will never match an order categorized as
   // "Hair Styling" just because both contain the word "hair".
+  //
+  // FIX: as of the categoryMatch() patch in order_service.dart, a
+  // provider with an EMPTY categories+subCategories pool now fails
+  // this check (returns false) instead of auto-matching everything.
+  // If you land here and providerCats/providerSubCats are both
+  // empty, that IS the mismatch reason — the message below already
+  // makes that visible via `mergedCats` being `[]`.
   if (!_categoryMatch(data, providerCats, providerSubCats: providerSubCats)) {
     final cands      = orderCategoryCandidates(data);
     final mergedCats = providerCategoryPool(providerCats, providerSubCats);
+    if (mergedCats.isEmpty) {
+      return 'You have no categories or subCategories selected in your '
+             'profile yet — add at least one to start receiving matching '
+             '${svcNorm.isEmpty ? "" : "$svcNorm "}orders. (Order categories: $cands)';
+    }
     return 'Category mismatch: order categories=$cands vs your categories=$mergedCats';
   }
 
@@ -699,6 +738,23 @@ class _BDPState extends State<BusinessDashboardPage> {
         '${widget.businessName} accepted your ${widget.serviceType} booking.',
         NotificationType.bookingAccepted);
 
+      // FIX: NEW — tell every OTHER matching provider this job is gone.
+      // Runs the same categoryMatchFuzzy() candidate pool used everywhere
+      // else in order_service.dart, excludes THIS provider, and sends a
+      // real push (fcm_queue + notifications doc) so it rings on/off-
+      // screen instead of the order just silently disappearing from
+      // their Available tab while the old "new order" notification
+      // stays in their list looking still-open — the exact confusion
+      // reported ("message stays and provider get confuse").
+      OrderService.notifyOthersOrderTaken(
+        orderId:                id,
+        serviceType:            _svcNorm,
+        category:               (data['category'] ?? '').toString(),
+        subCategory:            (data['subCategory'] ?? '').toString(),
+        acceptedProviderId:     widget.providerId,
+        acceptedByBusinessName: widget.businessName,
+      ).catchError((e) => debugPrint('[notifyOthersOrderTaken] $e'));
+
       if (!mounted) return;
       _goTab(1);
       _snack(
@@ -919,6 +975,14 @@ class _BDPState extends State<BusinessDashboardPage> {
           final subCats     = providerSubCategories(prov);
           final displayCats = providerCategoryPool(mainCats, subCats);
 
+          // ── NEW — surfaced directly in the header when a provider
+          // has registered zero categories. Since categoryMatch() now
+          // fails closed on an empty pool (see order_service.dart),
+          // such a provider will see NOTHING in Available until they
+          // fix this — so tell them plainly instead of a silent
+          // empty list.
+          final hasNoCategoriesRegistered = displayCats.isEmpty;
+
           return Column(children: [
             _Header(
               businessName:     widget.businessName,
@@ -929,6 +993,7 @@ class _BDPState extends State<BusinessDashboardPage> {
               myCount:          _myNotifier.value,
               photoUrl:         photoUrl,
               activeCategories: displayCats,
+              noCategoriesWarning: hasNoCategoriesRegistered,
               terms:            _terms,
               onTab:            _goTab,
               onProfile: () => Navigator.push(
@@ -1095,10 +1160,10 @@ class _AvailTab extends StatelessWidget {
     countNotifier.update(docs.length);
 
     if (docs.isEmpty) {
-      // The provider-facing message stays short and calm. The full
-      // per-reason breakdown goes to debugPrint only via
-      // _logSkipSummary() below — never shown in the UI.
-      _logSkipSummary();
+      // Skip-reason breakdown is still computed and logged to the
+      // debug console for troubleshooting, but it is never rendered
+      // on screen — providers just see a clean, simple empty state.
+      _buildSkipSummary();
       return _Empty(
         icon:  Icons.work_outline_rounded,
         title: 'No ${terms.availableTab}',
@@ -1127,14 +1192,21 @@ class _AvailTab extends StatelessWidget {
     );
   }
 
-  // ── Debug-console-only diagnostic summary ───────────────────
-  // Grouped and sorted by frequency so a real mismatch is still
-  // easy to spot without scrolling through dozens of per-order
-  // lines. Never shown to the provider.
-  void _logSkipSummary() {
+  // ── Builds a grouped, frequency-sorted diagnostic summary of why
+  // every order currently in `allDocs` is being skipped for this
+  // provider. Sent ONLY to debugPrint() — never shown to the user.
+  //
+  // FIX: reworded the summary line. It used to always say "0 match
+  // your categories" even when the actual skip reasons had nothing to
+  // do with categories at all (e.g. "already accepted", "assigned to
+  // another provider", "completed") — which made this actively
+  // misleading when the real bug was elsewhere (see the direct-
+  // assignment bypass fix above). Now it just states the plain fact —
+  // none are currently available — and lets the itemized reasons
+  // below speak for themselves.
+  void _buildSkipSummary() {
     if (allDocs.isEmpty) {
-      debugPrint('[avail] No $serviceType ${terms.singular.toLowerCase()}s '
-          'exist yet.');
+      debugPrint('[avail] No $serviceType ${terms.singular.toLowerCase()}s exist yet.');
       return;
     }
     final reasonCounts = <String, int>{};
@@ -1152,10 +1224,11 @@ class _AvailTab extends StatelessWidget {
     }
     final entries = reasonCounts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final lines = entries.map((e) => '  ${e.value}x — ${e.key}').join('\n');
+    final lines = entries.map((e) => '${e.value}x — ${e.key}').join('\n');
     final mergedCats = providerCategoryPool(providerCats, providerSubCats);
-    debugPrint('[avail] ${allDocs.length} ${terms.singular.toLowerCase()}(s) '
-        'exist, 0 match provider categories $mergedCats:\n$lines');
+    final summary = '${allDocs.length} ${terms.singular.toLowerCase()}(s) exist, '
+        'none are currently available. Your categories: $mergedCats\n$lines';
+    debugPrint('[avail] $summary');
   }
 }
 
@@ -1378,20 +1451,11 @@ class _CardState extends State<_Card> {
   // recognizes offline/COD-style methods as a DISTINCT state instead
   // of lumping them in with "payment pending", since being unpaid at
   // booking time is expected/normal for those, not a warning sign.
-  //
-  // A provider previously had no way to see HOW the customer paid (or
-  // whether they'd paid at all) without opening Firestore directly,
-  // and any method not in the old fixed switch (e.g. "offline", "cod",
-  // "netbanking") either showed blank or an ugly raw string.
   Map<String, dynamic> _payment() {
     final p = widget.data['payment'];
     return p is Map ? p.cast<String, dynamic>() : <String, dynamic>{};
   }
 
-  // Checks every field shape a booking/enquiry page might have used to
-  // store the chosen method, in priority order, so a real method never
-  // silently shows up blank just because it landed in a slightly
-  // different field than expected.
   String _paymentMethodRaw() {
     final candidates = <String>[
       (_payment()['method'] ?? '').toString(),
@@ -1423,10 +1487,6 @@ class _CardState extends State<_Card> {
     'online':            'Online Payment',
   };
 
-  // Human-readable label for ANY payment method string. Known methods
-  // get a friendly name from `_methodLabels`; anything else (a new
-  // method type added later, a typo, whatever) is automatically
-  // title-cased instead of being dropped or shown raw/blank.
   String _paymentMethodLabel() {
     final raw = _paymentMethodRaw();
     if (raw.isEmpty) return '';
@@ -1440,9 +1500,6 @@ class _CardState extends State<_Card> {
         .join(' ');
   }
 
-  // "Offline" methods are collected by the provider in person, so
-  // unpaid-at-booking-time is the NORMAL state for these — the badge
-  // below treats that differently from an unpaid online payment.
   bool get _isOfflineMethod {
     const offline = {'cash', 'cod', 'cash_on_delivery', 'offline', 'pay_offline'};
     return offline.contains(_paymentMethodRaw().replaceAll(RegExp(r'[\s\-]+'), '_'));
@@ -1477,10 +1534,6 @@ class _CardState extends State<_Card> {
   bool get _isEnquiry =>
       (widget.data['status'] ?? '').toString().toLowerCase() == OrderStatus.enquiry;
 
-  // ── FIX: dedicated payment status strip shown on every card, now
-  // with a distinct "collect in person" state for offline methods
-  // (cash / COD / pay-offline) instead of showing them as a payment
-  // warning the way an unpaid UPI/card order would be.
   Widget _paymentBadge() {
     final methodLabel = _paymentMethodLabel();
     if (methodLabel.isEmpty) return const SizedBox.shrink();
@@ -1972,10 +2025,21 @@ class _StatusBadge extends StatelessWidget {
 
 // ═══════════════════════════════════════════════════════════════
 // EMPTY STATE
+//
+// FIX: this now ALWAYS renders just the icon + title + message —
+// the on-screen debug breakdown panel has been removed entirely.
+// Skip-reason diagnostics are still written to debugPrint() (see
+// _AvailTab._buildSkipSummary()) for anyone checking device logs,
+// but the provider's own dashboard now only ever shows a clean,
+// simple "No Available X" message, per request.
 // ═══════════════════════════════════════════════════════════════
 class _Empty extends StatelessWidget {
   final IconData icon; final String title, msg;
-  const _Empty({required this.icon, required this.title, required this.msg});
+  const _Empty({
+    required this.icon,
+    required this.title,
+    required this.msg,
+  });
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) => SingleChildScrollView(
@@ -2120,6 +2184,12 @@ class _Header extends StatelessWidget {
   final _Terms        terms;
   final void Function(int) onTab;
   final VoidCallback  onProfile;
+  // ── NEW — true when this provider has NO categories/subCategories
+  // registered at all. Since categoryMatch() now fails closed on an
+  // empty pool, such a provider will see zero orders until they fix
+  // this — so it's surfaced directly instead of silently showing an
+  // empty Available tab with no explanation.
+  final bool noCategoriesWarning;
 
   const _Header({
     required this.businessName,     required this.serviceType,
@@ -2128,6 +2198,7 @@ class _Header extends StatelessWidget {
     required this.tab,              required this.availCount,
     required this.myCount,          required this.terms,
     required this.onTab,            required this.onProfile,
+    this.noCategoriesWarning = false,
   });
 
   @override
@@ -2175,6 +2246,41 @@ class _Header extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 12),
+
+          // ── NEW — plain-language warning banner instead of a
+          // silently empty Available tab. Tapping it goes straight to
+          // the profile page to fix it.
+          if (noCategoriesWarning) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GestureDetector(
+                onTap: onProfile,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _C.redSft,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _C.red.withOpacity(0.25)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.warning_amber_rounded, color: _C.red, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'No categories selected yet — you won\'t receive any '
+                        'orders until you add at least one. Tap to fix.',
+                        style: const TextStyle(
+                            color: _C.red, fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.4),
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, color: _C.red, size: 18),
+                  ]),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
 
           if (activeCategories.isNotEmpty) ...[
             Padding(

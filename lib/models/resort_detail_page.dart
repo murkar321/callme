@@ -18,7 +18,6 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   final PageController _pageController = PageController();
   int _currentImageIndex = 0;
 
-  // ✅ Reads from the resort model — works for every resort automatically
   List<Map<String, String>> get _galleryImages => widget.resort.images;
 
   @override
@@ -54,11 +53,6 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
           children: [
 
             /// ================= IMAGE CAROUSEL =================
-            // FIX: removed the large "RESORT TITLE OVERLAY" text that used to
-            // sit at bottom:48 — it visually collided with the image label
-            // chip right above it (bottom:52). The AppBar already shows the
-            // resort name, so it was redundant. Gradient + label chip now
-            // have the full image height to themselves.
             Stack(
               children: [
 
@@ -97,8 +91,6 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                             ),
                           ),
 
-                          // ✅ Label chip now sits comfortably near the
-                          // bottom with no competing overlay text behind it.
                           Positioned(
                             left: 16,
                             bottom: 18,
@@ -282,6 +274,18 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
+                  /// ================= TAGLINE =================
+                  // ✅ NEW — the one-line distinguisher shown right under the gallery
+                  Text(
+                    resort.tagline,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
                   /// ================= LOCATION + RATING =================
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -295,38 +299,60 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                             blurRadius: 8),
                       ],
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              const Icon(Icons.location_on,
-                                  color: Colors.red, size: 20),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  resort.location,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
                         Row(
                           children: [
-                            const Icon(Icons.star,
-                                color: Colors.orange, size: 20),
-                            const SizedBox(width: 4),
-                            Text(
-                              resort.rating.toString(),
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15),
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.location_on,
+                                      color: Colors.red, size: 20),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      resort.location,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Row(
+                              children: [
+                                const Icon(Icons.star,
+                                    color: Colors.orange, size: 20),
+                                const SizedBox(width: 4),
+                                Text(
+                                  resort.rating.toString(),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        // ✅ NEW — distance/access line, differs per resort
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(Icons.directions,
+                                color: Colors.grey.shade500, size: 16),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                resort.distanceInfo,
+                                style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: Colors.grey.shade600),
+                              ),
                             ),
                           ],
                         ),
@@ -388,7 +414,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                   /// ================= HIGHLIGHTS =================
                   _sectionTitle("Resort Highlights"),
                   const SizedBox(height: 12),
-                  _buildHighlightsGrid(),
+                  _buildHighlightsGrid(resort.highlights),
 
                   const SizedBox(height: 24),
 
@@ -418,7 +444,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                   /// ================= WHAT'S INCLUDED =================
                   _sectionTitle("What's Included"),
                   const SizedBox(height: 12),
-                  _buildInclusionsList(),
+                  _buildInclusionsList(resort.inclusions),
 
                   const SizedBox(height: 24),
 
@@ -451,7 +477,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                   /// ================= TIMINGS & RULES =================
                   _sectionTitle("Resort Timings & Rules"),
                   const SizedBox(height: 12),
-                  _buildTimingCard(),
+                  _buildTimingCard(resort.timings, resort.rules),
                 ],
               ),
             ),
@@ -506,16 +532,8 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   }
 
   /// ================= HIGHLIGHTS GRID =================
-  Widget _buildHighlightsGrid() {
-    final highlights = [
-      {'icon': Icons.pool,         'label': 'Swimming Pool',  'sub': 'Olympic size'},
-      {'icon': Icons.waves,        'label': 'Water Park',     'sub': 'Slides & rides'},
-      {'icon': Icons.restaurant,   'label': 'Multi-Cuisine',  'sub': 'Lunch included'},
-      {'icon': Icons.music_note,   'label': 'Rain Dance',     'sub': 'DJ & music'},
-      {'icon': Icons.nightlife,    'label': 'Evening Events', 'sub': 'Live shows'},
-      {'icon': Icons.spa,          'label': 'Spa & Wellness', 'sub': 'Relax & rejuvenate'},
-    ];
-
+  // ✅ now driven entirely by resort.highlights — different per resort
+  Widget _buildHighlightsGrid(List<HighlightItem> highlights) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -547,19 +565,19 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                   color: Colors.blue.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(item['icon'] as IconData,
+                child: Icon(item.icon,
                     color: Colors.blue.shade700, size: 22),
               ),
               const SizedBox(height: 8),
               Text(
-                item['label'] as String,
+                item.label,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontSize: 12, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
               Text(
-                item['sub'] as String,
+                item.sub,
                 textAlign: TextAlign.center,
                 style:
                     TextStyle(fontSize: 10, color: Colors.grey.shade500),
@@ -572,16 +590,8 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   }
 
   /// ================= INCLUSIONS LIST =================
-  Widget _buildInclusionsList() {
-    final inclusions = [
-      'Unlimited Water Park access all day',
-      'Complimentary lunch (multi-cuisine buffet)',
-      'Rain Dance session with DJ',
-      'Free use of Resort Pool & jacuzzi',
-      'Welcome drink on arrival',
-      'Complimentary locker & changing room',
-    ];
-
+  // ✅ now driven entirely by resort.inclusions
+  Widget _buildInclusionsList(List<String> inclusions) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -617,23 +627,8 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   }
 
   /// ================= TIMING CARD =================
-  Widget _buildTimingCard() {
-    final timings = [
-      {'icon': Icons.login,      'label': 'Check-in',   'value': '10:00 AM'},
-      {'icon': Icons.logout,     'label': 'Check-out',  'value': '06:00 PM'},
-      {'icon': Icons.restaurant, 'label': 'Lunch',      'value': '12:30 PM – 3:00 PM'},
-      {'icon': Icons.waves,      'label': 'Water Park', 'value': '10:00 AM – 5:30 PM'},
-      {'icon': Icons.music_note, 'label': 'Rain Dance', 'value': '2:00 PM – 4:00 PM'},
-    ];
-
-    final rules = [
-      'Outside food & beverages are not allowed',
-      'Swimwear is mandatory for pool & water park',
-      'Children below 3 ft entry is free',
-      'Photography at select zones only',
-      'Resort management reserves the right of admission',
-    ];
-
+  // ✅ now driven entirely by resort.timings + resort.rules
+  Widget _buildTimingCard(List<TimingItem> timings, List<String> rules) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -653,20 +648,20 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Row(
                 children: [
-                  Icon(item['icon'] as IconData,
+                  Icon(item.icon,
                       color: Colors.blue.shade600, size: 18),
                   const SizedBox(width: 10),
                   SizedBox(
                     width: 100,
                     child: Text(
-                      item['label'] as String,
+                      item.label,
                       style: const TextStyle(
                           fontSize: 13, fontWeight: FontWeight.w600),
                     ),
                   ),
                   Expanded(
                     child: Text(
-                      item['value'] as String,
+                      item.value,
                       style: TextStyle(
                           fontSize: 13, color: Colors.grey.shade700),
                     ),

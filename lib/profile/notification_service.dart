@@ -33,6 +33,13 @@ class NotificationType {
   static const String registrationRejected = 'registration_rejected';
   static const String providerFound = 'provider_found';
   static const String serviceCompleted = 'service_completed';
+
+  // FIX: NEW — matches OrderService.NotificationType.orderTakenByOther
+  // in order_service.dart. Needed here too because notification_page.dart
+  // imports NotificationType from THIS file (not order_service.dart), so
+  // without this constant the page can't render the "taken" notice with
+  // its own icon/color and would fall through to the generic default.
+  static const String orderTakenByOther = 'order_taken_by_other';
 }
 
 // Shared plugin instance

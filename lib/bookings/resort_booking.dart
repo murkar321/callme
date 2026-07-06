@@ -55,6 +55,10 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   // name+phone into one generic error.
   bool _phoneComplete = false;
 
+  // ✅ NEW — facilities the customer wants for this visit, chosen from the
+  // resort's own registered facility list (widget.resort.facilities).
+  final Set<String> _selectedFacilities = {};
+
   // Provider resolved from Firestore
   String? _providerId;
   String? _providerName;
@@ -84,7 +88,13 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   String get _category =>
       resolveCanonicalCategory(widget.resort.name, _kServiceType);
 
-  List<String> get _servicesForOrder => [widget.resort.name];
+  // ✅ UPDATED — the resort name is always the first "service", followed
+  // by whichever facilities the customer picked, in the order they appear
+  // on the resort's own facility list (keeps the order deterministic).
+  List<String> get _servicesForOrder => [
+        widget.resort.name,
+        ...widget.resort.facilities.where(_selectedFacilities.contains),
+      ];
 
   // ── Total ─────────────────────────────────────────────────────────────────
   double get totalAmount {
@@ -353,7 +363,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
 
   // ==========================================================================
   // SCROLL BODY — ordered flow:
-  // Hero → Summary → (1) Guests → (2) Guest Details → (3) Schedule
+  // Hero → Summary → (1) Facilities → (2) Guests → (3) Guest Details → (4) Schedule
   // ==========================================================================
 
   Widget _buildScrollBody() {
@@ -367,13 +377,20 @@ class _ResortBookingPageState extends State<ResortBookingPage>
               children: [
                 _buildSummaryCard(),
 
+                // ✅ NEW — Step 1: pick which of the resort's registered
+                // facilities the customer wants for this visit.
                 const SizedBox(height: 20),
-                _StepHeader(number: 1, label: 'Guests'),
+                _StepHeader(number: 1, label: 'Select Facilities'),
+                const SizedBox(height: 10),
+                _buildFacilitiesCard(),
+
+                const SizedBox(height: 20),
+                _StepHeader(number: 2, label: 'Guests'),
                 const SizedBox(height: 10),
                 _buildGuestsCard(),
 
                 const SizedBox(height: 20),
-                _StepHeader(number: 2, label: 'Guest Details'),
+                _StepHeader(number: 3, label: 'Guest Details'),
                 const SizedBox(height: 10),
                 _buildGuestDetailsCard(),
 
@@ -390,7 +407,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
                               children: [
                                 const SizedBox(height: 20),
                                 _StepHeader(
-                                    number: 3, label: 'Check-In Date & Time'),
+                                    number: 4, label: 'Check-In Date & Time'),
                                 const SizedBox(height: 10),
                                 _buildScheduleCard(),
                               ],
@@ -590,6 +607,22 @@ class _ResortBookingPageState extends State<ResortBookingPage>
                           '${children > 0 ? ' · $children child${children != 1 ? 'ren' : ''}' : ''}',
                           totalAmount,
                         ),
+                        // ✅ NEW — selected facilities shown right in the
+                        // summary so the customer sees exactly what's
+                        // included before they pay.
+                        if (_selectedFacilities.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 16, bottom: 8),
+                            child: Text(
+                              widget.resort.facilities
+                                  .where(_selectedFacilities.contains)
+                                  .join(' · '),
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 12),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 6),
                         const Divider(color: Colors.white24, height: 1),
                         const SizedBox(height: 10),
@@ -646,7 +679,91 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   }
 
   // ==========================================================================
-  // STEP 1 — Guests card
+  // STEP 1 — Facilities card (NEW)
+  // ==========================================================================
+  //
+  // Reads directly from widget.resort.facilities — i.e. whatever the
+  // provider actually registered for THIS resort (Anand's waterpark
+  // facilities vs. Alexon's banquet/stay facilities are already distinct
+  // per-resort in resorts_data.dart). No hardcoded list here at all.
+
+  Widget _buildFacilitiesCard() {
+    final facilities = widget.resort.facilities;
+
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Choose the facilities you\'d like to use at ${widget.resort.name}',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade600,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: facilities.map((facility) {
+              final selected = _selectedFacilities.contains(facility);
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    selected
+                        ? _selectedFacilities.remove(facility)
+                        : _selectedFacilities.add(facility);
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selected ? _kAccent : const Color(0xFFF3F2FB),
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(
+                      color: selected ? _kAccent : Colors.grey.shade200,
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        selected
+                            ? Icons.check_circle_rounded
+                            : Icons.add_circle_outline_rounded,
+                        size: 16,
+                        color: selected ? Colors.white : Colors.grey.shade500,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        facility,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: selected ? Colors.white : Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          if (_selectedFacilities.isEmpty) ...[
+            const SizedBox(height: 12),
+            _hintRow('Select at least one facility to continue'),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // STEP 2 — Guests card
   // ==========================================================================
 
   Widget _buildGuestsCard() {
@@ -684,7 +801,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   }
 
   // ==========================================================================
-  // STEP 2 — Guest Details card
+  // STEP 3 — Guest Details card
   // ==========================================================================
 
   Widget _buildGuestDetailsCard() {
@@ -747,7 +864,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   }
 
   // ==========================================================================
-  // STEP 3 — Schedule card
+  // STEP 4 — Schedule card
   // ==========================================================================
 
   Widget _buildScheduleCard() {
@@ -796,9 +913,10 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   // ==========================================================================
 
   Widget _buildBottomBar() {
-    final canPay = !_isLoading && _providerId != null;
+    final facilitiesDone = _selectedFacilities.isNotEmpty;
     final step1Done = _phoneComplete;
     final step2Done = selectedDate != null && selectedTime != null;
+    final canPay = !_isLoading && _providerId != null && facilitiesDone;
 
     return SafeArea(
       top: false,
@@ -818,7 +936,11 @@ class _ResortBookingPageState extends State<ResortBookingPage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _ProgressRow(step1: step1Done, step2: step1Done && step2Done),
+            _ProgressRow(
+              facilities: facilitiesDone,
+              step1: facilitiesDone && step1Done,
+              step2: facilitiesDone && step1Done && step2Done,
+            ),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
@@ -873,10 +995,15 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   // ==========================================================================
 
   Future<void> _payNow() async {
-    // FIX: split into specific checks (name / phone-digit-count / date+time
-    // / provider) instead of one combined "fill your details" message —
-    // matches booking_page.dart's _validateAndPay() flow so the person
-    // knows exactly which field needs fixing.
+    // FIX: split into specific checks (facilities / name / phone-digit-count
+    // / date+time / provider) instead of one combined "fill your details"
+    // message — matches booking_page.dart's _validateAndPay() flow so the
+    // person knows exactly which field needs fixing.
+    if (_selectedFacilities.isEmpty) {
+      _showSnack('Please select at least one facility');
+      return;
+    }
+
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
 
@@ -921,6 +1048,18 @@ class _ResortBookingPageState extends State<ResortBookingPage>
 
     setState(() => _isLoading = true);
     try {
+      // ✅ NEW — human-readable facilities line prepended to the note so
+      // the provider dashboard's order detail view shows exactly what the
+      // customer picked, even before opening the services list.
+      final facilitiesLine = widget.resort.facilities
+          .where(_selectedFacilities.contains)
+          .join(', ');
+      final noteText = _noteController.text.trim();
+      final combinedNote = [
+        'Facilities requested: $facilitiesLine',
+        if (noteText.isNotEmpty) noteText,
+      ].join('\n');
+
       await OrderService.placeOrder(
         serviceType: _kServiceType,
         services: _servicesForOrder,
@@ -931,7 +1070,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
         createdBy: user.uid,
         createdByRole: 'user',
         address: '${widget.resort.name}, ${widget.resort.location}',
-        note: _noteController.text.trim(),
+        note: combinedNote,
         date: selectedDate!,
         time: selectedTime!.format(context),
         totalAmount: totalAmount,
@@ -1258,16 +1397,24 @@ class _PickerTile extends StatelessWidget {
   }
 }
 
+// ✅ UPDATED — 4-stage progress row: Facilities → Details → Schedule → Payment
 class _ProgressRow extends StatelessWidget {
+  final bool facilities;
   final bool step1;
   final bool step2;
 
-  const _ProgressRow({required this.step1, required this.step2});
+  const _ProgressRow({
+    required this.facilities,
+    required this.step1,
+    required this.step2,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
+        _dot(done: facilities, label: 'Facilities'),
+        _line(done: facilities),
         _dot(done: step1, label: 'Details'),
         _line(done: step1),
         _dot(done: step2, label: 'Schedule'),
@@ -1305,7 +1452,7 @@ class _ProgressRow extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       height: 2,
-      width: 36,
+      width: 28,
       color: done ? _kAccent : const Color(0xFFE8E6F7),
     );
   }

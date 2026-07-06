@@ -170,6 +170,13 @@ class _NotificationPageState extends State<NotificationPage> {
         return (icon: Icons.block_outlined, color: Colors.red);
       case NotificationType.serviceCompleted:
         return (icon: Icons.task_alt_outlined, color: Colors.teal);
+      // FIX: NEW — "this job was accepted by another provider" notice.
+      // Distinct grey/timer-off look so it visually reads as "no action
+      // needed" rather than falling into the generic indigo-bell
+      // default, which would make it look like a fresh, actionable
+      // alert.
+      case NotificationType.orderTakenByOther:
+        return (icon: Icons.timer_off_outlined, color: Colors.grey);
       default:
         return (
           icon: Icons.notifications_active_outlined,
