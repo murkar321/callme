@@ -2,11 +2,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:callme/provider/service_provider_form.dart';
 import 'package:callme/provider/provider_dashboard.dart';
+
+// ⚠️ Adjust this import path if order_service.dart lives somewhere else
+// in your project (e.g. package:callme/services/order_service.dart).
+// We need categoryMatchFuzzy/providerCategories/providerSubCategories
+// from here so the badge count uses the EXACT SAME matching logic as
+// OrderService's fan-out and business_dashboard_page.dart's Available
+// tab — otherwise "got notified" and "badge shows a number" can drift
+// apart again, which was the original bug.
+import 'package:callme/provider/order_service.dart';
 
 // =====================================================
 // CATEGORY MODEL
@@ -50,7 +58,18 @@ class _BusinessPageState extends State<BusinessPage>
 
   // ── Stagger animation ─────────────────────────────
   late AnimationController _listController;
-  StreamSubscription<RemoteMessage>? _fcmSubscription;
+
+  // NOTE: This page used to run its own separate FCM permission
+  // request / token-save / foreground-listener block (`_setupFCM`).
+  // That duplicated — and could race with — the single canonical
+  // NotificationService already running app-wide (which saves tokens
+  // to users/{uid}, users/{email} (back-compat), AND providers/{id},
+  // and is what actually makes notifications ring on lock screen /
+  // off-screen). Removed here so there's exactly one place doing FCM
+  // setup, matching the project's "single source of truth" pattern.
+  // If you were relying on the in-app SnackBar this page used to show
+  // for foreground messages, NotificationService already shows a real
+  // system-style local notification for those instead.
 
   // ── Categories ────────────────────────────────────
   static const List<ServiceCategoryStyle> businessCategories = [
@@ -119,49 +138,12 @@ class _BusinessPageState extends State<BusinessPage>
       duration: const Duration(milliseconds: 600),
     )..forward();
     _getLocation();
-    _setupFCM();
   }
 
   @override
   void dispose() {
-    _fcmSubscription?.cancel();
     _listController.dispose();
     super.dispose();
-  }
-
-  // ── FCM ───────────────────────────────────────────
-  Future<void> _setupFCM() async {
-    try {
-      await FirebaseMessaging.instance.requestPermission(
-          alert: true, badge: true, sound: true);
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token != null && user != null) {
-        await firestore
-            .collection("users")
-            .doc(user!.email?.toLowerCase())
-            .set({"fcmToken": token}, SetOptions(merge: true));
-      }
-      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-        if (user != null) {
-          await firestore
-              .collection("users")
-              .doc(user!.email?.toLowerCase())
-              .set({"fcmToken": newToken}, SetOptions(merge: true));
-        }
-      });
-      _fcmSubscription =
-          FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        if (!mounted) return;
-        if (message.notification != null) {
-          _showSnack(
-            message.notification?.title ?? "New Notification",
-            isSuccess: true,
-          );
-        }
-      });
-    } catch (e) {
-      debugPrint("FCM ERROR: $e");
-    }
   }
 
   // ── Location ──────────────────────────────────────
@@ -234,7 +216,72 @@ class _BusinessPageState extends State<BusinessPage>
   }
 
   // =====================================================
-  // NEW — DYNAMIC ORDERING
+  // FIX: badge / order-count now fan-out aware.
+  //
+  // OLD BEHAVIOR (bug): counted orders where
+  // `providerUserId == user.uid`. But a brand-new booking that hasn't
+  // been accepted by anyone yet has an EMPTY `providerUserId` — it's
+  // fanned out to every matching provider via categoryMatchFuzzy() in
+  // OrderService, and only gets a providerUserId once someone accepts
+  // it. Result: the push notification would ring, but the category
+  // card's badge would never show it.
+  //
+  // NEW BEHAVIOR: for each order (status pending/accepted/ongoing)
+  // whose serviceType matches one of this user's registered provider
+  // profiles:
+  //   - if the order IS already assigned (providerUserId set): only
+  //     counts if it's assigned to ME.
+  //   - if the order is NOT yet assigned (fan-out, providerUserId ''):
+  //     counts if categoryMatchFuzzy() says this provider profile
+  //     would see it — using the SAME shared function OrderService and
+  //     business_dashboard_page.dart already use, from order_service.dart.
+  // =====================================================
+  Map<String, int> _computeOrderCounts(
+    List<QueryDocumentSnapshot> orderDocs,
+    Map<String, Map<String, dynamic>> providerMap,
+  ) {
+    final counts = <String, int>{};
+
+    for (final doc in orderDocs) {
+      final order = doc.data() as Map<String, dynamic>? ?? {};
+      final orderServiceType =
+          normalize((order['serviceType'] ?? '').toString());
+
+      final provider = providerMap[orderServiceType];
+      if (provider == null) continue; // not registered for this service
+
+      final providerUserId = (provider['userId'] ?? '').toString();
+      final orderProviderUserId =
+          (order['providerUserId'] ?? '').toString().trim();
+
+      bool matches;
+      if (orderProviderUserId.isNotEmpty) {
+        // Already assigned to someone — only counts for ME if it's mine.
+        matches = orderProviderUserId == providerUserId;
+      } else {
+        // Fan-out order, nobody's accepted it yet — count it if this
+        // provider profile would actually see it in their Available tab.
+        final providerCats = providerCategories(provider);
+        final providerSubCats = providerSubCategories(provider);
+        matches = categoryMatchFuzzy(
+          order,
+          providerCats,
+          providerSubCats: providerSubCats,
+          debugOrderId: '${doc.id} -> businessPage badge '
+              '(${provider['providerId']})',
+        );
+      }
+
+      if (matches) {
+        counts[orderServiceType] = (counts[orderServiceType] ?? 0) + 1;
+      }
+    }
+
+    return counts;
+  }
+
+  // =====================================================
+  // DYNAMIC ORDERING
   //
   // Returns businessCategories INDICES sorted with priority:
   //   1) Categories with active orders right now (pending/accepted/
@@ -617,25 +664,24 @@ class _BusinessPageState extends State<BusinessPage>
                       providerMap[type] = {...data, 'providerId': doc.id};
                     }
                   }
+                  // FIX: broad status-only query (same shape as before) —
+                  // deliberately NOT filtering by serviceType server-side
+                  // to avoid combining two `whereIn` clauses. We filter by
+                  // registered serviceType + category match client-side in
+                  // _computeOrderCounts() instead, which is what makes
+                  // fan-out (unassigned) orders count correctly.
                   return StreamBuilder<QuerySnapshot>(
                     stream: firestore
                         .collection("orders")
-                        .where("providerUserId", isEqualTo: user!.uid)
                         .where("status",
                             whereIn: ["pending", "accepted", "ongoing"])
                         .snapshots(),
                     builder: (context, orderSnap) {
-                      final Map<String, int> orderCountMap = {};
-                      if (orderSnap.hasData) {
-                        for (var doc in orderSnap.data!.docs) {
-                          final order =
-                              doc.data() as Map<String, dynamic>;
-                          final type =
-                              normalize(order['serviceType'] ?? "");
-                          orderCountMap[type] =
-                              (orderCountMap[type] ?? 0) + 1;
-                        }
-                      }
+                      final orderCountMap = orderSnap.hasData
+                          ? _computeOrderCounts(
+                              orderSnap.data!.docs, providerMap)
+                          : <String, int>{};
+
                       return Padding(
                         padding:
                             const EdgeInsets.fromLTRB(16, 0, 16, 32),
@@ -651,8 +697,8 @@ class _BusinessPageState extends State<BusinessPage>
                             childAspectRatio: 1.05,
                           ),
                           itemBuilder: (_, gridPosition) {
-                            // NEW: `gridPosition` is where in the grid we
-                            // are rendering; `i` is which category from
+                            // `gridPosition` is where in the grid we are
+                            // rendering; `i` is which category from
                             // businessCategories actually goes there,
                             // resolved via the dynamic priority order.
                             final sorted =
@@ -768,11 +814,10 @@ class _BusinessPageState extends State<BusinessPage>
     final count = orderCountMap[serviceType] ?? 0;
     final status = provider?['status'];
 
-    // NOTE: the stagger-in animation delay is now keyed off
-    // `gridPosition` (where the card actually lands on screen) instead
-    // of `i` (which category it is), so cards still cascade in
-    // top-left-to-bottom-right regardless of how _sortedIndices()
-    // reordered them.
+    // NOTE: the stagger-in animation delay is keyed off `gridPosition`
+    // (where the card actually lands on screen) instead of `i` (which
+    // category it is), so cards still cascade in top-left-to-bottom-right
+    // regardless of how _sortedIndices() reordered them.
     final delay = gridPosition * 0.05;
     final animation = CurvedAnimation(
       parent: _listController,

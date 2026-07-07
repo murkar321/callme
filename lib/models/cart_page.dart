@@ -515,10 +515,16 @@ class _CartPageState extends State<CartPage>
   // =========================================================
 
   Future<void> _onProceed(List<CartItem> items) async {
+    // `result` is whatever the pushed booking/enquiry page returns when it
+    // pops. Each booking page should call `Navigator.pop(context, true)`
+    // once the booking/enquiry is successfully placed. If it pops with
+    // nothing (back button) or `false`, the cart is left untouched so the
+    // user doesn't lose their selection.
+    dynamic result;
+
     if (_isCivil) {
       // ── Civil: enquiry flow, no payment ──────────────────────────────────
-   
-      await Navigator.push(
+      result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => CivilBookingPage(
@@ -533,7 +539,7 @@ class _CartPageState extends State<CartPage>
       );
     } else if (_isEnquiry) {
       // ── Education (and any future enquiry-only service) ───────────────────
-      await Navigator.push(
+      result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => EnquiryPage(
@@ -546,7 +552,7 @@ class _CartPageState extends State<CartPage>
       // ── Salon: payment flow with home/salon visit popup ───────────────────
       // Pass providerId as initialProviderId so SalonBookingPage skips the
       // provider lookup when the caller already has the ID.
-      await Navigator.push(
+      result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => SalonBookingPage(
@@ -560,7 +566,7 @@ class _CartPageState extends State<CartPage>
       );
     } else {
       // ── All other services: universal BookingPage ─────────────────────────
-      await Navigator.push(
+      result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => BookingPage(
@@ -575,6 +581,12 @@ class _CartPageState extends State<CartPage>
         ),
       );
     }
+
+    // Only clear the cart when the booking/enquiry actually completed.
+    if (result == true) {
+      Cart.clear(widget.service);
+    }
+
     _refresh();
   }
 

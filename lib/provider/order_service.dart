@@ -141,6 +141,11 @@ String cleanSubCategory(String raw) => raw.trim();
 // this file's _notifyMatchingProviders() (who actually gets a
 // `notifications` doc + push). Both must call categoryMatchFuzzy()
 // from HERE — neither file should re-implement its own copy.
+//
+// NOTE: business_page.dart's badge counter now ALSO calls
+// categoryMatchFuzzy() from here directly (see business_page.dart),
+// so "got notified" / "shows in Available" / "badge count" can never
+// disagree with each other.
 // ============================================================
 
 String normalizeCategory(String s) =>
@@ -248,9 +253,6 @@ bool categoryMatch(
   List<String> providerCats, {
   String debugOrderId = '',
 }) {
-  // FIX: `providerCats.isEmpty` used to short-circuit straight to
- 
-  // fixing it here fixes both places at once, by design.
   if (providerCats.isEmpty) {
     debugPrint('[catMatch] $debugOrderId: provider has NO categories or '
         'subCategories registered in their profile — FAILING CLOSED '
@@ -283,12 +285,13 @@ bool categoryMatch(
   }
   return matched;
 }
-/// Public entry point used by both business_dashboard_page.dart (tab
-/// visibility) and _notifyMatchingProviders() / notifyOthersOrderTaken()
-/// below (push fan-out). All call sites pass `providerCats` (main
-/// categories[]) and `providerSubCats` (subCategories[]) — merged into
-/// one pool and matched EXACTLY (normalized) against the order's
-/// category / services.
+
+/// Public entry point used by business_dashboard_page.dart (tab
+/// visibility), business_page.dart (badge counts), and
+/// _notifyMatchingProviders() / notifyOthersOrderTaken() below (push
+/// fan-out). All call sites pass `providerCats` (main categories[])
+/// and `providerSubCats` (subCategories[]) — merged into one pool and
+/// matched EXACTLY (normalized) against the order's category / services.
 bool categoryMatchFuzzy(
   Map<String, dynamic> orderData,
   List<String> providerCats, {
@@ -716,9 +719,14 @@ class OrderService {
             'body':       '$userName has cancelled their $serviceType booking.',
             'type':       NotificationType.userCancelled,
             'data': {
-              'type':       NotificationType.userCancelled,
-              'orderId':    orderId,
-              'receiverId': providerUserId,
+              'type':        NotificationType.userCancelled,
+              'orderId':     orderId,
+              'receiverId':  providerUserId,
+              // FIX: enriched so a tap on this notification could, in
+              // future, route straight to this provider's dashboard
+              // instead of only relying on in-app navigation.
+              'providerId':  docId,
+              'serviceType': serviceType,
             },
             'sent':      false,
             'createdAt': FieldValue.serverTimestamp(),
@@ -737,8 +745,9 @@ class OrderService {
   //
   // Uses the shared, strict-exact categoryMatchFuzzy() — identical
   // function and identical arguments (providerCats + providerSubCats)
-  // to business_dashboard_page.dart's `_categoryMatch()`, so "got
-  // notified" and "shows up in Available" can never disagree.
+  // to business_dashboard_page.dart's `_categoryMatch()` AND
+  // business_page.dart's badge counter, so "got notified" / "shows up
+  // in Available" / "badge count" can never disagree.
   // ==========================================================
   static Future<void> _notifyMatchingProviders({
     required String orderId,
@@ -851,26 +860,6 @@ class OrderService {
 
   // ==========================================================
   // FIX: NEW — FCFS "taken" notice to every OTHER matching provider.
-  //
-  // Previously, the instant one provider accepted an order, it just
-  // disappeared from every other matching provider's Available tab
-  // (via _isAvailable()'s isAssigned/providerUserId check) with zero
-  // explanation — the order's `notifications` doc from creation time
-  // stayed in their Notifications list forever, looking like a job
-  // that's still up for grabs. That's exactly the confusion reported:
-  // "message stays and provider gets confused."
-  //
-  // This runs the EXACT SAME candidate-gathering + categoryMatchFuzzy()
-  // pipeline as _notifyMatchingProviders() (so "who got the original
-  // alert" and "who gets the taken notice" always agree), skips the
-  // provider who just accepted, and sends both a `notifications` doc
-  // and an `fcm_queue` entry — so it rings on-screen (via
-  // FirebaseMessaging.onMessage) AND off-screen/terminated (via the
-  // background handler + Cloud Function), exactly like every other
-  // push in this app.
-  //
-  // Call this from the dashboard's `_accept()` right after the order
-  // is transactionally marked accepted.
   // ==========================================================
   static Future<void> notifyOthersOrderTaken({
     required String orderId,
@@ -969,9 +958,15 @@ class OrderService {
             'body':       body,
             'type':       NotificationType.orderTakenByOther,
             'data': {
-              'type':       NotificationType.orderTakenByOther,
-              'orderId':    orderId,
-              'receiverId': providerUserId,
+              'type':        NotificationType.orderTakenByOther,
+              'orderId':     orderId,
+              'receiverId':  providerUserId,
+              // FIX: enriched (previously just type/orderId/receiverId)
+              // so this payload carries the same shape as newBooking's,
+              // in case routing for this type is added later.
+              'providerId':  doc.id,
+              'serviceType': serviceType,
+              'category':    displayCat,
             },
             'sent':      false,
             'createdAt': FieldValue.serverTimestamp(),
@@ -1030,6 +1025,11 @@ class OrderService {
         'on ${_formatDate(date)} at $time.'
         '${totalAmount > 0 ? ' Amount ₹${totalAmount.toStringAsFixed(0)}' : ''}';
 
+    // FIX: `businessName: providerName` was missing here before — the
+    // Firestore `notifications` doc for new bookings never carried the
+    // provider's own name/id, which is what notification_router.dart
+    // now needs to route straight to THIS provider's dashboard (instead
+    // of just opening the generic BusinessPage list).
     await _sendNotification(
       receiverId: providerUserId,
       role:       'provider',
@@ -1037,6 +1037,7 @@ class OrderService {
       title:      title,
       body:       body,
       type:       NotificationType.newBooking,
+      businessName: providerName,
       serviceType: serviceType,
       category:    displayCat,
       providerId:  providerId,
@@ -1053,9 +1054,17 @@ class OrderService {
         'body':       body,
         'type':       NotificationType.newBooking,
         'data': {
-          'type':       NotificationType.newBooking,
-          'orderId':    orderId,
-          'receiverId': providerUserId,
+          'type':        NotificationType.newBooking,
+          'orderId':     orderId,
+          'receiverId':  providerUserId,
+          // FIX: this is the actual payload that survives to a
+          // locked-screen / terminated-app tap. Without these three
+          // fields, notification_router.dart had nothing to route on
+          // and fell back to the generic BusinessPage list every time.
+          'providerId':   providerId,
+          'businessName': providerName,
+          'serviceType':  serviceType,
+          'category':     displayCat,
         },
         'sent':      false,
         'createdAt': FieldValue.serverTimestamp(),
@@ -1101,6 +1110,22 @@ class OrderService {
           (userDoc.data()?['fcmToken'] ?? '').toString().trim();
 
       if (fcmToken.isNotEmpty) {
+        // FIX: enrich the push data with businessName/serviceType/
+        // providerId when present — previously this map only ever had
+        // type/orderId/receiverId, so a locked-screen tap had less
+        // context to route with than the in-app notifications doc did.
+        final pushData = <String, dynamic>{
+          'type':       type,
+          'orderId':    orderId,
+          'receiverId': userId,
+        };
+        final bn = businessName?.trim() ?? '';
+        if (bn.isNotEmpty) pushData['businessName'] = bn;
+        final st = serviceType?.trim() ?? '';
+        if (st.isNotEmpty) pushData['serviceType'] = st;
+        final pid = providerId?.trim() ?? '';
+        if (pid.isNotEmpty) pushData['providerId'] = pid;
+
         await _db.collection('fcm_queue').add({
           'token':      fcmToken,
           'receiverId': userId,
@@ -1108,11 +1133,7 @@ class OrderService {
           'title':      title,
           'body':       body,
           'type':       type,
-          'data': {
-            'type':       type,
-            'orderId':    orderId,
-            'receiverId': userId,
-          },
+          'data':       pushData,
           'sent':      false,
           'createdAt': FieldValue.serverTimestamp(),
         });

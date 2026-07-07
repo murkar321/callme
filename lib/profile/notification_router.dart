@@ -20,7 +20,7 @@ import '../Admin/approve_providers_page.dart';
 //   • NotificationService._listenBackgroundTap / _checkColdStart (FCM tap)
 //
 // BUG FIXES vs previous version:
-//   1. registrationApproved: ApproveProvidersPage now stamps providerId /
+//   1. registrationApproved: ApproveProvidersPage stamps providerId /
 //      businessName / serviceType directly onto the notification + FCM
 //      payload, so we route straight to BusinessDashboardPage without a
 //      Firestore round trip. Falls back to the old Firestore lookup only
@@ -32,6 +32,15 @@ import '../Admin/approve_providers_page.dart';
 //   4. FeedbackPage is `const` — was being constructed without const.
 //   5. Navigator retry loop: on cold-start the navigator isn't mounted for
 //      ~1-2 s; retries up to 10× at 300 ms intervals.
+//   6. FIX (NEW): newBooking now routes straight to the specific
+//      BusinessDashboardPage for the registered service the order matched
+//      — previously it always opened the generic BusinessPage category
+//      list regardless of which service the booking was actually for.
+//      This reuses the same providerId/businessName/serviceType fast-path
+//      pattern already proven out for registrationApproved, via the new
+//      shared `_routeToProviderDashboard()` helper below. It works
+//      because OrderService now stamps those three fields onto every
+//      new-booking notification + FCM payload (see order_service.dart).
 // ─────────────────────────────────────────────────────────────────────────────
 
 void routeNotification(Map<String, dynamic> data) {
@@ -62,9 +71,15 @@ Future<void> _doRoute(NavigatorState navigator, Map<String, dynamic> data) async
   switch (type) {
 
     // ── Provider receives a new booking ──────────────────────────────────────
+    // FIX: previously always opened the generic BusinessPage list. Now
+    // tries the fast path straight to the matching service's own
+    // dashboard first, and only falls back to BusinessPage if an older
+    // notification is missing the required fields.
     case NotificationType.newBooking:
-      navigator.push(
-        MaterialPageRoute(builder: (_) => const BusinessPage()),
+      await _routeToProviderDashboard(
+        navigator,
+        data,
+        fallbackToBusinessPage: true,
       );
       break;
 
@@ -94,7 +109,7 @@ Future<void> _doRoute(NavigatorState navigator, Map<String, dynamic> data) async
 
     // ── Provider: registration approved → open their dashboard ────────────────
     case NotificationType.registrationApproved:
-      await _routeToApprovedDashboard(navigator, data);
+      await _routeToProviderDashboard(navigator, data);
       break;
 
     // ── Provider: registration rejected → back to the registration/status page ─
@@ -131,20 +146,34 @@ Future<void> _doRoute(NavigatorState navigator, Map<String, dynamic> data) async
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _routeToApprovedDashboard
+// _routeToProviderDashboard
 // ─────────────────────────────────────────────────────────────────────────────
-// Fast path: ApproveProvidersPage.approveProvider() now stamps providerId,
-// businessName, and serviceType directly onto the notification doc / FCM
-// payload, so `data` already has everything BusinessDashboardPage needs —
-// no extra Firestore read, no chance of a UID/doc-ID mismatch.
+// Shared fast-path helper used by BOTH newBooking and registrationApproved.
 //
-// Falls back to the old Firestore lookup (_routeToDashboard) only for
-// notifications saved before this update, which won't carry those fields.
+// Fast path: whenever the notification/FCM payload already carries
+// providerId + businessName + serviceType (which OrderService and
+// ApproveProvidersPage now both stamp on), we can push
+// BusinessDashboardPage directly — no extra Firestore read, no chance of
+// guessing the wrong registered service for a provider who runs more
+// than one business type.
+//
+// Fallback behavior differs by caller:
+//   - registrationApproved (fallbackToBusinessPage: false): falls back to
+//     the old Firestore-lookup-by-uid path (_routeToDashboard), since a
+//     freshly-approved provider realistically only has the one new
+//     profile to land on.
+//   - newBooking (fallbackToBusinessPage: true): falls back to the
+//     generic BusinessPage category list instead, because guessing a
+//     single provider doc by uid alone would be WRONG for a provider
+//     registered under multiple service types — better to let them pick
+//     the right category themselves than land them on the wrong
+//     dashboard.
 // ─────────────────────────────────────────────────────────────────────────────
-Future<void> _routeToApprovedDashboard(
+Future<void> _routeToProviderDashboard(
   NavigatorState navigator,
-  Map<String, dynamic> data,
-) async {
+  Map<String, dynamic> data, {
+  bool fallbackToBusinessPage = false,
+}) async {
   final providerId   = data['providerId']?.toString().trim() ?? '';
   final businessName = data['businessName']?.toString().trim() ?? '';
   final serviceType  = data['serviceType']?.toString().trim() ?? '';
@@ -163,6 +192,16 @@ Future<void> _routeToApprovedDashboard(
         ),
       ),
     );
+    return;
+  }
+
+  if (fallbackToBusinessPage) {
+    debugPrint(
+      '[NOTIF-ROUTE] Payload missing providerId/businessName/serviceType '
+      '— opening BusinessPage (can\'t safely guess which registered '
+      'service this belongs to)',
+    );
+    navigator.push(MaterialPageRoute(builder: (_) => const BusinessPage()));
     return;
   }
 

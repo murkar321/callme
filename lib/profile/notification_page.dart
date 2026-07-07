@@ -84,10 +84,7 @@ class _NotificationPageState extends State<NotificationPage> {
     _showSnack('${snap.docs.length} notifications marked as read');
   }
 
-  /// Deletes a single notification from Firestore by document ID.
-  /// Uses the document ID directly (not the captured DocumentSnapshot)
-  /// so the correct record is always deleted even if the list shifts
-  /// during a dismiss animation.
+
   Future<void> _deleteById(String docId) async {
     try {
       await FirebaseFirestore.instance
@@ -176,12 +173,7 @@ class _NotificationPageState extends State<NotificationPage> {
       // would make it look like a fresh, actionable alert.
       case NotificationType.orderTakenByOther:
         return (icon: Icons.timer_off_outlined, color: Colors.grey);
-      // FIX: NEW — was previously undefined in this switch (the constant
-      // lived only in order_service.dart's NotificationType class, which
-      // this page deliberately doesn't import to avoid the ambiguous-
-      // import problem documented in business_dashboard_page.dart). Every
-      // "user cancelled their booking" notification to a provider was
-      // silently falling through to the generic default icon/color.
+    
       case NotificationType.userCancelled:
         return (icon: Icons.event_busy_outlined, color: Colors.deepOrange);
       // FIX: NEW — same gap as above; also had no case here.

@@ -47,24 +47,6 @@ class NotificationType {
   static const String userCancelled = 'user_cancelled';
 }
 
-// ============================================================
-// REAL DEDUPE CACHE
-//
-// First caller to present a given key within the window gets to fire;
-// any other caller with the same key inside the window is skipped. It
-// lives in the main isolate, so it correctly dedupes the two paths that
-// actually race each other in practice — the dashboard's instant local
-// alert and `_listenForeground()`'s FCM handling — since both run in the
-// same (foreground) isolate.
-//
-// NOTE: `firebaseMessagingBackgroundHandler` runs in a separate,
-// short-lived background isolate that does NOT share this in-memory
-// cache. In practice this isn't a real-world duplicate risk: the
-// dashboard's local alert only ever fires while the app is in the
-// foreground, and the background handler only ever fires while the app
-// is backgrounded / terminated — the two conditions are mutually
-// exclusive.
-// ============================================================
 class _NotifDedupe {
   static final Map<String, DateTime> _fired = {};
   static const Duration _window = Duration(seconds: 45);
@@ -137,14 +119,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       '[FCM-BG]   notification: ${message.notification?.title} / ${message.notification?.body}');
   debugPrint('[FCM-BG]   data: ${message.data}');
 
-  // NOTE: this only fires our own local notification when the message is
-  // DATA-ONLY (no top-level `notification` block). This is intentional —
-  // see functions_index.js's comment on why the Cloud Function must send
-  // data-only messages. If your Cloud Function (or whatever sends the
-  // actual push) ever sends a `notification` block instead, Android will
-  // auto-display it via its own default channel/sound and this branch
-  // will correctly be skipped (avoiding a double-notification), but you
-  // will lose your custom channel/sound/vibration for that message.
+
   if (message.notification == null && message.data.isNotEmpty) {
     await _showLocalNotificationStandalone(
       id: _uniqueNotifId(),
@@ -600,25 +575,7 @@ class NotificationService {
     }
   }
 
-  // ============================================================
-  // NEW — testNotification()
-  //
-  // Fires a real local notification through the exact same channel,
-  // sound, and details as every other notification in this file, with
-  // NO Firestore/FCM involved at all. Call this from a debug button
-  // anywhere in the app (e.g. a hidden long-press on the app bar) to
-  // isolate the problem:
-  //
-  //   - If this rings  -> local notifications + channel + sound file are
-  //                        all fine. The problem is upstream: either the
-  //                        Cloud Function isn't deployed/working, the
-  //                        provider has no fcmToken saved, or Firestore
-  //                        rules are rejecting the fcm_queue write.
-  //   - If this DOESN'T ring -> the problem is on-device: check
-  //                        POST_NOTIFICATIONS permission, that
-  //                        notification_sound.mp3/.wav actually exists
-  //                        under android/app/src/main/res/raw/, and that
-  //                        the app isn't battery-restricted by the OS.
+
   // ============================================================
   static Future<void> testNotification() async {
     await NotificationService().initialize();

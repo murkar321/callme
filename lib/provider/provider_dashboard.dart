@@ -160,14 +160,40 @@ String? _unavailableReason({
         : 'Already assigned to another provider';
   }
 
-
-  // order/enquiry has been targeted at this exact provider profile.
-  final bool isDirectAssignmentToMe = assignedToMe &&
-      (status == OrderStatus.pending || status == OrderStatus.enquiry);
-  if (isDirectAssignmentToMe) {
-    return null; // available — no further checks needed
-  }
-  // assignment).
+  // ─────────────────────────────────────────────────────────────
+  // FIX (category leak — this is the bug that was causing providers
+  // to see orders for categories they never registered for):
+  //
+  // This function used to have an early-return here:
+  //
+  //   final bool isDirectAssignmentToMe = assignedToMe &&
+  //       (status == OrderStatus.pending || status == OrderStatus.enquiry);
+  //   if (isDirectAssignmentToMe) {
+  //     return null; // available — no further checks needed
+  //   }
+  //
+  // i.e. ANY order whose providerId/providerUserId already pointed at
+  // THIS exact provider profile was marked "available" immediately,
+  // with NO service-type check and NO category check at all.
+  //
+  // Because most booking pages resolve to one specific provider up
+  // front (see _loadProvider() / initialProviderId in the booking
+  // pages) before ever calling OrderService.placeOrder(), the huge
+  // majority of orders in this app ARE "direct assignments" in that
+  // sense — which meant the category filter a provider configures at
+  // registration was being bypassed for nearly every order, and
+  // providers ended up seeing bookings completely outside the
+  // categories they selected.
+  //
+  // There is intentionally NO shortcut return here anymore. Every
+  // order — whether it was pre-assigned to this provider profile or
+  // not — must fall through to the isOpen / declinedBy / service-type
+  // / category checks below before it can be considered available.
+  // If a directly-booked order genuinely doesn't match any category
+  // this provider has registered, it will now correctly stay hidden;
+  // the fix for that is adding the missing category to the provider's
+  // profile, not bypassing the filter here.
+  // ─────────────────────────────────────────────────────────────
   final bool isOrphanedAccept =
       status == OrderStatus.accepted && provUid.isEmpty;
   final bool isOpen = status == OrderStatus.pending
@@ -868,8 +894,11 @@ class _BDPState extends State<BusinessDashboardPage> {
                   // ── FIX: instant local alert for newly-arrived orders.
                   // Computed with the exact same _isAvailable() filter the
                   // Available tab itself uses (now including the
-                  // per-provider-profile check), so "got an alert" and
-                  // "shows up in Available" can never disagree.
+                  // per-provider-profile check AND the category check —
+                  // see the fix note in _unavailableReason() above), so
+                  // "got an alert" and "shows up in Available" can never
+                  // disagree, and neither can ever fire for an order
+                  // outside this provider's registered categories.
                   final availableForAlert = allDocs.where((d) => _isAvailable(
                     data:            d.data(),
                     myUid:           _uid,
@@ -952,7 +981,9 @@ class _AvailTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // ── Client-side filter: only truly available (scoped to THIS
-    // exact provider profile, not just this login) ────────────────
+    // exact provider profile, not just this login, AND matched to
+    // this provider's registered categories — see the fix note in
+    // _unavailableReason() above) ────────────────────────────────
     final docs = allDocs.where((d) => _isAvailable(
       data:            d.data(),
       myUid:           myUid,
