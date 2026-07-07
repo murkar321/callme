@@ -1,125 +1,67 @@
-/**
- * ============================================================
- * fcm_queue → real device push notification
- *
- * THIS is the missing piece. Your Flutter app already writes
- * documents into `fcm_queue` correctly (order_service.dart /
- * notification_service.dart) and already writes to `notifications`
- * for the in-app bell. But writing a Firestore document does NOT
- * send a push by itself — something server-side has to notice the
- * new document and call the Firebase Admin SDK's messaging().send().
- * That's exactly what this function does.
- *
- * Once this is deployed, every fcm_queue document you're already
- * creating will result in a REAL system-level notification — heads-up
- * popup, lock-screen, sound, vibration — whether the CallMe app is in
- * the foreground, backgrounded, or fully killed. Nothing on the
- * Flutter side needs to change; it already writes the right shape of
- * document.
- *
- * DEPLOY:
- *   1. From your Firebase project root:  firebase init functions
- *      (choose JavaScript, skip if functions/ already exists)
- *   2. Drop this file in as functions/index.js
- *   3. cd functions && npm install firebase-admin firebase-functions
- *   4. firebase deploy --only functions
- *
- * REQUIRES: Blaze (pay-as-you-go) plan. Firestore-triggered functions
- * don't run on the free Spark plan — but Blaze still has a generous
- * free monthly quota, so for an app this size you likely pay ₹0.
- * ============================================================
- */
 
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
-const { logger } = require('firebase-functions');
+
+const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 
-admin.initializeApp();
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+
 const db = admin.firestore();
 
-/**
- * Fires once for every new document created in `fcm_queue`.
- * Expects the exact shape your Dart code already writes:
- *   {
- *     token: string,          // device FCM token
- *     receiverId: string,     // uid of the user/provider doc
- *     providerId?: string,    // only present for provider-bound pushes
- *     orderId: string,
- *     title: string,
- *     body: string,
- *     type: string,           // e.g. 'new_booking', 'booking_accepted'
- *     data: { ... },          // small map of extra fields, all strings
- *     sent: false,
- *     createdAt: Timestamp,
- *   }
- */
-exports.sendFcmQueueNotification = onDocumentCreated(
-  'fcm_queue/{queueId}',
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
+exports.sendFcmFromQueue = functions.firestore
+  .document('fcm_queue/{docId}')
+  .onCreate(async (snap, context) => {
+    const docId = context.params.docId;
+    const queueData = snap.data() || {};
 
-    const queueId = event.params.queueId;
-    const doc = snap.data();
-
-    const token = (doc.token || '').toString().trim();
+    const token = (queueData.token || '').toString().trim();
     if (!token) {
-      logger.warn(`[fcm_queue/${queueId}] No token on document — skipping.`);
+      console.log(`[sendFcmFromQueue] ${docId}: no token present, skipping.`);
       await snap.ref.update({
         sent: false,
-        error: 'missing_token',
+        error: 'no_token',
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      return;
+      return null;
     }
 
-    // FCM `data` payload values must ALL be strings.
-    const rawData = doc.data && typeof doc.data === 'object' ? doc.data : {};
-    const stringData = {};
-    for (const [k, v] of Object.entries(rawData)) {
-      stringData[k] = v === null || v === undefined ? '' : String(v);
-    }
-    // Always guarantee these two, since notification_router.dart on the
-    // client uses them to decide where to navigate on tap.
-    stringData.type = stringData.type || (doc.type || '').toString();
-    stringData.orderId = stringData.orderId || (doc.orderId || '').toString();
+    // Build the data payload. Every value in a FCM `data` map MUST be a
+    // string — coerce everything defensively.
+    const nestedData = queueData.data && typeof queueData.data === 'object'
+      ? queueData.data
+      : {};
 
-    const title = (doc.title || 'CallMe').toString();
-    const body = (doc.body || '').toString();
+    const dataPayload = {
+      type: (queueData.type || nestedData.type || '').toString(),
+      title: (queueData.title || '').toString(),
+      body: (queueData.body || '').toString(),
+      orderId: (queueData.orderId || nestedData.orderId || '').toString(),
+      providerId: (queueData.providerId || nestedData.providerId || '').toString(),
+      receiverId: (queueData.receiverId || queueData.userId || nestedData.receiverId || '').toString(),
+      businessName: (queueData.businessName || '').toString(),
+      serviceType: (queueData.serviceType || '').toString(),
+      reason: (queueData.reason || '').toString(),
+    };
+
+    // Strip empty keys — cleaner payload, avoids sending "" for
+    // everything that wasn't relevant to this particular notification.
+    Object.keys(dataPayload).forEach((k) => {
+      if (dataPayload[k] === '') delete dataPayload[k];
+    });
 
     const message = {
       token,
-
-      // ── Intentionally DATA-ONLY for Android ──────────────────
-      // Your Dart firebaseMessagingBackgroundHandler() /
-      // NotificationService already build the actual on-screen
-      // notification themselves (custom channel `callme_high_v7`,
-      // custom sound, custom vibration pattern). If we ALSO sent a
-      // top-level `notification` block, Android would show its own
-      // generic tray notification in addition to — or instead of —
-      // your custom one, and you'd lose the custom sound/vibration.
-      // Data-only + high priority is what makes your existing
-      // Dart-side notification code actually run in the background.
-      data: stringData,
-
+      data: dataPayload,
       android: {
         priority: 'high',
       },
-
-      // ── iOS needs an actual alert block ──────────────────────
-      // Flutter's background isolate is not reliably invoked on iOS
-      // the way it is on Android, so iOS pop-ups need to come
-      // straight from APNs itself rather than from Dart code.
       apns: {
         headers: {
           'apns-priority': '10',
-          'apns-push-type': 'alert',
         },
         payload: {
           aps: {
-            alert: { title, body },
-            sound: 'default',
-            badge: 1,
             'content-available': 1,
           },
         },
@@ -127,71 +69,64 @@ exports.sendFcmQueueNotification = onDocumentCreated(
     };
 
     try {
-      await admin.messaging().send(message);
+      const response = await admin.messaging().send(message);
+      console.log(`[sendFcmFromQueue] ${docId}: sent OK, messageId=${response}`);
       await snap.ref.update({
         sent: true,
-        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        fcmMessageId: response,
       });
-      logger.info(`[fcm_queue/${queueId}] Sent OK -> receiverId=${doc.receiverId || ''}`);
     } catch (err) {
-      logger.error(`[fcm_queue/${queueId}] Send failed: ${err.code} — ${err.message}`);
+      console.error(`[sendFcmFromQueue] ${docId}: send FAILED`, err);
+
+      // Common actionable cases, logged plainly so they show up in
+      // `firebase functions:log` without needing to decode error codes.
+      const code = err && err.code ? err.code : 'unknown';
+      if (code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-registration-token') {
+        console.error(`[sendFcmFromQueue] ${docId}: token is stale/invalid — `
+          + `the provider's device likely reinstalled the app or cleared data. `
+          + `A fresh token will be written next time NotificationService.initialize() `
+          + `runs on their device.`);
+      }
 
       await snap.ref.update({
         sent: false,
-        error: err.code || err.message || 'unknown_error',
+        error: code,
+        errorMessage: (err && err.message) ? err.message : String(err),
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-
-      // Stale/invalid token → clean it up so future orders don't keep
-      // trying (and failing) to notify this same dead token.
-      const staleTokenCodes = new Set([
-        'messaging/registration-token-not-registered',
-        'messaging/invalid-registration-token',
-        'messaging/invalid-argument',
-      ]);
-      if (staleTokenCodes.has(err.code)) {
-        await _clearStaleToken(doc.receiverId, doc.providerId);
-      }
     }
-  }
-);
+
+    return null;
+  });
 
 /**
- * Removes a dead fcmToken from wherever it lives — users/{email} for
- * customers, providers/{providerId} for providers — mirroring exactly
- * how your Dart _writeToken()/clearTokenOnLogout() already store it,
- * just from the server side.
+ * OPTIONAL BUT RECOMMENDED — cleanup old processed queue docs so
+ * `fcm_queue` doesn't grow forever. Runs once a day, deletes anything
+ * older than 2 days regardless of sent/failed status.
  */
-async function _clearStaleToken(receiverId, providerId) {
-  try {
-    if (providerId) {
-      await db.collection('providers').doc(providerId).update({
-        fcmToken: admin.firestore.FieldValue.delete(),
-      });
-      logger.info(`Cleared stale token on providers/${providerId}`);
-      return;
+exports.cleanupFcmQueue = functions.pubsub
+  .schedule('every 24 hours')
+  .onRun(async () => {
+    const cutoff = admin.firestore.Timestamp.fromMillis(
+      Date.now() - 2 * 24 * 60 * 60 * 1000,
+    );
+
+    const snap = await db
+      .collection('fcm_queue')
+      .where('createdAt', '<', cutoff)
+      .limit(500)
+      .get();
+
+    if (snap.empty) {
+      console.log('[cleanupFcmQueue] nothing to clean up.');
+      return null;
     }
-    if (receiverId) {
-      // Your users collection is keyed by email in _writeToken(), but
-      // fall back to a userId-field query in case some docs are keyed
-      // differently.
-      const byId = await db.collection('users').doc(receiverId).get();
-      if (byId.exists) {
-        await byId.ref.update({ fcmToken: admin.firestore.FieldValue.delete() });
-        logger.info(`Cleared stale token on users/${receiverId}`);
-        return;
-      }
-      const q = await db
-        .collection('users')
-        .where('uid', '==', receiverId)
-        .limit(1)
-        .get();
-      if (!q.empty) {
-        await q.docs[0].ref.update({ fcmToken: admin.firestore.FieldValue.delete() });
-        logger.info(`Cleared stale token on users/${q.docs[0].id}`);
-      }
-    }
-  } catch (e) {
-    logger.error(`_clearStaleToken error: ${e.message}`);
-  }
-}
+
+    const batch = db.batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    console.log(`[cleanupFcmQueue] deleted ${snap.docs.length} old fcm_queue docs.`);
+    return null;
+  });

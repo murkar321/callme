@@ -15,6 +15,46 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   String search = "";
 
+  // ═══════════════════════════════════════════════════════════════
+  // FIX: DUPLICATE NOTIFICATION GUARD.
+  //
+  // Root cause of "approve/reject message goes multiple times":
+  // the Approve/Reject buttons stayed tappable while the async
+  // approveProvider()/rejectProvider() call was still running. A
+  // fast double-tap (or the StreamBuilder rebuilding mid-flight
+  // while Firestore's local cache resolves) could fire the whole
+  // function twice, which wrote TWO `notifications` docs and queued
+  // TWO `fcm_queue` pushes for the exact same decision — hence the
+  // device ringing twice and two identical entries on the
+  // notification page.
+  //
+  // Fix has two layers:
+  //   1) `_processingIds` — a local, in-memory lock. The instant a
+  //      decision starts for a providerId, its card shows a spinner
+  //      and both buttons are disabled until the call finishes
+  //      (success OR failure). This stops accidental double-taps at
+  //      the UI level.
+  //   2) A Firestore transaction inside approveProvider()/
+  //      rejectProvider() that reads the provider doc and ONLY
+  //      proceeds if `status` is still "pending". If two calls ever
+  //      did race past the UI lock (e.g. two admins on two devices),
+  //      the second transaction sees status already flipped and
+  //      bails out before any notification is ever written — so at
+  //      most ONE notification/push is ever produced per provider
+  //      decision, no matter what.
+  // ═══════════════════════════════════════════════════════════════
+  final Set<String> _processingIds = {};
+
+  bool _isProcessing(String providerId) => _processingIds.contains(providerId);
+
+  void _lock(String providerId) {
+    if (mounted) setState(() => _processingIds.add(providerId));
+  }
+
+  void _unlock(String providerId) {
+    if (mounted) setState(() => _processingIds.remove(providerId));
+  }
+
   // =====================================================
   // STREAM — only pending providers
   // =====================================================
@@ -65,7 +105,26 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   // =====================================================
   // SEND FCM HELPER
   //
-
+  // NOTE ON "NOT RINGING ON REAL DEVICE":
+  // This only queues the push (writes to fcm_queue). The actual ring
+  // on a provider's real device depends on:
+  //   1) A Cloud Function trigger on fcm_queue that reads this doc's
+  //      `token` and sends the FCM message (not shown in this file —
+  //      confirm it exists and is deployed).
+  //   2) The provider's device having a valid, un-expired fcmToken
+  //      saved (see NotificationService._writeToken in
+  //      notification_service.dart — it now writes to users/{uid},
+  //      users/{email} AND providers/{providerId}).
+  //   3) The Android app having the "notification_sound" raw
+  //      resource actually present at
+  //      android/app/src/main/res/raw/notification_sound.mp3 (or
+  //      .wav) — if that file is missing, Android silently falls
+  //      back to no sound instead of erroring.
+  //   4) Battery-optimization / "restricted" app settings on some
+  //      OEM devices (Xiaomi/Oppo/Vivo) which throttle background
+  //      FCM delivery — this is a device setting, not something the
+  //      app can fully control.
+  // =====================================================
 
   Future<bool> _sendFcm({
     required String token,
@@ -206,35 +265,67 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   // =====================================================
   // APPROVE
   //
-  // FIX: the core action (flipping provider status to approved) and
-  // the notification/push delivery are now in SEPARATE try/catch
-  // blocks. A notification/push failure can never again roll back or
-  // mask the fact that the provider WAS approved — the admin instead
-  // gets an accurate "approved, but notification failed" snackbar so
-  // they know to check the provider's push settings / your Firestore
-  // rules, instead of a confusing raw exception that looks like the
-  // whole approval failed.
+  // FIX: the status flip is now done inside a Firestore transaction
+  // that first re-reads the doc and checks `status == "pending"`.
+  // If the doc has ALREADY been approved/rejected (by an earlier,
+  // possibly-racing call), the transaction throws `already_handled`
+  // and we exit immediately — no notification, no push, no role
+  // update runs a second time. Combined with the `_processingIds`
+  // UI lock, this makes the whole approve action idempotent: calling
+  // it twice (double-tap, rebuild, or two admins) can now only ever
+  // produce ONE notification + ONE push.
   // =====================================================
 
   Future<void> approveProvider(String providerId) async {
+    if (_isProcessing(providerId)) return; // already running — ignore
+    _lock(providerId);
+
     Map<String, dynamic> data;
     String userId;
     String ownerName;
     ({String businessName, String serviceType}) identity;
 
-    // ── STEP 1 — the actual approval action ─────────────────────────
+    // ── STEP 1 — the actual approval action (idempotent) ────────────
     try {
-      final providerDoc =
-          await firestore.collection("providers").doc(providerId).get();
+      final ref = firestore.collection("providers").doc(providerId);
 
-      if (!providerDoc.exists) return;
+      final result = await firestore.runTransaction<Map<String, dynamic>?>(
+        (tx) async {
+          final snap = await tx.get(ref);
+          if (!snap.exists) return null;
 
-      data      = providerDoc.data() ?? {};
-      final business  = (data["business"] as Map<String, dynamic>?) ?? {};
+          final cur = snap.data() as Map<String, dynamic>;
+          final curStatus = (cur["status"] ?? "").toString().toLowerCase();
+
+          // Already handled by a previous call — do nothing, and tell
+          // the caller so it can skip the notification step entirely.
+          if (curStatus != "pending") {
+            throw Exception('already_handled');
+          }
+
+          tx.update(ref, {
+            "status":    "approved",
+            "isActive":  true,
+            "updatedAt": FieldValue.serverTimestamp(),
+          });
+
+          return cur;
+        },
+      );
+
+      if (result == null) {
+        // Doc no longer exists — nothing to do.
+        _unlock(providerId);
+        return;
+      }
+
+      data = result;
+      final business = (data["business"] as Map<String, dynamic>?) ?? {};
       ownerName = (business["ownerName"] ?? "there").toString();
 
       userId = (data["userId"] ?? "").toString();
       if (userId.isEmpty) {
+        _unlock(providerId);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -246,14 +337,17 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
       identity = _extractIdentity(data);
 
-      await firestore.collection("providers").doc(providerId).update({
-        "status":    "approved",
-        "isActive":  true,
-        "updatedAt": FieldValue.serverTimestamp(),
-      });
-
       await _updateUserRole(userId, "provider");
     } catch (e) {
+      _unlock(providerId);
+      final isAlreadyHandled = e.toString().contains('already_handled');
+      if (isAlreadyHandled) {
+        // Someone else's call already approved/rejected this provider
+        // first — silently stop. No error, no duplicate notification.
+        debugPrint('[approve] Skipped — provider $providerId already '
+            'handled by another call.');
+        return;
+      }
       debugPrint("APPROVE ERROR (core action): $e");
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -261,7 +355,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       return;
     }
 
-    // ── STEP 2 — notify (best-effort, never blocks the success state) ──
+    // ── STEP 2 — notify (best-effort, never blocks the success state,
+    // and guaranteed to run at most ONCE thanks to Step 1's guard) ──
     final fcmToken = (data["fcmToken"] ?? "").toString();
     final businessName =
         identity.businessName.isNotEmpty ? identity.businessName : "your business";
@@ -293,6 +388,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       serviceType:  serviceType,
     );
 
+    _unlock(providerId);
     if (!mounted) return;
 
     if (savedInApp && pushQueued) {
@@ -347,9 +443,17 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
   // =====================================================
   // REJECT — with reason dialog
+  //
+  // Same idempotency treatment as approveProvider(): the status flip
+  // happens inside a transaction guarded by `status == "pending"`,
+  // and the whole action is locked per-providerId via
+  // `_processingIds` so the dialog + button can't be triggered twice
+  // for the same provider while a previous rejection is still saving.
   // =====================================================
 
   Future<void> rejectProvider(String providerId) async {
+    if (_isProcessing(providerId)) return;
+
     final TextEditingController reasonController = TextEditingController();
 
     final bool? confirmed = await showDialog<bool>(
@@ -443,6 +547,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     );
 
     if (confirmed != true) return;
+    if (_isProcessing(providerId)) return; // re-check after the await
+    _lock(providerId);
 
     final String reason = reasonController.text.trim();
 
@@ -451,31 +557,56 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     String ownerName;
     ({String businessName, String serviceType}) identity;
 
-    // ── STEP 1 — the actual rejection action ────────────────────────
+    // ── STEP 1 — the actual rejection action (idempotent) ───────────
     try {
-      final providerDoc =
-          await firestore.collection("providers").doc(providerId).get();
+      final ref = firestore.collection("providers").doc(providerId);
 
-      if (!providerDoc.exists) return;
+      final result = await firestore.runTransaction<Map<String, dynamic>?>(
+        (tx) async {
+          final snap = await tx.get(ref);
+          if (!snap.exists) return null;
 
-      data      = providerDoc.data() ?? {};
-      final business  = (data["business"] as Map<String, dynamic>?) ?? {};
+          final cur = snap.data() as Map<String, dynamic>;
+          final curStatus = (cur["status"] ?? "").toString().toLowerCase();
+
+          if (curStatus != "pending") {
+            throw Exception('already_handled');
+          }
+
+          tx.update(ref, {
+            "status":       "rejected",
+            "isActive":     false,
+            "rejectReason": reason,
+            "updatedAt":    FieldValue.serverTimestamp(),
+          });
+
+          return cur;
+        },
+      );
+
+      if (result == null) {
+        _unlock(providerId);
+        return;
+      }
+
+      data = result;
+      final business = (data["business"] as Map<String, dynamic>?) ?? {};
       ownerName = (business["ownerName"] ?? "there").toString();
 
       userId = (data["userId"] ?? "").toString();
       identity = _extractIdentity(data);
 
-      await firestore.collection("providers").doc(providerId).update({
-        "status":       "rejected",
-        "isActive":     false,
-        "rejectReason": reason,
-        "updatedAt":    FieldValue.serverTimestamp(),
-      });
-
       if (userId.isNotEmpty) {
         await _updateUserRole(userId, "user");
       }
     } catch (e) {
+      _unlock(providerId);
+      final isAlreadyHandled = e.toString().contains('already_handled');
+      if (isAlreadyHandled) {
+        debugPrint('[reject] Skipped — provider $providerId already '
+            'handled by another call.');
+        return;
+      }
       debugPrint("REJECT ERROR (core action): $e");
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -483,7 +614,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       return;
     }
 
-    // ── STEP 2 — notify (best-effort, never blocks the success state) ──
+    // ── STEP 2 — notify (best-effort, guaranteed to run at most ONCE) ──
     final fcmToken = (data["fcmToken"] ?? "").toString();
 
     const String title = "Account Not Approved";
@@ -519,6 +650,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       );
     }
 
+    _unlock(providerId);
     if (!mounted) return;
 
     if (savedInApp && pushQueued) {
@@ -755,6 +887,8 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
         ? DateFormat('dd MMM yyyy').format(createdAt.toDate())
         : "-";
 
+    final bool busy = _isProcessing(providerId);
+
     return Container(
       margin:  const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(18),
@@ -924,45 +1058,76 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
           const SizedBox(height: 16),
 
           // ── ACTION BUTTONS ────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => rejectProvider(providerId),
-                  icon:  const Icon(Icons.close_rounded, color: Colors.red),
-                  label: const Text("Reject",
-                      style: TextStyle(
-                          color:      Colors.red,
-                          fontWeight: FontWeight.w600)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    side:    const BorderSide(color: Colors.red),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+          // FIX: while `busy` (this exact provider's decision is
+          // in-flight), both buttons are disabled and replaced with a
+          // spinner row — this is what stops the double-tap that was
+          // causing duplicate approve/reject notifications.
+          if (busy)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.5, color: Color(0xFF4F46E5)),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    "Processing…",
+                    style: TextStyle(
+                        color: Color(0xFF4F46E5),
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => rejectProvider(providerId),
+                    icon:  const Icon(Icons.close_rounded, color: Colors.red),
+                    label: const Text("Reject",
+                        style: TextStyle(
+                            color:      Colors.red,
+                            fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      side:    const BorderSide(color: Colors.red),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => approveProvider(providerId),
-                  icon:  const Icon(Icons.check_rounded,
-                      color: Colors.white),
-                  label: const Text("Approve",
-                      style: TextStyle(
-                          color:      Colors.white,
-                          fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    elevation:       0,
-                    backgroundColor: const Color(0xFF16A34A),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => approveProvider(providerId),
+                    icon:  const Icon(Icons.check_rounded,
+                        color: Colors.white),
+                    label: const Text("Approve",
+                        style: TextStyle(
+                            color:      Colors.white,
+                            fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      elevation:       0,
+                      backgroundColor: const Color(0xFF16A34A),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );

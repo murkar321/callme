@@ -286,6 +286,37 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   int            get _cartTotal =>
       _cartItems.fold(0, (sum, item) => sum + item.price * (item.quantity));
 
+  // =====================================================
+  // NEW — CLEAR CART AFTER BOOKING
+  //
+  // `widget.cart` is expected to be the SAME live `List<CartItem>`
+  // instance the caller (e.g. CartPage) holds — the standard pattern for
+  // passing a mutable cart down to a booking page in this codebase.
+  // Calling `.clear()` on it empties it wherever else that same list is
+  // referenced (CartPage's badge count, its item list, etc.) without
+  // needing a global cart singleton.
+  //
+  // This intentionally does NOT run right after a successful _save() —
+  // the success screen (_buildSuccessView) still reads _cartItems to
+  // show what was ordered, and clearing immediately would blank that
+  // summary out from under the user. Instead it runs here, in
+  // _goHome(), which only fires when the user taps "Done" and is
+  // actually leaving the success screen — the natural point at which
+  // "this cart's job is finished."
+  //
+  // ⚠️ If cart.dart instead exposes a separate global store (e.g. a
+  // `CartManager`/`Cart` singleton) rather than handing this page the
+  // live list directly, replace the line below with that singleton's
+  // own clear call (e.g. `CartManager.instance.clear();`) — I don't have
+  // cart.dart's contents, so I can't see which pattern your app uses.
+  // =====================================================
+  void _clearCartAfterBooking() {
+    if (widget.cart != null && widget.cart!.isNotEmpty) {
+      widget.cart!.clear();
+      debugPrint('[Civil] Cart cleared after booking (Done tapped).');
+    }
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -943,6 +974,11 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   }
 
   void _goHome() {
+    // NEW: cart is emptied right here — the user has seen their order
+    // summary on the success screen and is now navigating away, so this
+    // is the correct point to consider the cart "used up."
+    _clearCartAfterBooking();
+
     final user = FirebaseAuth.instance.currentUser;
     Navigator.pushAndRemoveUntil(
       context,
@@ -1035,7 +1071,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         providerId:    _providerId!,
         providerName:  _providerName ?? '',
         visitType:     'Site Visit',
-        isEnquiry:     true,
+        isEnquiry:     true, itemBreakdown: [],
       );
 
       if (!mounted) return;

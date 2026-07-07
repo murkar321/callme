@@ -842,7 +842,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         visitType:     _visitType,
         providerId:    _providerId!,
         isEnquiry:     false,
-        providerName:  _providerName ?? '',
+        providerName:  _providerName ?? '', itemBreakdown: [],
       );
 
       Cart.clear('Salon');

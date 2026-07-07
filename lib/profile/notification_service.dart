@@ -34,12 +34,71 @@ class NotificationType {
   static const String providerFound = 'provider_found';
   static const String serviceCompleted = 'service_completed';
 
-  // FIX: NEW — matches OrderService.NotificationType.orderTakenByOther
-  // in order_service.dart. Needed here too because notification_page.dart
+  // Matches OrderService.NotificationType.orderTakenByOther in
+  // order_service.dart. Needed here too because notification_page.dart
   // imports NotificationType from THIS file (not order_service.dart), so
   // without this constant the page can't render the "taken" notice with
   // its own icon/color and would fall through to the generic default.
   static const String orderTakenByOther = 'order_taken_by_other';
+
+  // Matches OrderService.NotificationType.userCancelled in
+  // order_service.dart. Single source of truth lives in both places with
+  // the same string value ('user_cancelled').
+  static const String userCancelled = 'user_cancelled';
+}
+
+// ============================================================
+// REAL DEDUPE CACHE
+//
+// First caller to present a given key within the window gets to fire;
+// any other caller with the same key inside the window is skipped. It
+// lives in the main isolate, so it correctly dedupes the two paths that
+// actually race each other in practice — the dashboard's instant local
+// alert and `_listenForeground()`'s FCM handling — since both run in the
+// same (foreground) isolate.
+//
+// NOTE: `firebaseMessagingBackgroundHandler` runs in a separate,
+// short-lived background isolate that does NOT share this in-memory
+// cache. In practice this isn't a real-world duplicate risk: the
+// dashboard's local alert only ever fires while the app is in the
+// foreground, and the background handler only ever fires while the app
+// is backgrounded / terminated — the two conditions are mutually
+// exclusive.
+// ============================================================
+class _NotifDedupe {
+  static final Map<String, DateTime> _fired = {};
+  static const Duration _window = Duration(seconds: 45);
+
+  /// Returns true if this key has NOT fired recently (i.e. it's safe to
+  /// show a notification for it now) and claims the key. Returns false
+  /// if something already fired for this exact key inside the window —
+  /// caller should skip showing anything.
+  ///
+  /// An empty key always returns true (no dedupe requested/possible).
+  static bool claim(String key) {
+    if (key.isEmpty) return true;
+    final now = DateTime.now();
+    // Sweep out stale entries so this map never grows unbounded.
+    _fired.removeWhere((_, t) => now.difference(t) > _window);
+    if (_fired.containsKey(key)) {
+      debugPrint('[NOTIF-DEDUPE] SKIP duplicate ring for key="$key"');
+      return false;
+    }
+    _fired[key] = now;
+    return true;
+  }
+}
+
+/// Builds a stable dedupe key from FCM/local-alert data payloads.
+/// Format: "<type>:order:<orderId>" — matches the key format
+/// business_dashboard_page.dart already builds for its instant local
+/// alerts (`'new_booking:order:${doc.id}'`), so both paths agree on the
+/// same identity for the same event.
+String _dedupeKeyFromData(Map<String, dynamic> data) {
+  final type = (data['type'] ?? '').toString().trim();
+  final orderId = (data['orderId'] ?? '').toString().trim();
+  if (type.isEmpty || orderId.isEmpty) return '';
+  return '$type:order:$orderId';
 }
 
 // Shared plugin instance
@@ -63,7 +122,6 @@ void _onTapBackground(NotificationResponse response) {
   }
 }
 
-// a data-only message) — it no longer touches Firestore.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
@@ -79,6 +137,14 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       '[FCM-BG]   notification: ${message.notification?.title} / ${message.notification?.body}');
   debugPrint('[FCM-BG]   data: ${message.data}');
 
+  // NOTE: this only fires our own local notification when the message is
+  // DATA-ONLY (no top-level `notification` block). This is intentional —
+  // see functions_index.js's comment on why the Cloud Function must send
+  // data-only messages. If your Cloud Function (or whatever sends the
+  // actual push) ever sends a `notification` block instead, Android will
+  // auto-display it via its own default channel/sound and this branch
+  // will correctly be skipped (avoiding a double-notification), but you
+  // will lose your custom channel/sound/vibration for that message.
   if (message.notification == null && message.data.isNotEmpty) {
     await _showLocalNotificationStandalone(
       id: _uniqueNotifId(),
@@ -295,7 +361,9 @@ class NotificationService {
     }
   }
 
-  // exists the moment the action occurred, regardless of push delivery.
+  // Every foreground FCM message goes through the same dedupe gate as
+  // the dashboard's instant local alert (see `_NotifDedupe` above), keyed
+  // off `type` + `orderId` in the message data.
   void _listenForeground() {
     FirebaseMessaging.onMessage.listen(
       (RemoteMessage message) async {
@@ -303,6 +371,12 @@ class NotificationService {
         debugPrint(
             '[FCM-FG]   notification: ${message.notification?.title} / ${message.notification?.body}');
         debugPrint('[FCM-FG]   data: ${message.data}');
+
+        final dedupeKey = _dedupeKeyFromData(message.data);
+        if (!_NotifDedupe.claim(dedupeKey)) {
+          debugPrint('[FCM-FG] skipped ring — already fired for key="$dedupeKey"');
+          return;
+        }
 
         final notif = message.notification;
         final title =
@@ -317,6 +391,7 @@ class NotificationService {
           debugPrint('  id        : $id');
           debugPrint('  title     : $title');
           debugPrint('  body      : $body');
+          debugPrint('  dedupeKey : $dedupeKey');
           debugPrint('=================================');
         }
 
@@ -378,22 +453,6 @@ class NotificationService {
     );
   }
 
-  // ── FIX: CRITICAL BUG — this used to save the token ONLY under
-  // `users/{email}`. But OrderService.notifyUser() (order_service.dart)
-  // reads the token back with `users.doc(userId)` where `userId` is the
-  // Firebase Auth UID, NOT the email. Those are two different document
-  // IDs, so every single lookup by uid found nothing, `fcmToken` came
-  // back empty, and notifyUser() silently skipped writing an
-  // `fcm_queue` entry for the customer — every single time. That is
-  // the exact reason customers never rang / were never notified when a
-  // provider accepted, rejected, or completed their order: the token
-  // was never actually saved where the read path was looking for it.
-  //
-  // Fix: write (and later clear) the token under BOTH `users/{uid}`
-  // (what order_service.dart actually reads) AND `users/{email}` (kept
-  // for back-compat, in case something else in the app already reads
-  // by email). Both docs are merged, so this never overwrites other
-  // fields already on either doc.
   Future<void> _writeToken(String token) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -417,8 +476,7 @@ class NotificationService {
     debugPrint('[FCM] Token saved -> users/$uid (primary, uid-keyed)');
 
     // BACK-COMPAT MIRROR: doc(email) — kept so any older code path
-    // that still reads by email keeps working. Safe no-op duplication
-    // if nothing reads this anymore.
+    // that still reads by email keeps working.
     final email = user.email;
     if (email != null && email.isNotEmpty) {
       await db.collection('users').doc(email).set(tokenData, SetOptions(merge: true));
@@ -464,9 +522,6 @@ class NotificationService {
 
   Future<void> refreshTokenAfterLogin() => _saveToken();
 
-  // ── FIX: clear the token from BOTH doc locations on logout, mirroring
-  // the dual-write above — otherwise a stale token would keep living
-  // under users/{uid} (or users/{email}) after logout.
   Future<void> clearTokenOnLogout() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -504,12 +559,21 @@ class NotificationService {
     debugPrint('[FCM] Token cleared on logout');
   }
 
+  // `dedupeKey` is enforced via `_NotifDedupe.claim()`. Any caller that
+  // passes the SAME key within the dedupe window will be silently
+  // skipped.
   static Future<void> showLocalAlert({
     required String title,
     required String body,
     String? payload,
+    required String dedupeKey,
   }) async {
     try {
+      if (!_NotifDedupe.claim(dedupeKey)) {
+        debugPrint('[NOTIF] showLocalAlert skipped — duplicate key="$dedupeKey"');
+        return;
+      }
+
       await NotificationService().initialize();
 
       final id = _uniqueNotifId();
@@ -520,6 +584,7 @@ class NotificationService {
         debugPrint('  id        : $id');
         debugPrint('  title     : $title');
         debugPrint('  body      : $body');
+        debugPrint('  dedupeKey : $dedupeKey');
         debugPrint('==================================');
       }
 
@@ -533,5 +598,38 @@ class NotificationService {
     } catch (e, st) {
       debugPrint('[NOTIF] showLocalAlert error: $e\n$st');
     }
+  }
+
+  // ============================================================
+  // NEW — testNotification()
+  //
+  // Fires a real local notification through the exact same channel,
+  // sound, and details as every other notification in this file, with
+  // NO Firestore/FCM involved at all. Call this from a debug button
+  // anywhere in the app (e.g. a hidden long-press on the app bar) to
+  // isolate the problem:
+  //
+  //   - If this rings  -> local notifications + channel + sound file are
+  //                        all fine. The problem is upstream: either the
+  //                        Cloud Function isn't deployed/working, the
+  //                        provider has no fcmToken saved, or Firestore
+  //                        rules are rejecting the fcm_queue write.
+  //   - If this DOESN'T ring -> the problem is on-device: check
+  //                        POST_NOTIFICATIONS permission, that
+  //                        notification_sound.mp3/.wav actually exists
+  //                        under android/app/src/main/res/raw/, and that
+  //                        the app isn't battery-restricted by the OS.
+  // ============================================================
+  static Future<void> testNotification() async {
+    await NotificationService().initialize();
+    await _sharedPlugin.show(
+      _uniqueNotifId(),
+      '🔔 Test Notification',
+      'If you can see and hear this, local notifications are working '
+          'correctly. Any missing ring elsewhere is happening upstream '
+          '(Cloud Function / fcmToken / Firestore rules), not here.',
+      _buildDetails(body: 'Local notification test'),
+    );
+    debugPrint('[NOTIF] testNotification() fired.');
   }
 }

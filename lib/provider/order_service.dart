@@ -383,7 +383,7 @@ class OrderService {
 
     // Legacy positional params kept for call-site compat
     String providerName = '',
-    Object? providerUserId,
+    Object? providerUserId, required List<Map<String, dynamic>> itemBreakdown,
   }) async {
     final hasCategory = category != null && category.trim().isNotEmpty;
 

@@ -99,47 +99,13 @@ class _Terms {
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
-//
-// FIX: _norm() used to keep its own private copy of the
-// space/hyphen/underscore-stripping regex. order_service.dart
-// already exposes the exact same logic as normalizeServiceType() —
-// having two independent copies is exactly the kind of drift that
-// caused the earlier category-matching bugs (one file's regex
-// silently diverging from the other's). _norm() now just delegates,
-// so there is only ever ONE definition of "normalized" in the app.
+
 // ═══════════════════════════════════════════════════════════════
 String _norm(String s) => normalizeServiceType(s);
 
 bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 
-// ─────────────────────────────────────────────────────────────
-// CATEGORY MATCH
-//
-// This also accepts `providerSubCats` and forwards it to
-// categoryMatchFuzzy() exactly like order_service.dart's
-// _notifyMatchingProviders() does. A provider who is registered
-// ONLY under `subCategories[]` (no matching main category) will
-// still see the order here — the same merged-pool pipeline is used
-// on both the "who gets notified" side and the "what do I see" side.
-//
-// NOTE: categoryMatchFuzzy() itself is STRICT/EXACT ONLY (see
-// order_service.dart) — it does not do fuzzy word-overlap matching
-// across categories. "Hair Styling" will never match a provider
-// registered only under "Hair Treatments". The only thing "fuzzy"
-// about this pipeline is that it checks the provider's categories[]
-// AND subCategories[] pool — both of which the provider explicitly
-// selected themselves — not that it guesses based on shared words.
-//
-// FIX: categoryMatchFuzzy() / categoryMatch() (in order_service.dart)
-// now FAILS CLOSED when a provider has NO categories/subCategories
-// registered at all, instead of the old fail-OPEN behavior that
-// silently matched such a provider against every order in their
-// vertical. That single shared-function fix is what stops
-// "providers who never selected this service still getting
-// notified" — see the comment on categoryMatch() in
-// order_service.dart for the full explanation. Nothing in THIS file
-// needed to change for that part; it was already delegating to the
-// shared function correctly.
+
 // ─────────────────────────────────────────────────────────────
 bool _categoryMatch(
   Map<String, dynamic> orderData,
@@ -155,36 +121,6 @@ bool _categoryMatch(
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// AVAILABILITY CHECK — single source of truth.
-//
-// Returns WHY an order is unavailable (or null if it's available).
-// `_isAvailable()` below is a thin bool wrapper around it, and
-// `_AvailTab._buildSkipSummary()` uses these reason strings to log a
-// breakdown to the debug console only — the provider's dashboard UI
-// itself just shows a clean "No Available X" message.
-//
-// This is also the ONE function that decides FCFS visibility: once
-// any provider accepts an order (isAssigned=true, providerUserId set
-// to someone else), every OTHER provider's live listener re-runs this
-// check and the order disappears from their Available tab in
-// real time — no polling, no manual refresh needed.
-//
-// ─────────────────────────────────────────────────────────────
-// FIX (PRIOR REVISION): MULTI-PROFILE-PER-LOGIN ISOLATION.
-//
-// One Firebase Auth account (`userId`) can own MULTIPLE provider
-// profiles across different verticals — e.g. the same login
-// registered both a Salon business (providerId="SAL-118697") AND a
-// Resort/Civil business (providerId="RES-457227"). Firestore's
-// `providerUserId` field on an order only ever stores the Auth UID,
-// which is IDENTICAL for both of that person's dashboards.
-//
-// Every ownership check in this file compares the order's
-// `providerId` (the specific business profile) against
-// `myProviderId` (this dashboard instance's own providerId) — NOT
-// just `providerUserId` — so a login with multiple business
-// profiles can never leak an order between them.
 // ─────────────────────────────────────────────────────────────
 String? _unavailableReason({
   required Map<String, dynamic> data,
@@ -224,52 +160,13 @@ String? _unavailableReason({
         : 'Already assigned to another provider';
   }
 
-  // ── DIRECT-ASSIGNMENT BYPASS ─────────────────────────────────
-  // Customer explicitly picked THIS exact provider profile at
-  // booking time. Still "pending"/"enquiry" (not yet accepted) →
-  // always show it to the assigned provider profile, skip
-  // service-type/category checks entirely. Once they Accept, status
-  // flips to "accepted" and it moves to the "My" tab via _isMine()
-  // instead.
-  //
-  // FIX (CRITICAL): this used to only bypass when
-  // `status == OrderStatus.pending`. But EnquiryPage submits with
-  // `isEnquiry: true`, which makes placeOrder() write
-  // `status: OrderStatus.enquiry` (NOT "pending"), while still
-  // correctly setting isAssigned=true + providerId/providerUserId to
-  // the exact provider that _findMatchingProvider() picked for the
-  // enquiry. Because "enquiry" wasn't included in this check, every
-  // direct-assigned ENQUIRY fell straight through to the
-  // service-type/category checks further below — and if that
-  // provider had been chosen as a same-service-type fallback (NOT an
-  // exact category/subCategory match — see
-  // EnquiryPage._findMatchingProvider()'s final
-  // `return candidates.first.id;` fallback), the category check
-  // failed CLOSED and the enquiry became invisible EVERYWHERE: not
-  // "available" (category mismatch) and not "mine" either (status
-  // isn't accepted/completed/cancelled yet, see _isMine() below). It
-  // just silently vanished for the exact provider it was assigned
-  // to, even though Firestore had it correctly assigned the whole
-  // time. This is what produced dashboards showing "No Available
-  // Enquiries" while dozens of enquiries sat unreachable in
-  // Firestore.
-  //
-  // Fix: bypass for BOTH pending and enquiry status. A direct
-  // assignment already represents an intentional routing decision —
-  // it should never be re-litigated against category rules once the
+
   // order/enquiry has been targeted at this exact provider profile.
   final bool isDirectAssignmentToMe = assignedToMe &&
       (status == OrderStatus.pending || status == OrderStatus.enquiry);
   if (isDirectAssignmentToMe) {
     return null; // available — no further checks needed
   }
-
-  // ── Open-status check ───────────────────────────────────────
-  // Any order with a provider attached, whether that's this
-  // provider or another one, is no longer "available" — the
-  // 'accepted' branch below only reopens an order when it is
-  // genuinely ORPHANED data (status says accepted but no provider
-  // is actually attached — a data inconsistency, not a real
   // assignment).
   final bool isOrphanedAccept =
       status == OrderStatus.accepted && provUid.isEmpty;
@@ -297,17 +194,7 @@ String? _unavailableReason({
     return 'Service type mismatch: order="$orderSvc" vs your profile="$svcNorm"';
   }
 
-  // ── Category match ───────────────────────────────────────────
-  // EXACT ONLY (see categoryMatchFuzzy() / categoryMatch() in
-  // order_service.dart), run against the MERGED categories +
-  // subCategories pool. No fuzzy word-overlap: a provider under
-  // "Hair Treatments" will never match an order categorized as
-  // "Hair Styling" just because both contain the word "hair".
-  //
-  // FIX: as of the categoryMatch() patch in order_service.dart, a
-  // provider with an EMPTY categories+subCategories pool now fails
-  // this check (returns false) instead of auto-matching everything.
-  // If you land here and providerCats/providerSubCats are both
+  
   // empty, that IS the mismatch reason — the message below already
   // makes that visible via `mergedCats` being `[]`.
   if (!_categoryMatch(data, providerCats, providerSubCats: providerSubCats)) {
@@ -466,22 +353,7 @@ class _BDPState extends State<BusinessDashboardPage> {
 
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _providerSnap;
 
-  // ─────────────────────────────────────────────────────────────
-  // ORDERS STREAM — SINGLE SOURCE OF TRUTH
-  //
-  // One query, single orderBy field (`createdAt`) → no composite
-  // index required, ever. Everything else (isAssigned, status,
-  // service type, category, AND provider profile) is filtered
-  // client-side. Both tabs share this one stream/result set, and any
-  // error is surfaced immediately instead of being swallowed.
-  //
-  // NOTE: because this query reads the WHOLE `orders` collection
-  // (filtering happens client-side), your Firestore Security Rules
-  // must allow an authenticated user to READ the `orders` collection
-  // with NO per-document field conditions. Real access control lives
-  // in the app instead: the accept() transaction below guards
-  // isAssigned/providerUserId/providerId, and category/service-type/
-  // provider-profile matching decides what's ever shown.
+
   // ─────────────────────────────────────────────────────────────
   Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream =
       const Stream.empty();
@@ -491,32 +363,7 @@ class _BDPState extends State<BusinessDashboardPage> {
 
   ScaffoldMessengerState? _messenger;
 
-  // ─────────────────────────────────────────────────────────────
-  // FIX: INSTANT NEW-ORDER ALERT.
-  //
-  // This is a SECOND, best-effort delivery path on top of the
-  // server-side push: while THIS dashboard instance is open and
-  // listening to the live `orders` stream, the instant a NEW order
-  // shows up that matches this provider (and wasn't already known
-  // from the first load), we fire a local sound+vibration alert
-  // directly — no round trip needed.
-  //
-  // IMPORTANT: this is purely a local, on-device heads-up. It does
-  // NOT write anything to Firestore. The actual `notifications`
-  // collection doc (the one NotificationPage reads, and the one that
-  // triggers a real push via `fcm_queue`) is written once, at order
-  // creation time, by OrderService._notifyMatchingProviders() in
-  // order_service.dart — using the exact same categoryMatchFuzzy()
-  // pipeline as `_isAvailable()` below. As long as both stay in sync
-  // (see the note on categoryMatchFuzzy() in order_service.dart),
-  // "shows up locally" and "has a saved notification" will always
-  // agree. Do NOT add a second Firestore write here — that would
-  // create duplicate notification docs for orders that already got
-  // one at creation time.
-  //
-  // `_isFirstOrdersLoad` prevents falsely "alerting" on every order
-  // that already existed when the dashboard was opened; only orders
-  // that arrive AFTER that first snapshot trigger a notification.
+
   // ─────────────────────────────────────────────────────────────
   final Set<String> _knownAvailableOrderIds = {};
   bool _isFirstOrdersLoad = true;
@@ -621,16 +468,6 @@ class _BDPState extends State<BusinessDashboardPage> {
         duration: const Duration(seconds: 3),
       ));
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // FIX: called once per orders-stream emission with the set of
-  // orders that are currently AVAILABLE to this provider (already
-  // category/service/status/profile filtered via _isAvailable()).
-  // Diffs against what we saw last time and fires a local alert for
-  // anything genuinely new.
-  //
-  // Safe to call on every rebuild: if nothing changed since last
-  // time, `newIds` is empty and this is a no-op.
   // ─────────────────────────────────────────────────────────────
   void _checkForNewOrders(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> availableDocs,
@@ -659,6 +496,11 @@ class _BDPState extends State<BusinessDashboardPage> {
           body: '${custName.isEmpty ? "A customer" : custName} has a new '
               '${widget.serviceType} $label waiting — first to accept gets it.',
           payload: jsonEncode({'type': 'new_booking', 'orderId': doc.id}),
+          // Shares the ring-dedupe claim with notification_service.dart's
+          // _listenForeground() so this order can only ring once on this
+          // device, whichever channel (real FCM push vs. this instant
+          // local alert) happens to fire first.
+          dedupeKey: 'new_booking:order:${doc.id}',
         );
       }
     }
@@ -668,13 +510,7 @@ class _BDPState extends State<BusinessDashboardPage> {
       ..addAll(currentIds);
   }
 
-  // ─── Firestore actions ────────────────────────────────────────
-
-  // FIX: the accept transaction now also checks that an order which
-  // is already assigned to "me" (by UID) is assigned to THIS exact
-  // provider profile too — so a Salon dashboard can never be used to
-  // accidentally accept an order that a Resort profile under the same
-  // login was directly assigned.
+ 
   Future<void> _accept(String id, Map<String, dynamic> data) async {
     if (_uid.isEmpty) {
       _snack('Session error — please restart the app.', _C.red, Icons.error_outline);
@@ -738,14 +574,6 @@ class _BDPState extends State<BusinessDashboardPage> {
         '${widget.businessName} accepted your ${widget.serviceType} booking.',
         NotificationType.bookingAccepted);
 
-      // FIX: NEW — tell every OTHER matching provider this job is gone.
-      // Runs the same categoryMatchFuzzy() candidate pool used everywhere
-      // else in order_service.dart, excludes THIS provider, and sends a
-      // real push (fcm_queue + notifications doc) so it rings on/off-
-      // screen instead of the order just silently disappearing from
-      // their Available tab while the old "new order" notification
-      // stays in their list looking still-open — the exact confusion
-      // reported ("message stays and provider get confuse").
       OrderService.notifyOthersOrderTaken(
         orderId:                id,
         serviceType:            _svcNorm,
@@ -960,26 +788,11 @@ class _BDPState extends State<BusinessDashboardPage> {
           final business = (prov['business'] as Map?)?.cast<String, dynamic>() ?? {};
           final photoUrl = (business['image'] ?? '').toString().trim();
 
-          // ── Read BOTH `categories` (main) and `subCategories`
-          // (specific) off the provider doc via order_service.dart's
-          // shared helpers — the exact same helpers
-          // _notifyMatchingProviders() uses for push notifications.
-          //
-          // Because this comes from a live `snapshots()` listener on
-          // the provider's own doc, editing categories in
-          // ProviderProfilePage / registration-edit flow updates
-          // `mainCats` / `subCats` here IMMEDIATELY — no re-login or
-          // manual refresh needed — and every order in `_ordersStream`
-          // is re-filtered against the new list on the next rebuild.
+         
           final mainCats    = providerCategories(prov);
           final subCats     = providerSubCategories(prov);
           final displayCats = providerCategoryPool(mainCats, subCats);
 
-          // ── NEW — surfaced directly in the header when a provider
-          // has registered zero categories. Since categoryMatch() now
-          // fails closed on an empty pool (see order_service.dart),
-          // such a provider will see NOTHING in Available until they
-          // fix this — so tell them plainly instead of a silent
           // empty list.
           final hasNoCategoriesRegistered = displayCats.isEmpty;
 
@@ -1193,17 +1006,6 @@ class _AvailTab extends StatelessWidget {
   }
 
   // ── Builds a grouped, frequency-sorted diagnostic summary of why
-  // every order currently in `allDocs` is being skipped for this
-  // provider. Sent ONLY to debugPrint() — never shown to the user.
-  //
-  // FIX: reworded the summary line. It used to always say "0 match
-  // your categories" even when the actual skip reasons had nothing to
-  // do with categories at all (e.g. "already accepted", "assigned to
-  // another provider", "completed") — which made this actively
-  // misleading when the real bug was elsewhere (see the direct-
-  // assignment bypass fix above). Now it just states the plain fact —
-  // none are currently available — and lets the itemized reasons
-  // below speak for themselves.
   void _buildSkipSummary() {
     if (allDocs.isEmpty) {
       debugPrint('[avail] No $serviceType ${terms.singular.toLowerCase()}s exist yet.');
@@ -1446,11 +1248,7 @@ class _CardState extends State<_Card> {
     return 0;
   }
 
-  // ── FIX: payment method + paid/unpaid status — now reads from
-  // several possible field shapes (not just `payment.method`), and
-  // recognizes offline/COD-style methods as a DISTINCT state instead
-  // of lumping them in with "payment pending", since being unpaid at
-  // booking time is expected/normal for those, not a warning sign.
+
   Map<String, dynamic> _payment() {
     final p = widget.data['payment'];
     return p is Map ? p.cast<String, dynamic>() : <String, dynamic>{};

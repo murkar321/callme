@@ -169,15 +169,35 @@ class _BookingPageState extends State<BookingPage>
   // `_cleanItemName()` strips a trailing " (Something)" annotation so
   // category resolution runs against the plain base product name, while
   // the fabric-annotated original text is still shown to the customer
-  // (in the summary card) and to the provider (via `_autoItemsNote()`
-  // below) — nothing about what the customer picked is lost, it's just
-  // no longer allowed to break provider matching.
+  // (in the summary card) and to the provider (via `_itemBreakdown` /
+  // `_autoItemsNote` below) — nothing about what the customer picked is
+  // lost, it's just no longer allowed to break provider matching.
   // ─────────────────────────────────────────────────────────────────────────
 
   String _cleanItemName(String rawName) {
     final match = RegExp(r'^(.*?)\s*\([^()]*\)\s*$').firstMatch(rawName.trim());
     final cleaned = match?.group(1)?.trim() ?? '';
     return cleaned.isNotEmpty ? cleaned : rawName.trim();
+  }
+
+  // FIX: NEW — like `_cleanItemName()` but returns BOTH pieces instead of
+  // discarding the fabric/variant annotation. Used to build a structured,
+  // human-readable breakdown (see `_itemBreakdown` below) instead of the
+  // collapsed, matching-only name that used to be all providers/admins
+  // could see (which made "Washing (Wool)" and "Washing (Denim)" both
+  // render as indistinguishable "Washing" chips on their dashboards).
+  ({String base, String? variant}) _splitItemName(String rawName) {
+    final match =
+        RegExp(r'^(.*?)\s*\(([^()]*)\)\s*$').firstMatch(rawName.trim());
+    if (match == null) {
+      return (base: rawName.trim(), variant: null);
+    }
+    final base = match.group(1)?.trim();
+    final variant = match.group(2)?.trim();
+    return (
+      base: (base != null && base.isNotEmpty) ? base : rawName.trim(),
+      variant: (variant != null && variant.isNotEmpty) ? variant : null,
+    );
   }
 
   String get _normalizedServiceType => widget.serviceName.trim().toLowerCase();
@@ -351,27 +371,56 @@ class _BookingPageState extends State<BookingPage>
   /// Clean, matchable names used ONLY for provider category resolution
   /// (sent as the order's `services` field). See `_cleanItemName()` for
   /// why the fabric annotation is stripped here — the full fabric detail
-  /// is never lost, it's preserved for humans in `_autoItemsNote()` and
-  /// in the on-screen summary card, which both use the raw cart item
-  /// name directly.
+  /// is never lost, it's preserved for humans in `_itemBreakdown` /
+  /// `_autoItemsNote` below and in the on-screen summary card, which both
+  /// use the raw cart item name directly.
   List<String> get _servicesForOrder => _isCart
       ? _cartItems.map((e) => _cleanItemName(e.name)).toList()
       : [widget.product?.name ?? widget.serviceName];
 
-  /// FIX: NEW — a human-readable line listing every cart item with its
-  /// full fabric annotation and quantity, e.g.
-  /// "Items: Shirt (Cotton) x2, Trousers (Denim) x1". This is prepended
-  /// to the booking note so the fabric/quantity choice from the popup is
+  /// FIX: NEW — a structured, per-item breakdown (base service name +
+  /// variant/fabric + quantity) sent to `OrderService.placeOrder()` as
+  /// `itemBreakdown`. This is saved to Firestore purely for DISPLAY on
+  /// the provider/admin dashboards, completely separate from the
+  /// cleaned/canonical `services` field used for matching. This is what
+  /// actually fixes "Washing, Washing" showing up with no way to tell
+  /// which fabric is which — the provider dashboard can now render
+  /// "Washing: 1 Wool, 1 Denim" using this exact structure.
+  List<Map<String, dynamic>> get _itemBreakdown {
+    if (!_isCart || _cartItems.isEmpty) return [];
+    return _cartItems.map((item) {
+      final split = _splitItemName(item.name);
+      return <String, dynamic>{
+        'service':     split.base,
+        'variant':     split.variant ?? '',
+        'quantity':    item.quantity,
+        'displayName': item.name,
+      };
+    }).toList();
+  }
+
+  /// FIX: NEW — a human-readable line grouping every cart item by its
+  /// base service name with each variant/fabric + quantity listed under
+  /// it, e.g. "Washing: 1 Wool, 1 Denim". This is prepended to the
+  /// booking note so the fabric/quantity choice from the popup is
   /// GUARANTEED visible on the provider's dashboard card (which renders
   /// the note prominently) — regardless of how category matching turns
-  /// out. This is what was actually missing before: the fabric choice
-  /// only ever lived in the cart item's `name`, which was never surfaced
-  /// anywhere the provider could see it.
+  /// out, and regardless of whether the admin/provider UI has been
+  /// updated yet to read the new `itemBreakdown` field directly.
   String get _autoItemsNote {
     if (!_isCart || _cartItems.isEmpty) return '';
-    final lines = _cartItems
-        .map((e) => '${e.name} x${e.quantity}')
-        .join(', ');
+
+    final grouped = <String, List<String>>{};
+    for (final item in _cartItems) {
+      final split = _splitItemName(item.name);
+      final label = split.variant != null
+          ? '${item.quantity} ${split.variant}'
+          : '${item.quantity} pc${item.quantity == 1 ? '' : 's'}';
+      grouped.putIfAbsent(split.base, () => []).add(label);
+    }
+
+    final lines =
+        grouped.entries.map((e) => '${e.key}: ${e.value.join(', ')}').join(' | ');
     return 'Items: $lines';
   }
 
@@ -1084,6 +1133,11 @@ class _BookingPageState extends State<BookingPage>
         // in order_service.dart).
         category:      _category,
         subCategory:   _subCategory,
+
+        // FIX: NEW — structured, un-collapsed item breakdown so the
+        // provider/admin dashboards can render "Washing: 1 Wool, 1
+        // Denim" instead of two indistinguishable "Washing" chips.
+        itemBreakdown: _itemBreakdown,
 
         // THE KEY FIX: only pin a provider when the caller explicitly
         // chose one. Otherwise omit providerId so placeOrder() fans out

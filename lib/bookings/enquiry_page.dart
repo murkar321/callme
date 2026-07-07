@@ -354,7 +354,7 @@ class _EnquiryPageState extends State<EnquiryPage>
         totalAmount:   0,
         isEnquiry:     true,
         providerId:    _providerId!,
-        providerName:  'service provider',
+        providerName:  'service provider', itemBreakdown: [],
       );
 
       if (_hasCart) Cart.clear(widget.serviceName);

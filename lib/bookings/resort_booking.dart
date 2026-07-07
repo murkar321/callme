@@ -1092,7 +1092,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
         // preview search happened to land on.
         providerId: _isPinnedProvider ? _providerId : null,
         providerName: _isPinnedProvider ? (_providerName ?? '') : '',
-        isEnquiry: false,
+        isEnquiry: false, itemBreakdown: [],
       );
 
       if (!mounted) return;

@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "240198181802-gegjevoh3t3p9e37pgmhmfb6oujkdono.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.allinone.callme",
+            "certificate_hash": "5a58259354145a46db349c5dfd9e194d5c38c546"
+          }
+        },
+        {
           "client_id": "240198181802-9tj0u2c598el4c8b6f85qv2t092t9tbp.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -42,7 +50,7 @@
               "client_id": "240198181802-ac1782sljh2r2sfi1en01u8255skl6pj.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.allinone.callme"
+                "bundle_id": "com.example.callme"
               }
             }
           ]

@@ -170,13 +170,23 @@ class _NotificationPageState extends State<NotificationPage> {
         return (icon: Icons.block_outlined, color: Colors.red);
       case NotificationType.serviceCompleted:
         return (icon: Icons.task_alt_outlined, color: Colors.teal);
-      // FIX: NEW — "this job was accepted by another provider" notice.
-      // Distinct grey/timer-off look so it visually reads as "no action
-      // needed" rather than falling into the generic indigo-bell
-      // default, which would make it look like a fresh, actionable
-      // alert.
+      // "This job was accepted by another provider" notice. Distinct
+      // grey/timer-off look so it visually reads as "no action needed"
+      // rather than falling into the generic indigo-bell default, which
+      // would make it look like a fresh, actionable alert.
       case NotificationType.orderTakenByOther:
         return (icon: Icons.timer_off_outlined, color: Colors.grey);
+      // FIX: NEW — was previously undefined in this switch (the constant
+      // lived only in order_service.dart's NotificationType class, which
+      // this page deliberately doesn't import to avoid the ambiguous-
+      // import problem documented in business_dashboard_page.dart). Every
+      // "user cancelled their booking" notification to a provider was
+      // silently falling through to the generic default icon/color.
+      case NotificationType.userCancelled:
+        return (icon: Icons.event_busy_outlined, color: Colors.deepOrange);
+      // FIX: NEW — same gap as above; also had no case here.
+      case NotificationType.providerFound:
+        return (icon: Icons.person_search_outlined, color: Colors.indigo);
       default:
         return (
           icon: Icons.notifications_active_outlined,
@@ -284,8 +294,8 @@ class _NotificationPageState extends State<NotificationPage> {
               final isRead = data['read'] == true;
               final style  = _style(data['type'] as String?);
 
-              // ✅ Show which business/service this notification is about,
-              // when the doc carries it (approvals now stamp this on).
+              // Show which business/service this notification is about,
+              // when the doc carries it.
               final businessName = (data['businessName'] ?? '').toString().trim();
               final serviceType  = (data['serviceType'] ?? '').toString().trim();
               final hasServiceInfo = businessName.isNotEmpty || serviceType.isNotEmpty;
@@ -393,7 +403,7 @@ class _NotificationPageState extends State<NotificationPage> {
     );
   }
 
-  // ✅ Small chip used to surface which service/business a notification
+  // Small chip used to surface which service/business a notification
   // (booking, approval, rejection) relates to.
   Widget _serviceChip(IconData icon, String label) {
     return Container(

@@ -238,45 +238,64 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
       statusBarIconBrightness: Brightness.light,
     ));
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F5FB),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _ordersStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && _allDocs.isEmpty) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
-          }
-          if (snapshot.hasError) {
-            return _errorState(snapshot.error.toString());
-          }
+    // ── FIX: BOTTOM OVERFLOW ROOT CAUSE ──────────────────────────────────
+    // The service-filter and status-filter chip rows below live inside
+    // fixed-height SizedBoxes. On devices with a larger system font scale
+    // (accessibility "Large text" setting, or certain OEM display-size
+    // presets — the same class of device-specific quirk we saw with MIUI
+    // notification channels), the text inside those chips renders taller
+    // than the fixed box allows, and Flutter throws a
+    // "RenderFlex overflowed by X pixels on the bottom" error/yellow strip.
+    //
+    // Fix: clamp the effective text scale for this whole page so chip
+    // rows can never be pushed past their fixed height, regardless of the
+    // user's OS font-size setting. This is a page-level fix that never
+    // touches other screens.
+    final mq = MediaQuery.of(context);
+    final clampedScale = mq.textScaler.scale(1.0).clamp(0.85, 1.15);
 
-          if (snapshot.hasData) {
-            _syncDocs(List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
-              snapshot.data!.docs,
-            ));
-          }
+    return MediaQuery(
+      data: mq.copyWith(textScaler: TextScaler.linear(clampedScale)),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5FB),
+        body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _ordersStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting && _allDocs.isEmpty) {
+              return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+            }
+            if (snapshot.hasError) {
+              return _errorState(snapshot.error.toString());
+            }
 
-          if (_allDocs.isEmpty) return _emptyState();
+            if (snapshot.hasData) {
+              _syncDocs(List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
+                snapshot.data!.docs,
+              ));
+            }
 
-          final filtered = _filtered;
-          final svcCounts = _svcCounts;
+            if (_allDocs.isEmpty) return _emptyState();
 
-          return Column(
-            children: [
-              _buildHeader(filtered.length, svcCounts),
-              Expanded(
-                child: filtered.isEmpty
-                    ? _noMatch()
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
-                        physics: const BouncingScrollPhysics(),
-                        itemCount: filtered.length,
-                        itemBuilder: (_, i) => _orderCard(filtered[i].data(), filtered[i].id),
-                      ),
-              ),
-            ],
-          );
-        },
+            final filtered = _filtered;
+            final svcCounts = _svcCounts;
+
+            return Column(
+              children: [
+                _buildHeader(filtered.length, svcCounts),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? _noMatch()
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: filtered.length,
+                          itemBuilder: (_, i) => _orderCard(filtered[i].data(), filtered[i].id),
+                        ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -321,6 +340,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                       children: [
                         const Text(
                           'Orders Dashboard',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -330,6 +351,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                         ),
                         Text(
                           '$count ${count == 1 ? 'order' : 'orders'} shown',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white60, fontSize: 12),
                         ),
                       ],
@@ -398,8 +421,11 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
             const SizedBox(height: 12),
 
             // ── Service filter chips ──
+            // FIX: bumped height 76 -> 84 and wrapped inner Column in a
+            // FittedBox so content scales down instead of overflowing the
+            // fixed-height box on large-font devices.
             SizedBox(
-              height: 76,
+              height: 84,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -416,6 +442,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                       duration: const Duration(milliseconds: 180),
                       width: 64,
                       margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
                       decoration: BoxDecoration(
                         color: selected ? Colors.white : Colors.white.withOpacity(.14),
                         borderRadius: BorderRadius.circular(16),
@@ -423,45 +450,49 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                             ? Border.all(color: Colors.white, width: 1.5)
                             : null,
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            svc['icon'] as IconData,
-                            size: 20,
-                            color: selected ? const Color(0xFF4F46E5) : Colors.white70,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            svc['label'] as String,
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              svc['icon'] as IconData,
+                              size: 20,
                               color: selected ? const Color(0xFF4F46E5) : Colors.white70,
                             ),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (k != 'all') ...[
-                            const SizedBox(height: 3),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: selected ? const Color(0xFF4F46E5) : Colors.white.withOpacity(.22),
-                                borderRadius: BorderRadius.circular(6),
+                            const SizedBox(height: 4),
+                            Text(
+                              svc['label'] as String,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: selected ? const Color(0xFF4F46E5) : Colors.white70,
                               ),
-                              child: Text(
-                                '$cnt',
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold,
-                                  color: selected ? Colors.white : Colors.white70,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (k != 'all') ...[
+                              const SizedBox(height: 3),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: selected ? const Color(0xFF4F46E5) : Colors.white.withOpacity(.22),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '$cnt',
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                    color: selected ? Colors.white : Colors.white70,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   );
@@ -472,8 +503,10 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
             const SizedBox(height: 10),
 
             // ── Status filter chips ──
+            // FIX: bumped height 38 -> 42 and wrapped label in FittedBox for
+            // the same large-font-overflow protection as the service chips.
             SizedBox(
-              height: 38,
+              height: 42,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -492,14 +525,18 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                         color: selected ? Colors.white : Colors.white.withOpacity(.14),
                         borderRadius: BorderRadius.circular(40),
                       ),
-                      child: Text(
-                        s.toUpperCase(),
-                        style: TextStyle(
-                          color: selected
-                              ? (s == 'all' ? const Color(0xFF4F46E5) : _statusColor(s))
-                              : Colors.white70,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          s.toUpperCase(),
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: selected
+                                ? (s == 'all' ? const Color(0xFF4F46E5) : _statusColor(s))
+                                : Colors.white70,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                     ),
@@ -590,6 +627,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                     children: [
                       Text(
                         service.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
@@ -600,6 +639,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                       const SizedBox(height: 2),
                       Text(
                         userName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white70, fontSize: 13),
                       ),
                       const SizedBox(height: 8),
@@ -657,6 +698,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                           const SizedBox(height: 3),
                           Text(
                             '₹$amount',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: svcColor,
                               fontWeight: FontWeight.w800,
@@ -673,6 +716,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                         ),
                         child: Text(
                           payMethod,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: svcColor,
                             fontWeight: FontWeight.w700,
@@ -789,6 +834,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
             children: [
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       width: 34,
@@ -814,6 +860,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                     const SizedBox(height: 5),
                     Text(
                       item.$1,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 9,
                         color: Color(0xFF6B7280),
@@ -824,6 +872,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                     const SizedBox(height: 2),
                     Text(
                       item.$2,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w700,
@@ -881,6 +931,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                     children: [
                       Text(
                         item.$2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 10,
                           color: Color(0xFF9CA3AF),
@@ -923,6 +975,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
         const SizedBox(width: 8),
         Text(
           title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
@@ -945,6 +999,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
           const SizedBox(width: 4),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 9),
           ),
         ],
@@ -957,6 +1013,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 80,
@@ -981,11 +1038,14 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
           const SizedBox(height: 12),
           Text(
             'No matching orders',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Colors.grey.shade600,
               fontWeight: FontWeight.w600,
@@ -995,6 +1055,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
           const SizedBox(height: 5),
           Text(
             'Try adjusting filters or search term',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
           ),
         ],
@@ -1008,6 +1070,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.error_outline_rounded, size: 40, color: Color(0xFFDC2626)),
             const SizedBox(height: 12),

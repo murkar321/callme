@@ -233,6 +233,67 @@ class _BusinessPageState extends State<BusinessPage>
     );
   }
 
+  // =====================================================
+  // NEW — DYNAMIC ORDERING
+  //
+  // Returns businessCategories INDICES sorted with priority:
+  //   1) Categories with active orders right now (pending/accepted/
+  //      ongoing) — sorted by order count, HIGHEST first, so the
+  //      busiest / most urgent category is the very first card the
+  //      provider sees and its badge is immediately visible without
+  //      scrolling.
+  //   2) Categories the user has already registered a provider profile
+  //      for (any status — pending/approved/rejected) but with zero
+  //      active orders right now — so "my businesses" surface right
+  //      after anything actionable, ahead of categories they haven't
+  //      touched at all.
+  //   3) Everything else, in the original hardcoded order (unchanged
+  //      for guests / brand-new users — nothing shifts around for
+  //      someone who hasn't registered anywhere yet).
+  //
+  // This only reorders which index renders in which grid slot — the
+  // card widget itself (_buildCard), its data lookups, its animation,
+  // and _handleTap are all completely untouched.
+  // =====================================================
+  List<int> _sortedIndices(
+    Map<String, Map<String, dynamic>> providerMap,
+    Map<String, int> orderCountMap,
+  ) {
+    final indices = List<int>.generate(businessCategories.length, (i) => i);
+
+    int tierOf(int i) {
+      final serviceType = _getServiceType(businessCategories[i].name);
+      final hasOrders = (orderCountMap[serviceType] ?? 0) > 0;
+      final isRegistered = providerMap.containsKey(serviceType);
+      if (hasOrders) return 0; // top priority
+      if (isRegistered) return 1; // registered, but quiet right now
+      return 2; // untouched category
+    }
+
+    // Stable sort: within the same tier, original hardcoded order is
+    // preserved (Dart's List.sort is not guaranteed stable, so we
+    // decorate with the original index as a tiebreaker instead of
+    // relying on sort stability).
+    indices.sort((a, b) {
+      final tierA = tierOf(a);
+      final tierB = tierOf(b);
+      if (tierA != tierB) return tierA.compareTo(tierB);
+
+      if (tierA == 0) {
+        // Within the "has active orders" tier, busiest first.
+        final countA =
+            orderCountMap[_getServiceType(businessCategories[a].name)] ?? 0;
+        final countB =
+            orderCountMap[_getServiceType(businessCategories[b].name)] ?? 0;
+        if (countA != countB) return countB.compareTo(countA);
+      }
+
+      return a.compareTo(b); // tiebreaker — keeps original relative order
+    });
+
+    return indices;
+  }
+
   // ── Tap handler ───────────────────────────────────
   void _handleTap(
       ServiceCategoryStyle service, Map<String, dynamic>? provider) {
@@ -589,8 +650,17 @@ class _BusinessPageState extends State<BusinessPage>
                             mainAxisSpacing: 12,
                             childAspectRatio: 1.05,
                           ),
-                          itemBuilder: (_, i) =>
-                              _buildCard(i, providerMap, orderCountMap),
+                          itemBuilder: (_, gridPosition) {
+                            // NEW: `gridPosition` is where in the grid we
+                            // are rendering; `i` is which category from
+                            // businessCategories actually goes there,
+                            // resolved via the dynamic priority order.
+                            final sorted =
+                                _sortedIndices(providerMap, orderCountMap);
+                            final i = sorted[gridPosition];
+                            return _buildCard(
+                                i, gridPosition, providerMap, orderCountMap);
+                          },
                         ),
                       );
                     },
@@ -666,6 +736,11 @@ class _BusinessPageState extends State<BusinessPage>
     Map<String, int> orderCountMap,
     Size size,
   ) {
+    // Guest view (no user): providerMap/orderCountMap are always empty,
+    // so _sortedIndices() naturally falls back to the original hardcoded
+    // order — nothing changes for someone who isn't logged in yet.
+    final sorted = _sortedIndices(providerMap, orderCountMap);
+
     return SliverGrid(
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: size.width < 600 ? 2 : 3,
@@ -674,7 +749,8 @@ class _BusinessPageState extends State<BusinessPage>
         childAspectRatio: 1.05,
       ),
       delegate: SliverChildBuilderDelegate(
-        (_, i) => _buildCard(i, providerMap, orderCountMap),
+        (_, gridPosition) => _buildCard(
+            sorted[gridPosition], gridPosition, providerMap, orderCountMap),
         childCount: businessCategories.length,
       ),
     );
@@ -682,6 +758,7 @@ class _BusinessPageState extends State<BusinessPage>
 
   Widget _buildCard(
     int i,
+    int gridPosition,
     Map<String, Map<String, dynamic>> providerMap,
     Map<String, int> orderCountMap,
   ) {
@@ -691,7 +768,12 @@ class _BusinessPageState extends State<BusinessPage>
     final count = orderCountMap[serviceType] ?? 0;
     final status = provider?['status'];
 
-    final delay = i * 0.05;
+    // NOTE: the stagger-in animation delay is now keyed off
+    // `gridPosition` (where the card actually lands on screen) instead
+    // of `i` (which category it is), so cards still cascade in
+    // top-left-to-bottom-right regardless of how _sortedIndices()
+    // reordered them.
+    final delay = gridPosition * 0.05;
     final animation = CurvedAnimation(
       parent: _listController,
       curve: Interval(delay.clamp(0.0, 0.8), 1.0,
