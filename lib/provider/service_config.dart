@@ -37,7 +37,7 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "Manicure",
       "Pedicure",
       "Waxing",
-      "Mehandi",
+      
     ],
     requiredDocuments: [
       "Aadhaar Card",

@@ -184,7 +184,7 @@ const List<Resort> resorts = [
       "24-hour room service",
     ],
     timings: [
-      TimingItem(icon: Icons.login, label: "Check-in", value: "2:00 PM"),
+      TimingItem(icon: Icons.login, label: "Check-in", value: "10:00 AM"),
       TimingItem(icon: Icons.logout, label: "Check-out", value: "12:00 PM"),
       TimingItem(icon: Icons.restaurant, label: "Dining", value: "All-day multi-cuisine"),
       TimingItem(icon: Icons.pool, label: "Pool Access", value: "Daytime"),

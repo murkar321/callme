@@ -748,6 +748,30 @@ class OrderService {
   // to business_dashboard_page.dart's `_categoryMatch()` AND
   // business_page.dart's badge counter, so "got notified" / "shows up
   // in Available" / "badge count" can never disagree.
+  //
+  // ── BUG FIX (this was the source of the leak) ─────────────────────
+  // The DIRECT-ASSIGNMENT branch below (specificProviderId != null)
+  // used to notify that provider UNCONDITIONALLY, with a comment
+  // literally saying "no category check". That's the exact same class
+  // of bug that was fixed on the *display* side in
+  // business_dashboard_page.dart's `_unavailableReason()` — but it was
+  // never fixed here on the *notification* side.
+  //
+  // Net effect before this fix: because most bookings resolve to one
+  // specific provider before ever calling placeOrder() (see
+  // `initialProviderId` / `_loadProvider()` in the booking pages),
+  // nearly EVERY order counted as a "direct assignment" — so nearly
+  // every order notified its assigned provider regardless of whether
+  // it matched that provider's registered categories/subCategories.
+  // The dashboard correctly hid the order from Available, but the push
+  // + in-app notification still fired.
+  //
+  // Fix: the direct-assignment branch now runs the exact same
+  // categoryMatchFuzzy() check as the broadcast branch below before
+  // sending anything. If it doesn't match, the notification is
+  // skipped — consistent with what the provider actually sees on
+  // their dashboard.
+  // ────────────────────────────────────────────────────────────────
   // ==========================================================
   static Future<void> _notifyMatchingProviders({
     required String orderId,
@@ -763,12 +787,37 @@ class OrderService {
   }) async {
     try {
       if (specificProviderId != null && specificProviderId.isNotEmpty) {
-        // Direct assignment — notify only this provider, no category check.
+        // Direct assignment — SAME category check as the broadcast
+        // path below. No more unconditional notify.
         final doc = await _db
             .collection('providers')
             .doc(specificProviderId)
             .get();
         if (!doc.exists) return;
+
+        final provData        = doc.data() ?? {};
+        final providerCats    = providerCategories(provData);
+        final providerSubCats = providerSubCategories(provData);
+
+        final matches = categoryMatchFuzzy(
+          orderData,
+          providerCats,
+          providerSubCats: providerSubCats,
+          debugOrderId: '$orderId -> direct-assign ${doc.id}',
+        );
+
+        if (!matches) {
+          final mergedCats = providerCategoryPool(providerCats, providerSubCats);
+          debugPrint('[OrderService] order $orderId: direct-assigned to '
+              'provider ${doc.id} but category mismatch — notification '
+              'SKIPPED (this used to bypass the category check entirely). '
+              'Provider categories: $mergedCats, order category: '
+              '"$category"${subCategory.isNotEmpty ? " / \"$subCategory\"" : ""}. '
+              'If this provider SHOULD receive this order, add the missing '
+              'category to their profile.');
+          return;
+        }
+
         await _sendProviderNotification(
           providerId:  doc.id,
           orderId:     orderId,
