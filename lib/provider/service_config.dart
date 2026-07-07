@@ -50,15 +50,15 @@ final Map<String, ServiceConfig> serviceConfigs = {
   "cleaning": ServiceConfig(
     businessLabel: "Cleaning Business Name",
     serviceCategories: [
-      "Home Cleaning",
-      "Corporate Office Cleaning",
-      "Bathroom Cleaning",
-      "Kitchen Cleaning",
-      "Deep Cleaning",
-      "Sofa Cleaning",
-      "Window Cleaning",
-      "Electronic Cleaning",
-      "Monthly Packages",
+      "Home",
+      "Corporate Office",
+      "Bathroom",
+      "Kitchen",
+      "Deep",
+      "Sofa",
+      "Window",
+      "Electronic",
+      "Monthly Pakages",
 
     ],
     requiredDocuments: [
