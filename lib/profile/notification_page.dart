@@ -2,7 +2,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import 'package:callme/profile/notification_service.dart' show NotificationType;
+// FIX: import bannerStyleForType alongside NotificationType. This is the
+// SAME icon/color function notification_service.dart uses for its
+// in-app banner and FCM foreground alerts. Previously this page kept
+// its own hand-copied switch statement (_style()) which had drifted out
+// of sync — it was missing the workStarted case (used by the new
+// "Start Work" OTP feature in business_dashboard_page.dart), so those
+// notifications fell through to the generic default icon here even
+// though they rang and popped up correctly everywhere else.
+//
+// By calling the shared function directly instead of maintaining a
+// second copy, this page can never go out of sync again — any new
+// NotificationType added in notification_service.dart automatically
+// gets the right icon/color here too, with zero extra work.
+import 'package:callme/profile/notification_service.dart'
+    show bannerStyleForType;
 
 typedef NotificationTapCallback = void Function(Map<String, dynamic> data);
 
@@ -84,7 +98,6 @@ class _NotificationPageState extends State<NotificationPage> {
     _showSnack('${snap.docs.length} notifications marked as read');
   }
 
-
   Future<void> _deleteById(String docId) async {
     try {
       await FirebaseFirestore.instance
@@ -151,41 +164,8 @@ class _NotificationPageState extends State<NotificationPage> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
-  ({IconData icon, Color color}) _style(String? type) {
-    switch (type) {
-      case NotificationType.newBooking:
-        return (icon: Icons.event_available_outlined, color: Colors.blue);
-      case NotificationType.bookingAccepted:
-        return (icon: Icons.check_circle_outline, color: Colors.green);
-      case NotificationType.bookingRejected:
-        return (icon: Icons.cancel_outlined, color: Colors.red);
-      case NotificationType.providerRegistered:
-        return (icon: Icons.store_mall_directory_outlined, color: Colors.orange);
-      case NotificationType.registrationApproved:
-        return (icon: Icons.verified_outlined, color: Colors.green);
-      case NotificationType.registrationRejected:
-        return (icon: Icons.block_outlined, color: Colors.red);
-      case NotificationType.serviceCompleted:
-        return (icon: Icons.task_alt_outlined, color: Colors.teal);
-      // "This job was accepted by another provider" notice. Distinct
-      // grey/timer-off look so it visually reads as "no action needed"
-      // rather than falling into the generic indigo-bell default, which
-      // would make it look like a fresh, actionable alert.
-      case NotificationType.orderTakenByOther:
-        return (icon: Icons.timer_off_outlined, color: Colors.grey);
-    
-      case NotificationType.userCancelled:
-        return (icon: Icons.event_busy_outlined, color: Colors.deepOrange);
-      // FIX: NEW — same gap as above; also had no case here.
-      case NotificationType.providerFound:
-        return (icon: Icons.person_search_outlined, color: Colors.indigo);
-      default:
-        return (
-          icon: Icons.notifications_active_outlined,
-          color: Colors.indigo
-        );
-    }
-  }
+  // FIX: _style() removed. Use the shared bannerStyleForType() from
+  // notification_service.dart instead — see import comment above.
 
   @override
   Widget build(BuildContext context) {
@@ -284,7 +264,10 @@ class _NotificationPageState extends State<NotificationPage> {
               final docId  = doc.id;
               final data   = doc.data() as Map<String, dynamic>;
               final isRead = data['read'] == true;
-              final style  = _style(data['type'] as String?);
+              // FIX: was _style(...), now calls the shared function so
+              // this page can never fall out of sync with
+              // notification_service.dart again.
+              final style  = bannerStyleForType(data['type'] as String?);
 
               // Show which business/service this notification is about,
               // when the doc carries it.

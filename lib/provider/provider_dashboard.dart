@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -95,6 +97,26 @@ class _Terms {
       myStat:        'Active Orders',
     );
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WORK-IN-PROGRESS / OTP SUPPORT
+//
+// `kWorkInProgress` is a new order lifecycle state sitting between
+// "accepted" and "completed": the provider has tapped "Start Work", an
+// OTP has been generated and sent to the customer, and completion is now
+// gated behind entering that OTP correctly.
+//
+// This is intentionally a plain string literal defined HERE rather than
+// added to OrderStatus in order_service.dart, since that file wasn't
+// part of this change — every comparison against it in this file goes
+// through this single constant so it stays consistent.
+// ═══════════════════════════════════════════════════════════════
+const String kWorkInProgress = 'in_progress';
+
+String _generateOtp() {
+  final rnd = Random();
+  return List.generate(6, (_) => rnd.nextInt(10)).join();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -297,17 +319,22 @@ bool _isMine({
 
   // Only show statuses that mean "this job is mine"
   // 'pending' without assignment = available job, not mine
+  // NOTE: kWorkInProgress added — job is still mine while awaiting the
+  // completion OTP.
   const mineStatuses = {
     OrderStatus.accepted,
+    kWorkInProgress,
     OrderStatus.completed,
     OrderStatus.cancelled,
   };
   if (!mineStatuses.contains(status)) return false;
 
   // Extra guard: if isAssigned is explicitly false and status is
-  // somehow 'accepted', treat as available (data inconsistency)
-  if (assignedRaw == false && status == OrderStatus.accepted) {
-    debugPrint('[mine] SKIP: isAssigned=false but status=accepted, '
+  // somehow 'accepted'/'in_progress', treat as available (data
+  // inconsistency)
+  if (assignedRaw == false &&
+      (status == OrderStatus.accepted || status == kWorkInProgress)) {
+    debugPrint('[mine] SKIP: isAssigned=false but status=$status, '
         'treating as available');
     return false;
   }
@@ -632,6 +659,68 @@ class _BDPState extends State<BusinessDashboardPage> {
     }
   }
 
+  // ── NEW: Start Work ─────────────────────────────────────────
+  // Generates a 6-digit OTP, stores it on the order, moves the order
+  // into kWorkInProgress, and pushes a notification to the customer
+  // telling them what the OTP is for and to only share it once the
+  // work is genuinely finished.
+  Future<void> _startWork(String id, Map<String, dynamic> data) async {
+    if (_uid.isEmpty) {
+      _snack('Session error — please restart the app.', _C.red, Icons.error_outline);
+      return;
+    }
+    final custId = (data['userId'] ?? '').toString();
+    final otp = _generateOtp();
+    try {
+      await _db.collection('orders').doc(id).update({
+        'status':             kWorkInProgress,
+        'workOtp':            otp,
+        'workOtpGeneratedAt': FieldValue.serverTimestamp(),
+        'updatedAt':          FieldValue.serverTimestamp(),
+        'lastActionBy':       'provider',
+      });
+
+      _notify(custId, id,
+        '🔐 Work Started — Your Completion OTP',
+        '${widget.businessName} has started your ${widget.serviceType} '
+        '${_terms.singular.toLowerCase()}. Your OTP is $otp — please share '
+        'it with the provider ONLY once the work is fully completed to '
+        'your satisfaction. This confirms the job before it can be '
+        'marked complete.',
+        NotificationType.workStarted);
+
+      if (!mounted) return;
+      _snack('Work started — OTP sent to the customer.', _C.blue,
+          Icons.lock_clock_rounded);
+    } catch (e) {
+      debugPrint('[startWork] $e');
+      _snack('Could not start work. Try again.', _C.red, Icons.error_rounded);
+    }
+  }
+
+  // ── NEW: Resend OTP (regenerates + re-sends) ────────────────
+  Future<void> _resendOtp(String id, Map<String, dynamic> data) async {
+    final custId = (data['userId'] ?? '').toString();
+    final otp = _generateOtp();
+    try {
+      await _db.collection('orders').doc(id).update({
+        'workOtp':            otp,
+        'workOtpGeneratedAt': FieldValue.serverTimestamp(),
+        'updatedAt':          FieldValue.serverTimestamp(),
+      });
+      _notify(custId, id,
+        '🔐 Your New Completion OTP',
+        'Here is a new OTP for your ${widget.serviceType} '
+        '${_terms.singular.toLowerCase()}: $otp. Share it with '
+        '${widget.businessName} only once the work is fully completed.',
+        NotificationType.workStarted);
+      _snack('New OTP sent to the customer.', _C.blue, Icons.lock_clock_rounded);
+    } catch (e) {
+      debugPrint('[resendOtp] $e');
+      _snack('Could not resend OTP. Try again.', _C.red, Icons.error_rounded);
+    }
+  }
+
   Future<void> _decline(String id, String note, Map<String, dynamic> data) async {
     final custId = (data['userId'] ?? '').toString();
     try {
@@ -658,16 +747,20 @@ class _BDPState extends State<BusinessDashboardPage> {
     }
   }
 
+  // ── UPDATED: Complete now also clears the OTP fields so a stale OTP
+  // can never linger on a finished order.
   Future<void> _complete(String id, Map<String, dynamic> data) async {
     final custId = (data['userId'] ?? '').toString();
     try {
       await _db.collection('orders').doc(id).update({
-        'status':       OrderStatus.completed,
-        'isCompleted':  true,
-        'isAssigned':   false,
-        'completedAt':  FieldValue.serverTimestamp(),
-        'updatedAt':    FieldValue.serverTimestamp(),
-        'lastActionBy': 'provider',
+        'status':             OrderStatus.completed,
+        'isCompleted':        true,
+        'isAssigned':         false,
+        'completedAt':        FieldValue.serverTimestamp(),
+        'updatedAt':          FieldValue.serverTimestamp(),
+        'lastActionBy':       'provider',
+        'workOtp':            FieldValue.delete(),
+        'workOtpGeneratedAt': FieldValue.delete(),
       });
       _notify(custId, id,
         '✅ Service Completed',
@@ -679,6 +772,40 @@ class _BDPState extends State<BusinessDashboardPage> {
       debugPrint('[complete] $e');
       _snack('Could not complete. Try again.', _C.red, Icons.error_rounded);
     }
+  }
+
+  // ── NEW: gate for _complete() — prompts the provider for the OTP the
+  // customer was given at "Start Work" time, and only calls _complete()
+  // if it matches what's stored on the order.
+  Future<void> _showCompleteWithOtp(String id, Map<String, dynamic> data) async {
+    final storedOtp = (data['workOtp'] ?? '').toString().trim();
+
+    final entered = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _OtpDialog(
+        title:    'Enter Completion OTP',
+        subtitle: 'Ask the customer for the 6-digit OTP sent to them when '
+            'you started work, then enter it below to mark this '
+            '${_terms.singular.toLowerCase()} complete.',
+        onResend: () => _resendOtp(id, data),
+      ),
+    );
+    if (!mounted || entered == null) return;
+
+    if (storedOtp.isEmpty) {
+      // No OTP on record (older order started before this feature, or a
+      // data hiccup) — don't hard-block a legitimate completion.
+      await _complete(id, data);
+      return;
+    }
+
+    if (entered.trim() != storedOtp) {
+      _snack('Incorrect OTP — please confirm it with the customer.',
+          _C.red, Icons.error_outline);
+      return;
+    }
+    await _complete(id, data);
   }
 
   Future<void> _cancel(String id, String note, Map<String, dynamic> data) async {
@@ -698,6 +825,8 @@ class _BDPState extends State<BusinessDashboardPage> {
         'providerUserId':     null,
         'providerId':         null,
         'providerName':       null,
+        'workOtp':            FieldValue.delete(),
+        'workOtpGeneratedAt': FieldValue.delete(),
       });
       _notify(custId, id,
         '❌ Provider Cancelled',
@@ -935,7 +1064,8 @@ class _BDPState extends State<BusinessDashboardPage> {
                         serviceType:   widget.serviceType,
                         countNotifier: _myNotifier,
                         terms:         _terms,
-                        onComplete:    _complete,
+                        onStartWork:   _startWork,
+                        onComplete:    _showCompleteWithOtp,
                         onCancel:      _showCancel,
                       ),
                     ],
@@ -1073,6 +1203,7 @@ class _MyTab extends StatelessWidget {
   final String         myUid, myProviderId, svcNorm, serviceType;
   final _CountNotifier countNotifier;
   final _Terms         terms;
+  final Future<void> Function(String, Map<String, dynamic>) onStartWork;
   final Future<void> Function(String, Map<String, dynamic>) onComplete;
   final Future<void> Function(String, Map<String, dynamic>) onCancel;
 
@@ -1085,6 +1216,7 @@ class _MyTab extends StatelessWidget {
     required this.serviceType,
     required this.countNotifier,
     required this.terms,
+    required this.onStartWork,
     required this.onComplete,
     required this.onCancel,
   });
@@ -1103,6 +1235,7 @@ class _MyTab extends StatelessWidget {
 
     const ord = {
       OrderStatus.accepted:  0,
+      kWorkInProgress:       0,
       OrderStatus.completed: 1,
       OrderStatus.cancelled: 2,
       OrderStatus.pending:   3,
@@ -1118,10 +1251,11 @@ class _MyTab extends StatelessWidget {
       return bt.compareTo(at);
     });
 
-    final active = docs
-        .where((d) => (d.data()['status'] ?? '').toString().toLowerCase() ==
-            OrderStatus.accepted)
-        .length;
+    // "Active" now covers both accepted AND in-progress jobs.
+    final active = docs.where((d) {
+      final s = (d.data()['status'] ?? '').toString().toLowerCase();
+      return s == OrderStatus.accepted || s == kWorkInProgress;
+    }).length;
     countNotifier.update(active);
 
     if (docs.isEmpty) {
@@ -1146,8 +1280,12 @@ class _MyTab extends StatelessWidget {
           mode:        _Mode.mine,
           serviceType: serviceType,
           terms:       terms,
-          onComplete: status == OrderStatus.accepted ? () => onComplete(doc.id, data) : null,
-          onCancel:   status == OrderStatus.accepted ? () => onCancel(doc.id, data)   : null,
+          onStartWork: status == OrderStatus.accepted
+              ? () => onStartWork(doc.id, data) : null,
+          onComplete:  status == kWorkInProgress
+              ? () => onComplete(doc.id, data) : null,
+          onCancel:    (status == OrderStatus.accepted || status == kWorkInProgress)
+              ? () => onCancel(doc.id, data) : null,
         );
       },
     );
@@ -1168,6 +1306,7 @@ class _Card extends StatefulWidget {
   final _Terms   terms;
   final _AsyncCb? onAccept;
   final _AsyncCb? onDecline;
+  final _AsyncCb? onStartWork;
   final _AsyncCb? onComplete;
   final _AsyncCb? onCancel;
 
@@ -1176,7 +1315,8 @@ class _Card extends StatefulWidget {
     required this.doc,      required this.data,
     required this.mode,     required this.serviceType,
     required this.terms,
-    this.onAccept, this.onDecline, this.onComplete, this.onCancel,
+    this.onAccept, this.onDecline,
+    this.onStartWork, this.onComplete, this.onCancel,
   });
 
   @override
@@ -1197,6 +1337,7 @@ class _CardState extends State<_Card> {
     OrderStatus.pending:   _C.amber,
     OrderStatus.enquiry:   _C.orange,
     OrderStatus.accepted:  _C.green,
+    kWorkInProgress:       _C.teal,
     OrderStatus.completed: _C.blue,
     OrderStatus.cancelled: _C.grey,
   };
@@ -1204,6 +1345,7 @@ class _CardState extends State<_Card> {
     OrderStatus.pending:   _C.amberSft,
     OrderStatus.enquiry:   _C.orangeSft,
     OrderStatus.accepted:  _C.greenSft,
+    kWorkInProgress:       _C.tealSft,
     OrderStatus.completed: _C.blueSft,
     OrderStatus.cancelled: _C.greySft,
   };
@@ -1211,6 +1353,7 @@ class _CardState extends State<_Card> {
     OrderStatus.pending:   Icons.schedule_rounded,
     OrderStatus.enquiry:   Icons.help_rounded,
     OrderStatus.accepted:  Icons.check_circle_rounded,
+    kWorkInProgress:       Icons.build_circle_rounded,
     OrderStatus.completed: Icons.verified_rounded,
     OrderStatus.cancelled: Icons.cancel_rounded,
   };
@@ -1471,7 +1614,7 @@ class _CardState extends State<_Card> {
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   _Pill(icon: icon, color: sc),
                   const SizedBox(width: 8),
-                  Text(dispStatus.toUpperCase(),
+                  Text(dispStatus.replaceAll('_', ' ').toUpperCase(),
                       style: TextStyle(color: sc, fontWeight: FontWeight.w800,
                           fontSize: 11, letterSpacing: 1)),
                 ]),
@@ -1644,6 +1787,29 @@ class _CardState extends State<_Card> {
                 ),
               ],
 
+              // ── NEW: work-in-progress OTP banner ─────────────────
+              if (rawStatus == kWorkInProgress && widget.mode == _Mode.mine) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _C.tealSft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _C.teal.withOpacity(.25)),
+                  ),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Icon(Icons.lock_clock_rounded, color: _C.teal, size: 16),
+                    const SizedBox(width: 8),
+                    const Expanded(child: Text(
+                      'Work in progress. An OTP was sent to the customer — '
+                      'ask them for it once you\'re done, then tap "Mark Complete".',
+                      style: TextStyle(color: _C.teal, fontSize: 12, height: 1.4),
+                    )),
+                  ]),
+                ),
+              ],
+
               const SizedBox(height: 14),
 
               // ── ACTION BUTTONS ──────────────────────────────────
@@ -1687,7 +1853,32 @@ class _CardState extends State<_Card> {
                 ])
 
               else ...[
+                // Accepted, not started yet → "Start Work"
                 if (rawStatus == OrderStatus.accepted)
+                  Row(children: [
+                    Expanded(child: _ActionBtn(
+                      label: 'Start Work',
+                      icon:  Icons.play_circle_fill_rounded,
+                      bg:    _C.indigo, fg: Colors.white,
+                      onTap: () => _run(widget.onStartWork),
+                    )),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: () => _run(widget.onCancel),
+                      child: Container(
+                        width: 50, height: 50,
+                        decoration: BoxDecoration(
+                            color: _C.redSft,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: _C.red.withOpacity(0.3))),
+                        child: const Icon(Icons.close_rounded,
+                            color: _C.red, size: 22),
+                      ),
+                    ),
+                  ]),
+
+                // Work started → "Mark Complete" (OTP-gated)
+                if (rawStatus == kWorkInProgress)
                   Row(children: [
                     Expanded(child: _ActionBtn(
                       label: 'Mark Complete',
@@ -1709,6 +1900,7 @@ class _CardState extends State<_Card> {
                       ),
                     ),
                   ]),
+
                 if (rawStatus == OrderStatus.completed)
                   _StatusBadge(Icons.verified_rounded,
                       '${widget.terms.singular} Completed Successfully',
@@ -2293,7 +2485,7 @@ class _StatChip extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// REASON DIALOG
+// REASON DIALOG (decline / cancel)
 // ═══════════════════════════════════════════════════════════════
 class _Dialog extends StatefulWidget {
   final String title, subtitle, hint, btnLabel, keepLabel;
@@ -2391,6 +2583,144 @@ class _DialogState extends State<_Dialog> {
                           borderRadius: BorderRadius.circular(12))),
                   child: Text(widget.btnLabel,
                       style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w700)),
+                )),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// OTP DIALOG — used to gate "Mark Complete" behind the customer's OTP
+// ═══════════════════════════════════════════════════════════════
+class _OtpDialog extends StatefulWidget {
+  final String title, subtitle;
+  final VoidCallback onResend;
+  const _OtpDialog({
+    required this.title,
+    required this.subtitle,
+    required this.onResend,
+  });
+  @override
+  State<_OtpDialog> createState() => _OtpDialogState();
+}
+
+class _OtpDialogState extends State<_OtpDialog> {
+  late final TextEditingController _ctrl;
+  String? _error;
+
+  @override void initState() { super.initState(); _ctrl = TextEditingController(); }
+  @override void dispose()   { _ctrl.dispose(); super.dispose(); }
+
+  void _unfocus() {
+    if (!mounted) return;
+    try { FocusScope.of(context).unfocus(); } catch (_) {}
+  }
+
+  void _confirm() {
+    final text = _ctrl.text.trim();
+    if (text.length != 6) {
+      setState(() => _error = 'Enter the full 6-digit OTP');
+      return;
+    }
+    _unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop(text);
+    });
+  }
+
+  void _cancel() {
+    _unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: false,
+    onPopInvokedWithResult: (didPop, _) { if (didPop) return; _cancel(); },
+    child: Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                      color: _C.green.withOpacity(.1),
+                      borderRadius: BorderRadius.circular(14)),
+                  child: const Icon(Icons.lock_outline_rounded,
+                      color: _C.green, size: 26)),
+              const SizedBox(height: 14),
+              Text(widget.title, style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
+              const SizedBox(height: 4),
+              Text(widget.subtitle, textAlign: TextAlign.center,
+                  style: const TextStyle(color: _C.sub, fontSize: 13, height: 1.4)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _ctrl,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800,
+                    letterSpacing: 8, color: _C.text),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                decoration: InputDecoration(
+                  counterText: '',
+                  hintText: '••••••',
+                  hintStyle: const TextStyle(color: _C.sub, fontSize: 20, letterSpacing: 8),
+                  filled: true, fillColor: const Color(0xFFF7F8FC),
+                  errorText: _error,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: BorderSide.none),
+                ),
+                onChanged: (_) { if (_error != null) setState(() => _error = null); },
+                onSubmitted: (_) => _confirm(),
+              ),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: widget.onResend,
+                child: const Text('Resend OTP to customer',
+                    style: TextStyle(color: _C.indigo, fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+              ),
+              const SizedBox(height: 18),
+              Row(children: [
+                Expanded(child: OutlinedButton(
+                  onPressed: _cancel,
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      side: const BorderSide(color: _C.divider),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12))),
+                  child: const Text('Cancel', style: TextStyle(color: _C.sub)),
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: ElevatedButton(
+                  onPressed: _confirm,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: _C.green, elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12))),
+                  child: const Text('Verify & Complete',
+                      style: TextStyle(
                           color: Colors.white, fontWeight: FontWeight.w700)),
                 )),
               ]),

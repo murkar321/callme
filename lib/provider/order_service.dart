@@ -22,11 +22,13 @@ class NotificationType {
   static const String registrationApproved = 'registration_approved';
   static const String registrationRejected = 'registration_rejected';
 
-  // FIX: NEW — sent to every OTHER matching provider the instant one
-  // provider accepts an order, so it doesn't just silently vanish from
-  // their Available tab with no explanation. See
-  // OrderService.notifyOthersOrderTaken() below.
   static const String orderTakenByOther = 'order_taken_by_other';
+
+  // FIX: added — business_dashboard_page.dart's _startWork()/_resendOtp()
+  // this notification type. If these two ever diverge, OTP notifications
+  // will silently fall back to the generic bell icon instead of the
+  // dedicated one.
+  static const String workStarted = 'work_started_otp';
 }
 
 // ============================================================

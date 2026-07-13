@@ -1,12 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 // DIAGNOSTIC FLAG
@@ -16,9 +18,17 @@ const bool _debugNotif = true;
 const bool _useCustomSound = true;
 const String _soundFile = 'notification_sound';
 
+// ═══════════════════════════════════════════════════════════════
 // Channel constants
+//
+// Android notification channels are IMMUTABLE once created on a given
+// device — if you change importance/sound/vibration in this file, you
+// must bump the channel id or Android keeps reusing the old channel
+// definition already on that device. Bump again (v9, v10, ...) any
+// time you touch channel settings.
+// ═══════════════════════════════════════════════════════════════
 class NotificationChannels {
-  static const String id = 'callme_high_v7';
+  static const String id = 'callme_high_v8';
   static const String name = 'CallMe Notifications';
   static const String desc = 'Booking, acceptance, and admin alerts.';
 }
@@ -34,33 +44,51 @@ class NotificationType {
   static const String providerFound = 'provider_found';
   static const String serviceCompleted = 'service_completed';
 
-  // Matches OrderService.NotificationType.orderTakenByOther in
-  // order_service.dart. Needed here too because notification_page.dart
-  // imports NotificationType from THIS file (not order_service.dart), so
-  // without this constant the page can't render the "taken" notice with
-  // its own icon/color and would fall through to the generic default.
+  static const String workStarted = 'work_started_otp';
   static const String orderTakenByOther = 'order_taken_by_other';
-
-  // Matches OrderService.NotificationType.userCancelled in
-  // order_service.dart. Single source of truth lives in both places with
-  // the same string value ('user_cancelled').
   static const String userCancelled = 'user_cancelled';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Shared icon/color mapping — used everywhere a banner/list item
+// needs to know what a notification type looks like.
+// ═══════════════════════════════════════════════════════════════
+({IconData icon, Color color}) bannerStyleForType(String? type) {
+  switch (type) {
+    case NotificationType.newBooking:
+      return (icon: Icons.event_available_outlined, color: const Color(0xFF1565C0));
+    case NotificationType.bookingAccepted:
+      return (icon: Icons.check_circle_outline, color: const Color(0xFF2E7D32));
+    case NotificationType.bookingRejected:
+      return (icon: Icons.cancel_outlined, color: const Color(0xFFD32F2F));
+    case NotificationType.providerRegistered:
+      return (icon: Icons.store_mall_directory_outlined, color: const Color(0xFFE65100));
+    case NotificationType.registrationApproved:
+      return (icon: Icons.verified_outlined, color: const Color(0xFF2E7D32));
+    case NotificationType.registrationRejected:
+      return (icon: Icons.block_outlined, color: const Color(0xFFD32F2F));
+    case NotificationType.serviceCompleted:
+      return (icon: Icons.task_alt_outlined, color: const Color(0xFF00695C));
+    case NotificationType.workStarted:
+      return (icon: Icons.lock_clock_rounded, color: const Color(0xFF00695C));
+    case NotificationType.orderTakenByOther:
+      return (icon: Icons.timer_off_outlined, color: const Color(0xFF9E9E9E));
+    case NotificationType.userCancelled:
+      return (icon: Icons.event_busy_outlined, color: const Color(0xFFE64A19));
+    case NotificationType.providerFound:
+      return (icon: Icons.person_search_outlined, color: const Color(0xFF3F51B5));
+    default:
+      return (icon: Icons.notifications_active_outlined, color: const Color(0xFF3F51B5));
+  }
 }
 
 class _NotifDedupe {
   static final Map<String, DateTime> _fired = {};
   static const Duration _window = Duration(seconds: 45);
 
-  /// Returns true if this key has NOT fired recently (i.e. it's safe to
-  /// show a notification for it now) and claims the key. Returns false
-  /// if something already fired for this exact key inside the window —
-  /// caller should skip showing anything.
-  ///
-  /// An empty key always returns true (no dedupe requested/possible).
   static bool claim(String key) {
     if (key.isEmpty) return true;
     final now = DateTime.now();
-    // Sweep out stale entries so this map never grows unbounded.
     _fired.removeWhere((_, t) => now.difference(t) > _window);
     if (_fired.containsKey(key)) {
       debugPrint('[NOTIF-DEDUPE] SKIP duplicate ring for key="$key"');
@@ -71,11 +99,6 @@ class _NotifDedupe {
   }
 }
 
-/// Builds a stable dedupe key from FCM/local-alert data payloads.
-/// Format: "<type>:order:<orderId>" — matches the key format
-/// business_dashboard_page.dart already builds for its instant local
-/// alerts (`'new_booking:order:${doc.id}'`), so both paths agree on the
-/// same identity for the same event.
 String _dedupeKeyFromData(Map<String, dynamic> data) {
   final type = (data['type'] ?? '').toString().trim();
   final orderId = (data['orderId'] ?? '').toString().trim();
@@ -119,15 +142,30 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       '[FCM-BG]   notification: ${message.notification?.title} / ${message.notification?.body}');
   debugPrint('[FCM-BG]   data: ${message.data}');
 
-
   if (message.notification == null && message.data.isNotEmpty) {
-    await _showLocalNotificationStandalone(
-      id: _uniqueNotifId(),
-      title: message.data['title']?.toString() ?? 'New notification',
-      body: message.data['body']?.toString() ?? '',
-      payload: jsonEncode(message.data),
-    );
+    // FIX: this call used to be unguarded. If flutter_local_notifications
+    // throws here (most commonly because the custom sound resource is
+    // missing/invalid, or the plugin isn't initialised yet in this
+    // isolate), the exception used to propagate silently out of this
+    // background isolate — no ring, no tray icon, no error anyone would
+    // ever see. Now it's caught, logged, and retried with the default
+    // sound before giving up.
+    try {
+      await _showLocalNotificationStandalone(
+        id: _uniqueNotifId(),
+        title: message.data['title']?.toString() ?? 'New notification',
+        body: message.data['body']?.toString() ?? '',
+        payload: jsonEncode(message.data),
+      );
+    } catch (e, st) {
+      debugPrint('[FCM-BG] failed to show local notification: $e\n$st');
+    }
   }
+  // NOTE: no in-app banner here — there is no live UI/Overlay to draw
+  // into while the app is fully backgrounded/terminated. The system
+  // tray notification above is the correct (and only possible) signal
+  // in that state; the in-app banner takes over once the app is
+  // foregrounded again (see _listenForeground / _checkColdStart).
 }
 
 // Helpers
@@ -136,13 +174,14 @@ int _uniqueNotifId() => DateTime.now().millisecondsSinceEpoch & 0x7fffffff;
 
 const List<int> _vibrationPattern = [0, 300, 200, 300, 200, 600];
 
-AndroidNotificationChannel _buildChannel() => AndroidNotificationChannel(
+AndroidNotificationChannel _buildChannel({bool forceDefaultSound = false}) =>
+    AndroidNotificationChannel(
       NotificationChannels.id,
       NotificationChannels.name,
       description: NotificationChannels.desc,
       importance: Importance.max,
       playSound: true,
-      sound: _useCustomSound
+      sound: (_useCustomSound && !forceDefaultSound)
           ? RawResourceAndroidNotificationSound(_soundFile)
           : null,
       enableVibration: true,
@@ -151,7 +190,15 @@ AndroidNotificationChannel _buildChannel() => AndroidNotificationChannel(
       showBadge: true,
     );
 
-NotificationDetails _buildDetails({String body = ''}) => NotificationDetails(
+// FIX: added `forceDefaultSound` so callers can retry a failed show()
+// with the platform default sound instead of the custom raw resource.
+// A missing/invalid raw sound resource is the single most common
+// real-world reason flutter_local_notifications throws on show(), and
+// previously that exception was never caught anywhere near these call
+// sites — so a bad sound file could silently kill the ENTIRE
+// notification (tray + banner), not just the sound.
+NotificationDetails _buildDetails({String body = '', bool forceDefaultSound = false}) =>
+    NotificationDetails(
       android: AndroidNotificationDetails(
         NotificationChannels.id,
         NotificationChannels.name,
@@ -159,7 +206,7 @@ NotificationDetails _buildDetails({String body = ''}) => NotificationDetails(
         importance: Importance.max,
         priority: Priority.max,
         playSound: true,
-        sound: _useCustomSound
+        sound: (_useCustomSound && !forceDefaultSound)
             ? RawResourceAndroidNotificationSound(_soundFile)
             : null,
         enableVibration: true,
@@ -174,13 +221,54 @@ NotificationDetails _buildDetails({String body = ''}) => NotificationDetails(
         audioAttributesUsage: AudioAttributesUsage.notification,
         styleInformation: BigTextStyleInformation(body),
       ),
-      iOS: const DarwinNotificationDetails(
+      iOS: DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
         interruptionLevel: InterruptionLevel.active,
+        sound: (_useCustomSound && !forceDefaultSound) ? '$_soundFile.caf' : 'default',
       ),
     );
+
+// ═══════════════════════════════════════════════════════════════
+// FIX (core bug): a single place that shows a tray notification and
+// NEVER lets an exception escape uncaught. Every call site that used
+// to call `_sharedPlugin.show(...)` directly now goes through this
+// instead. On failure it retries once with the default sound (the
+// most common real cause of show() throwing) before giving up, and
+// always logs so a failure is at least visible in the console instead
+// of vanishing with zero trace.
+// ═══════════════════════════════════════════════════════════════
+Future<bool> _showTrayNotification({
+  required int id,
+  required String title,
+  required String body,
+  String? payload,
+}) async {
+  try {
+    await _sharedPlugin.show(id, title, body, _buildDetails(body: body), payload: payload);
+    return true;
+  } catch (e, st) {
+    debugPrint('[NOTIF] show() failed with custom sound "$_soundFile" — '
+        'retrying with default sound. This usually means the raw sound '
+        'resource is missing/invalid on this device/build. Error: $e\n$st');
+    try {
+      await _sharedPlugin.show(
+        id,
+        title,
+        body,
+        _buildDetails(body: body, forceDefaultSound: true),
+        payload: payload,
+      );
+      return true;
+    } catch (e2, st2) {
+      debugPrint('[NOTIF] show() failed even with default sound — this '
+          'notification will NOT appear at all. Check POST_NOTIFICATIONS '
+          'permission and channel setup. Error: $e2\n$st2');
+      return false;
+    }
+  }
+}
 
 Future<void> _showLocalNotificationStandalone({
   required int id,
@@ -209,7 +297,207 @@ Future<void> _showLocalNotificationStandalone({
     debugPrint('====================================');
   }
 
-  await plugin.show(id, title, body, _buildDetails(body: body), payload: payload);
+  // FIX: was an unguarded plugin.show() call. Now goes through the same
+  // catch + default-sound-retry path as every other show site.
+  try {
+    await plugin.show(id, title, body, _buildDetails(body: body), payload: payload);
+  } catch (e, st) {
+    debugPrint('[NOTIF-BG-STANDALONE] show() failed with custom sound, '
+        'retrying with default: $e\n$st');
+    try {
+      await plugin.show(
+        id, title, body,
+        _buildDetails(body: body, forceDefaultSound: true),
+        payload: payload,
+      );
+    } catch (e2, st2) {
+      debugPrint('[NOTIF-BG-STANDALONE] show() failed even with default '
+          'sound — notification NOT shown: $e2\n$st2');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IN-APP ON-SCREEN BANNER
+// ═══════════════════════════════════════════════════════════════
+class _TopBanner {
+  static OverlayEntry? _entry;
+  static Timer? _timer;
+
+  static void show({
+    required String title,
+    required String body,
+    required IconData icon,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
+    final overlay = NotificationService.navigatorKey.currentState?.overlay;
+    if (overlay == null) {
+      debugPrint('[NOTIF-BANNER] No overlay available yet — skipping on-screen popup '
+          '(add navigatorKey: NotificationService.navigatorKey to your MaterialApp).');
+      return;
+    }
+
+    _entry?.remove();
+    _timer?.cancel();
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => _BannerWidget(
+        title: title,
+        body: body,
+        icon: icon,
+        color: color,
+        onTap: () {
+          onTap?.call();
+        },
+        onDismiss: () {
+          if (_entry == entry) _entry = null;
+          entry.remove();
+        },
+      ),
+    );
+
+    _entry = entry;
+    overlay.insert(entry);
+
+    _timer = Timer(const Duration(seconds: 6), () {
+      if (_entry == entry) {
+        _entry = null;
+        entry.remove();
+      }
+    });
+  }
+}
+
+class _BannerWidget extends StatefulWidget {
+  final String title;
+  final String body;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  final VoidCallback onDismiss;
+
+  const _BannerWidget({
+    required this.title,
+    required this.body,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_BannerWidget> createState() => _BannerWidgetState();
+}
+
+class _BannerWidgetState extends State<_BannerWidget> {
+  bool _visible = false;
+  bool _closing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  void _close() {
+    if (_closing || !mounted) return;
+    _closing = true;
+    setState(() => _visible = false);
+    Future.delayed(const Duration(milliseconds: 220), widget.onDismiss);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+    return Positioned(
+      top: topPadding + 8,
+      left: 12,
+      right: 12,
+      child: AnimatedSlide(
+        offset: _visible ? Offset.zero : const Offset(0, -1.6),
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        child: AnimatedOpacity(
+          opacity: _visible ? 1 : 0,
+          duration: const Duration(milliseconds: 200),
+          child: Material(
+            color: Colors.transparent,
+            child: SafeArea(
+              bottom: false,
+              child: GestureDetector(
+                onTap: () {
+                  _close();
+                  widget.onTap();
+                },
+                onVerticalDragEnd: (d) {
+                  if ((d.primaryVelocity ?? 0) < 0) _close();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.18),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                    border: Border.all(color: widget.color.withOpacity(0.25)),
+                  ),
+                  child: Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(9),
+                      decoration: BoxDecoration(
+                        color: widget.color.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(widget.icon, color: widget.color, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(widget.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13.5,
+                                  color: Color(0xFF212121))),
+                          const SizedBox(height: 2),
+                          Text(widget.body,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 12, color: Color(0xFF757575), height: 1.3)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: _close,
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.close_rounded, size: 16, color: Color(0xFF9E9E9E)),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // NotificationService
@@ -217,6 +505,8 @@ class NotificationService {
   NotificationService._internal();
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
+
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   bool _initialised = false;
 
@@ -259,7 +549,27 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(_buildChannel());
       debugPrint('[NOTIF] Channel registered: ${NotificationChannels.id}');
+    } catch (e, st) {
+      // FIX: channel creation failing (e.g. bad sound resource at
+      // creation time) used to be able to abort initialize() entirely
+      // via the outer catch below without ever registering the plugin
+      // or listeners — meaning EVERY future notification would fail.
+      // Now we log it and still fall through to register a
+      // default-sound channel so the app can still notify.
+      debugPrint('[NOTIF] Channel registration with custom sound failed: '
+          '$e\n$st — retrying with default sound.');
+      try {
+        await _sharedPlugin
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(_buildChannel(forceDefaultSound: true));
+        debugPrint('[NOTIF] Channel registered with default sound fallback.');
+      } catch (e2, st2) {
+        debugPrint('[NOTIF] Channel registration failed even with default '
+            'sound: $e2\n$st2');
+      }
+    }
 
+    try {
       await _sharedPlugin.initialize(
         const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -307,12 +617,28 @@ class NotificationService {
       provisional: false,
     );
     debugPrint('[FCM] Auth status: ${settings.authorizationStatus}');
+    if (settings.authorizationStatus == AuthorizationStatus.denied) {
+      // FIX: this is a silent-failure trap distinct from the show()
+      // bug above — if the user denied notification permission,
+      // show() will often just no-op with NO exception at all. Make
+      // that state loud in the logs instead of indistinguishable from
+      // "everything is fine".
+      debugPrint('[NOTIF] ⚠️ Notification permission is DENIED. No '
+          'notification — tray or otherwise — will ever appear until the '
+          'user re-enables notifications for this app in system settings.');
+    }
 
     if (!kIsWeb && Platform.isAndroid) {
       final granted = await _sharedPlugin
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
           ?.requestNotificationsPermission();
       debugPrint('[NOTIF] POST_NOTIFICATIONS granted: $granted');
+      if (granted == false) {
+        debugPrint('[NOTIF] ⚠️ POST_NOTIFICATIONS was denied on Android 13+. '
+            'flutter_local_notifications will silently do nothing on '
+            'show() — no exception, no tray icon. This is the other '
+            'common "silent" failure mode besides a bad sound resource.');
+      }
 
       final exactAlarm = await _sharedPlugin
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
@@ -336,9 +662,24 @@ class NotificationService {
     }
   }
 
-  // Every foreground FCM message goes through the same dedupe gate as
-  // the dashboard's instant local alert (see `_NotifDedupe` above), keyed
-  // off `type` + `orderId` in the message data.
+  // ═══════════════════════════════════════════════════════════════
+  // FIX (the main bug): tray notification and in-app banner are now
+  // shown in two INDEPENDENT try/catch blocks. Previously there was
+  // no error handling at all here — an exception thrown by
+  // `_sharedPlugin.show()` (most commonly a missing/invalid custom
+  // sound resource) would propagate as an unhandled Future error out
+  // of this `.listen()` callback and silently abort BEFORE the banner
+  // code below it ever ran. That produced exactly the symptom
+  // reported: no ring AND no on-screen popup, with nothing visible
+  // anywhere to explain why. Now:
+  //   - the tray notification goes through _showTrayNotification(),
+  //     which itself retries with the default sound before giving up
+  //     and always logs.
+  //   - the banner is shown regardless of whether the tray call
+  //     succeeded, so at minimum the provider sees SOMETHING even if
+  //     the system notification failed for some device-specific
+  //     reason.
+  // ═══════════════════════════════════════════════════════════════
   void _listenForeground() {
     FirebaseMessaging.onMessage.listen(
       (RemoteMessage message) async {
@@ -358,7 +699,6 @@ class NotificationService {
             notif?.title ?? message.data['title']?.toString() ?? 'New message';
         final body = notif?.body ?? message.data['body']?.toString() ?? '';
         final id = _uniqueNotifId();
-        final details = _buildDetails(body: body);
 
         if (_debugNotif) {
           debugPrint('=== NOTIF DEBUG (foreground) ===');
@@ -370,15 +710,31 @@ class NotificationService {
           debugPrint('=================================');
         }
 
-        await _sharedPlugin.show(
-          id,
-          title,
-          body,
-          details,
+        // 1) System tray notification — rings / vibrates. Isolated so a
+        // failure here can never block the banner below.
+        final shown = await _showTrayNotification(
+          id: id,
+          title: title,
+          body: body,
           payload: jsonEncode(message.data),
         );
+        debugPrint('[FCM-FG] tray show() succeeded=$shown id=$id');
 
-        debugPrint('[FCM-FG] show() called id=$id');
+        // 2) In-app on-screen banner — wrapped separately so a bug in
+        // the banner layer (e.g. overlay not ready) can never suppress
+        // the tray notification above, and vice versa.
+        try {
+          final style = bannerStyleForType(message.data['type']?.toString());
+          _TopBanner.show(
+            title: title,
+            body: body,
+            icon: style.icon,
+            color: style.color,
+            onTap: () => NotificationService.fireTap(message.data),
+          );
+        } catch (e, st) {
+          debugPrint('[NOTIF-BANNER] failed to show in-app banner: $e\n$st');
+        }
       },
       onError: (e) => debugPrint('[FCM-FG] stream error: $e'),
     );
@@ -428,6 +784,30 @@ class NotificationService {
     );
   }
 
+  Future<List<String>> _resolveAllProviderDocIds(String uid) async {
+    if (uid.isEmpty) return const [];
+    final db = FirebaseFirestore.instance;
+    final ids = <String>{};
+
+    try {
+      final byUserId = await db
+          .collection('providers')
+          .where('userId', isEqualTo: uid)
+          .get();
+      ids.addAll(byUserId.docs.map((d) => d.id));
+
+      final byUid = await db
+          .collection('providers')
+          .where('uid', isEqualTo: uid)
+          .get();
+      ids.addAll(byUid.docs.map((d) => d.id));
+    } catch (e) {
+      debugPrint('[FCM] _resolveAllProviderDocIds error: $e');
+    }
+
+    return ids.toList();
+  }
+
   Future<void> _writeToken(String token) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -445,13 +825,9 @@ class NotificationService {
       'platform': platform,
     };
 
-    // PRIMARY: doc(uid) — this is what OrderService.notifyUser() and
-    // every other uid-keyed lookup in the app actually reads.
     await db.collection('users').doc(uid).set(tokenData, SetOptions(merge: true));
     debugPrint('[FCM] Token saved -> users/$uid (primary, uid-keyed)');
 
-    // BACK-COMPAT MIRROR: doc(email) — kept so any older code path
-    // that still reads by email keeps working.
     final email = user.email;
     if (email != null && email.isNotEmpty) {
       await db.collection('users').doc(email).set(tokenData, SetOptions(merge: true));
@@ -459,39 +835,21 @@ class NotificationService {
     }
 
     try {
-      final providerDocId = await _resolveProviderDocId(uid);
-      if (providerDocId != null) {
-        await db.collection('providers').doc(providerDocId).set(tokenData, SetOptions(merge: true));
-        debugPrint('[FCM] Token also saved -> providers/$providerDocId');
+      final providerDocIds = await _resolveAllProviderDocIds(uid);
+      if (providerDocIds.isEmpty) {
+        debugPrint('[FCM] No provider profiles found for uid=$uid — '
+            'nothing to mirror (fine if this login is a customer, not a provider).');
+      }
+      for (final id in providerDocIds) {
+        await db.collection('providers').doc(id).set(tokenData, SetOptions(merge: true));
+        debugPrint('[FCM] Token also saved -> providers/$id');
+      }
+      if (providerDocIds.length > 1) {
+        debugPrint('[FCM] uid=$uid owns ${providerDocIds.length} provider profiles '
+            '(${providerDocIds.join(", ")}) — token mirrored to ALL of them.');
       }
     } catch (e) {
       debugPrint('[FCM] provider token mirror error: $e');
-    }
-  }
-
-  Future<String?> _resolveProviderDocId(String uid) async {
-    if (uid.isEmpty) return null;
-    final db = FirebaseFirestore.instance;
-
-    try {
-      var snap = await db
-          .collection('providers')
-          .where('userId', isEqualTo: uid)
-          .limit(1)
-          .get();
-
-      if (snap.docs.isEmpty) {
-        snap = await db
-            .collection('providers')
-            .where('uid', isEqualTo: uid)
-            .limit(1)
-            .get();
-      }
-
-      return snap.docs.isNotEmpty ? snap.docs.first.id : null;
-    } catch (e) {
-      debugPrint('[FCM] _resolveProviderDocId error: $e');
-      return null;
     }
   }
 
@@ -520,10 +878,12 @@ class NotificationService {
     }
 
     try {
-      final providerDocId = await _resolveProviderDocId(uid);
-      if (providerDocId != null) {
-        await db.collection('providers').doc(providerDocId).update({
+      final providerDocIds = await _resolveAllProviderDocIds(uid);
+      for (final id in providerDocIds) {
+        await db.collection('providers').doc(id).update({
           'fcmToken': FieldValue.delete(),
+        }).catchError((e) {
+          debugPrint('[FCM] providers/$id token clear error (may not exist): $e');
         });
       }
     } catch (e) {
@@ -534,59 +894,86 @@ class NotificationService {
     debugPrint('[FCM] Token cleared on logout');
   }
 
-  // `dedupeKey` is enforced via `_NotifDedupe.claim()`. Any caller that
-  // passes the SAME key within the dedupe window will be silently
-  // skipped.
+  // FIX: tray + banner split into independent try/catch blocks here
+  // too, same reasoning as _listenForeground() above. This is the
+  // entry point business_dashboard_page.dart uses for its own instant
+  // "new order available" alert.
   static Future<void> showLocalAlert({
     required String title,
     required String body,
     String? payload,
     required String dedupeKey,
   }) async {
+    if (!_NotifDedupe.claim(dedupeKey)) {
+      debugPrint('[NOTIF] showLocalAlert skipped — duplicate key="$dedupeKey"');
+      return;
+    }
+
     try {
-      if (!_NotifDedupe.claim(dedupeKey)) {
-        debugPrint('[NOTIF] showLocalAlert skipped — duplicate key="$dedupeKey"');
-        return;
-      }
-
       await NotificationService().initialize();
+    } catch (e, st) {
+      debugPrint('[NOTIF] showLocalAlert: initialize() failed: $e\n$st');
+      // fall through and still attempt to show — plugin may already be
+      // initialised from a previous call even if this one errored.
+    }
 
-      final id = _uniqueNotifId();
+    final id = _uniqueNotifId();
 
-      if (_debugNotif) {
-        debugPrint('=== NOTIF DEBUG (local-alert) ===');
-        debugPrint('  channelId : ${NotificationChannels.id}');
-        debugPrint('  id        : $id');
-        debugPrint('  title     : $title');
-        debugPrint('  body      : $body');
-        debugPrint('  dedupeKey : $dedupeKey');
-        debugPrint('==================================');
+    if (_debugNotif) {
+      debugPrint('=== NOTIF DEBUG (local-alert) ===');
+      debugPrint('  channelId : ${NotificationChannels.id}');
+      debugPrint('  id        : $id');
+      debugPrint('  title     : $title');
+      debugPrint('  body      : $body');
+      debugPrint('  dedupeKey : $dedupeKey');
+      debugPrint('==================================');
+    }
+
+    // 1) System tray notification.
+    final shown = await _showTrayNotification(id: id, title: title, body: body, payload: payload);
+    debugPrint('[NOTIF] showLocalAlert tray show() succeeded=$shown id=$id');
+
+    // 2) In-app on-screen banner — independent of whether (1) succeeded.
+    try {
+      Map<String, dynamic>? parsedPayload;
+      if (payload != null) {
+        try {
+          parsedPayload = jsonDecode(payload) as Map<String, dynamic>;
+        } catch (e) {
+          debugPrint('[NOTIF] showLocalAlert payload decode error: $e');
+        }
       }
-
-      await _sharedPlugin.show(
-        id,
-        title,
-        body,
-        _buildDetails(body: body),
-        payload: payload,
+      final style = bannerStyleForType(parsedPayload?['type']?.toString());
+      _TopBanner.show(
+        title: title,
+        body: body,
+        icon: style.icon,
+        color: style.color,
+        onTap: () {
+          if (parsedPayload != null) NotificationService.fireTap(parsedPayload);
+        },
       );
     } catch (e, st) {
-      debugPrint('[NOTIF] showLocalAlert error: $e\n$st');
+      debugPrint('[NOTIF-BANNER] showLocalAlert failed to show banner: $e\n$st');
     }
   }
-
 
   // ============================================================
   static Future<void> testNotification() async {
     await NotificationService().initialize();
-    await _sharedPlugin.show(
-      _uniqueNotifId(),
-      '🔔 Test Notification',
-      'If you can see and hear this, local notifications are working '
+    final shown = await _showTrayNotification(
+      id: _uniqueNotifId(),
+      title: '🔔 Test Notification',
+      body: 'If you can see and hear this, local notifications are working '
           'correctly. Any missing ring elsewhere is happening upstream '
           '(Cloud Function / fcmToken / Firestore rules), not here.',
-      _buildDetails(body: 'Local notification test'),
     );
-    debugPrint('[NOTIF] testNotification() fired.');
+    debugPrint('[NOTIF] testNotification() tray shown=$shown');
+    _TopBanner.show(
+      title: '🔔 Test Notification',
+      body: 'On-screen banner is working too.',
+      icon: Icons.notifications_active_rounded,
+      color: const Color(0xFF3F51B5),
+    );
   }
 }
