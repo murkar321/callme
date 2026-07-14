@@ -13,35 +13,7 @@ import '../Admin/approve_providers_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // routeNotification
-// ─────────────────────────────────────────────────────────────────────────────
-// Entry point called from three places:
-//   • NotificationPage.onNotificationTap  (user taps a list item in the page)
-//   • NotificationService._onTapForeground (local notification tapped while app open)
-//   • NotificationService._listenBackgroundTap / _checkColdStart (FCM tap)
-//
-// BUG FIXES vs previous version:
-//   1. registrationApproved: ApproveProvidersPage stamps providerId /
-//      businessName / serviceType directly onto the notification + FCM
-//      payload, so we route straight to BusinessDashboardPage without a
-//      Firestore round trip. Falls back to the old Firestore lookup only
-//      if an older notification doc doesn't have that data.
-//   2. registrationRejected no longer opens BusinessDashboardPage (a
-//      rejected provider isn't active) — it now opens BusinessPage so they
-//      can see their status / reapply.
-//   3. MyOrdersPage used phoneNumber (null for email-auth) → now uses email.
-//   4. FeedbackPage is `const` — was being constructed without const.
-//   5. Navigator retry loop: on cold-start the navigator isn't mounted for
-//      ~1-2 s; retries up to 10× at 300 ms intervals.
-//   6. FIX (NEW): newBooking now routes straight to the specific
-//      BusinessDashboardPage for the registered service the order matched
-//      — previously it always opened the generic BusinessPage category
-//      list regardless of which service the booking was actually for.
-//      This reuses the same providerId/businessName/serviceType fast-path
-//      pattern already proven out for registrationApproved, via the new
-//      shared `_routeToProviderDashboard()` helper below. It works
-//      because OrderService now stamps those three fields onto every
-//      new-booking notification + FCM payload (see order_service.dart).
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 void routeNotification(Map<String, dynamic> data) {
   _routeWithRetry(data, attempts: 10, delay: const Duration(milliseconds: 300));
@@ -80,6 +52,73 @@ Future<void> _doRoute(NavigatorState navigator, Map<String, dynamic> data) async
         navigator,
         data,
         fallbackToBusinessPage: true,
+      );
+      break;
+
+    // ── Provider: the order was cancelled by the customer ─────────────────────
+    // NEW: takes the provider straight to the dashboard of the specific
+    // service the cancelled order belonged to, same fast-path logic as
+    // newBooking, so they land on the right "Available Jobs" tab instead
+    // of a generic list.
+    case NotificationType.orderCancelled:
+      await _routeToProviderDashboard(
+        navigator,
+        data,
+        fallbackToBusinessPage: true,
+      );
+      break;
+
+    // ── Provider: order is no longer available (another provider accepted it,
+    //    or it expired/was auto-closed before anyone accepted) ────────────────
+    // NEW: same fast-path routing — provider should land on their specific
+    // service dashboard, not a generic list, so they can immediately see
+    // other available jobs for that category.
+    case NotificationType.orderUnavailable:
+      await _routeToProviderDashboard(
+        navigator,
+        data,
+        fallbackToBusinessPage: true,
+      );
+      break;
+
+    // ── Provider: the CUSTOMER cancelled the order directly ────────────────────
+    // FIX (NEW): this notification type — 'user_cancelled', sent by
+    // OrderService.userCancelOrder() — used to have no case here at all,
+    // so it silently fell into `default` below, which pushed the
+    // PROVIDER onto MyOrdersPage — a customer-facing screen keyed by
+    // email. That's the wrong destination entirely for a provider.
+    //
+    // The fcm_queue payload written by userCancelOrder() only carries
+    // `providerId` + `serviceType` (no `businessName`), so the fast
+    // path in _routeToProviderDashboard would never have enough to
+    // build the dashboard directly. fallbackToBusinessPage is set to
+    // FALSE here (unlike newBooking/orderCancelled/orderUnavailable
+    // above) so it falls through to _routeToDashboard(), which looks
+    // up the provider's own Firestore doc and opens their REAL
+    // BusinessDashboardPage with the correct business name — not just
+    // the generic BusinessPage list.
+    case 'user_cancelled':
+      await _routeToProviderDashboard(
+        navigator,
+        data,
+        fallbackToBusinessPage: false,
+      );
+      break;
+
+    // ── Provider: an order they could have taken is no longer available
+    //    (another provider accepted it first) ───────────────────────────────
+    // FIX (NEW): this notification type — 'order_taken_by_other', sent by
+    // OrderService.notifyOthersOrderTaken() — also had no case here and
+    // fell into `default`, sending the provider to MyOrdersPage instead
+    // of their own dashboard. Same reasoning as 'user_cancelled' above:
+    // this payload doesn't carry `businessName` either, so
+    // fallbackToBusinessPage is FALSE to let the Firestore-lookup
+    // fallback build the real dashboard.
+    case 'order_taken_by_other':
+      await _routeToProviderDashboard(
+        navigator,
+        data,
+        fallbackToBusinessPage: false,
       );
       break;
 
@@ -147,27 +186,7 @@ Future<void> _doRoute(NavigatorState navigator, Map<String, dynamic> data) async
 
 // ─────────────────────────────────────────────────────────────────────────────
 // _routeToProviderDashboard
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared fast-path helper used by BOTH newBooking and registrationApproved.
-//
-// Fast path: whenever the notification/FCM payload already carries
-// providerId + businessName + serviceType (which OrderService and
-// ApproveProvidersPage now both stamp on), we can push
-// BusinessDashboardPage directly — no extra Firestore read, no chance of
-// guessing the wrong registered service for a provider who runs more
-// than one business type.
-//
-// Fallback behavior differs by caller:
-//   - registrationApproved (fallbackToBusinessPage: false): falls back to
-//     the old Firestore-lookup-by-uid path (_routeToDashboard), since a
-//     freshly-approved provider realistically only has the one new
-//     profile to land on.
-//   - newBooking (fallbackToBusinessPage: true): falls back to the
-//     generic BusinessPage category list instead, because guessing a
-//     single provider doc by uid alone would be WRONG for a provider
-//     registered under multiple service types — better to let them pick
-//     the right category themselves than land them on the wrong
-//     dashboard.
+
 // ─────────────────────────────────────────────────────────────────────────────
 Future<void> _routeToProviderDashboard(
   NavigatorState navigator,

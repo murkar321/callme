@@ -47,6 +47,18 @@ class NotificationType {
   static const String workStarted = 'work_started_otp';
   static const String orderTakenByOther = 'order_taken_by_other';
   static const String userCancelled = 'user_cancelled';
+
+  // FIX (NEW): these two were referenced by notification_router.dart
+  // (case NotificationType.orderCancelled / NotificationType.orderUnavailable)
+  // but were never actually defined on this class — that's what threw
+  // "The getter 'orderCancelled' isn't defined for the type
+  // 'NotificationType'" / same for 'orderUnavailable'. Adding them here
+  // fixes the getter error. Keep these string values in sync with any
+  // Cloud Function / server-side code that sends these notification
+  // types — if the sender uses a different string, the router's switch
+  // will silently miss and fall to `default`.
+  static const String orderCancelled = 'order_cancelled';
+  static const String orderUnavailable = 'order_unavailable';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -75,6 +87,14 @@ class NotificationType {
       return (icon: Icons.timer_off_outlined, color: const Color(0xFF9E9E9E));
     case NotificationType.userCancelled:
       return (icon: Icons.event_busy_outlined, color: const Color(0xFFE64A19));
+    // FIX (NEW): banner styling for the two newly-defined types above,
+    // so a router/notification-list consumer that hits these types
+    // gets a sensible icon/color instead of silently falling to the
+    // generic default case below.
+    case NotificationType.orderCancelled:
+      return (icon: Icons.event_busy_outlined, color: const Color(0xFFD32F2F));
+    case NotificationType.orderUnavailable:
+      return (icon: Icons.hourglass_disabled_outlined, color: const Color(0xFF9E9E9E));
     case NotificationType.providerFound:
       return (icon: Icons.person_search_outlined, color: const Color(0xFF3F51B5));
     default:
@@ -664,21 +684,7 @@ class NotificationService {
 
   // ═══════════════════════════════════════════════════════════════
   // FIX (the main bug): tray notification and in-app banner are now
-  // shown in two INDEPENDENT try/catch blocks. Previously there was
-  // no error handling at all here — an exception thrown by
-  // `_sharedPlugin.show()` (most commonly a missing/invalid custom
-  // sound resource) would propagate as an unhandled Future error out
-  // of this `.listen()` callback and silently abort BEFORE the banner
-  // code below it ever ran. That produced exactly the symptom
-  // reported: no ring AND no on-screen popup, with nothing visible
-  // anywhere to explain why. Now:
-  //   - the tray notification goes through _showTrayNotification(),
-  //     which itself retries with the default sound before giving up
-  //     and always logs.
-  //   - the banner is shown regardless of whether the tray call
-  //     succeeded, so at minimum the provider sees SOMETHING even if
-  //     the system notification failed for some device-specific
-  //     reason.
+ 
   // ═══════════════════════════════════════════════════════════════
   void _listenForeground() {
     FirebaseMessaging.onMessage.listen(

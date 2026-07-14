@@ -39,6 +39,7 @@ class _ProfilePageState extends State<ProfilePage> {
   bool   _isLoading      = true;
   bool   _isSaving       = false;
   bool   _isUploading    = false;
+  bool   _isDeleting     = false;
   double _uploadProgress = 0;
 
   File?  _imageFile;
@@ -313,6 +314,115 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // DELETE ACCOUNT — wipes Storage photo, Firestore doc, Auth user
+  // ─────────────────────────────────────────────────────────────
+
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete your account?'),
+        content: const Text(
+          'This will permanently delete your profile, saved address and '
+          'photo. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    // Second confirmation to prevent accidental taps on a destructive action.
+    final finalConfirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Are you absolutely sure?'),
+        content: const Text(
+          'Your account and all associated data will be permanently removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yes, delete my account',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (finalConfirm != true) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showSnack('Session expired. Please log in again.', isError: true);
+      return;
+    }
+
+    if (mounted) setState(() => _isDeleting = true);
+
+    try {
+      final email = _docId(user);
+
+      // 1. Delete profile photo from Storage (ignore if it never existed).
+      try {
+        await FirebaseStorage.instance
+            .ref('profile_images/${user.uid}/profile.jpg')
+            .delete();
+      } catch (e) {
+        debugPrint('STORAGE DELETE (non-fatal): $e');
+      }
+
+      // 2. Delete the user's Firestore document (keyed by email).
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(email)
+            .delete();
+      } catch (e) {
+        debugPrint('FIRESTORE DELETE (non-fatal): $e');
+      }
+
+      // 3. Delete the Firebase Auth account itself.
+      await user.delete();
+
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LogoPage()),
+        (_) => false,
+      );
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        _showSnack(
+          'For security, please log out and log back in, then try deleting '
+          'your account again.',
+          isError: true,
+        );
+      } else {
+        _showSnack('Delete failed: ${e.message}', isError: true);
+      }
+    } catch (e) {
+      debugPrint('DELETE ACCOUNT ERROR: $e');
+      _showSnack('Delete failed. Please try again.', isError: true);
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // SNACKBAR
   // ─────────────────────────────────────────────────────────────
 
@@ -578,6 +688,33 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ),
                               ),
+
+                              const SizedBox(height: 14),
+
+                              // Delete account button
+                              SizedBox(
+                                width:  double.infinity,
+                                height: 54,
+                                child: TextButton.icon(
+                                  onPressed: _isDeleting ? null : _deleteAccount,
+                                  icon: _isDeleting
+                                      ? const SizedBox(
+                                          width: 16, height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2, color: Colors.red))
+                                      : const Icon(Icons.delete_forever,
+                                          size: 18, color: Colors.red),
+                                  label: Text('Delete My Profile',
+                                      style: TextStyle(
+                                          fontSize:   15 * sp,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.red)),
+                                  style: TextButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16)),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -618,6 +755,30 @@ class _ProfilePageState extends State<ProfilePage> {
                       Text('${(_uploadProgress * 100).toStringAsFixed(0)}%',
                           style: const TextStyle(
                               color: Colors.indigo, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Delete-account overlay
+          if (_isDeleting)
+            Container(
+              color: Colors.black.withOpacity(0.4),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20)),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Deleting your account…',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                      SizedBox(height: 16),
+                      CircularProgressIndicator(
+                          strokeWidth: 2.5, color: Colors.red),
                     ],
                   ),
                 ),
