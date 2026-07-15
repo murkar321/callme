@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import 'admin_analytics_page.dart';
 import 'approve_providers_page.dart';
 import 'orders_detail.dart';
 import 'providers_details.dart';
@@ -42,6 +43,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
     'accepted': 0,
     'completed': 0,
     'rejected': 0,
+    // Live "at a glance" preview of the two headline analytics numbers —
+    // full breakdown lives in AdminAnalyticsPage, this is just a teaser
+    // so the admin doesn't have to leave the home screen to see them.
+    'todayRevenue': 0.0,
+    'avgRating': null, // null = no ratings recorded yet
   };
 
   String? _newProviderBanner;
@@ -381,6 +387,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // Status is read tolerantly (a few possible field names/locations,
   // case/whitespace-insensitive) and bucketed into the same four buckets
   // AdminOrdersPage uses: pending / accepted / completed / rejected.
+  //
+  // Also derives the two "at a glance" analytics teasers shown in the
+  // stats grid (today's revenue, average rating) using the same
+  // tolerant-fallback style as AdminAnalyticsPage's _amountOf/_ratingOf —
+  // kept lightweight here since the full breakdown lives on that page.
   // =====================================================
 
   void _listenOrders() {
@@ -388,12 +399,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
       if (!mounted) return;
 
       int pending = 0, accepted = 0, completed = 0, rejected = 0;
+      double todayRevenue = 0;
+      double ratingSum = 0;
+      int ratingCount = 0;
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
         final rawStatus = _statusOf(data);
+        final bucket = _bucketFor(rawStatus);
 
-        switch (_bucketFor(rawStatus)) {
+        switch (bucket) {
           case _OrderBucket.accepted:
             accepted++;
             break;
@@ -407,6 +422,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
             pending++;
             break;
         }
+
+        if (bucket == _OrderBucket.completed && _isToday(_createdAtOf(data))) {
+          todayRevenue += _amountOf(data);
+        }
+
+        final rating = _ratingOf(data);
+        if (rating != null) {
+          ratingSum += rating;
+          ratingCount++;
+        }
       }
 
       setState(() {
@@ -415,6 +440,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         dashboardData['accepted'] = accepted;
         dashboardData['completed'] = completed;
         dashboardData['rejected'] = rejected;
+        dashboardData['todayRevenue'] = todayRevenue;
+        dashboardData['avgRating'] = ratingCount > 0 ? ratingSum / ratingCount : null;
         _loadingOrders = false;
         _timedOut = false;
         _lastUpdated = DateTime.now();
@@ -461,6 +488,58 @@ class _AdminDashboardState extends State<AdminDashboard> {
       default:
         return _OrderBucket.pending;
     }
+  }
+
+  /// Same fallback-list philosophy as `_statusOf` above: order docs don't
+  /// consistently store price under one field name, so every plausible
+  /// shape is tried and the first non-empty numeric value wins.
+  double _amountOf(Map<String, dynamic> data) {
+    final candidates = <dynamic>[
+      data['amount'],
+      data['totalAmount'],
+      data['price'],
+      data['totalPrice'],
+      data['total'],
+      data['orderAmount'],
+    ];
+    for (final c in candidates) {
+      if (c == null) continue;
+      if (c is num) return c.toDouble();
+      final parsed = double.tryParse(c.toString());
+      if (parsed != null) return parsed;
+    }
+    return 0.0;
+  }
+
+  double? _ratingOf(Map<String, dynamic> data) {
+    final c = data['rating'] ?? data['orderRating'];
+    if (c == null) return null;
+    if (c is num) return c.toDouble();
+    return double.tryParse(c.toString());
+  }
+
+  DateTime? _createdAtOf(Map<String, dynamic> data) {
+    final candidates = <dynamic>[
+      data['createdAt'],
+      data['timestamp'],
+      data['orderDate'],
+      data['bookingDate'],
+    ];
+    for (final c in candidates) {
+      if (c == null) continue;
+      if (c is Timestamp) return c.toDate();
+      if (c is String) {
+        final parsed = DateTime.tryParse(c);
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  bool _isToday(DateTime? d) {
+    if (d == null) return false;
+    final now = DateTime.now();
+    return d.year == now.year && d.month == now.month && d.day == now.day;
   }
 
   // ── Header search: jump into Orders pre-filtered by whatever was typed.
@@ -865,6 +944,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ],
                 ),
                 SizedBox(width: m.isMobile ? 6 : 10),
+                // Analytics shortcut — sits right next to notifications/
+                // refresh so the admin can jump to the full breakdown
+                // (revenue trend, popular services, peak hours, top
+                // providers/cities, growth, repeat-customer & cancellation
+                // rate) in one tap from anywhere on the home screen.
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AdminAnalyticsPage()),
+                  ),
+                  child: Container(
+                    padding: EdgeInsets.all(m.iconButtonPadding),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.insights_rounded,
+                        color: Colors.white, size: m.headerIconSize),
+                  ),
+                ),
+                SizedBox(width: m.isMobile ? 6 : 10),
                 GestureDetector(
                   onTap: _retryLoad,
                   child: Container(
@@ -943,8 +1043,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ─── Stats grid (responsive) ────────────────────────────────────────
+  //
+  // Now 6 cards instead of 4 — Today's Revenue and Average Rating give a
+  // live analytics teaser right on the home screen, both tapping through
+  // to the full AdminAnalyticsPage breakdown rather than a single-metric
+  // detail page (since there's no dedicated page for either number alone).
 
   Widget _buildStatsGrid(BuildContext context, _ScreenMetrics m) {
+    final double revenue = (dashboardData['todayRevenue'] ?? 0.0) as double;
+    final double? rating = dashboardData['avgRating'] as double?;
+
     return GridView(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -952,34 +1060,48 @@ class _AdminDashboardState extends State<AdminDashboard> {
         crossAxisCount: m.statsColumns,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: m.statsAspectRatio,
+        // Fixed pixel height (not width-derived) — see the Quick Actions
+        // grid below for why this is safer than childAspectRatio.
+        mainAxisExtent: m.statsCardHeight,
       ),
       children: [
         _statCard(context,
             title: 'Users',
             icon: Icons.people_alt_rounded,
-            count: dashboardData['users'],
+            value: '${dashboardData['users']}',
             color: const Color(0xFF3B82F6),
             page: UsersPage()),
         _statCard(context,
             title: 'Providers',
             icon: Icons.storefront_rounded,
-            count: dashboardData['providers'],
+            value: '${dashboardData['providers']}',
             color: const Color(0xFF10B981),
             page: ProvidersPage()),
         _statCard(context,
             title: 'Orders',
             icon: Icons.receipt_long_rounded,
-            count: dashboardData['orders'],
+            value: '${dashboardData['orders']}',
             color: const Color(0xFFF59E0B),
             page: const AdminOrdersPage()),
         _statCard(context,
             title: 'Approvals',
             icon: Icons.pending_actions_rounded,
-            count: dashboardData['approvals'],
+            value: '${dashboardData['approvals']}',
             color: const Color(0xFFEF4444),
             page: const ApproveProvidersPage(),
             highlight: (dashboardData['approvals'] ?? 0) > 0),
+        _statCard(context,
+            title: "Today's Revenue",
+            icon: Icons.currency_rupee_rounded,
+            value: '₹${revenue.toStringAsFixed(0)}',
+            color: const Color(0xFF10B981),
+            page: const AdminAnalyticsPage()),
+        _statCard(context,
+            title: 'Avg Rating',
+            icon: Icons.star_rounded,
+            value: rating != null ? rating.toStringAsFixed(1) : '—',
+            color: const Color(0xFFF59E0B),
+            page: const AdminAnalyticsPage()),
       ],
     );
   }
@@ -988,7 +1110,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     BuildContext context, {
     required String title,
     required IconData icon,
-    required int count,
+    required String value,
     required Color color,
     required Widget page,
     bool highlight = false,
@@ -1021,26 +1143,29 @@ class _AdminDashboardState extends State<AdminDashboard> {
               child: Icon(icon, color: color, size: 22),
             ),
             Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '$count',
+                    value,
                     style: TextStyle(
-                        fontSize: 30, fontWeight: FontWeight.bold, color: color),
+                        fontSize: 28, fontWeight: FontWeight.bold, color: color),
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF64748B)),
+                Flexible(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B)),
+                  ),
                 ),
               ],
             ),
@@ -1159,23 +1284,30 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminAnalyticsPage()),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.circle, size: 8, color: Colors.green),
-                    SizedBox(width: 5),
-                    Text('Live',
-                        style: TextStyle(
-                            color: Colors.green,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold)),
-                  ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6D28D9).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Text('Full Report',
+                          style: TextStyle(
+                              color: Color(0xFF6D28D9),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold)),
+                      SizedBox(width: 3),
+                      Icon(Icons.arrow_forward_rounded,
+                          size: 13, color: Color(0xFF6D28D9)),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -1293,6 +1425,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ─── Quick actions ────────────────────────────────────────────────────
+  //
+  // Now 4 actions (Analytics added) — mobile switches to a 2x2 grid so
+  // every tile stays evenly sized instead of wrapping 3+1 lopsided.
 
   Widget _buildQuickActions(BuildContext context, _ScreenMetrics m) {
     final actions = [
@@ -1314,6 +1449,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
         color: const Color(0xFFEF4444),
         page: const ApproveProvidersPage(),
       ),
+      (
+        label: 'Analytics',
+        icon: Icons.insights_rounded,
+        color: const Color(0xFF6D28D9),
+        page: const AdminAnalyticsPage(),
+      ),
     ];
 
     if (m.isMobile) {
@@ -1321,10 +1462,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
+          crossAxisCount: 2,
           crossAxisSpacing: 10,
           mainAxisSpacing: 10,
-          childAspectRatio: 0.95,
+          // FIX: childAspectRatio derives tile HEIGHT from tile WIDTH, so
+          // it silently shrinks on narrower Android screens even though
+          // the icon + 2-line label content needs the same ~100px no
+          // matter how wide the phone is. mainAxisExtent pins the tile
+          // to a fixed pixel height instead — content height is now
+          // independent of screen width, so it can never come up short.
+          mainAxisExtent: 126,
         ),
         children: actions
             .map((a) => _actionButton(context,
@@ -1359,7 +1506,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        // FIX: was vertical:16 with a 12px icon pad + 22px icon + 11px
+        // 2-line label — that combination only fits inside a short 1.6
+        // aspect-ratio tile if nothing is ever clipped by rounding. Every
+        // dimension here is trimmed a notch so the intrinsic content
+        // height comfortably clears the tile height with room to spare.
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -1369,24 +1521,29 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ],
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icon, color: color, size: 22),
+              child: Icon(icon, color: color, size: 20),
             ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF374151)),
+            const SizedBox(height: 8),
+            Flexible(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF374151)),
+              ),
             ),
           ],
         ),
@@ -1412,7 +1569,7 @@ class _ScreenMetrics {
   final double headerIconSize;
   final double iconButtonPadding;
   final int statsColumns;
-  final double statsAspectRatio;
+  final double statsCardHeight;
 
   _ScreenMetrics._({
     required this.width,
@@ -1425,7 +1582,7 @@ class _ScreenMetrics {
     required this.headerIconSize,
     required this.iconButtonPadding,
     required this.statsColumns,
-    required this.statsAspectRatio,
+    required this.statsCardHeight,
   });
 
   factory _ScreenMetrics.of(double width) {
@@ -1448,8 +1605,13 @@ class _ScreenMetrics {
       subtitleFontSize: isMobile ? 12 : 13,
       headerIconSize: isMobile ? 20 : 24,
       iconButtonPadding: isNarrowPhone ? 9 : (isMobile ? 10 : 12),
-      statsColumns: isMobile ? 2 : (isTablet ? 3 : 4),
-      statsAspectRatio: isMobile ? 1.05 : (isTablet ? 1.15 : 1.25),
+      // 6 stat cards now (Users/Providers/Orders/Approvals/Revenue/Rating)
+      // — 3 columns on tablet AND desktop gives a clean 2-row layout
+      // instead of the old 4-wide row that would leave an awkward gap.
+      // Fixed pixel height (not aspect ratio) so content never comes up
+      // short on narrower Android screens — see Quick Actions grid note.
+      statsColumns: isMobile ? 2 : 3,
+      statsCardHeight: isMobile ? 148 : (isTablet ? 158 : 170),
     );
   }
 }

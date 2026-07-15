@@ -38,6 +38,7 @@ List<String> salonCategories = [
   "Facial",
   "Makeup",
   "Manicure",
+  "Mehandi",
   "Pedicure",
   "Waxing",
 ];
@@ -595,7 +596,96 @@ SalonService(
       "Final moisturizing"
     ], id: 27,
   ),
-
+///MEHANDI
+SalonService(
+    name: "Engagement Mehandi",
+    category: "Mehandi",
+    image: "assets/engage mehandi.jpg",
+    time: "30 minutes",
+    price: 800,
+    discount: 10,
+    finalPrice: 720,
+    slogan: "Fun and cute mehandi designs for kids.",
+    description:
+        "A professional mehandi service that creates fun and cute designs suitable for children.",
+    includes: [
+      "Mehandi design consultation",
+      "Application of mehandi paste",
+      "Design detailing and finishing"
+    ],
+    process: [
+      "Design consultation",
+      "Mehandi paste application",
+      "Detailing and finishing"
+    ], id: 49,
+  ),
+SalonService(
+    name: "Bridal Mehandi",
+    category: "Mehandi",
+    image: "assets/bridal mehandi.jpg",
+    time: "3 hours",
+    price: 5000,
+    discount: 20,
+    finalPrice: 4000,
+    slogan: "Intricate bridal mehandi designs.",
+    description:
+        "A professional mehandi service that creates beautiful and intricate designs for brides.",
+    includes: [
+      "Mehandi design consultation",
+      "Application of mehandi paste",
+      "Design detailing and finishing"
+    ],
+    process: [
+      "Design consultation",
+      "Mehandi paste application",
+      "Detailing and finishing"
+    ], id: 46,
+  ),
+  SalonService(
+    name: "Party Mehandi",
+    category: "Mehandi",
+    image: "assets/party mehandi.jpg",
+    time: "2 hours",
+    price: 3000,
+    discount: 15,
+    finalPrice: 2550,
+    slogan: "Stylish mehandi designs for parties.",
+    description:
+        "A professional mehandi service that creates stylish and trendy designs for party occasions.",
+    includes: [
+      "Mehandi design consultation",
+      "Application of mehandi paste",
+      "Design detailing and finishing"
+    ],
+    process: [
+      "Design consultation",
+      "Mehandi paste application",
+      "Detailing and finishing"
+    ], id: 47,
+  ),
+  SalonService(
+    name: "Simple Mehandi",
+    category: "Mehandi",
+    image: "assets/mehandi.jpg",
+    time: "1 hour",
+    price: 1500,
+    discount: 10,
+    finalPrice: 1350,
+    slogan: "Elegant and simple mehandi designs.",
+    description:
+        "A professional mehandi service that creates elegant and simple designs for casual occasions.",
+    includes: [
+      "Mehandi design consultation",
+      "Application of mehandi paste",
+      "Design detailing and finishing"
+    ],
+    process: [
+      "Design consultation",
+      "Mehandi paste application",
+      "Detailing and finishing"
+    ], id: 48,
+  ),
+  
   /// MAKEUP
 
   SalonService(
