@@ -24,7 +24,7 @@ class NotificationType {
 
   static const String orderTakenByOther = 'order_taken_by_other';
 
-  // FIX: added — business_dashboard_page.dart's _startWork()/_resendOtp()
+  // Added — business_dashboard_page.dart's _startWork()/_resendOtp()
   // this notification type. If these two ever diverge, OTP notifications
   // will silently fall back to the generic bell icon instead of the
   // dedicated one.
@@ -144,10 +144,10 @@ String cleanSubCategory(String raw) => raw.trim();
 // `notifications` doc + push). Both must call categoryMatchFuzzy()
 // from HERE — neither file should re-implement its own copy.
 //
-// NOTE: business_page.dart's badge counter now ALSO calls
-// categoryMatchFuzzy() from here directly (see business_page.dart),
-// so "got notified" / "shows in Available" / "badge count" can never
-// disagree with each other.
+// NOTE: business_page.dart's badge counter also calls
+// categoryMatchFuzzy() from here directly, so "got notified" /
+// "shows in Available" / "badge count" can never disagree with each
+// other.
 // ============================================================
 
 String normalizeCategory(String s) =>
@@ -349,6 +349,59 @@ class OrderService {
 
   // ==========================================================
   // PLACE ORDER
+  //
+  // ── BUG FIX (this is the fix for "only the first registered
+  //    provider ever receives orders") ─────────────────────────────
+  // Previously, whenever a booking page resolved a `providerId`
+  // before calling placeOrder() — which nearly every booking page
+  // does, since most flows land on one specific business before
+  // checkout — the order was written with:
+  //
+  //   'providerId':     resolvedProviderId,
+  //   'providerUserId': resolvedProviderUserId,
+  //   'isAssigned':     resolvedProviderId.isNotEmpty,   // TRUE
+  //
+  // i.e. the order was immediately LOCKED to that one provider at
+  // creation time, before any fan-out or FCFS logic ever ran. Two
+  // knock-on effects:
+  //
+  //   1. _notifyMatchingProviders() took the "direct assignment"
+  //      branch and only ever notified that ONE provider — every
+  //      other provider registered for the exact same category never
+  //      got a notification, regardless of how many of them existed.
+  //
+  //   2. On business_dashboard_page.dart, _unavailableReason() saw
+  //      isAssigned == true with a providerUserId that didn't match
+  //      the viewing provider, and returned "Already assigned to
+  //      another provider" — hiding the order from every other
+  //      matching provider's Available tab too.
+  //
+  // Net result: whichever provider a booking page happened to resolve
+  // first (often just the first result of a query) silently absorbed
+  // 100% of the orders for that category, while every other provider
+  // who registered for the same service/category never saw a single
+  // one — exactly the behaviour reported.
+  //
+  // FIX: placeOrder() no longer pre-assigns or locks the order to any
+  // provider. Every order is created OPEN (isAssigned: false, status:
+  // pending/enquiry) and is ALWAYS broadcast to every approved
+  // provider whose categories/subCategories match — the same
+  // category-matching logic the dashboard itself uses to decide what
+  // to display. Whichever matching provider taps Accept first wins,
+  // via the existing Firestore-transaction-guarded _accept() in
+  // business_dashboard_page.dart. This is the actual FCFS model the
+  // app is meant to run on.
+  //
+  // The incoming `providerId` parameter is KEPT for backward
+  // compatibility with existing booking-page call sites, but it is
+  // now purely informational — stored as `requestedProviderId` on the
+  // order doc for debugging/analytics only. It no longer assigns,
+  // locks, or restricts who can see/accept the order. If a specific
+  // "book this exact provider directly, skip the marketplace" flow is
+  // ever needed (e.g. tapping "Book Now" from a provider's own
+  // profile page), that should be a distinct, explicitly-flagged code
+  // path — not the default behaviour of every booking page.
+  // ──────────────────────────────────────────────────────────────
   // ==========================================================
   static Future<DocumentReference> placeOrder({
     required String serviceType,
@@ -374,6 +427,8 @@ class OrderService {
     int? children,
     String? visitType,
 
+    // NOTE: no longer used to assign/lock the order — see fix note
+    // above. Kept only as an optional informational hint.
     String? providerId,
 
     String? category,
@@ -424,23 +479,10 @@ class OrderService {
           'providers see accurate payment info on their dashboard.');
     }
 
-    // ── Resolve provider details (direct-assignment only) ─────────────────────
-    String resolvedProviderId     = providerId ?? '';
-    String resolvedProviderName   = '';
-    String resolvedProviderUserId = '';
-
-    if (resolvedProviderId.isNotEmpty) {
-      final snap = await _db
-          .collection('providers')
-          .doc(resolvedProviderId)
-          .get();
-      final d = snap.data() ?? {};
-      resolvedProviderName   =
-          (d['businessName'] ?? d['providerName'] ?? d['name'] ?? '')
-              .toString();
-      resolvedProviderUserId =
-          (d['userId'] ?? d['uid'] ?? '').toString();
-    }
+    // ── requestedProviderId is informational ONLY now — it does not
+    // assign, lock, or restrict the order in any way. See fix note
+    // above the function signature.
+    final String requestedProviderId = (providerId ?? '').trim();
 
     final orderId               = generateOrderId(userName);
     final docRef                = _db.collection('orders').doc(orderId);
@@ -472,15 +514,23 @@ class OrderService {
         'email': email ?? '',
       },
 
-      'providerId':     resolvedProviderId,
-      'providerUserId': resolvedProviderUserId,
-      'providerName':   resolvedProviderName,
+      // ── No provider assigned at creation. Every matching provider
+      // is treated equally; whoever accepts first (via the
+      // transaction-guarded _accept() on the dashboard) becomes the
+      // provider on this order.
+      'providerId':     '',
+      'providerUserId': '',
+      'providerName':   '',
 
       'provider': {
-        'providerId':     resolvedProviderId,
-        'providerUserId': resolvedProviderUserId,
-        'providerName':   resolvedProviderName,
+        'providerId':     '',
+        'providerUserId': '',
+        'providerName':   '',
       },
+
+      // Purely informational — which provider's page/flow this order
+      // originated from, if any. Never used for matching or locking.
+      'requestedProviderId': requestedProviderId,
 
       'serviceType': normalizedServiceType,
       'serviceName': normalizedServiceType,
@@ -520,8 +570,10 @@ class OrderService {
 
       'isEnquiry': isEnquiry,
 
+      // ── Always created OPEN. No order is ever pre-assigned to a
+      // single provider anymore — see fix note above.
       'status':      isEnquiry ? OrderStatus.enquiry : OrderStatus.pending,
-      'isAssigned':  resolvedProviderId.isNotEmpty,
+      'isAssigned':  false,
       'isCompleted': false,
 
       'declineReason': '',
@@ -535,7 +587,8 @@ class OrderService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    // ── Fan-out order + notification to matching providers ─────────────────────
+    // ── Fan-out order + notification to EVERY matching approved
+    // provider — no single-provider shortcut anymore.
     await _notifyMatchingProviders(
       orderId:       orderId,
       orderData: {
@@ -551,9 +604,6 @@ class OrderService {
       date:          date,
       time:          time,
       totalAmount:   totalAmount,
-      specificProviderId: resolvedProviderId.isNotEmpty
-          ? resolvedProviderId
-          : null,
     );
 
     return docRef;
@@ -724,9 +774,6 @@ class OrderService {
               'type':        NotificationType.userCancelled,
               'orderId':     orderId,
               'receiverId':  providerUserId,
-              // FIX: enriched so a tap on this notification could, in
-              // future, route straight to this provider's dashboard
-              // instead of only relying on in-app navigation.
               'providerId':  docId,
               'serviceType': serviceType,
             },
@@ -751,29 +798,12 @@ class OrderService {
   // business_page.dart's badge counter, so "got notified" / "shows up
   // in Available" / "badge count" can never disagree.
   //
-  // ── BUG FIX (this was the source of the leak) ─────────────────────
-  // The DIRECT-ASSIGNMENT branch below (specificProviderId != null)
-  // used to notify that provider UNCONDITIONALLY, with a comment
-  // literally saying "no category check". That's the exact same class
-  // of bug that was fixed on the *display* side in
-  // business_dashboard_page.dart's `_unavailableReason()` — but it was
-  // never fixed here on the *notification* side.
-  //
-  // Net effect before this fix: because most bookings resolve to one
-  // specific provider before ever calling placeOrder() (see
-  // `initialProviderId` / `_loadProvider()` in the booking pages),
-  // nearly EVERY order counted as a "direct assignment" — so nearly
-  // every order notified its assigned provider regardless of whether
-  // it matched that provider's registered categories/subCategories.
-  // The dashboard correctly hid the order from Available, but the push
-  // + in-app notification still fired.
-  //
-  // Fix: the direct-assignment branch now runs the exact same
-  // categoryMatchFuzzy() check as the broadcast branch below before
-  // sending anything. If it doesn't match, the notification is
-  // skipped — consistent with what the provider actually sees on
-  // their dashboard.
-  // ────────────────────────────────────────────────────────────────
+  // As of the fix documented on placeOrder() above, this is now the
+  // ONLY path orders are ever notified through — there is no more
+  // "direct assignment, single provider only" branch. Every approved
+  // provider whose categories/subCategories match the order gets
+  // notified, equally, regardless of which business the customer
+  // happened to browse from.
   // ==========================================================
   static Future<void> _notifyMatchingProviders({
     required String orderId,
@@ -785,55 +815,8 @@ class OrderService {
     required DateTime date,
     required String time,
     required double totalAmount,
-    String? specificProviderId,
   }) async {
     try {
-      if (specificProviderId != null && specificProviderId.isNotEmpty) {
-        // Direct assignment — SAME category check as the broadcast
-        // path below. No more unconditional notify.
-        final doc = await _db
-            .collection('providers')
-            .doc(specificProviderId)
-            .get();
-        if (!doc.exists) return;
-
-        final provData        = doc.data() ?? {};
-        final providerCats    = providerCategories(provData);
-        final providerSubCats = providerSubCategories(provData);
-
-        final matches = categoryMatchFuzzy(
-          orderData,
-          providerCats,
-          providerSubCats: providerSubCats,
-          debugOrderId: '$orderId -> direct-assign ${doc.id}',
-        );
-
-        if (!matches) {
-          final mergedCats = providerCategoryPool(providerCats, providerSubCats);
-          debugPrint('[OrderService] order $orderId: direct-assigned to '
-              'provider ${doc.id} but category mismatch — notification '
-              'SKIPPED (this used to bypass the category check entirely). '
-              'Provider categories: $mergedCats, order category: '
-              '"$category"${subCategory.isNotEmpty ? " / \"$subCategory\"" : ""}. '
-              'If this provider SHOULD receive this order, add the missing '
-              'category to their profile.');
-          return;
-        }
-
-        await _sendProviderNotification(
-          providerId:  doc.id,
-          orderId:     orderId,
-          serviceType: serviceType,
-          category:    category,
-          subCategory: subCategory,
-          userName:    userName,
-          date:        date,
-          time:        time,
-          totalAmount: totalAmount,
-        );
-        return;
-      }
-
       final normSvc = normalizeServiceType(serviceType);
 
       // Primary: fast indexed query — works whenever the provider's
@@ -903,14 +886,15 @@ class OrderService {
 
       debugPrint('[OrderService] order $orderId: notified $notifiedCount / '
           '${candidateDocs.length} $serviceType providers '
-          '(category="$category", subCategory="$subCategory") — EXACT match only');
+          '(category="$category", subCategory="$subCategory") — EXACT match, '
+          'ALL matching providers notified equally (no single-provider lock)');
     } catch (e) {
       debugPrint('[OrderService] _notifyMatchingProviders error: $e');
     }
   }
 
   // ==========================================================
-  // FIX: NEW — FCFS "taken" notice to every OTHER matching provider.
+  // FCFS "taken" notice to every OTHER matching provider.
   // ==========================================================
   static Future<void> notifyOthersOrderTaken({
     required String orderId,
@@ -1012,9 +996,6 @@ class OrderService {
               'type':        NotificationType.orderTakenByOther,
               'orderId':     orderId,
               'receiverId':  providerUserId,
-              // FIX: enriched (previously just type/orderId/receiverId)
-              // so this payload carries the same shape as newBooking's,
-              // in case routing for this type is added later.
               'providerId':  doc.id,
               'serviceType': serviceType,
               'category':    displayCat,
@@ -1076,11 +1057,11 @@ class OrderService {
         'on ${_formatDate(date)} at $time.'
         '${totalAmount > 0 ? ' Amount ₹${totalAmount.toStringAsFixed(0)}' : ''}';
 
-    // FIX: `businessName: providerName` was missing here before — the
-    // Firestore `notifications` doc for new bookings never carried the
-    // provider's own name/id, which is what notification_router.dart
-    // now needs to route straight to THIS provider's dashboard (instead
-    // of just opening the generic BusinessPage list).
+    // `businessName: providerName` is written here so the Firestore
+    // `notifications` doc for new bookings carries the provider's own
+    // name/id, which notification_router.dart needs to route straight
+    // to THIS provider's dashboard (instead of the generic BusinessPage
+    // list).
     await _sendNotification(
       receiverId: providerUserId,
       role:       'provider',
@@ -1108,7 +1089,7 @@ class OrderService {
           'type':        NotificationType.newBooking,
           'orderId':     orderId,
           'receiverId':  providerUserId,
-          // FIX: this is the actual payload that survives to a
+          // This is the actual payload that survives to a
           // locked-screen / terminated-app tap. Without these three
           // fields, notification_router.dart had nothing to route on
           // and fell back to the generic BusinessPage list every time.
@@ -1161,10 +1142,6 @@ class OrderService {
           (userDoc.data()?['fcmToken'] ?? '').toString().trim();
 
       if (fcmToken.isNotEmpty) {
-        // FIX: enrich the push data with businessName/serviceType/
-        // providerId when present — previously this map only ever had
-        // type/orderId/receiverId, so a locked-screen tap had less
-        // context to route with than the in-app notifications doc did.
         final pushData = <String, dynamic>{
           'type':       type,
           'orderId':    orderId,

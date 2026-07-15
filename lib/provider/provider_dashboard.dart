@@ -13,12 +13,7 @@ import 'provider_profile_page.dart';
 import '../provider/order_service.dart';
 // ⚠️ Adjust path if service_config.dart lives elsewhere.
 
-// FIX: only import NotificationService from notification_service.dart —
-// NOT the whole file. notification_service.dart also declares its own
-// `class NotificationType`, and order_service.dart (imported above)
-// already declares a DIFFERENT `class NotificationType`. Importing both
-// files unqualified would make `NotificationType` ambiguous and fail to
-// compile. `show NotificationService` sidesteps that entirely.
+
 import '../profile/notification_service.dart' show NotificationService;
 // ⚠️ Adjust path above if notification_service.dart lives elsewhere.
 

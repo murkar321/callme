@@ -12,10 +12,15 @@ class SalonServiceCard extends StatefulWidget {
   final SalonService service;
   final VoidCallback? onUpdate;
 
+  /// When true, shows a small category chip on the card. Used by search
+  /// results, where cards from different categories can appear together.
+  final bool showCategory;
+
   const SalonServiceCard({
     super.key,
     required this.service,
     this.onUpdate,
+    this.showCategory = false,
   });
 
   @override
@@ -125,6 +130,24 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (widget.showCategory) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _theme.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      widget.service.category,
+                      style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: _theme),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                ],
                 Text(widget.service.name,
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 15)),

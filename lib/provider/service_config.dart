@@ -33,6 +33,7 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "Hair Treatments",
       "Hair Color",
       "Facial",
+      "Mehandi",
       "Makeup",
       "Manicure",
       "Pedicure",
