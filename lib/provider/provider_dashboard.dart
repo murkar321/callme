@@ -44,6 +44,100 @@ class _C {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// SERVICE ICON STYLE
+//
+// FIX: the dashboard header used to always render a generic
+// `Icons.storefront_rounded` box regardless of which service this
+// dashboard was for (Salon, Plumbing, Hotel, etc.).
+//
+// business_page.dart already defines exactly one icon/color/background
+// per category in its `businessCategories` list (the grid the provider
+// taps to register). This map is that SAME set of icon/color/background
+// values, keyed by normalized serviceType, so this dashboard's header
+// shows the identical icon a provider already associates with that
+// category from the business page grid — never a generic placeholder.
+//
+// Keys match the exact strings `_getServiceType()` in business_page.dart
+// produces (lowercased category name, with "Educational Services"
+// mapped to "education").
+// ═══════════════════════════════════════════════════════════════
+class _ServiceIconStyle {
+  final IconData icon;
+  final Color color;
+  final Color bg;
+  const _ServiceIconStyle({
+    required this.icon,
+    required this.color,
+    required this.bg,
+  });
+}
+
+class _ServiceIcons {
+  static const Map<String, _ServiceIconStyle> _map = {
+    'salon': _ServiceIconStyle(
+      icon:  Icons.content_cut_rounded,
+      color: Color(0xFFE91E8C),
+      bg:    Color(0xFFFCE4F1),
+    ),
+    'education': _ServiceIconStyle(
+      icon:  Icons.menu_book_rounded,
+      color: Color(0xFF5C6BC0),
+      bg:    Color(0xFFE8EAF6),
+    ),
+    'cleaning': _ServiceIconStyle(
+      icon:  Icons.cleaning_services_rounded,
+      color: Color(0xFF00897B),
+      bg:    Color(0xFFE0F2F1),
+    ),
+    'plumbing': _ServiceIconStyle(
+      icon:  Icons.plumbing_rounded,
+      color: Color(0xFF0288D1),
+      bg:    Color(0xFFE1F5FE),
+    ),
+    'hotel': _ServiceIconStyle(
+      icon:  Icons.hotel_rounded,
+      color: Color(0xFFF57C00),
+      bg:    Color(0xFFFFF3E0),
+    ),
+    'resort': _ServiceIconStyle(
+      icon:  Icons.beach_access_rounded,
+      color: Color(0xFF2E7D32),
+      bg:    Color(0xFFE8F5E9),
+    ),
+    'laundry': _ServiceIconStyle(
+      icon:  Icons.local_laundry_service_rounded,
+      color: Color(0xFF8E24AA),
+      bg:    Color(0xFFF3E5F5),
+    ),
+    'water': _ServiceIconStyle(
+      icon:  Icons.water_drop_rounded,
+      color: Color(0xFF1976D2),
+      bg:    Color(0xFFE3F2FD),
+    ),
+    'civil': _ServiceIconStyle(
+      icon:  Icons.construction_rounded,
+      color: Color(0xFFD84315),
+      bg:    Color(0xFFFBE9E7),
+    ),
+  };
+
+  // Fallback only ever used for a serviceType outside the 9 known
+  // categories (e.g. new category added to business_page.dart but not
+  // yet mirrored here) — keeps the dashboard from crashing instead of
+  // silently mismatching a category to the wrong icon.
+  static const _ServiceIconStyle _fallback = _ServiceIconStyle(
+    icon:  Icons.storefront_rounded,
+    color: _C.indigo,
+    bg:    _C.indigoSft,
+  );
+
+  static _ServiceIconStyle forServiceType(String serviceType) {
+    final key = serviceType.toLowerCase().trim();
+    return _map[key] ?? _fallback;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // TERMINOLOGY — maps serviceType → { singular, available, mine }
 // ═══════════════════════════════════════════════════════════════
 class _Terms {
@@ -2219,6 +2313,14 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // FIX: this used to always render a generic Icons.storefront_rounded
+    // box regardless of service. It now looks up the exact same
+    // icon/color/background this service's category card uses in
+    // business_page.dart's grid, via _ServiceIcons — so a Salon
+    // dashboard shows the scissors icon, a Plumbing dashboard shows the
+    // wrench icon, a Hotel dashboard shows the hotel icon, etc.
+    final iconStyle = _ServiceIcons.forServiceType(serviceType);
+
     return Container(
       decoration: const BoxDecoration(
           color: Colors.white,
@@ -2233,9 +2335,9 @@ class _Header extends StatelessWidget {
               Container(
                   width: 52, height: 52,
                   decoration: BoxDecoration(
-                      color: _C.indigoSft, borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(Icons.storefront_rounded,
-                      color: _C.indigo, size: 26)),
+                      color: iconStyle.bg, borderRadius: BorderRadius.circular(16)),
+                  child: Icon(iconStyle.icon,
+                      color: iconStyle.color, size: 26)),
               const SizedBox(width: 14),
               Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

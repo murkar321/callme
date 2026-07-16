@@ -62,12 +62,44 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   String? _providerName;
   String? _noProviderMessage;
 
-  // ✅ The canonical category resolved during provider lookup — reused as-is
-  // when the order is placed, so what we matched a provider on is exactly
-  // what gets stored on the order (and later re-matched by the dashboard /
-  // FCM fan-out via the same resolveCanonicalCategory()/categoryMatchFuzzy()
-  // pipeline in order_service.dart).
+  // ✅ The canonical category resolved from what the customer picked —
+  // reused as-is when the order is placed, so what we matched a provider
+  // on is exactly what gets stored on the order (and later re-matched by
+  // the dashboard / FCM fan-out via the same
+  // resolveCanonicalCategory()/categoryMatchFuzzy() pipeline in
+  // order_service.dart).
   String _resolvedCategory = '';
+
+  // ═════════════════════════════════════════════════════════════════════
+  // ✅ FIX (root cause of "civil enquiries never become available to any
+  // provider"):
+  //
+  // resolveCanonicalCategory() in order_service.dart is DESIGNED to
+  // collapse a specific pick (e.g. "Kitchen Renovation") down to its
+  // broad PARENT category (e.g. "Renovation") — that's how it snaps
+  // free-text onto a category providers can register under. But this
+  // page used to throw the specific pick away completely once that
+  // happened, and never sent a `subCategory` to OrderService.placeOrder()
+  // at all.
+  //
+  // Category matching in order_service.dart (`categoryMatch()`) is a
+  // STRICT, EXACT, normalized match — there's no fuzzy word-overlap
+  // fallback. So a provider who registered specifically under the
+  // "Kitchen Renovation" subCategory — without separately also ticking
+  // the broad "Renovation" main category — could NEVER exact-match an
+  // order that only ever carried "Renovation". That order stayed
+  // invisible to that provider's Available tab and no notification was
+  // ever sent, no matter how correctly the provider had registered.
+  //
+  // Fix: keep BOTH values —
+  //   _resolvedCategory    → the broad parent, matches providers
+  //                          registered under the main category
+  //   _resolvedSubCategory → the exact original pick, matches providers
+  //                          registered under that specific subCategory
+  // — and send both to OrderService.placeOrder(). Either kind of
+  // provider registration will now match.
+  // ═════════════════════════════════════════════════════════════════════
+  String _resolvedSubCategory = '';
 
   late final AnimationController _pageAnim;
   late final AnimationController _revealAnim;
@@ -100,6 +132,14 @@ class _CivilBookingPageState extends State<CivilBookingPage>
       final digits = user.phoneNumber!.replaceAll(RegExp(r'[^\d]'), '');
       _phoneController.text = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
     }
+
+    // ✅ FIX: this used to only happen inside _loadProvider(), which is
+    // SKIPPED below whenever initialProviderId is supplied — meaning
+    // _resolvedCategory/_resolvedSubCategory were NEVER set on that path
+    // and the order was later saved with an unresolved/empty category.
+    // Resolving it here, unconditionally, up front, guarantees it always
+    // runs regardless of which branch below executes.
+    _resolveCategorySelection();
 
     if (widget.initialProviderId != null && widget.initialProviderId!.isNotEmpty) {
       _providerId        = widget.initialProviderId;
@@ -145,28 +185,65 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     } catch (_) {}
   }
 
-  /// Everything this booking is "about", in the shape order_service.dart's
-  /// categoryMatchFuzzy()/orderCategoryCandidates() expect — i.e. exactly
-  /// what will end up on the order document itself. Built ONCE per lookup
-  /// so the provider we match here is guaranteed to be the same provider
-  /// the dashboard/FCM fan-out would independently pick for this order.
-  Map<String, dynamic> _buildOrderLikeData(String normalizedServiceType) {
+  /// ✅ FIX — see the big comment above `_resolvedSubCategory` for the
+  /// full explanation. Resolves what this booking is "about" into BOTH a
+  /// parent `_resolvedCategory` and (when applicable) a specific
+  /// `_resolvedSubCategory`, instead of collapsing everything down to
+  /// just the parent and losing the customer's specific pick. Called
+  /// exactly once, unconditionally, from initState() — not just inside
+  /// _loadProvider() — so it always runs regardless of whether this page
+  /// was opened with an initialProviderId or not.
+  void _resolveCategorySelection() {
+    final normalizedServiceType = widget.serviceType.trim().toLowerCase();
     final serviceNames = _hasCartItems
         ? _cartItems.map((e) => e.name).toList()
         : (widget.selectedRenovationItems?.isNotEmpty ?? false)
             ? widget.selectedRenovationItems!
             : [widget.serviceName];
 
-    final rawCategoryInput = serviceNames.isNotEmpty ? serviceNames.first : widget.serviceName;
+    final rawCategoryInput =
+        serviceNames.isNotEmpty ? serviceNames.first : widget.serviceName;
 
-    // resolveCanonicalCategory() snaps whatever the user picked onto the
-    // exact category string providers register under (serviceConfigs),
-    // including recognizing a specific sub-service and mapping it to its
-    // parent category — the SAME resolver OrderService.placeOrder() uses.
-    _resolvedCategory = resolveCanonicalCategory(rawCategoryInput, normalizedServiceType);
+    // Does this raw pick match a specific, registered sub-service? If so,
+    // keep BOTH its parent (so providers registered at the main-category
+    // level still match) AND the raw item itself as the subCategory (so
+    // providers registered specifically under that sub-service — without
+    // necessarily also ticking the parent — still match too).
+    final subParent =
+        parentCategoryForSubService(rawCategoryInput, normalizedServiceType);
+
+    if (subParent != null) {
+      _resolvedCategory    = subParent;
+      _resolvedSubCategory = cleanSubCategory(rawCategoryInput);
+    } else {
+      // No specific sub-service recognized — resolveCanonicalCategory()
+      // snaps whatever the user picked onto the exact category string
+      // providers register under (serviceConfigs). The SAME resolver
+      // OrderService.placeOrder() uses, so this stays consistent.
+      _resolvedCategory    = resolveCanonicalCategory(rawCategoryInput, normalizedServiceType);
+      _resolvedSubCategory = '';
+    }
+
+    debugPrint('[Civil] resolved category="$_resolvedCategory" '
+        'subCategory="$_resolvedSubCategory" from raw="$rawCategoryInput"');
+  }
+
+  /// Everything this booking is "about", in the shape order_service.dart's
+  /// categoryMatchFuzzy()/orderCategoryCandidates() expect. Used only to
+  /// find a provider to DISPLAY in the header while _loadProvider() runs —
+  /// the actual fan-out to every matching provider still happens
+  /// independently inside OrderService.placeOrder(), so this lookup never
+  /// locks the order to whichever provider it happens to find first.
+  Map<String, dynamic> _orderLikeDataForLookup(String normalizedServiceType) {
+    final serviceNames = _hasCartItems
+        ? _cartItems.map((e) => e.name).toList()
+        : (widget.selectedRenovationItems?.isNotEmpty ?? false)
+            ? widget.selectedRenovationItems!
+            : [widget.serviceName];
 
     return <String, dynamic>{
       'category':    _resolvedCategory,
+      'subCategory': _resolvedSubCategory,
       'services':    serviceNames,
       'serviceType': normalizedServiceType,
     };
@@ -178,10 +255,14 @@ class _CivilBookingPageState extends State<CivilBookingPage>
 
     try {
       final normalizedServiceType = widget.serviceType.trim().toLowerCase();
-      final orderLikeData         = _buildOrderLikeData(normalizedServiceType);
+      // Category/subCategory were already resolved once in initState()
+      // via _resolveCategorySelection() — reuse that instead of
+      // resolving it a second time here.
+      final orderLikeData = _orderLikeDataForLookup(normalizedServiceType);
 
       debugPrint('[Civil] serviceType="$normalizedServiceType" '
-          'resolvedCategory="$_resolvedCategory"');
+          'resolvedCategory="$_resolvedCategory" '
+          'resolvedSubCategory="$_resolvedSubCategory"');
 
       // Primary: fast indexed query — exact serviceType + approved.
       final primarySnap = await FirebaseFirestore.instance
@@ -219,7 +300,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
 
       // Stage A — prefer a provider whose registered categories/subCategories
       // actually match this booking, via the shared categoryMatchFuzzy()
-      // pipeline (exact → fuzzy word overlap → sub-service reverse lookup).
+      // pipeline (now checking both category AND subCategory candidates).
       for (final doc in candidates) {
         final data    = doc.data();
         final cats    = providerCategories(data);
@@ -1063,6 +1144,12 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         // on — placeOrder() would otherwise re-derive it from services[0]
         // and could (in theory) land on a different canonical value.
         category:      _resolvedCategory.isNotEmpty ? _resolvedCategory : null,
+        // ✅ FIX: previously never passed at all. Without this, a provider
+        // registered specifically under this exact subCategory (without
+        // separately ticking the broad parent category too) could never
+        // exact-match this order — see the big comment above
+        // `_resolvedSubCategory` for the full explanation.
+        subCategory:   _resolvedSubCategory.isNotEmpty ? _resolvedSubCategory : null,
         userId:        user?.uid ?? '',
         userName:      _nameController.text.trim(),
         phone:         _phoneController.text.trim(),
@@ -1135,3 +1222,378 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         ),
       );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
