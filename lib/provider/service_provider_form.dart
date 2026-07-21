@@ -126,13 +126,37 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
 
   final _pageCtrl = PageController();
 
-  static const _stepLabels = [
-    'Categories',
-    'Business',
-    'Service',
-    'Bank',
-    'Documents',
-  ];
+  // ✅ NEW — The step list is now BUILT PER SERVICE TYPE instead of being a
+  // fixed 5-step sequence. Every step key maps to a widget builder and a
+  // label; whether a given key is included depends on the category's
+  // ServiceConfig flags:
+  //   - 'service' (the tools & equipment toggle) is skipped when
+  //     `_config.showToolsOption == false`
+  //   - 'bank' (bank details) is skipped when
+  //     `_config.showBankDetails == false`
+  // 'categories', 'business', and 'documents' are always present.
+  //
+  // Everything else in this file (progress bar, step labels, validation,
+  // nav buttons, submit) reads from `_stepKeys` instead of a hardcoded
+  // count, so it automatically adapts to however many steps are active.
+  List<String> get _stepKeys {
+    final keys = <String>['categories', 'business'];
+    if (_config.showToolsOption != false) keys.add('service');
+    if (_config.showBankDetails != false) keys.add('bank');
+    keys.add('documents');
+    return keys;
+  }
+
+  static const Map<String, String> _stepLabelMap = {
+    'categories': 'Categories',
+    'business':   'Business',
+    'service':    'Service',
+    'bank':       'Bank',
+    'documents':  'Documents',
+  };
+
+  List<String> get _stepLabels =>
+      _stepKeys.map((k) => _stepLabelMap[k]!).toList();
 
   // ── Data ─────────────────────────────────────────────────────────────────────
   File?               _businessImage;
@@ -193,19 +217,24 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   // both the inline field-level red errors (via the Form widgets) AND the
   // summary sheet shown in [_showMissingSheet], so the provider always knows
   // exactly what they still need to fix.
+  //
+  // ✅ UPDATED — dispatches on the step's KEY (from `_stepKeys`) rather than
+  // a hardcoded index, since the index of e.g. "documents" now shifts
+  // depending on which optional steps are active for this category.
   // ─────────────────────────────────────────────────────────────────────────────
 
   List<String> _missingItemsForStep(int step) {
-    switch (step) {
-      case 0:
+    final key = _stepKeys[step];
+    switch (key) {
+      case 'categories':
         return _categoriesMissing();
-      case 1:
+      case 'business':
         return _businessMissing();
-      case 2:
+      case 'service':
         return const [];
-      case 3:
+      case 'bank':
         return _bankMissing();
-      case 4:
+      case 'documents':
         return _documentsMissing();
       default:
         return const [];
@@ -298,13 +327,15 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
     if (missing.isNotEmpty) {
       // Also light up per-field red errors so the exact field is obvious,
       // in addition to the summary sheet.
-      if (_step == 1) _businessFormKey.currentState?.validate();
-      if (_step == 3) _bankFormKey.currentState?.validate();
+      final key = _stepKeys[_step];
+      if (key == 'business') _businessFormKey.currentState?.validate();
+      if (key == 'bank') _bankFormKey.currentState?.validate();
       _showMissingSheet(missing);
       return;
     }
 
-    if (_step < 4) {
+    final lastStep = _stepKeys.length - 1;
+    if (_step < lastStep) {
       setState(() => _step++);
       _pageCtrl.animateToPage(_step,
           duration: const Duration(milliseconds: 320),
@@ -525,6 +556,13 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   //   providers.where('userId', isEqualTo: currentUser.uid).limit(1)
   //
   // instead of reading a separate `provider_uid_lookup/{uid}` pointer doc.
+  //
+  // NOTE: for categories where the 'bank' step is hidden (Education,
+  // Civil), `bank` in the written document below will simply contain the
+  // initial empty-string field values, since the bank controllers are
+  // never populated for those categories. This preserves the existing
+  // document shape for every other page/query that reads `bank.*` without
+  // needing null-checks added elsewhere.
   // ─────────────────────────────────────────────────────────────────────────────
 
   Future<void> _submitForm() async {
@@ -822,6 +860,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
     final mq       = MediaQuery.of(context);
     final isTablet = mq.size.width > 600;
     final hPad     = isTablet ? 48.0 : 16.0;
+    final steps    = _stepKeys;
 
     return Scaffold(
       backgroundColor: _kBg,
@@ -844,25 +883,19 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
           child: Padding(
             padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 0),
             child: Column(children: [
-              _buildProgress(),
+              _buildProgress(steps.length),
               const SizedBox(height: 6),
-              _buildStepLabels(),
+              _buildStepLabels(steps.length),
               const SizedBox(height: 14),
               Expanded(
                 child: PageView(
                   controller: _pageCtrl,
                   physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _categoriesStep(),
-                    _businessStep(),
-                    _serviceStep(),
-                    _bankStep(),
-                    _documentsStep(),
-                  ],
+                  children: steps.map(_stepWidgetFor).toList(),
                 ),
               ),
               const SizedBox(height: 10),
-              _buildNavButtons(),
+              _buildNavButtons(steps.length),
               SizedBox(height: mq.padding.bottom > 0 ? 4 : 10),
             ]),
           ),
@@ -878,17 +911,35 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
     );
   }
 
+  // ✅ NEW — maps a step key to its corresponding page widget.
+  Widget _stepWidgetFor(String key) {
+    switch (key) {
+      case 'categories':
+        return _categoriesStep();
+      case 'business':
+        return _businessStep();
+      case 'service':
+        return _serviceStep();
+      case 'bank':
+        return _bankStep();
+      case 'documents':
+        return _documentsStep();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
   // ── Progress bar ──────────────────────────────────────────────────────────────
 
-  Widget _buildProgress() {
+  Widget _buildProgress(int stepCount) {
     return Row(
-      children: List.generate(5, (i) {
+      children: List.generate(stepCount, (i) {
         final done   = i < _step;
         final active = i == _step;
         return Expanded(
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
-            margin: EdgeInsets.only(right: i == 4 ? 0 : 5),
+            margin: EdgeInsets.only(right: i == stepCount - 1 ? 0 : 5),
             height: 7,
             decoration: BoxDecoration(
               color: done
@@ -904,9 +955,10 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
     );
   }
 
-  Widget _buildStepLabels() {
+  Widget _buildStepLabels(int stepCount) {
+    final labels = _stepLabels;
     return Row(
-      children: List.generate(5, (i) {
+      children: List.generate(stepCount, (i) {
         final active = i == _step;
         final done   = i < _step;
         return Expanded(
@@ -916,7 +968,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
             else
               SizedBox(height: done ? 13 : 0),
             Text(
-              _stepLabels[i],
+              labels[i],
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 10,
@@ -934,7 +986,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
     );
   }
 
-  Widget _buildNavButtons() => Row(children: [
+  Widget _buildNavButtons(int stepCount) => Row(children: [
         if (_step > 0) ...[
           Expanded(
             child: OutlinedButton.icon(
@@ -952,7 +1004,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
             onPressed: _loading ? null : _next,
             style: _elevatedStyle(),
             child: Text(
-              _step == 4 ? 'Submit Registration' : 'Continue',
+              _step == stepCount - 1 ? 'Submit Registration' : 'Continue',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -960,7 +1012,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
       ]);
 
   // ══════════════════════════════════════════════════════════════════
-  //  STEP 0 — Categories
+  //  STEP — Categories
   // ══════════════════════════════════════════════════════════════════
 
   Widget _categoriesStep() {
@@ -1011,7 +1063,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   }
 
   // ══════════════════════════════════════════════════════════════════
-  //  STEP 1 — Business Info
+  //  STEP — Business Info
   // ══════════════════════════════════════════════════════════════════
 
   Widget _businessStep() {
@@ -1160,7 +1212,8 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   }
 
   // ══════════════════════════════════════════════════════════════════
-  //  STEP 2 — Service preferences
+  //  STEP — Service preferences (tools & equipment)
+  //  Only reachable when `_config.showToolsOption != false`.
   // ══════════════════════════════════════════════════════════════════
 
   Widget _serviceStep() {
@@ -1192,7 +1245,8 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   }
 
   // ══════════════════════════════════════════════════════════════════
-  //  STEP 3 — Bank details
+  //  STEP — Bank details
+  //  Only reachable when `_config.showBankDetails != false`.
   // ══════════════════════════════════════════════════════════════════
 
   Widget _bankStep() {
@@ -1240,7 +1294,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
   }
 
   // ══════════════════════════════════════════════════════════════════
-  //  STEP 4 — Documents
+  //  STEP — Documents
   // ══════════════════════════════════════════════════════════════════
 
   Widget _documentsStep() {

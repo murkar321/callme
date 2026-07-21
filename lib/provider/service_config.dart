@@ -5,10 +5,22 @@ class ServiceConfig {
   final List<String> requiredDocuments;
   final bool showPricing;
   final bool showRoomCount;
+
+  // ✅ Controls whether the "Bank Details" step appears in
+  // ServiceProviderForm. Set to false for enquiry-only categories
+  // (no payouts happen through the app for these) — currently
+  // Education and Civil.
   final bool showBankDetails;
 
+  // ✅ NEW — Controls whether the "Service Preferences" step (the
+  // "I have my own tools & equipment" toggle) appears in
+  // ServiceProviderForm. Set to false for categories where a tools
+  // toggle doesn't make sense — currently Education, Laundry, Hotel,
+  // and Resort.
+  final bool showToolsOption;
+
   // ============================================================
-  
+
   // ============================================================
   final Map<String, List<String>> subServices;
 
@@ -20,6 +32,7 @@ class ServiceConfig {
     this.showPricing = true,
     this.showRoomCount = false,
     this.showBankDetails = true,
+    this.showToolsOption = true,
     this.subServices = const {},
   });
 }
@@ -38,7 +51,7 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "Manicure",
       "Pedicure",
       "Waxing",
-      
+
     ],
     requiredDocuments: [
       "Aadhaar Card",
@@ -69,6 +82,8 @@ final Map<String, ServiceConfig> serviceConfigs = {
     ],
   ),
 
+  // ✅ UPDATED — Education is enquiry-only: no bank payouts, and no
+  // tools toggle (doesn't apply to an educational institution).
   "education": ServiceConfig(
     businessLabel: "Educational Institution Name",
     serviceCategories: [
@@ -95,6 +110,8 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "Institution License",
       "Educator Certificates",
     ],
+    showBankDetails: false,
+    showToolsOption: false,
   ),
 
 
@@ -118,6 +135,7 @@ final Map<String, ServiceConfig> serviceConfigs = {
     ],
   ),
 
+  // ✅ UPDATED — Hotel: tools toggle removed (not relevant to hotels).
   "hotel": ServiceConfig(
     businessLabel: "Hotel Name",
     serviceCategories: [
@@ -145,6 +163,7 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "Hotel Photos",
     ],
     showRoomCount: true,
+    showToolsOption: false,
   ),
 
   // ✅ UPDATED — amenities catalog added. This is the full pool of
@@ -154,6 +173,8 @@ final Map<String, ServiceConfig> serviceConfigs = {
   // ResortBookingPage now reads the *specific* facilities registered
   // against the resort (via resorts_data.dart's `facilities`) and lets
   // the customer choose which of those they want for their visit.
+  //
+  // Also: tools toggle removed (not relevant to resorts).
   "resort": ServiceConfig(
     businessLabel: "Resort Name",
     serviceCategories: [
@@ -181,6 +202,7 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "Resort Photos",
     ],
     showRoomCount: true,
+    showToolsOption: false,
   ),
 
   "water": ServiceConfig(
@@ -199,10 +221,11 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "PAN Card",
       "Business License",
     ],
-   
-  
+
+
   ),
 
+  // ✅ UPDATED — Laundry: tools toggle removed.
   "laundry": ServiceConfig(
     businessLabel: "Laundry Name",
     serviceCategories: [
@@ -218,8 +241,11 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "PAN Card",
       "Shop License",
     ],
+    showToolsOption: false,
   ),
 
+  // ✅ UPDATED — Civil is enquiry-only: no bank payouts. Tools toggle
+  // is kept (civil work commonly involves provider-owned tools).
   "civil": ServiceConfig(
     businessLabel: "Construction Company Name",
     serviceCategories: [
@@ -242,6 +268,7 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "GST",
       "Contractor License",
     ],
-   
+    showBankDetails: false,
+
   ),
 };

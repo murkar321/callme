@@ -22,7 +22,7 @@ const String _soundFile = 'notification_sound';
 
 // ═══════════════════════════════════════════════════════════════
 const String _smallIconDrawable = 'ic_notification';
-const String _largeIconResource = '@mipmap/ic_launcher';
+const String _largeIconResource = '@mipmap/ic_notification_large'; // was @mipmap/ic_launcher
 const String _safeInitIcon = '@mipmap/ic_launcher';
 
 // ═══════════════════════════════════════════════════════════════
