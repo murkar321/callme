@@ -1145,7 +1145,7 @@ class _BookingPageState extends State<BookingPage>
         // actually match — instead of silently notifying only whoever
         // _loadProvider()'s preview search happened to land on.
         providerId:    _isPinnedProvider ? _providerId : null,
-        providerName:  _isPinnedProvider ? (_providerName ?? '') : '',
+        providerName:  _isPinnedProvider ? (_providerName ?? '') : '', subCategories: [],
       );
 
       // Booking succeeded — clear this service's cart.

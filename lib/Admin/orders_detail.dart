@@ -1,7 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+
+// Brings in OrderService.adminDeclineOrder() — the single source of
+// truth for updating order status + notifying the customer. This page
+// never writes 'status'/'declineReason' directly to Firestore itself,
+// so admin declines stay consistent with provider/user cancellations.
+import 'package:callme/provider/order_service.dart';
 
 class AdminOrdersPage extends StatefulWidget {
   /// Optional query to pre-fill the search box with — used when arriving
@@ -47,6 +54,11 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   List<QueryDocumentSnapshot<Map<String, dynamic>>>? _pendingDocs;
   bool _syncScheduled = false;
 
+  // ── Tracks which order IDs currently have a decline action in flight,
+  // so the button/dialog can't be double-submitted for the same order
+  // while awaiting Firestore.
+  final Set<String> _decliningIds = {};
+
   // ─── Services ─────────────────────────────────────────────────────────────
   static const List<Map<String, dynamic>> _kServices = [
     {'key': 'all',       'label': 'All',       'icon': Icons.dashboard_rounded},
@@ -63,6 +75,16 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
 
   static const List<String> _kStatuses = [
     'all', 'pending', 'accepted', 'completed', 'cancelled', 'rejected',
+  ];
+
+  // Quick-select reasons shown as chips in the decline dialog — "Provider
+  // not available" first since that's the most common admin decline case.
+  static const List<String> _kDeclineReasons = [
+    'Provider not available',
+    'No provider accepted in time',
+    'Service not available in this area',
+    'Duplicate booking',
+    'Customer requested cancellation',
   ];
 
   // ─── Computed filtered list ────────────────────────────────────────────────
@@ -194,6 +216,14 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     return (d['location']?['address'] ?? '-').toString();
   }
 
+  /// Reads the userId off an order doc tolerantly — some flows write it
+  /// top-level, others nest it under `user`.
+  String _userIdOf(Map<String, dynamic> d) {
+    final top = (d['userId'] ?? '').toString().trim();
+    if (top.isNotEmpty) return top;
+    return (d['user']?['id'] ?? '').toString().trim();
+  }
+
   String _fmt(Timestamp? t, {String pattern = 'dd MMM yyyy'}) =>
       t == null ? '-' : DateFormat(pattern).format(t.toDate());
 
@@ -227,6 +257,161 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
         setState(() => _allDocs = latest);
       }
     });
+  }
+
+  // ─── Admin decline flow ────────────────────────────────────────────────────
+
+  void _showSnack(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? const Color(0xFFDC2626) : null,
+      ),
+    );
+  }
+
+  /// Opens the decline dialog for one order, then calls
+  /// OrderService.adminDeclineOrder() so status update + customer
+  /// notification stay in one place with every other order action.
+  Future<void> _declineOrder(Map<String, dynamic> d, String docId) async {
+    final userName   = _userName(d);
+    final userId     = _userIdOf(d);
+    final serviceType = (d['serviceType'] ?? d['serviceName'] ?? 'service').toString();
+
+    if (userId.isEmpty) {
+      _showSnack(
+        'Cannot decline — this order has no userId on file, so the '
+        'customer can\'t be notified.',
+        isError: true,
+      );
+      return;
+    }
+
+    final reasonController = TextEditingController();
+    String? selectedChip;
+
+    final reason = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: const [
+                  Icon(Icons.gpp_bad_outlined, color: Color(0xFFDC2626)),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Decline Order', style: TextStyle(fontSize: 18)),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Declining $userName\'s $serviceType booking. '
+                      'The customer will be notified with this reason.',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Quick reasons',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF6B7280)),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _kDeclineReasons.map((r) {
+                        final selected = selectedChip == r;
+                        return ChoiceChip(
+                          label: Text(r, style: const TextStyle(fontSize: 12)),
+                          selected: selected,
+                          onSelected: (_) {
+                            setDialogState(() {
+                              selectedChip = r;
+                              reasonController.text = r;
+                              reasonController.selection = TextSelection.collapsed(
+                                offset: reasonController.text.length,
+                              );
+                            });
+                          },
+                          selectedColor: const Color(0xFFDC2626).withOpacity(.15),
+                          labelStyle: TextStyle(
+                            color: selected ? const Color(0xFFDC2626) : const Color(0xFF374151),
+                            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: reasonController,
+                      maxLines: 3,
+                      onChanged: (_) => setDialogState(() => selectedChip = null),
+                      decoration: InputDecoration(
+                        labelText: 'Reason for customer',
+                        hintText: 'e.g. Provider not available in your area',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.all(12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+                  onPressed: () {
+                    final r = reasonController.text.trim();
+                    if (r.isEmpty) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(content: Text('Please enter or select a reason')),
+                      );
+                      return;
+                    }
+                    Navigator.pop(dialogContext, r);
+                  },
+                  child: const Text('Decline Order'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    reasonController.dispose();
+
+    if (reason == null || reason.trim().isEmpty) return; // cancelled
+    if (!mounted) return;
+
+    setState(() => _decliningIds.add(docId));
+
+    try {
+      await OrderService.adminDeclineOrder(
+        orderId:     docId,
+        userId:      userId,
+        serviceType: serviceType,
+        reason:      reason.trim(),
+        adminId:     FirebaseAuth.instance.currentUser?.uid ?? '',
+      );
+      _showSnack('Order declined — $userName has been notified.');
+    } catch (e) {
+      debugPrint('[AdminOrdersPage] decline failed for $docId: $e');
+      _showSnack('Failed to decline order: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _decliningIds.remove(docId));
+    }
   }
 
   // ─── Build ─────────────────────────────────────────────────────────────────
@@ -573,6 +758,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     final isCompleted  = d['isCompleted'] ?? false;
     final isAssigned   = d['isAssigned'] ?? false;
     final lastActionBy = (d['lastActionBy'] ?? '-').toString();
+    final cancelledBy  = (d['cancelledBy'] ?? '').toString().trim().toLowerCase();
+    final declineReason = (d['declineReason'] ?? d['adminDeclineNote'] ?? '').toString().trim();
 
     final Timestamp? schedDate   = d['schedule']?['date'] ?? d['date'];
     final Timestamp? createdAt   = d['createdAt'];
@@ -581,6 +768,12 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     final Timestamp? updatedAt   = d['updatedAt'];
 
     final svcColor = _serviceColor(service);
+
+    // Admin can only decline orders that haven't already reached a
+    // terminal state — no point declining a completed/cancelled/rejected
+    // order a second time.
+    final canDecline = status == 'pending' || status == 'accepted';
+    final isDeclining = _decliningIds.contains(docId);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -812,6 +1005,80 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                         ),
                       );
                     }).toList(),
+                  ),
+                ],
+
+                // ── Decline reason (shown once an order HAS been
+                // declined/rejected/cancelled, by anyone) — surfaces the
+                // reason customers were given, right on the admin card.
+                if (declineReason.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFFECACA)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFDC2626)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                cancelledBy == 'admin'
+                                    ? 'Declined by Admin'
+                                    : cancelledBy.isNotEmpty
+                                        ? 'Declined by ${cancelledBy[0].toUpperCase()}${cancelledBy.substring(1)}'
+                                        : 'Decline Reason',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                declineReason,
+                                style: const TextStyle(fontSize: 12.5, color: Color(0xFF7F1D1D)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // ── Admin action bar — decline order (provider not
+                // available, etc). Only shown while the order is still
+                // pending/accepted, i.e. before it's already terminal.
+                if (canDecline) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: isDeclining ? null : () => _declineOrder(d, docId),
+                      icon: isDeclining
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.gpp_bad_outlined, size: 18),
+                      label: Text(isDeclining ? 'Declining…' : 'Decline Order'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDC2626),
+                        side: const BorderSide(color: Color(0xFFFCA5A5)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
                   ),
                 ],
               ],

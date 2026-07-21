@@ -1123,7 +1123,7 @@ class _HotelBookingPageState extends State<HotelBookingPage>
         // preview search happened to land on.
         providerId: _isPinnedProvider ? _providerId : null,
         isEnquiry: false,
-        providerName: _isPinnedProvider ? (_providerName ?? '') : '', itemBreakdown: [],
+        providerName: _isPinnedProvider ? (_providerName ?? '') : '', itemBreakdown: [], subCategories: [],
       );
 
       Cart.clear('Hotel');

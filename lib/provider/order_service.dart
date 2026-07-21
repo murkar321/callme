@@ -29,6 +29,14 @@ class NotificationType {
   // will silently fall back to the generic bell icon instead of the
   // dedicated one.
   static const String workStarted = 'work_started_otp';
+
+  // Added — fired when an ADMIN manually declines/cancels an order
+  // (typically because no provider is available / accepted it in
+  // time). Kept distinct from `bookingRejected` (which is a
+  // provider-initiated rejection) and `userCancelled` (customer
+  // initiated) so the customer, the notification list, and any
+  // future analytics can tell who actually made the call.
+  static const String adminDeclined = 'admin_declined';
 }
 
 // ============================================================
@@ -443,7 +451,7 @@ class OrderService {
 
     // Legacy positional params kept for call-site compat
     String providerName = '',
-    Object? providerUserId, required List<Map<String, dynamic>> itemBreakdown,
+    Object? providerUserId, required List<Map<String, dynamic>> itemBreakdown, required List<String> subCategories,
   }) async {
     final hasCategory = category != null && category.trim().isNotEmpty;
 
@@ -579,6 +587,7 @@ class OrderService {
       'declineReason': '',
       'cancelReason':  '',
       'cancelledBy':   '',
+      'lastActionBy':  '',
 
       'createdBy':     createdBy,
       'createdByRole': createdByRole,
@@ -623,6 +632,7 @@ class OrderService {
     await _db.collection('orders').doc(orderId).update({
       'status':     OrderStatus.accepted,
       'isAssigned': true,
+      'lastActionBy': 'provider',
       'updatedAt':  FieldValue.serverTimestamp(),
     });
 
@@ -655,6 +665,7 @@ class OrderService {
       'cancelReason':       trimmedReason,
       'cancelledBy':        'provider',
       'providerCancelNote': trimmedReason,
+      'lastActionBy':       'provider',
       'updatedAt':          FieldValue.serverTimestamp(),
     });
 
@@ -681,6 +692,7 @@ class OrderService {
     await _db.collection('orders').doc(orderId).update({
       'status':      OrderStatus.completed,
       'isCompleted': true,
+      'lastActionBy': 'provider',
       'updatedAt':   FieldValue.serverTimestamp(),
     });
 
@@ -713,6 +725,7 @@ class OrderService {
       'cancelReason':       trimmedReason,
       'cancelledBy':        'provider',
       'providerCancelNote': trimmedReason,
+      'lastActionBy':       'provider',
       'updatedAt':          FieldValue.serverTimestamp(),
     });
 
@@ -730,6 +743,63 @@ class OrderService {
   }
 
   // ==========================================================
+  // ADMIN DECLINES AN ORDER
+  //
+  // Used from admin_orders_page.dart when staff need to close out an
+  // order manually — most commonly because no provider is available /
+  // no one accepted it in a reasonable time, but usable for any
+  // admin-side decline. Unlike rejectOrder()/providerCancelOrder(),
+  // this is not tied to a specific provider (the order may still be
+  // unassigned, isAssigned == false, providerId == ''), so it does not
+  // reference providerName/providerId at all.
+  //
+  // Sets:
+  //   - status            -> OrderStatus.rejected
+  //   - declineReason / cancelReason -> the admin-entered reason
+  //   - cancelledBy       -> 'admin'
+  //   - adminDeclineNote  -> the admin-entered reason (kept alongside
+  //                          cancelReason so admin-specific tooling can
+  //                          query for it distinctly from provider
+  //                          cancellations if needed later)
+  //   - lastActionBy      -> 'admin' (admin_orders_page.dart already
+  //                          reads and displays this field per order)
+  //
+  // Always sends a NotificationType.adminDeclined notification (in-app
+  // doc + FCM queue entry via notifyUser()) to the customer so they
+  // know their booking was declined and why.
+  // ==========================================================
+  static Future<void> adminDeclineOrder({
+    required String orderId,
+    required String userId,
+    required String serviceType,
+    required String reason,
+    String adminId = '',
+  }) async {
+    final trimmedReason = reason.trim();
+
+    await _db.collection('orders').doc(orderId).update({
+      'status':            OrderStatus.rejected,
+      'declineReason':     trimmedReason,
+      'cancelReason':      trimmedReason,
+      'cancelledBy':       'admin',
+      'adminDeclineNote':  trimmedReason,
+      'declinedByAdminId': adminId,
+      'lastActionBy':      'admin',
+      'updatedAt':         FieldValue.serverTimestamp(),
+    });
+
+    await notifyUser(
+      userId:  userId,
+      orderId: orderId,
+      title:   '⚠️ Booking Declined',
+      body:    'Your $serviceType booking has been declined by our team. '
+               'Reason: $trimmedReason',
+      type:    NotificationType.adminDeclined,
+      serviceType: serviceType,
+    );
+  }
+
+  // ==========================================================
   // USER CANCELS ORDER
   // ==========================================================
   static Future<void> userCancelOrder({
@@ -741,6 +811,7 @@ class OrderService {
     await _db.collection('orders').doc(orderId).update({
       'status':      OrderStatus.cancelled,
       'cancelledBy': 'user',
+      'lastActionBy': 'user',
       'updatedAt':   FieldValue.serverTimestamp(),
     });
 
@@ -1110,7 +1181,7 @@ class OrderService {
   }
 
   // ==========================================================
-  // NOTIFY USER — status updates from provider
+  // NOTIFY USER — status updates from provider / admin
   // ==========================================================
   static Future<void> notifyUser({
     required String userId,

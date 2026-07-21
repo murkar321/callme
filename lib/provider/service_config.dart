@@ -230,6 +230,12 @@ final Map<String, ServiceConfig> serviceConfigs = {
       "Electrical",
       "Plumbing",
     ],
+    subServices: {
+  "Renovation": ["Kitchen Renovation", "Bathroom Renovation", "Full House Renovation"],
+  "Painting": ["Interior Painting", "Exterior Painting"],
+  "Electrical": ["Wiring", "Lighting Installation", "Panel Upgrade"],
+  "Plumbing": ["Pipe Fitting", "Bathroom Plumbing Setup"],
+},
     requiredDocuments: [
       "Aadhaar Card",
       "PAN Card",

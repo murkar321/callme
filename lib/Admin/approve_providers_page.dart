@@ -17,31 +17,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
   // ═══════════════════════════════════════════════════════════════
   // FIX: DUPLICATE NOTIFICATION GUARD.
-  //
-  // Root cause of "approve/reject message goes multiple times":
-  // the Approve/Reject buttons stayed tappable while the async
-  // approveProvider()/rejectProvider() call was still running. A
-  // fast double-tap (or the StreamBuilder rebuilding mid-flight
-  // while Firestore's local cache resolves) could fire the whole
-  // function twice, which wrote TWO `notifications` docs and queued
-  // TWO `fcm_queue` pushes for the exact same decision — hence the
-  // device ringing twice and two identical entries on the
-  // notification page.
-  //
-  // Fix has two layers:
-  //   1) `_processingIds` — a local, in-memory lock. The instant a
-  //      decision starts for a providerId, its card shows a spinner
-  //      and both buttons are disabled until the call finishes
-  //      (success OR failure). This stops accidental double-taps at
-  //      the UI level.
-  //   2) A Firestore transaction inside approveProvider()/
-  //      rejectProvider() that reads the provider doc and ONLY
-  //      proceeds if `status` is still "pending". If two calls ever
-  //      did race past the UI lock (e.g. two admins on two devices),
-  //      the second transaction sees status already flipped and
-  //      bails out before any notification is ever written — so at
-  //      most ONE notification/push is ever produced per provider
-  //      decision, no matter what.
+  // (unchanged from before — see previous comments)
   // ═══════════════════════════════════════════════════════════════
   final Set<String> _processingIds = {};
 
@@ -105,28 +81,45 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   // =====================================================
   // SEND FCM HELPER
   //
-  // NOTE ON "NOT RINGING ON REAL DEVICE":
-  // This only queues the push (writes to fcm_queue). The actual ring
-  // on a provider's real device depends on:
-  //   1) A Cloud Function trigger on fcm_queue that reads this doc's
-  //      `token` and sends the FCM message (not shown in this file —
-  //      confirm it exists and is deployed).
-  //   2) The provider's device having a valid, un-expired fcmToken
-  //      saved (see NotificationService._writeToken in
-  //      notification_service.dart — it now writes to users/{uid},
-  //      users/{email} AND providers/{providerId}).
-  //   3) The Android app having the "notification_sound" raw
-  //      resource actually present at
-  //      android/app/src/main/res/raw/notification_sound.mp3 (or
-  //      .wav) — if that file is missing, Android silently falls
-  //      back to no sound instead of erroring.
-  //   4) Battery-optimization / "restricted" app settings on some
-  //      OEM devices (Xiaomi/Oppo/Vivo) which throttle background
-  //      FCM delivery — this is a device setting, not something the
-  //      app can fully control.
-  // =====================================================
+  // ═══════════════════════════════════════════════════════════════
+  // FIX (THIS IS THE MAIN CHANGE): _sendFcm() used to just return a
+  // bool, so approveProvider()/rejectProvider() only ever knew
+  // "it worked" or "it didn't" — never WHY. That's why the SnackBar
+  // you saw only said "may not have been delivered. Check debug logs"
+  // with no way to act on it from the UI.
+  //
+  // Now it returns a record: (success, reason). Two reasons cover
+  // the two real-world failure modes:
+  //
+  //   1) "no_token"        → provider doc has no fcmToken saved yet.
+  //      This happens when the provider registered but never actually
+  //      logged into the app afterward (NotificationService._writeToken
+  //      only runs once the app initializes for a logged-in user, so a
+  //      provider who signed up and closed the app has no token yet).
+  //      This is NOT an error — it's expected. The provider will still
+  //      see the in-app bell notification the next time they open the
+  //      app and log in; they just won't get an OS-level push this time.
+  //
+  //   2) "permission-denied" (or the raw exception text) → the write
+  //      to fcm_queue was rejected by Firestore Security Rules. This
+  //      is almost always because the rule looks like:
+  //         allow create: if request.resource.data.receiverId == request.auth.uid;
+  //      That rule is written assuming the PROVIDER writes their own
+  //      queue doc, but here the ADMIN is writing a doc addressed to
+  //      the provider. You need a rule that also allows the hardcoded
+  //      admin UID/email to write to fcm_queue regardless of
+  //      receiverId, e.g.:
+  //
+  //        match /fcm_queue/{doc} {
+  //          allow create: if request.auth != null && (
+  //            request.resource.data.receiverId == request.auth.uid ||
+  //            request.auth.uid == '<ADMIN_UID>' ||
+  //            request.auth.token.email == 'allinonecallme@gmail.com'
+  //          );
+  //        }
+  // ═══════════════════════════════════════════════════════════════
 
-  Future<bool> _sendFcm({
+  Future<({bool success, String? reason})> _sendFcm({
     required String token,
     required String title,
     required String body,
@@ -139,8 +132,11 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   }) async {
     if (token.trim().isEmpty) {
       debugPrint('[approve-fcm] No fcmToken saved for provider $providerId '
-          '($userId) — push skipped (in-app notification still saved).');
-      return false;
+          '($userId) — push skipped (in-app notification still saved). '
+          'This provider likely has not logged into the app since '
+          'registering, so no token has been written to their provider '
+          'doc yet.');
+      return (success: false, reason: 'no_token');
     }
 
     final Map<String, dynamic> payload = {
@@ -153,10 +149,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       "type":       type,
       "createdAt":  FieldValue.serverTimestamp(),
       "sent":       false,
-      // Nested `data` map — matches the shape used everywhere else in
-      // the app (order_service.dart's fcm_queue writes) so the Cloud
-      // Function's expected payload shape stays consistent across
-      // every write path, not just order-related ones.
       "data": {
         "type":       type,
         "providerId": providerId,
@@ -176,7 +168,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
     try {
       await firestore.collection("fcm_queue").add(payload);
-      return true;
+      return (success: true, reason: null);
     } catch (e) {
       final msg = e.toString();
       final isPerm = msg.contains('permission-denied') ||
@@ -188,10 +180,10 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
             'rules issue: the admin (not the provider) is writing this '
             'doc, so a rule like "receiverId == request.auth.uid" will '
             'always reject it. Update the fcm_queue rule to also allow '
-            'admin-initiated writes. See the note above _sendFcm() in '
-            'approve_providers_page.dart for the exact rule to add.');
+            'admin-initiated writes — see the comment above _sendFcm().');
+        return (success: false, reason: 'permission-denied');
       }
-      return false;
+      return (success: false, reason: msg);
     }
   }
 
@@ -263,17 +255,43 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
   }
 
   // =====================================================
+  // HELPER: turn a failure reason into a human-readable message
+  // shown directly in the SnackBar, so you don't have to go dig
+  // through debug logs to know which of the two cases it is.
+  // =====================================================
+
+  String _describeNotifFailure({
+    required bool savedInApp,
+    required bool pushQueued,
+    required String? pushFailReason,
+  }) {
+    if (!savedInApp && !pushQueued) {
+      return "Approved, but BOTH the in-app notification and push failed to "
+          "save. This is likely a Firestore permission issue on the "
+          "'notifications' or 'fcm_queue' collection — check your rules.";
+    }
+    if (savedInApp && !pushQueued) {
+      if (pushFailReason == 'no_token') {
+        return "Approved & in-app notification saved. No push sent — this "
+            "provider hasn't logged into the app since registering, so no "
+            "device token is on file yet. They'll see the bell notification "
+            "once they log in.";
+      }
+      if (pushFailReason == 'permission-denied') {
+        return "Approved & in-app notification saved, but the push was "
+            "blocked by Firestore rules on 'fcm_queue' (admin writes need "
+            "to be allowed there — see code comment in _sendFcm()).";
+      }
+      return "Approved & in-app notification saved, but push failed: "
+          "${pushFailReason ?? 'unknown error'}";
+    }
+    // savedInApp == false, pushQueued == true (rare)
+    return "Approved & push queued, but the in-app notification failed to "
+        "save. Check Firestore rules on the 'notifications' collection.";
+  }
+
+  // =====================================================
   // APPROVE
-  //
-  // FIX: the status flip is now done inside a Firestore transaction
-  // that first re-reads the doc and checks `status == "pending"`.
-  // If the doc has ALREADY been approved/rejected (by an earlier,
-  // possibly-racing call), the transaction throws `already_handled`
-  // and we exit immediately — no notification, no push, no role
-  // update runs a second time. Combined with the `_processingIds`
-  // UI lock, this makes the whole approve action idempotent: calling
-  // it twice (double-tap, rebuild, or two admins) can now only ever
-  // produce ONE notification + ONE push.
   // =====================================================
 
   Future<void> approveProvider(String providerId) async {
@@ -297,8 +315,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
           final cur = snap.data() as Map<String, dynamic>;
           final curStatus = (cur["status"] ?? "").toString().toLowerCase();
 
-          // Already handled by a previous call — do nothing, and tell
-          // the caller so it can skip the notification step entirely.
           if (curStatus != "pending") {
             throw Exception('already_handled');
           }
@@ -314,7 +330,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       );
 
       if (result == null) {
-        // Doc no longer exists — nothing to do.
         _unlock(providerId);
         return;
       }
@@ -342,8 +357,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       _unlock(providerId);
       final isAlreadyHandled = e.toString().contains('already_handled');
       if (isAlreadyHandled) {
-        // Someone else's call already approved/rejected this provider
-        // first — silently stop. No error, no duplicate notification.
         debugPrint('[approve] Skipped — provider $providerId already '
             'handled by another call.');
         return;
@@ -377,7 +390,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
       serviceType:  serviceType,
     );
 
-    final pushQueued = await _sendFcm(
+    final pushResult = await _sendFcm(
       token:        fcmToken,
       title:        title,
       body:         body,
@@ -391,7 +404,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     _unlock(providerId);
     if (!mounted) return;
 
-    if (savedInApp && pushQueued) {
+    if (savedInApp && pushResult.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior:        SnackBarBehavior.floating,
@@ -412,26 +425,28 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
         ),
       );
     } else {
-      // FIX: the provider IS approved (step 1 succeeded) — this only
-      // warns that the notification/push delivery didn't fully go
-      // through, instead of silently failing or looking like the
-      // whole approval failed.
+      // FIX: now shows the SPECIFIC reason instead of a generic message.
+      final message = _describeNotifFailure(
+        savedInApp:     savedInApp,
+        pushQueued:     pushResult.success,
+        pushFailReason: pushResult.reason,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration:        const Duration(seconds: 6),
           behavior:        SnackBarBehavior.floating,
           backgroundColor: Colors.orange,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          content: const Row(
+          content: Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 10),
+              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  "Provider approved, but the notification/push may not have "
-                  "been delivered. Check debug logs and Firestore rules.",
-                  style: TextStyle(color: Colors.white),
+                  message,
+                  style: const TextStyle(color: Colors.white),
                 ),
               ),
             ],
@@ -443,12 +458,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
 
   // =====================================================
   // REJECT — with reason dialog
-  //
-  // Same idempotency treatment as approveProvider(): the status flip
-  // happens inside a transaction guarded by `status == "pending"`,
-  // and the whole action is locked per-providerId via
-  // `_processingIds` so the dialog + button can't be triggered twice
-  // for the same provider while a previous rejection is still saving.
   // =====================================================
 
   Future<void> rejectProvider(String providerId) async {
@@ -623,7 +632,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
         : "Hi $ownerName, your provider account was not approved at this time. Please contact support.";
 
     bool savedInApp = true;
-    bool pushQueued = true;
+    ({bool success, String? reason}) pushResult = (success: true, reason: null);
 
     if (userId.isNotEmpty) {
       savedInApp = await _saveNotification(
@@ -637,7 +646,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
         reason:       reason,
       );
 
-      pushQueued = await _sendFcm(
+      pushResult = await _sendFcm(
         token:        fcmToken,
         title:        title,
         body:         body,
@@ -653,7 +662,7 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     _unlock(providerId);
     if (!mounted) return;
 
-    if (savedInApp && pushQueued) {
+    if (savedInApp && pushResult.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior:        SnackBarBehavior.floating,
@@ -671,21 +680,26 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
         ),
       );
     } else {
+      final message = _describeNotifFailure(
+        savedInApp:     savedInApp,
+        pushQueued:     pushResult.success,
+        pushFailReason: pushResult.reason,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration:        const Duration(seconds: 6),
           behavior:        SnackBarBehavior.floating,
           backgroundColor: Colors.orange,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16)),
-          content: const Row(
+          content: Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 10),
+              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  "Provider rejected, but the notification/push may not have "
-                  "been delivered. Check debug logs and Firestore rules.",
-                  style: TextStyle(color: Colors.white),
+                  message,
+                  style: const TextStyle(color: Colors.white),
                 ),
               ),
             ],
@@ -883,6 +897,12 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
     final providerType = data['providerType'] ?? "Provider";
     final userId = (data['userId'] ?? "-").toString();
 
+    // FIX: surfaced in the UI so you can see at a glance, BEFORE
+    // tapping Approve, whether this provider even has a push token on
+    // file yet — instead of only finding out after the fact via the
+    // warning SnackBar.
+    final hasToken = (data['fcmToken'] ?? '').toString().trim().isNotEmpty;
+
     final String appliedDate = createdAt != null
         ? DateFormat('dd MMM yyyy').format(createdAt.toDate())
         : "-";
@@ -947,6 +967,13 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
                         _badge("PENDING", Colors.orange),
                         _badge(providerType, const Color(0xFF4F46E5),
                             bg: const Color(0xFFEEF2FF)),
+                        // FIX (NEW): visible warning chip when this
+                        // provider has no push token on file yet, so
+                        // you're not surprised by the orange SnackBar
+                        // after tapping Approve.
+                        if (!hasToken)
+                          _badge("NO PUSH TOKEN YET", Colors.grey.shade700,
+                              bg: Colors.grey.shade200),
                       ],
                     ),
                   ],
@@ -1035,20 +1062,37 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
             padding: const EdgeInsets.symmetric(
                 horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color:        const Color(0xFFF0FDF4),
+              color: hasToken
+                  ? const Color(0xFFF0FDF4)
+                  : const Color(0xFFFFF7ED),
               borderRadius: BorderRadius.circular(14),
-              border:       Border.all(color: const Color(0xFF86EFAC)),
+              border: Border.all(
+                  color: hasToken
+                      ? const Color(0xFF86EFAC)
+                      : const Color(0xFFFDBA74)),
             ),
             child: Row(
-              children: const [
-                Icon(Icons.notifications_active_rounded,
-                    color: Color(0xFF16A34A), size: 18),
-                SizedBox(width: 10),
+              children: [
+                Icon(
+                  hasToken
+                      ? Icons.notifications_active_rounded
+                      : Icons.notifications_off_rounded,
+                  color: hasToken
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFFC2410C),
+                  size: 18,
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    "Provider will receive a push notification + in-app alert on your decision.",
+                    hasToken
+                        ? "Provider will receive a push notification + in-app alert on your decision."
+                        : "No device token on file yet — provider will only see the in-app alert once they next log in. No push will fire right now.",
                     style: TextStyle(
-                        color: Color(0xFF15803D), fontSize: 12),
+                        color: hasToken
+                            ? const Color(0xFF15803D)
+                            : const Color(0xFFC2410C),
+                        fontSize: 12),
                   ),
                 ),
               ],
@@ -1058,10 +1102,6 @@ class _ApproveProvidersPageState extends State<ApproveProvidersPage> {
           const SizedBox(height: 16),
 
           // ── ACTION BUTTONS ────────────────────────
-          // FIX: while `busy` (this exact provider's decision is
-          // in-flight), both buttons are disabled and replaced with a
-          // spinner row — this is what stops the double-tap that was
-          // causing duplicate approve/reject notifications.
           if (busy)
             Container(
               width: double.infinity,

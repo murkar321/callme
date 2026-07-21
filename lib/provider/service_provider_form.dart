@@ -13,6 +13,13 @@ import 'package:image_picker/image_picker.dart';
 import '../provider/service_config.dart';
 import '../provider/succespage.dart';
 
+// FIX (NEW): needed so we can force an immediate FCM token mirror into
+// the provider doc right after it's created — see the comment block in
+// _submitForm() below for why this is necessary. Adjust this relative
+// path if notification_service.dart lives somewhere else in your
+// project (per project memory it's package:callme/profile/notification_service.dart).
+import '../profile/notification_service.dart';
+
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
 const _kPurple    = Color(0xFF5C35CC);
@@ -592,11 +599,47 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
 
         'status':    'pending',
         'isActive':  false,
-        'fcmToken':  '',   // populated later by NotificationService on device
+        'fcmToken':  '',   // see token-mirror fix immediately below —
+                           // this gets backfilled a few lines down, not
+                           // left to chance on a future login.
 
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // ── 4. FIX: force an immediate FCM token mirror into the provider ──────
+      // doc we just created.
+      //
+      // Why this is needed: to reach this form at all, the person must
+      // already be logged in (see the `user == null` check above). That
+      // means NotificationService._saveToken() already ran once at THEIR
+      // login and already wrote their token to users/{uid} and
+      // users/{email}. Its provider-mirror step
+      // (_resolveAllProviderDocIds) only mirrors into provider docs that
+      // ALREADY EXIST at that moment — and this provider doc didn't exist
+      // yet, since we're only creating it right now.
+      //
+      // Without this call, the doc above sits with fcmToken: '' until the
+      // person's NEXT login/token-refresh cycle happens to run (could be
+      // days/weeks), even though they were never actually logged out. This
+      // is what produces the admin-side "No push sent — provider hasn't
+      // logged in since registering" message even for providers who
+      // genuinely have been logged in the whole time — the doc just never
+      // got its token written.
+      //
+      // refreshTokenAfterLogin() re-runs the exact same _saveToken() /
+      // _writeToken() flow NotificationService already uses at login, so
+      // there's no new logic to trust here — it just runs it again, now
+      // that this provider doc actually exists to mirror into.
+      try {
+        await NotificationService().refreshTokenAfterLogin();
+        debugPrint('[ServiceProviderForm] Token mirror re-run after '
+            'provider doc creation for $readableId');
+      } catch (e) {
+        debugPrint('[ServiceProviderForm] Token mirror after registration '
+            'failed (non-fatal — will still self-heal on next login/token '
+            'refresh): $e');
+      }
 
       if (!mounted) return;
       Navigator.pushReplacement(

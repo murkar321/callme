@@ -18,6 +18,13 @@ const bool _debugNotif = true;
 const bool _useCustomSound = true;
 const String _soundFile = 'notification_sound';
 
+
+
+// ═══════════════════════════════════════════════════════════════
+const String _smallIconDrawable = 'ic_notification';
+const String _largeIconResource = '@mipmap/ic_launcher';
+const String _safeInitIcon = '@mipmap/ic_launcher';
+
 // ═══════════════════════════════════════════════════════════════
 // Channel constants
 //
@@ -48,17 +55,15 @@ class NotificationType {
   static const String orderTakenByOther = 'order_taken_by_other';
   static const String userCancelled = 'user_cancelled';
 
-  // FIX (NEW): these two were referenced by notification_router.dart
-  // (case NotificationType.orderCancelled / NotificationType.orderUnavailable)
-  // but were never actually defined on this class — that's what threw
-  // "The getter 'orderCancelled' isn't defined for the type
-  // 'NotificationType'" / same for 'orderUnavailable'. Adding them here
-  // fixes the getter error. Keep these string values in sync with any
-  // Cloud Function / server-side code that sends these notification
-  // types — if the sender uses a different string, the router's switch
-  // will silently miss and fall to `default`.
   static const String orderCancelled = 'order_cancelled';
   static const String orderUnavailable = 'order_unavailable';
+
+  // Fired by OrderService.adminDeclineOrder() when an admin manually
+  // declines a booking (e.g. no provider available/accepted in time).
+  // Kept distinct from bookingRejected (provider-initiated) so the
+  // notification list and icon clearly read as "our team", not "the
+  // provider".
+  static const String adminDeclined = 'admin_declined';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -87,16 +92,14 @@ class NotificationType {
       return (icon: Icons.timer_off_outlined, color: const Color(0xFF9E9E9E));
     case NotificationType.userCancelled:
       return (icon: Icons.event_busy_outlined, color: const Color(0xFFE64A19));
-    // FIX (NEW): banner styling for the two newly-defined types above,
-    // so a router/notification-list consumer that hits these types
-    // gets a sensible icon/color instead of silently falling to the
-    // generic default case below.
     case NotificationType.orderCancelled:
       return (icon: Icons.event_busy_outlined, color: const Color(0xFFD32F2F));
     case NotificationType.orderUnavailable:
       return (icon: Icons.hourglass_disabled_outlined, color: const Color(0xFF9E9E9E));
     case NotificationType.providerFound:
       return (icon: Icons.person_search_outlined, color: const Color(0xFF3F51B5));
+    case NotificationType.adminDeclined:
+      return (icon: Icons.gpp_bad_outlined, color: const Color(0xFFD32F2F));
     default:
       return (icon: Icons.notifications_active_outlined, color: const Color(0xFF3F51B5));
   }
@@ -163,13 +166,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('[FCM-BG]   data: ${message.data}');
 
   if (message.notification == null && message.data.isNotEmpty) {
-    // FIX: this call used to be unguarded. If flutter_local_notifications
-    // throws here (most commonly because the custom sound resource is
-    // missing/invalid, or the plugin isn't initialised yet in this
-    // isolate), the exception used to propagate silently out of this
-    // background isolate — no ring, no tray icon, no error anyone would
-    // ever see. Now it's caught, logged, and retried with the default
-    // sound before giving up.
+    // Data-only message — WE fully control display here, custom icon,
+    // custom sound, custom channel all apply correctly.
+    debugPrint('[FCM-BG] data-only payload → showing via app code '
+        '(custom icon + sound WILL apply).');
     try {
       await _showLocalNotificationStandalone(
         id: _uniqueNotifId(),
@@ -180,12 +180,28 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     } catch (e, st) {
       debugPrint('[FCM-BG] failed to show local notification: $e\n$st');
     }
+  } else if (message.notification != null) {
+    // ⚠️ The payload includes a top-level "notification" block, so
+    // Android/Google Play Services auto-renders this itself — this
+    // app's Dart code never runs in this case. Whether the icon/sound
+    // look right depends ENTIRELY on AndroidManifest.xml's
+    // default_notification_icon / default_notification_channel_id /
+    // default_notification_sound meta-data tags, which must point at
+    // resources that actually exist. If those are missing or wrong,
+    // Android can fail to render the notification AT ALL for this
+    // message shape — no exception ever reaches Dart because Dart
+    // isn't in the loop.
+    //
+    // If background/terminated notifications still don't show after
+    // fixing the icon resource below, switch your Cloud Function /
+    // server to send DATA-ONLY payloads (no top-level "notification"
+    // key) so this file controls display consistently in every app
+    // state.
+    debugPrint('[FCM-BG] ⚠️ payload has a "notification" block — Android '
+        'will auto-display this using AndroidManifest.xml defaults, NOT '
+        'this file\'s custom icon/sound. Verify default_notification_icon '
+        'in AndroidManifest.xml points to a drawable that actually exists.');
   }
-  // NOTE: no in-app banner here — there is no live UI/Overlay to draw
-  // into while the app is fully backgrounded/terminated. The system
-  // tray notification above is the correct (and only possible) signal
-  // in that state; the in-app banner takes over once the app is
-  // foregrounded again (see _listenForeground / _checkColdStart).
 }
 
 // Helpers
@@ -210,14 +226,16 @@ AndroidNotificationChannel _buildChannel({bool forceDefaultSound = false}) =>
       showBadge: true,
     );
 
-// FIX: added `forceDefaultSound` so callers can retry a failed show()
-// with the platform default sound instead of the custom raw resource.
-// A missing/invalid raw sound resource is the single most common
-// real-world reason flutter_local_notifications throws on show(), and
-// previously that exception was never caught anywhere near these call
-// sites — so a bad sound file could silently kill the ENTIRE
-// notification (tray + banner), not just the sound.
-NotificationDetails _buildDetails({String body = '', bool forceDefaultSound = false}) =>
+// FIX: added `forceDefaultIcon` alongside the existing
+// `forceDefaultSound`, so the retry ladder in `_showTrayNotification`
+// / `_showLocalNotificationStandalone` can independently rule out
+// "bad sound resource" vs "bad icon resource" as the cause of a
+// show() failure, and still land on something that displays.
+NotificationDetails _buildDetails({
+  String body = '',
+  bool forceDefaultSound = false,
+  bool forceDefaultIcon = false,
+}) =>
     NotificationDetails(
       android: AndroidNotificationDetails(
         NotificationChannels.id,
@@ -240,6 +258,10 @@ NotificationDetails _buildDetails({String body = '', bool forceDefaultSound = fa
         fullScreenIntent: false,
         audioAttributesUsage: AudioAttributesUsage.notification,
         styleInformation: BigTextStyleInformation(body),
+        icon: forceDefaultIcon ? _largeIconResource : _smallIconDrawable,
+        largeIcon: forceDefaultIcon
+            ? null
+            : const DrawableResourceAndroidBitmap(_largeIconResource),
       ),
       iOS: DarwinNotificationDetails(
         presentAlert: true,
@@ -251,13 +273,13 @@ NotificationDetails _buildDetails({String body = '', bool forceDefaultSound = fa
     );
 
 // ═══════════════════════════════════════════════════════════════
-// FIX (core bug): a single place that shows a tray notification and
-// NEVER lets an exception escape uncaught. Every call site that used
-// to call `_sharedPlugin.show(...)` directly now goes through this
-// instead. On failure it retries once with the default sound (the
-// most common real cause of show() throwing) before giving up, and
-// always logs so a failure is at least visible in the console instead
-// of vanishing with zero trace.
+// FIX: 3-step fallback ladder so a bad custom sound AND/OR a bad
+// custom icon can never fully silence a notification:
+//   1. custom sound + custom icon
+//   2. default sound + custom icon   (isolates a bad sound file)
+//   3. default sound + safe icon     (isolates a bad icon resource)
+// Every step is logged so you can see exactly which resource is
+// broken instead of just "nothing happened".
 // ═══════════════════════════════════════════════════════════════
 Future<bool> _showTrayNotification({
   required int id,
@@ -270,23 +292,42 @@ Future<bool> _showTrayNotification({
     return true;
   } catch (e, st) {
     debugPrint('[NOTIF] show() failed with custom sound "$_soundFile" — '
-        'retrying with default sound. This usually means the raw sound '
-        'resource is missing/invalid on this device/build. Error: $e\n$st');
-    try {
-      await _sharedPlugin.show(
-        id,
-        title,
-        body,
-        _buildDetails(body: body, forceDefaultSound: true),
-        payload: payload,
-      );
-      return true;
-    } catch (e2, st2) {
-      debugPrint('[NOTIF] show() failed even with default sound — this '
-          'notification will NOT appear at all. Check POST_NOTIFICATIONS '
-          'permission and channel setup. Error: $e2\n$st2');
-      return false;
-    }
+        'retrying with default sound. Error: $e\n$st');
+  }
+
+  try {
+    await _sharedPlugin.show(
+      id,
+      title,
+      body,
+      _buildDetails(body: body, forceDefaultSound: true),
+      payload: payload,
+    );
+    return true;
+  } catch (e, st) {
+    debugPrint('[NOTIF] show() failed with default sound + custom icon '
+        '"$_smallIconDrawable" — this usually means that drawable is '
+        'missing from android/app/src/main/res/drawable*/. Retrying with '
+        'safe launcher icon. Error: $e\n$st');
+  }
+
+  try {
+    await _sharedPlugin.show(
+      id,
+      title,
+      body,
+      _buildDetails(body: body, forceDefaultSound: true, forceDefaultIcon: true),
+      payload: payload,
+    );
+    debugPrint('[NOTIF] show() succeeded only after falling back to '
+        'default sound + safe icon — fix the custom sound/icon resources '
+        'when you get a chance.');
+    return true;
+  } catch (e2, st2) {
+    debugPrint('[NOTIF] show() failed even with default sound + safe icon '
+        '— this notification will NOT appear at all. Check '
+        'POST_NOTIFICATIONS permission and channel setup. Error: $e2\n$st2');
+    return false;
   }
 }
 
@@ -298,9 +339,15 @@ Future<void> _showLocalNotificationStandalone({
 }) async {
   final plugin = FlutterLocalNotificationsPlugin();
 
+  // FIX: use the guaranteed-to-exist launcher icon for the plugin's
+  // *initialization* default. This is just a fallback value the
+  // plugin uses internally — it does NOT determine what icon shows on
+  // an actual notification (that's controlled per-call by
+  // `_buildDetails()`'s `icon:` field below). Using a resource that's
+  // guaranteed to exist here prevents init from throwing.
   await plugin.initialize(
     const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings(_safeInitIcon),
       iOS: DarwinInitializationSettings(),
     ),
   );
@@ -317,23 +364,39 @@ Future<void> _showLocalNotificationStandalone({
     debugPrint('====================================');
   }
 
-  // FIX: was an unguarded plugin.show() call. Now goes through the same
-  // catch + default-sound-retry path as every other show site.
   try {
     await plugin.show(id, title, body, _buildDetails(body: body), payload: payload);
+    return;
   } catch (e, st) {
     debugPrint('[NOTIF-BG-STANDALONE] show() failed with custom sound, '
         'retrying with default: $e\n$st');
-    try {
-      await plugin.show(
-        id, title, body,
-        _buildDetails(body: body, forceDefaultSound: true),
-        payload: payload,
-      );
-    } catch (e2, st2) {
-      debugPrint('[NOTIF-BG-STANDALONE] show() failed even with default '
-          'sound — notification NOT shown: $e2\n$st2');
-    }
+  }
+
+  try {
+    await plugin.show(
+      id,
+      title,
+      body,
+      _buildDetails(body: body, forceDefaultSound: true),
+      payload: payload,
+    );
+    return;
+  } catch (e, st) {
+    debugPrint('[NOTIF-BG-STANDALONE] show() failed with custom icon too, '
+        'retrying with safe icon: $e\n$st');
+  }
+
+  try {
+    await plugin.show(
+      id,
+      title,
+      body,
+      _buildDetails(body: body, forceDefaultSound: true, forceDefaultIcon: true),
+      payload: payload,
+    );
+  } catch (e2, st2) {
+    debugPrint('[NOTIF-BG-STANDALONE] show() failed even with default '
+        'sound + safe icon — notification NOT shown: $e2\n$st2');
   }
 }
 
@@ -570,12 +633,6 @@ class NotificationService {
           ?.createNotificationChannel(_buildChannel());
       debugPrint('[NOTIF] Channel registered: ${NotificationChannels.id}');
     } catch (e, st) {
-      // FIX: channel creation failing (e.g. bad sound resource at
-      // creation time) used to be able to abort initialize() entirely
-      // via the outer catch below without ever registering the plugin
-      // or listeners — meaning EVERY future notification would fail.
-      // Now we log it and still fall through to register a
-      // default-sound channel so the app can still notify.
       debugPrint('[NOTIF] Channel registration with custom sound failed: '
           '$e\n$st — retrying with default sound.');
       try {
@@ -589,10 +646,21 @@ class NotificationService {
       }
     }
 
+    // FIX (the core bug): this used to pass `_smallIconDrawable`
+    // directly into AndroidInitializationSettings. If that drawable
+    // resource is missing/invalid, this call throws natively, the
+    // outer catch below swallows it, and EVERYTHING after this block
+    // — foreground listener, background-tap listener, token refresh
+    // listener, token save, cold-start check — silently never runs.
+    // That is why nothing rang or popped up. Using `_safeInitIcon`
+    // (`@mipmap/ic_launcher`, guaranteed to exist) here removes that
+    // failure point entirely. The custom icon is still applied
+    // per-notification in `_buildDetails()`, with its own fallback
+    // ladder in `_showTrayNotification`.
     try {
       await _sharedPlugin.initialize(
         const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          android: AndroidInitializationSettings(_safeInitIcon),
           iOS: DarwinInitializationSettings(
             requestAlertPermission: false,
             requestBadgePermission: false,
@@ -623,6 +691,12 @@ class NotificationService {
       debugPrint('[NOTIF] Initialised');
     } catch (e, st) {
       debugPrint('[NOTIF] Init error: $e\n$st');
+      debugPrint('[NOTIF] ⚠️ Because init failed, NO notification listeners '
+          'are attached — nothing will ring or pop up until this succeeds. '
+          'This should now be very unlikely since init uses the safe '
+          'launcher icon, but if you still see this, check '
+          'POST_NOTIFICATIONS/EXACT_ALARM permissions and the '
+          'notification_sound raw resource.');
     }
   }
 
@@ -638,11 +712,6 @@ class NotificationService {
     );
     debugPrint('[FCM] Auth status: ${settings.authorizationStatus}');
     if (settings.authorizationStatus == AuthorizationStatus.denied) {
-      // FIX: this is a silent-failure trap distinct from the show()
-      // bug above — if the user denied notification permission,
-      // show() will often just no-op with NO exception at all. Make
-      // that state loud in the logs instead of indistinguishable from
-      // "everything is fine".
       debugPrint('[NOTIF] ⚠️ Notification permission is DENIED. No '
           'notification — tray or otherwise — will ever appear until the '
           'user re-enables notifications for this app in system settings.');
@@ -657,7 +726,7 @@ class NotificationService {
         debugPrint('[NOTIF] ⚠️ POST_NOTIFICATIONS was denied on Android 13+. '
             'flutter_local_notifications will silently do nothing on '
             'show() — no exception, no tray icon. This is the other '
-            'common "silent" failure mode besides a bad sound resource.');
+            'common "silent" failure mode besides a bad sound/icon resource.');
       }
 
       final exactAlarm = await _sharedPlugin
@@ -682,10 +751,6 @@ class NotificationService {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // FIX (the main bug): tray notification and in-app banner are now
- 
-  // ═══════════════════════════════════════════════════════════════
   void _listenForeground() {
     FirebaseMessaging.onMessage.listen(
       (RemoteMessage message) async {
@@ -900,9 +965,7 @@ class NotificationService {
     debugPrint('[FCM] Token cleared on logout');
   }
 
-  // FIX: tray + banner split into independent try/catch blocks here
-  // too, same reasoning as _listenForeground() above. This is the
-  // entry point business_dashboard_page.dart uses for its own instant
+  // Entry point business_dashboard_page.dart uses for its own instant
   // "new order available" alert.
   static Future<void> showLocalAlert({
     required String title,

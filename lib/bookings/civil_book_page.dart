@@ -1164,7 +1164,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         providerId:    _providerId!,
         providerName:  _providerName ?? '',
         visitType:     'Site Visit',
-        isEnquiry:     true, itemBreakdown: [],
+        isEnquiry:     true, itemBreakdown: [], subCategories: [_resolvedSubCategory],
       );
 
       if (!mounted) return;
