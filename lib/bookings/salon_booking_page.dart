@@ -59,6 +59,15 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   // in the picker's bottom sheet aren't silently dropped on the floor.
   LatLng? _pickedLatLng;
 
+  // ── Appointment date/time ────────────────────────────────────────────────
+  // NEW: the customer now explicitly picks when they want the appointment,
+  // instead of the order silently being stamped with DateTime.now() /
+  // TimeOfDay.now() at the moment they hit "Proceed To Pay". Defaulted to
+  // "now" so the flow still works untouched if someone doesn't bother
+  // changing it, but both are fully editable via the Schedule card below.
+  DateTime  _selectedDate = DateTime.now();
+  TimeOfDay _selectedTime = TimeOfDay.now();
+
   late final AnimationController _animController;
   late final Animation<double>    _fadeIn;
 
@@ -272,6 +281,55 @@ class _SalonBookingPageState extends State<SalonBookingPage>
 
   double _sp(BuildContext context, double value) => value * _scale(context);
 
+  // ── Date/time display + pickers ─────────────────────────────────────────
+
+  String get _formattedDate {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${_selectedDate.day} ${months[_selectedDate.month - 1]} ${_selectedDate.year}';
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate.isBefore(now) ? now : _selectedDate,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 90)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(ctx).colorScheme.copyWith(
+                primary: const Color(0xFFB38BFA),
+              ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(ctx).colorScheme.copyWith(
+                primary: const Color(0xFFB38BFA),
+              ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedTime = picked);
+    }
+  }
+
   // ==========================================================================
   // BUILD
   // ==========================================================================
@@ -393,6 +451,9 @@ class _SalonBookingPageState extends State<SalonBookingPage>
           SizedBox(height: _sp(context, 20)),
           _sectionTitle(context, 'Appointment Type'),
           _buildVisitTypeCard(context),
+          SizedBox(height: _sp(context, 20)),
+          _sectionTitle(context, 'Schedule'),
+          _buildScheduleCard(context),
           SizedBox(height: _sp(context, 20)),
           _sectionTitle(context, 'Your Details'),
           _buildDetailsCard(context),
@@ -567,6 +628,86 @@ class _SalonBookingPageState extends State<SalonBookingPage>
           SizedBox(width: _sp(context, 12)),
           _visitChip(context, Icons.store_rounded, 'Salon', _hasSalon),
         ],
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // SCHEDULE CARD  (date + time pickers)
+  // ==========================================================================
+
+  Widget _buildScheduleCard(BuildContext context) {
+    return _card(
+      context: context,
+      child: Row(
+        children: [
+          Expanded(
+            child: _scheduleTile(
+              context,
+              icon: Icons.calendar_today_rounded,
+              label: 'Date',
+              value: _formattedDate,
+              onTap: _pickDate,
+            ),
+          ),
+          SizedBox(width: _sp(context, 12)),
+          Expanded(
+            child: _scheduleTile(
+              context,
+              icon: Icons.access_time_rounded,
+              label: 'Time',
+              value: _selectedTime.format(context),
+              onTap: _pickTime,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scheduleTile(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+            horizontal: _sp(context, 14), vertical: _sp(context, 14)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FD),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFFB38BFA), size: _sp(context, 20)),
+            SizedBox(width: _sp(context, 10)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: _sp(context, 11))),
+                  SizedBox(height: _sp(context, 2)),
+                  Text(
+                    value,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: _sp(context, 14)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -782,6 +923,20 @@ class _SalonBookingPageState extends State<SalonBookingPage>
       return;
     }
 
+    // NEW: guard against picking a date/time that's already in the past
+    // (e.g. user picked today + a time earlier than "now").
+    final scheduledAt = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      _selectedTime.hour,
+      _selectedTime.minute,
+    );
+    if (scheduledAt.isBefore(DateTime.now().subtract(const Duration(minutes: 1)))) {
+      _showPopup('Please choose a valid future date and time', false);
+      return;
+    }
+
     final name    = _nameController.text.trim();
     final phone   = _phoneController.text.trim();
     final email   = _emailController.text.trim();
@@ -836,8 +991,10 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         createdByRole: 'user',
         address:       _hasHome ? address : 'Salon Visit',
         note:          composedNote,
-        date:          DateTime.now(),
-        time:          TimeOfDay.now().format(context),
+        // NEW: use the customer-selected appointment date/time instead of
+        // always stamping the order with DateTime.now() / TimeOfDay.now().
+        date:          _selectedDate,
+        time:          _selectedTime.format(context),
         totalAmount:   _totalAmount,
         visitType:     _visitType,
         providerId:    _providerId!,

@@ -216,6 +216,57 @@ String _norm(String s) => normalizeServiceType(s);
 
 bool _svcEq(String a, String b) => _norm(a) == _norm(b);
 
+// ─────────────────────────────────────────────────────────────
+// NEW: tolerant lookup for the PROVIDER'S OWN business address —
+// i.e. the salon's physical address, as opposed to the customer's
+// address stored on an order.
+//
+// Mirrors the same "check several plausible field-name candidates"
+// pattern already used throughout this codebase (see
+// providerServiceType() in order_service.dart, and _name()/_phone()/
+// _addr() on _CardState below) because provider docs have not always
+// stored this consistently — some write it flat at the top level,
+// some nest it under `business`, some only have it inside a
+// `location` map alongside lat/lng from MapPickerPage.
+//
+// Returns '' if nothing usable is found anywhere, so call sites can
+// show a clear "no address on file" message instead of silently
+// sending an empty string to a customer.
+// ─────────────────────────────────────────────────────────────
+String _resolveProviderAddress(
+  Map<String, dynamic> prov,
+  Map<String, dynamic> business,
+) {
+  const candidateKeys = [
+    'address',
+    'fullAddress',
+    'shopAddress',
+    'businessAddress',
+    'formattedAddress',
+  ];
+
+  for (final k in candidateKeys) {
+    final v = (business[k] ?? '').toString().trim();
+    if (v.isNotEmpty) return v;
+  }
+
+  for (final k in candidateKeys) {
+    final v = (prov[k] ?? '').toString().trim();
+    if (v.isNotEmpty) return v;
+  }
+
+  final locCandidates = <dynamic>[business['location'], prov['location']];
+  for (final loc in locCandidates) {
+    if (loc is Map) {
+      for (final k in candidateKeys) {
+        final v = (loc[k] ?? '').toString().trim();
+        if (v.isNotEmpty) return v;
+      }
+    }
+  }
+
+  return '';
+}
 
 // ─────────────────────────────────────────────────────────────
 bool _categoryMatch(
@@ -934,6 +985,58 @@ class _BDPState extends State<BusinessDashboardPage> {
     }
   }
 
+  // ── NEW: Send Salon Address ─────────────────────────────────
+  // Lets a salon provider send THEIR OWN salon address to the customer
+  // for a salon-visit job (i.e. the customer is coming to the salon,
+  // rather than the provider going to the customer's home). Purely
+  // additive — does not touch order status, isAssigned, or any other
+  // field on the order; it just fires a notification to the customer.
+  //
+  // `providerAddress` is resolved once per build() from the provider's
+  // own Firestore doc via _resolveProviderAddress() and threaded down
+  // through _MyTab / _Card — see build() below.
+  Future<void> _sendSalonAddress(
+    String id,
+    Map<String, dynamic> data,
+    String providerAddress,
+  ) async {
+    if (providerAddress.trim().isEmpty) {
+      _snack(
+        'No salon address found in your profile yet — please add one first.',
+        _C.red,
+        Icons.error_outline,
+      );
+      return;
+    }
+    final custId = (data['userId'] ?? '').toString();
+    if (custId.isEmpty) {
+      _snack('Could not find the customer to notify.', _C.red, Icons.error_outline);
+      return;
+    }
+    try {
+      await OrderService.notifyUser(
+        userId:  custId,
+        orderId: id,
+        title:   '📍 Salon Address',
+        body:    '${widget.businessName} salon address: $providerAddress',
+        // Plain string literal — no need to touch order_service.dart's
+        // NotificationType class for this. notifyUser()/_sendNotification()
+        // already accept any type string, and an unrecognised type just
+        // falls back to a generic banner style on the notifications page.
+        type: 'salon_address_shared',
+        businessName: widget.businessName,
+        serviceType:  widget.serviceType,
+        providerId:   widget.providerId,
+      );
+      if (!mounted) return;
+      _snack('Salon address sent to the customer.', _C.green,
+          Icons.check_circle_rounded);
+    } catch (e) {
+      debugPrint('[sendSalonAddress] $e');
+      _snack('Could not send address. Try again.', _C.red, Icons.error_rounded);
+    }
+  }
+
   // FIX: now forwards `businessName` / `serviceType` / `providerId`
   // into OrderService.notifyUser() so the saved notification doc
   // carries this as STRUCTURED data — not just baked into `body` text.
@@ -1031,6 +1134,10 @@ class _BDPState extends State<BusinessDashboardPage> {
 
           final business = (prov['business'] as Map?)?.cast<String, dynamic>() ?? {};
           final photoUrl = (business['image'] ?? '').toString().trim();
+
+          // NEW: resolved once per profile snapshot — the salon's own
+          // address, used by "Send Salon Address" in the My Jobs tab.
+          final providerAddress = _resolveProviderAddress(prov, business);
 
          
           final mainCats    = providerCategories(prov);
@@ -1156,6 +1263,11 @@ class _BDPState extends State<BusinessDashboardPage> {
                         onStartWork:   _startWork,
                         onComplete:    _showCompleteWithOtp,
                         onCancel:      _showCancel,
+                        // NEW: closure captures providerAddress resolved
+                        // above for this build; _MyTab/_Card don't need
+                        // to know anything about where it came from.
+                        onSendAddress: (orderId, data) =>
+                            _sendSalonAddress(orderId, data, providerAddress),
                       ),
                     ],
                   );
@@ -1295,6 +1407,12 @@ class _MyTab extends StatelessWidget {
   final Future<void> Function(String, Map<String, dynamic>) onStartWork;
   final Future<void> Function(String, Map<String, dynamic>) onComplete;
   final Future<void> Function(String, Map<String, dynamic>) onCancel;
+  // NEW: sends the provider's own salon address to the customer for a
+  // salon-visit job. Kept as the same
+  // `Future<void> Function(String orderId, Map<String,dynamic> data)`
+  // shape as the other action callbacks above so it plugs into _Card
+  // the same way.
+  final Future<void> Function(String, Map<String, dynamic>) onSendAddress;
 
   const _MyTab({
     super.key,
@@ -1308,6 +1426,7 @@ class _MyTab extends StatelessWidget {
     required this.onStartWork,
     required this.onComplete,
     required this.onCancel,
+    required this.onSendAddress,
   });
 
   @override
@@ -1375,6 +1494,10 @@ class _MyTab extends StatelessWidget {
               ? () => onComplete(doc.id, data) : null,
           onCancel:    (status == OrderStatus.accepted || status == kWorkInProgress)
               ? () => onCancel(doc.id, data) : null,
+          // NEW: only wired up (non-null) while the job is active —
+          // matches the same accepted/in-progress gating as Cancel.
+          onSendAddress: (status == OrderStatus.accepted || status == kWorkInProgress)
+              ? () => onSendAddress(doc.id, data) : null,
         );
       },
     );
@@ -1398,6 +1521,10 @@ class _Card extends StatefulWidget {
   final _AsyncCb? onStartWork;
   final _AsyncCb? onComplete;
   final _AsyncCb? onCancel;
+  // NEW: optional — only ever non-null for salon-visit jobs in the My
+  // Jobs tab (see _isSalonVisit / _MyTab above). Left null everywhere
+  // else so nothing else about the card's behaviour changes.
+  final _AsyncCb? onSendAddress;
 
   const _Card({
     super.key,
@@ -1406,6 +1533,7 @@ class _Card extends StatefulWidget {
     required this.terms,
     this.onAccept, this.onDecline,
     this.onStartWork, this.onComplete, this.onCancel,
+    this.onSendAddress,
   });
 
   @override
@@ -1594,6 +1722,21 @@ class _CardState extends State<_Card> {
 
   bool get _isEnquiry =>
       (widget.data['status'] ?? '').toString().toLowerCase() == OrderStatus.enquiry;
+
+  // NEW: true only when this is a salon order where the CUSTOMER is
+  // visiting the salon (as opposed to a home-visit salon booking).
+  // Checked both via the order's `visitType` field (set by
+  // SalonBookingPage as 'Home' | 'Salon' | 'Mixed') and, as a
+  // fallback for older/legacy orders that may not carry `visitType`,
+  // via the literal 'Salon Visit' placeholder SalonBookingPage writes
+  // into `address` for a pure salon-visit booking.
+  bool get _isSalonVisit {
+    if (widget.serviceType.trim().toLowerCase() != 'salon') return false;
+    final visitType = _s(widget.data['visitType']).toLowerCase();
+    if (visitType == 'salon') return true;
+    final addr = _s(widget.data['address']).toLowerCase();
+    return addr == 'salon visit';
+  }
 
   Widget _paymentBadge() {
     final methodLabel = _paymentMethodLabel();
@@ -1989,6 +2132,22 @@ class _CardState extends State<_Card> {
                       ),
                     ),
                   ]),
+
+                // ── NEW: "Send Salon Address" — only ever rendered for
+                // a salon-visit job in the My Jobs tab, while it's
+                // active (accepted or in-progress; see the null-gating
+                // in _MyTab above). Purely additive — sits below the
+                // existing Start Work / Mark Complete row and never
+                // replaces or alters them.
+                if (widget.onSendAddress != null && _isSalonVisit) ...[
+                  const SizedBox(height: 10),
+                  _ActionBtn(
+                    label: 'Send Salon Address',
+                    icon:  Icons.location_on_rounded,
+                    bg:    _C.teal, fg: Colors.white,
+                    onTap: () => _run(widget.onSendAddress),
+                  ),
+                ],
 
                 if (rawStatus == OrderStatus.completed)
                   _StatusBadge(Icons.verified_rounded,

@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.VIBRATE" /> 
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
 
@@ -18,33 +18,23 @@
         android:icon="@mipmap/launcher_icon"
         android:label="callme">
 
-        <!-- Firebase Notifications -->
-        <!-- Must match NotificationChannels.id in notification_service.dart -->
+      
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="callme_high_v8" />
 
-        <!-- NEW: tells Android which icon to use when it auto-renders a
-             notification (background/killed-app state where the FCM
-             payload includes a top-level "notification" block, so
-             Dart code in notification_service.dart never runs). Must
-             point at the drawable added under
-             res/drawable-mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi/ic_notification.png.
-             Without this, Android falls back to the Flutter default
-             icon (or, on some OEM/OS combos, can fail to render the
-             notification at all). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_notification" />
 
-        <!-- NEW (optional): tint color Android applies to the white
-             notification silhouette on Android 5+. References
-             res/values/colors.xml -> notification_color. Safe to
-             remove this single meta-data block if you'd rather use
-             the OS default tint instead. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_color" />
+
+       
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_sound"
+            android:resource="@raw/notification_sound" />
 
         <meta-data
             android:name="firebase_messaging_auto_init_enabled"
@@ -88,30 +78,28 @@
             android:name="google_analytics_automatic_screen_reporting_enabled"
             android:value="true" />
 
-          
-
     </application>
 
-  <queries>
-    <intent>
-        <action android:name="android.intent.action.PROCESS_TEXT" />
-        <data android:mimeType="text/plain" />
-    </intent>
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
 
-    <intent>
-        <action android:name="android.intent.action.VIEW" />
-        <data android:scheme="https" />
-    </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
 
-    <intent>
-        <action android:name="android.intent.action.SENDTO" />
-        <data android:scheme="mailto" />
-    </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
 
-    <intent>
-        <action android:name="android.intent.action.DIAL" />
-        <data android:scheme="tel" />
-    </intent>
-</queries>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+    </queries>
 
 </manifest>
