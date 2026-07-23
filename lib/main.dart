@@ -32,10 +32,6 @@ Future<void> main() async {
       firebaseMessagingBackgroundHandler,
     );
 
-    // ② Assign tap callback BEFORE initialize() so cold-start taps are never
-    //   lost. The pending-queue in NotificationService holds any tap that
-    //   arrives before the callback is set, then flushes it the moment this
-    //   line runs.
     NotificationService.onNotificationTap = routeNotification;
 
     // ③ Initialize Firebase.
