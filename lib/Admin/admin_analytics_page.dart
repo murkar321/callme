@@ -5,25 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
-/// =====================================================================
-/// ADMIN ANALYTICS PAGE
-///
-/// Fully real-time analytics screen driven by three Firestore streams
-/// (orders, users, providers) — no polling, no pull-to-refresh needed,
-/// every card/graph recomputes the instant a doc changes.
-///
-/// Field reading follows the SAME tolerant pattern already used in
-/// admin_dashboard.dart (_statusOf / _providerServiceType): several
-/// possible field names/shapes are tried in priority order so this page
-/// doesn't break if different parts of the app wrote slightly different
-/// schemas for price/city/rating/etc. If your real field names differ,
-/// just add them to the candidate list in the relevant `_xOf()` helper
-/// below — nothing else needs to change.
-///
-/// UI is mobile-first (built for Android phones) but scales cleanly up
-/// to tablets via LayoutBuilder breakpoints, matching the responsive
-/// approach in AdminDashboard's _ScreenMetrics.
-/// =====================================================================
+
 
 class AdminAnalyticsPage extends StatefulWidget {
   const AdminAnalyticsPage({super.key});
@@ -38,18 +20,23 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
   StreamSubscription<QuerySnapshot>? _ordersSub;
   StreamSubscription<QuerySnapshot>? _usersSub;
   StreamSubscription<QuerySnapshot>? _providersSub;
+  StreamSubscription<QuerySnapshot>? _paymentsSub;
 
   bool _loadingOrders = true;
   bool _loadingUsers = true;
   bool _loadingProviders = true;
-  bool get isLoading => _loadingOrders || _loadingUsers || _loadingProviders;
+  bool _loadingPayments = true;
+  bool get isLoading =>
+      _loadingOrders || _loadingUsers || _loadingProviders || _loadingPayments;
 
   // Raw parsed docs — kept in memory so every metric can be recomputed
   // cheaply on any single stream update without re-reading Firestore.
   List<_OrderRecord> _orders = [];
+  Map<String, _OrderRecord> _ordersById = {};
   List<_JoinRecord> _users = [];
   List<_JoinRecord> _providers = [];
   Map<String, _ProviderMeta> _providerMeta = {}; // providerId -> name/rating
+  List<_PaymentRecord> _payments = [];
 
   Timer? _rangeTicker;
   final int _trendDays = 7; // window for the line/bar trend graphs
@@ -60,6 +47,7 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
     _listenProviders();
     _listenUsers();
     _listenOrders();
+    _listenPayments();
     // Cheap once-a-minute tick so "Today" boundaries / relative labels
     // stay correct if the screen is left open across midnight, etc.
     _rangeTicker = Timer.periodic(const Duration(minutes: 1), (_) {
@@ -72,6 +60,7 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
     _ordersSub?.cancel();
     _usersSub?.cancel();
     _providersSub?.cancel();
+    _paymentsSub?.cancel();
     _rangeTicker?.cancel();
     super.dispose();
   }
@@ -155,10 +144,11 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
     _ordersSub = _db.collection('orders').snapshots().listen((snap) {
       if (!mounted) return;
       final records = <_OrderRecord>[];
+      final byId = <String, _OrderRecord>{};
 
       for (final doc in snap.docs) {
         final data = doc.data();
-        records.add(_OrderRecord(
+        final record = _OrderRecord(
           id: doc.id,
           status: _bucketFor(_statusOf(data)),
           amount: _amountOf(data),
@@ -174,16 +164,66 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
           customerId: _stringOf(
               data, ['customerId', 'userId', 'uid', 'customerEmail']),
           rating: _doubleOf(data, ['rating', 'orderRating']),
-        ));
+        );
+        records.add(record);
+        byId[doc.id] = record;
       }
 
       setState(() {
         _orders = records;
+        _ordersById = byId;
         _loadingOrders = false;
       });
     }, onError: (e) {
       debugPrint('[Analytics] orders stream error: $e');
       if (mounted) setState(() => _loadingOrders = false);
+    });
+  }
+
+  /// Real payment transactions — the source of truth for realized revenue.
+  /// Tolerant of a few common collection shapes:
+  ///   payments/{paymentId}: { orderId, amount, status, method, createdAt }
+  void _listenPayments() {
+    _paymentsSub = _db.collection('payments').snapshots().listen((snap) {
+      if (!mounted) return;
+      final records = <_PaymentRecord>[];
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        records.add(_PaymentRecord(
+          id: doc.id,
+          orderId: _stringOf(data, ['orderId', 'order_id', 'bookingId']),
+          amount: _doubleOf(data, [
+                'amount',
+                'totalAmount',
+                'paidAmount',
+                'paymentAmount',
+                'value',
+                'price',
+              ]) ??
+              0.0,
+          status: _paymentStatusOf(data),
+          method: _stringOf(data, ['method', 'paymentMethod', 'mode', 'type']),
+          paidAt: _dateOf(data, [
+            'paidAt',
+            'createdAt',
+            'timestamp',
+            'transactionDate',
+            'date',
+          ]),
+        ));
+      }
+
+      setState(() {
+        _payments = records;
+        _loadingPayments = false;
+      });
+    }, onError: (e) {
+      debugPrint('[Analytics] payments stream error: $e');
+      // If the payments collection doesn't exist yet in this project, we
+      // shouldn't block the whole page — just stop waiting on it and let
+      // the legacy order.amount fallback carry all revenue metrics.
+      if (mounted) setState(() => _loadingPayments = false);
     });
   }
 
@@ -302,6 +342,46 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
     }
   }
 
+  /// Same tolerant-bucket philosophy as `_bucketFor`, applied to a
+  /// payment doc's status field so different payment gateways / manual
+  /// COD entries can all normalize into one of four buckets.
+  _PaymentStatus _paymentStatusOf(Map<String, dynamic> data) {
+    final candidates = <dynamic>[
+      data['status'],
+      data['paymentStatus'],
+      data['payment_status'],
+      data['transactionStatus'],
+    ];
+    String? status;
+    for (final c in candidates) {
+      final s = c?.toString().trim().toLowerCase();
+      if (s != null && s.isNotEmpty) {
+        status = s;
+        break;
+      }
+    }
+    switch (status) {
+      case 'paid':
+      case 'success':
+      case 'successful':
+      case 'captured':
+      case 'completed':
+      case 'complete':
+        return _PaymentStatus.paid;
+      case 'failed':
+      case 'failure':
+      case 'declined':
+      case 'error':
+        return _PaymentStatus.failed;
+      case 'refunded':
+      case 'reversed':
+      case 'refund':
+        return _PaymentStatus.refunded;
+      default:
+        return _PaymentStatus.pending;
+    }
+  }
+
   String _serviceTypeOf(Map<String, dynamic> data) {
     final top = _stringOf(data, ['serviceType', 'category', 'service_type']);
     if (top != null) return top;
@@ -318,6 +398,50 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
   }
 
   // =====================================================================
+  // REVENUE EVENTS
+  // Combines the `payments` collection (primary) with a per-order legacy
+  // fallback (secondary) into one flat list every revenue metric below
+  // reads from. See the class doc comment at the top of this file for
+  // the exact precedence rule.
+  // =====================================================================
+
+  List<_RevenueEvent> get _revenueEvents {
+    final events = <_RevenueEvent>[];
+    final coveredOrderIds = <String>{};
+
+    for (final p in _payments) {
+      if (p.status != _PaymentStatus.paid) continue;
+      final order = (p.orderId != null) ? _ordersById[p.orderId] : null;
+      events.add(_RevenueEvent(
+        date: p.paidAt ?? order?.createdAt,
+        amount: p.amount,
+        providerId: order?.providerId,
+        city: order?.city ?? 'Unknown',
+        serviceType: order?.serviceType ?? 'Other',
+        method: p.method ?? 'Other',
+      ));
+      if (p.orderId != null) coveredOrderIds.add(p.orderId!);
+    }
+
+    // Legacy fallback: orders marked completed with no matching payment
+    // doc — either older data recorded before the payments collection
+    // existed, or a payment that was simply never logged separately.
+    for (final o in _orders) {
+      if (o.status != _OrderBucket.completed) continue;
+      if (coveredOrderIds.contains(o.id)) continue;
+      events.add(_RevenueEvent(
+        date: o.createdAt,
+        amount: o.amount,
+        providerId: o.providerId,
+        city: o.city,
+        serviceType: o.serviceType,
+        method: 'Unrecorded',
+      ));
+    }
+    return events;
+  }
+
+  // =====================================================================
   // METRIC COMPUTATION
   // All pure functions over the cached lists — cheap enough to run on
   // every rebuild rather than caching separately, so nothing ever goes
@@ -330,9 +454,9 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
     return d.year == now.year && d.month == now.month && d.day == now.day;
   }
 
-  double get _todayRevenue => _orders
-      .where((o) => _isToday(o.createdAt) && o.status == _OrderBucket.completed)
-      .fold(0.0, (sum, o) => sum + o.amount);
+  double get _todayRevenue => _revenueEvents
+      .where((e) => _isToday(e.date))
+      .fold(0.0, (sum, e) => sum + e.amount);
 
   int get _todayBookings => _orders.where((o) => _isToday(o.createdAt)).length;
 
@@ -344,6 +468,13 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
 
   int get _cancelledCount =>
       _orders.where((o) => o.status == _OrderBucket.cancelled).length;
+
+  int get _pendingPaymentsCount =>
+      _payments.where((p) => p.status == _PaymentStatus.pending).length;
+
+  double get _pendingPaymentsAmount => _payments
+      .where((p) => p.status == _PaymentStatus.pending)
+      .fold(0.0, (s, p) => s + p.amount);
 
   double? get _averageRating {
     final rated = _orders.where((o) => o.rating != null).toList();
@@ -384,18 +515,15 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
     return List.generate(_trendDays, (i) => start.add(Duration(days: i)));
   }
 
-  /// Revenue per day for the trailing [_trendDays] window (completed
-  /// orders only, since pending/cancelled orders don't represent
-  /// realized revenue).
+  /// Revenue per day for the trailing [_trendDays] window, sourced from
+  /// `_revenueEvents` (payments collection + legacy order fallback).
   List<double> get _revenueTrend {
     final buckets = _trendDayBuckets;
+    final events = _revenueEvents;
     return buckets.map((day) {
-      return _orders
-          .where((o) =>
-              o.status == _OrderBucket.completed &&
-              o.createdAt != null &&
-              _sameDay(o.createdAt!, day))
-          .fold(0.0, (s, o) => s + o.amount);
+      return events
+          .where((e) => e.date != null && _sameDay(e.date!, day))
+          .fold(0.0, (s, e) => s + e.amount);
     }).toList();
   }
 
@@ -433,7 +561,9 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
     return buckets;
   }
 
-  /// Top providers by number of completed orders, with total revenue.
+  /// Top providers by number of completed orders, with revenue sourced
+  /// from `_revenueEvents` (so it reflects actual paid amounts, not just
+  /// whatever was on the order doc).
   List<_ProviderRank> get _topProviders {
     final byProvider = <String, _ProviderRank>{};
     for (final o in _orders) {
@@ -447,8 +577,13 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
       entry.totalOrders++;
       if (o.status == _OrderBucket.completed) {
         entry.completedOrders++;
-        entry.revenue += o.amount;
       }
+    }
+    for (final e in _revenueEvents) {
+      final pid = e.providerId;
+      if (pid == null || pid.isEmpty) continue;
+      final entry = byProvider[pid];
+      if (entry != null) entry.revenue += e.amount;
     }
     final list = byProvider.values.toList()
       ..sort((a, b) => b.completedOrders.compareTo(a.completedOrders));
@@ -465,6 +600,22 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
     final list = counts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     return list.take(5).toList();
+  }
+
+  /// Revenue broken down by payment method (e.g. Online / Cash / UPI),
+  /// sourced from `_revenueEvents`. Orders whose revenue only came from
+  /// the legacy fallback (no matching payment doc) are grouped under
+  /// "Unrecorded" so it's obvious how much revenue still isn't backed by
+  /// an actual payment record.
+  List<MapEntry<String, double>> get _paymentMethodBreakdown {
+    final totals = <String, double>{};
+    for (final e in _revenueEvents) {
+      final label = e.method.isEmpty ? 'Other' : e.method;
+      totals[label] = (totals[label] ?? 0) + e.amount;
+    }
+    final list = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return list;
   }
 
   List<int> get _customerGrowthTrend {
@@ -546,6 +697,10 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
                         _sectionLabel('Bookings (Last 7 Days)'),
                         const SizedBox(height: 12),
                         _buildBookingsChart(m),
+                        const SizedBox(height: 26),
+                        _sectionLabel('Payment Methods'),
+                        const SizedBox(height: 12),
+                        _buildPaymentMethods(m),
                         const SizedBox(height: 26),
                         m.isMobile
                             ? Column(
@@ -688,6 +843,12 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
         value: '$_cancelledCount',
         icon: Icons.cancel_rounded,
         color: const Color(0xFFEF4444),
+      ),
+      (
+        title: 'Pending Payments',
+        value: '$_pendingPaymentsCount',
+        icon: Icons.payments_outlined,
+        color: const Color(0xFF0EA5E9),
       ),
       (
         title: 'Average Rating',
@@ -926,6 +1087,112 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
   String _dayLabel(DateTime d) {
     const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return labels[d.weekday - 1];
+  }
+
+  // ── Payment methods (ranked list w/ ₹ bars) ─────────────────────────
+
+  Widget _buildPaymentMethods(_AnalyticsMetrics m) {
+    final breakdown = _paymentMethodBreakdown;
+    if (breakdown.isEmpty) {
+      return _card(
+        child: const Text('No payment data yet',
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+      );
+    }
+    final maxAmount = breakdown.first.value;
+    final colors = [
+      const Color(0xFF10B981),
+      const Color(0xFF3B82F6),
+      const Color(0xFF8B5CF6),
+      const Color(0xFFF59E0B),
+      const Color(0xFF94A3B8),
+    ];
+
+    return _card(
+      child: Column(
+        children: [
+          for (int i = 0; i < breakdown.length; i++) ...[
+            _rankedAmountBarRow(
+              label: breakdown[i].key,
+              value: breakdown[i].value,
+              maxValue: maxAmount,
+              color: colors[i % colors.length],
+            ),
+            if (i != breakdown.length - 1) const SizedBox(height: 14),
+          ],
+          if (_pendingPaymentsAmount > 0) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0EA5E9).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.hourglass_bottom_rounded,
+                      size: 16, color: Color(0xFF0EA5E9)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '$_pendingPaymentsCount payment(s) still pending',
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF334155)),
+                    ),
+                  ),
+                  Text(
+                    '₹${_pendingPaymentsAmount.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0EA5E9)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _rankedAmountBarRow({
+    required String label,
+    required double value,
+    required double maxValue,
+    required Color color,
+  }) {
+    final fraction = maxValue == 0 ? 0.0 : value / maxValue;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF334155))),
+            ),
+            Text('₹${value.toStringAsFixed(0)}',
+                style: TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.bold, color: color)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: fraction,
+            minHeight: 8,
+            backgroundColor: color.withOpacity(0.1),
+            valueColor: AlwaysStoppedAnimation(color),
+          ),
+        ),
+      ],
+    );
   }
 
   // ── Popular services (ranked list w/ bars) ──────────────────────────
@@ -1416,6 +1683,8 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage> {
 
 enum _OrderBucket { pending, accepted, completed, cancelled }
 
+enum _PaymentStatus { pending, paid, failed, refunded }
+
 class _OrderRecord {
   final String id;
   final _OrderBucket status;
@@ -1437,6 +1706,44 @@ class _OrderRecord {
     required this.providerId,
     required this.customerId,
     required this.rating,
+  });
+}
+
+class _PaymentRecord {
+  final String id;
+  final String? orderId;
+  final double amount;
+  final _PaymentStatus status;
+  final String? method;
+  final DateTime? paidAt;
+
+  _PaymentRecord({
+    required this.id,
+    required this.orderId,
+    required this.amount,
+    required this.status,
+    required this.method,
+    required this.paidAt,
+  });
+}
+
+/// One unit of realized revenue — either from an actual `payments` doc
+/// (preferred) or the legacy order.amount fallback. See `_revenueEvents`.
+class _RevenueEvent {
+  final DateTime? date;
+  final double amount;
+  final String? providerId;
+  final String city;
+  final String serviceType;
+  final String method;
+
+  _RevenueEvent({
+    required this.date,
+    required this.amount,
+    required this.providerId,
+    required this.city,
+    required this.serviceType,
+    required this.method,
   });
 }
 

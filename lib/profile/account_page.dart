@@ -7,6 +7,7 @@ import 'package:callme/profile/feedback_page.dart';
 import 'package:callme/profile/profile_page.dart';
 import 'package:callme/screens/logo_page.dart';
 import 'package:callme/login/auth_service.dart';
+import 'package:callme/payment/settings_page.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -50,13 +51,23 @@ class _AccountPageState extends State<AccountPage>
   late final AnimationController _blobController2;
   late final AnimationController _blobController3;
 
-  // Pastel palette for the header
-  static const List<Color> _pastelPalette = [
+  // Pastel palette for the header (light mode)
+  static const List<Color> _pastelPaletteLight = [
     Color(0xFFFFD6E8), // blush pink
     Color(0xFFD6E4FF), // periwinkle
     Color(0xFFFFF0C2), // soft butter
     Color(0xFFD3F5E4), // mint
     Color(0xFFE7D9FF), // lavender
+  ];
+
+  // Deeper, muted counterparts used for the header gradient in dark mode —
+  // same hues, dropped in lightness so they don't glow against a dark page.
+  static const List<Color> _pastelPaletteDark = [
+    Color(0xFF4A2E45), // muted blush
+    Color(0xFF2E3A5C), // muted periwinkle
+    Color(0xFF5C512E), // muted butter
+    Color(0xFF2E5C48), // muted mint
+    Color(0xFF3E2E5C), // muted lavender
   ];
 
   late final Animation<double> _cardFade;
@@ -67,7 +78,8 @@ class _AccountPageState extends State<AccountPage>
   // Precomputed staggered tile animations — built once instead of on
   // every build() call (avoids creating fresh CurvedAnimation/Tween
   // objects each frame).
-  static const int _tileCount = 5;
+  // Tiles: Profile, Settings, About Us, Contact Us, Feedback, Privacy Policy
+  static const int _tileCount = 6;
   final List<Animation<double>> _tileFades = [];
   final List<Animation<Offset>> _tileSlides = [];
   late final Animation<double> _logoutFade;
@@ -126,7 +138,7 @@ class _AccountPageState extends State<AccountPage>
     ).animate(_titleFade);
 
     for (int i = 0; i < _tileCount; i++) {
-      final start = (0.45 + i * 0.09).clamp(0.0, 0.9);
+      final start = (0.4 + i * 0.08).clamp(0.0, 0.9);
       final end   = (start + 0.35).clamp(0.0, 1.0);
       final fade = CurvedAnimation(
         parent: _entranceController,
@@ -404,26 +416,27 @@ class _AccountPageState extends State<AccountPage>
     // number so content never sits under the system nav bar.
     final double bottomSafePad = mq.viewPadding.bottom;
 
+    // Theme-driven values — this is what makes the page actually switch
+    // when SettingsController flips ThemeMode, instead of staying stuck
+    // in light colors while only the bottom nav bar goes dark.
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final Color pageBg = theme.scaffoldBackgroundColor;
+    final Color sectionTitleColor = theme.colorScheme.onSurface;
+
     return MediaQuery(
       data: mq.copyWith(textScaler: clampedTextScaler),
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F8FC),
+        backgroundColor: pageBg,
         extendBodyBehindAppBar: true,
         appBar: AppBar(
           elevation:       0,
           centerTitle:     true,
           backgroundColor: Colors.transparent,
-          title: Text(
-            'My Account',
-            style: TextStyle(
-              color:      const Color(0xFF2D2A45),
-              fontWeight: FontWeight.bold,
-              fontSize:   22 * sp,
-            ),
-          ),
+          
         ),
         body: isLoading
-            ? _buildLoadingSkeleton(sp, bottomSafePad)
+            ? _buildLoadingSkeleton(sp, bottomSafePad, isDark)
             : RefreshIndicator(
                 color: const Color(0xFFB79CE0),
                 onRefresh: refreshUserData,
@@ -447,7 +460,7 @@ class _AccountPageState extends State<AccountPage>
                           opacity: _cardFade,
                           child: SlideTransition(
                             position: _cardSlide,
-                            child: _buildProfileCard(sp),
+                            child: _buildProfileCard(sp, isDark),
                           ),
                         ),
 
@@ -474,7 +487,7 @@ class _AccountPageState extends State<AccountPage>
                                   style: TextStyle(
                                     fontSize:   20 * sp,
                                     fontWeight: FontWeight.bold,
-                                    color:      Colors.black87,
+                                    color:      sectionTitleColor,
                                   ),
                                 ),
                               ],
@@ -488,6 +501,7 @@ class _AccountPageState extends State<AccountPage>
                         _buildStaggeredTile(
                           index:    0,
                           sp:       sp,
+                          isDark:   isDark,
                           title:    'Profile',
                           subtitle: 'Manage personal details',
                           icon:     Icons.person_outline,
@@ -507,6 +521,22 @@ class _AccountPageState extends State<AccountPage>
                         _buildStaggeredTile(
                           index:    1,
                           sp:       sp,
+                          isDark:   isDark,
+                          title:    'Settings',
+                          subtitle: 'Theme, notifications & more',
+                          icon:     Icons.settings_outlined,
+                          color:    const Color(0xFF7C6FE0),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const SettingsPage()),
+                          ),
+                        ),
+
+                        _buildStaggeredTile(
+                          index:    2,
+                          sp:       sp,
+                          isDark:   isDark,
                           title:    'About Us',
                           subtitle: 'Know more about CallMe',
                           icon:     Icons.info_outline,
@@ -519,8 +549,9 @@ class _AccountPageState extends State<AccountPage>
                         ),
 
                         _buildStaggeredTile(
-                          index:    2,
+                          index:    3,
                           sp:       sp,
+                          isDark:   isDark,
                           title:    'Contact Us',
                           subtitle: 'Reach our support team',
                           icon:     Icons.support_agent,
@@ -533,8 +564,9 @@ class _AccountPageState extends State<AccountPage>
                         ),
 
                         _buildStaggeredTile(
-                          index:    3,
+                          index:    4,
                           sp:       sp,
+                          isDark:   isDark,
                           title:    'Feedback',
                           subtitle: 'Share your experience',
                           icon:     Icons.feedback_outlined,
@@ -547,8 +579,9 @@ class _AccountPageState extends State<AccountPage>
                         ),
 
                         _buildStaggeredTile(
-                          index:    4,
+                          index:    5,
                           sp:       sp,
+                          isDark:   isDark,
                           title:    'Privacy Policy',
                           subtitle: 'Read our policies',
                           icon:     Icons.privacy_tip_outlined,
@@ -600,7 +633,7 @@ class _AccountPageState extends State<AccountPage>
   // LOADING SKELETON (shimmer-style)
   // =====================================================
 
-  Widget _buildLoadingSkeleton(double sp, double bottomSafePad) {
+  Widget _buildLoadingSkeleton(double sp, double bottomSafePad, bool isDark) {
     final topPad = MediaQuery.of(context).padding.top + kToolbarHeight;
     return SafeArea(
       top: false,
@@ -609,15 +642,17 @@ class _AccountPageState extends State<AccountPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _ShimmerBox(height: 150 * sp, borderRadius: 28),
+            _ShimmerBox(height: 150 * sp, borderRadius: 28, isDark: isDark),
             const SizedBox(height: 32),
-            _ShimmerBox(height: 22 * sp, width: 160 * sp, borderRadius: 8),
+            _ShimmerBox(
+                height: 22 * sp, width: 160 * sp, borderRadius: 8, isDark: isDark),
             const SizedBox(height: 18),
             ...List.generate(
-              5,
+              6,
               (i) => Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: _ShimmerBox(height: 84 * sp, borderRadius: 20),
+                child: _ShimmerBox(
+                    height: 84 * sp, borderRadius: 20, isDark: isDark),
               ),
             ),
           ],
@@ -633,6 +668,7 @@ class _AccountPageState extends State<AccountPage>
   Widget _buildStaggeredTile({
     required int index,
     required double sp,
+    required bool isDark,
     required String title,
     required String subtitle,
     required IconData icon,
@@ -645,6 +681,7 @@ class _AccountPageState extends State<AccountPage>
         position: _tileSlides[index],
         child: _AnimatedTile(
           sp:       sp,
+          isDark:   isDark,
           title:    title,
           subtitle: subtitle,
           icon:     icon,
@@ -659,7 +696,20 @@ class _AccountPageState extends State<AccountPage>
   // PROFILE CARD  with time-based greeting
   // =====================================================
 
-  Widget _buildProfileCard(double sp) {
+  Widget _buildProfileCard(double sp, bool isDark) {
+    final palette = isDark ? _pastelPaletteDark : _pastelPaletteLight;
+    final Color nameColor = isDark ? Colors.white : const Color(0xFF2D2A45);
+    final Color nameSubColor = isDark ? Colors.white70 : const Color(0xFF5C5780);
+    final Color infoColor = isDark ? Colors.white70 : const Color(0xFF4B4770);
+    final Color infoIconColor = isDark ? Colors.white54 : const Color(0xFF6B6690);
+    final Color pillTextColor = isDark ? Colors.white : const Color(0xFF3A3660);
+    final Color pillBg = isDark
+        ? Colors.white.withOpacity(0.12)
+        : Colors.white.withOpacity(0.45);
+    final Color pillBorder = isDark
+        ? Colors.white.withOpacity(0.2)
+        : Colors.white.withOpacity(0.6);
+
     return AnimatedBuilder(
       animation: Listenable.merge(
         [_bgController, _blobController1, _blobController2, _blobController3],
@@ -675,9 +725,9 @@ class _AccountPageState extends State<AccountPage>
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Color.lerp(_pastelPalette[0], _pastelPalette[4], t)!,
-                  Color.lerp(_pastelPalette[1], _pastelPalette[2], t)!,
-                  Color.lerp(_pastelPalette[3], _pastelPalette[1], t)!,
+                  Color.lerp(palette[0], palette[4], t)!,
+                  Color.lerp(palette[1], palette[2], t)!,
+                  Color.lerp(palette[3], palette[1], t)!,
                 ],
                 begin: Alignment(-1 + t * 0.3, -1),
                 end:   Alignment(1, 1 - t * 0.3),
@@ -685,7 +735,7 @@ class _AccountPageState extends State<AccountPage>
               borderRadius: BorderRadius.circular(30),
               boxShadow: [
                 BoxShadow(
-                  color:      const Color(0xFFB9A6E0).withOpacity(0.28),
+                  color: const Color(0xFFB9A6E0).withOpacity(isDark ? 0.12 : 0.28),
                   blurRadius: 26,
                   offset:     const Offset(0, 12),
                 ),
@@ -697,21 +747,21 @@ class _AccountPageState extends State<AccountPage>
                 // ── floating pastel blobs (soft, blurred, drifting) ──
                 _floatingBlob(
                   controller: _blobController1,
-                  color: const Color(0xFFFFFFFF).withOpacity(0.35),
+                  color: Colors.white.withOpacity(isDark ? 0.08 : 0.35),
                   size:  120,
                   basePosition: const Offset(-24, -34),
                   amplitude: const Offset(10, 14),
                 ),
                 _floatingBlob(
                   controller: _blobController2,
-                  color: const Color(0xFFFFE3F1).withOpacity(0.45),
+                  color: const Color(0xFFFFE3F1).withOpacity(isDark ? 0.1 : 0.45),
                   size:  90,
                   basePosition: const Offset(250, 60),
                   amplitude: const Offset(-12, 10),
                 ),
                 _floatingBlob(
                   controller: _blobController3,
-                  color: const Color(0xFFE0F3FF).withOpacity(0.4),
+                  color: const Color(0xFFE0F3FF).withOpacity(isDark ? 0.08 : 0.4),
                   size:  70,
                   basePosition: const Offset(200, -40),
                   amplitude: const Offset(8, -12),
@@ -722,7 +772,7 @@ class _AccountPageState extends State<AccountPage>
                   children: [
 
                     // ── AVATAR ──────────────────────────────────
-                    _buildAvatar(sp),
+                    _buildAvatar(sp, isDark),
 
                     SizedBox(width: 18 * sp),
 
@@ -744,11 +794,9 @@ class _AccountPageState extends State<AccountPage>
                                 padding: EdgeInsets.symmetric(
                                     horizontal: 12 * sp, vertical: 5 * sp),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.45),
+                                  color: pillBg,
                                   borderRadius: BorderRadius.circular(30),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.6),
-                                  ),
+                                  border: Border.all(color: pillBorder),
                                 ),
                                 child: FittedBox(
                                   fit: BoxFit.scaleDown,
@@ -763,7 +811,7 @@ class _AccountPageState extends State<AccountPage>
                                       Text(
                                         _greeting,
                                         style: TextStyle(
-                                          color:      const Color(0xFF3A3660),
+                                          color:      pillTextColor,
                                           fontWeight: FontWeight.w700,
                                           fontSize:   13 * sp,
                                         ),
@@ -787,7 +835,7 @@ class _AccountPageState extends State<AccountPage>
                                       TextSpan(
                                         text: '$_firstName\n',
                                         style: TextStyle(
-                                          color: const Color(0xFF2D2A45),
+                                          color: nameColor,
                                           fontSize:   22 * sp,
                                           fontWeight: FontWeight.w800,
                                           height:     1.2,
@@ -803,7 +851,7 @@ class _AccountPageState extends State<AccountPage>
                                               .skip(1)
                                               .join(' '),
                                           style: TextStyle(
-                                            color: const Color(0xFF5C5780),
+                                            color: nameSubColor,
                                             fontSize:   14 * sp,
                                             fontWeight: FontWeight.w500,
                                           ),
@@ -813,7 +861,7 @@ class _AccountPageState extends State<AccountPage>
                                       TextSpan(
                                         text: userName,
                                         style: TextStyle(
-                                          color: const Color(0xFF2D2A45),
+                                          color: nameColor,
                                           fontSize:   20 * sp,
                                           fontWeight: FontWeight.w800,
                                         ),
@@ -826,14 +874,16 @@ class _AccountPageState extends State<AccountPage>
 
                           // Phone
                           if (userPhone.isNotEmpty)
-                            _infoRow(Icons.phone_rounded, userPhone, sp),
+                            _infoRow(Icons.phone_rounded, userPhone, sp,
+                                infoIconColor, infoColor),
 
                           if (userPhone.isNotEmpty && userEmail.isNotEmpty)
                             SizedBox(height: 5 * sp),
 
                           // Email
                           if (userEmail.isNotEmpty)
-                            _infoRow(Icons.email_rounded, userEmail, sp),
+                            _infoRow(Icons.email_rounded, userEmail, sp,
+                                infoIconColor, infoColor),
                         ],
                       ),
                     ),
@@ -884,10 +934,16 @@ class _AccountPageState extends State<AccountPage>
     );
   }
 
-  Widget _infoRow(IconData icon, String text, double sp) {
+  Widget _infoRow(
+    IconData icon,
+    String text,
+    double sp,
+    Color iconColor,
+    Color textColor,
+  ) {
     return Row(
       children: [
-        Icon(icon, color: const Color(0xFF6B6690), size: 14 * sp),
+        Icon(icon, color: iconColor, size: 14 * sp),
         SizedBox(width: 6 * sp),
         Expanded(
           child: Text(
@@ -895,7 +951,7 @@ class _AccountPageState extends State<AccountPage>
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color:      const Color(0xFF4B4770),
+              color:      textColor,
               fontSize:   12 * sp,
               fontWeight: FontWeight.w500,
             ),
@@ -909,7 +965,7 @@ class _AccountPageState extends State<AccountPage>
   // AVATAR  (with animated rotating ring)
   // =====================================================
 
-  Widget _buildAvatar(double sp) {
+  Widget _buildAvatar(double sp, bool isDark) {
     final double outer = 92 * sp;
     final double inner = 80 * sp;
     return SizedBox(
@@ -943,7 +999,7 @@ class _AccountPageState extends State<AccountPage>
             child: Container(
               width:  inner,
               height: inner,
-              color:  Colors.white,
+              color:  isDark ? const Color(0xFF1B1922) : Colors.white,
               child: profileImage.isNotEmpty
                   ? Image.network(
                       profileImage,
@@ -959,9 +1015,9 @@ class _AccountPageState extends State<AccountPage>
                           ),
                         );
                       },
-                      errorBuilder: (_, __, ___) => _initialsAvatar(sp),
+                      errorBuilder: (_, __, ___) => _initialsAvatar(sp, isDark),
                     )
-                  : _initialsAvatar(sp),
+                  : _initialsAvatar(sp, isDark),
             ),
           ),
         ],
@@ -969,7 +1025,7 @@ class _AccountPageState extends State<AccountPage>
     );
   }
 
-  Widget _initialsAvatar(double sp) {
+  Widget _initialsAvatar(double sp, bool isDark) {
     final initial = userName.trim().isNotEmpty
         ? userName.trim()[0].toUpperCase()
         : 'U';
@@ -993,6 +1049,7 @@ class _AccountPageState extends State<AccountPage>
 
 class _AnimatedTile extends StatefulWidget {
   final double sp;
+  final bool isDark;
   final String title;
   final String subtitle;
   final IconData icon;
@@ -1001,6 +1058,7 @@ class _AnimatedTile extends StatefulWidget {
 
   const _AnimatedTile({
     required this.sp,
+    required this.isDark,
     required this.title,
     required this.subtitle,
     required this.icon,
@@ -1024,6 +1082,13 @@ class _AnimatedTileState extends State<_AnimatedTile>
   @override
   Widget build(BuildContext context) {
     final sp = widget.sp;
+    final isDark = widget.isDark;
+    final Color tileBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color titleColor = isDark ? Colors.white : const Color(0xFF111827);
+    final Color subtitleColor = isDark ? Colors.white54 : Colors.grey.shade500;
+    final Color arrowBg = isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100;
+    final Color arrowColor = isDark ? Colors.white54 : Colors.black45;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: GestureDetector(
@@ -1039,11 +1104,13 @@ class _AnimatedTileState extends State<_AnimatedTile>
             duration: const Duration(milliseconds: 150),
             padding: EdgeInsets.all(16 * sp),
             decoration: BoxDecoration(
-              color:        Colors.white,
+              color:        tileBg,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(_pressed ? 0.02 : 0.05),
+                  color: Colors.black.withOpacity(
+                    isDark ? (_pressed ? 0.15 : 0.3) : (_pressed ? 0.02 : 0.05),
+                  ),
                   blurRadius: _pressed ? 6 : 14,
                   offset:     Offset(0, _pressed ? 2 : 5),
                 ),
@@ -1077,7 +1144,7 @@ class _AnimatedTileState extends State<_AnimatedTile>
                         style: TextStyle(
                           fontSize:   15 * sp,
                           fontWeight: FontWeight.w700,
-                          color:      const Color(0xFF111827),
+                          color:      titleColor,
                         ),
                       ),
                       SizedBox(height: 3 * sp),
@@ -1087,7 +1154,7 @@ class _AnimatedTileState extends State<_AnimatedTile>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12.5 * sp,
-                          color:    Colors.grey.shade500,
+                          color:    subtitleColor,
                           height:   1.4,
                         ),
                       ),
@@ -1103,13 +1170,13 @@ class _AnimatedTileState extends State<_AnimatedTile>
                   child: Container(
                     padding: EdgeInsets.all(7 * sp),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                      color: arrowBg,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.arrow_forward_ios_rounded,
                       size:  13 * sp,
-                      color: Colors.black45,
+                      color: arrowColor,
                     ),
                   ),
                 ),
@@ -1130,11 +1197,13 @@ class _ShimmerBox extends StatefulWidget {
   final double height;
   final double? width;
   final double borderRadius;
+  final bool isDark;
 
   const _ShimmerBox({
     required this.height,
     this.width,
     this.borderRadius = 12,
+    this.isDark = false,
   });
 
   @override
@@ -1162,6 +1231,9 @@ class _ShimmerBoxState extends State<_ShimmerBox>
 
   @override
   Widget build(BuildContext context) {
+    final base = widget.isDark ? const Color(0xFF232030) : const Color(0xFFE9EDF5);
+    final sheen = widget.isDark ? const Color(0xFF2E2A3E) : const Color(0xFFF7F9FC);
+
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
@@ -1169,11 +1241,7 @@ class _ShimmerBoxState extends State<_ShimmerBox>
           shaderCallback: (rect) {
             final dx = _controller.value * 2 - 1;
             return LinearGradient(
-              colors: [
-                const Color(0xFFE9EDF5),
-                const Color(0xFFF7F9FC),
-                const Color(0xFFE9EDF5),
-              ],
+              colors: [base, sheen, base],
               stops: const [0.35, 0.5, 0.65],
               begin: Alignment(-1 + dx, 0),
               end:   Alignment(1 + dx, 0),
@@ -1183,7 +1251,7 @@ class _ShimmerBoxState extends State<_ShimmerBox>
             width:  widget.width ?? double.infinity,
             height: widget.height,
             decoration: BoxDecoration(
-              color: const Color(0xFFE9EDF5),
+              color: base,
               borderRadius: BorderRadius.circular(widget.borderRadius),
             ),
           ),

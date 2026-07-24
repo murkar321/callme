@@ -621,18 +621,31 @@ class OrderService {
   // ==========================================================
   // PROVIDER ACTIONS
   // ==========================================================
-
+  // ==================================================================
   static Future<void> acceptOrder({
     required String orderId,
-    required String userId,
+    required String userId, // customer's id (kept name for call-site compat)
     required String providerName,
     required String serviceType,
-    String providerId = '',
+    required String providerUserId, // NEW — accepting provider's Firebase Auth uid
+    String providerId = '',         // provider doc id, e.g. SAL-118697
   }) async {
     await _db.collection('orders').doc(orderId).update({
       'status':     OrderStatus.accepted,
       'isAssigned': true,
       'lastActionBy': 'provider',
+
+      // 🔧 FIX: now actually written — see note above.
+      'providerId':     providerId,
+      'providerUserId': providerUserId,
+      'providerName':   providerName,
+
+      'provider': {
+        'providerId':     providerId,
+        'providerUserId': providerUserId,
+        'providerName':   providerName,
+      },
+
       'updatedAt':  FieldValue.serverTimestamp(),
     });
 
@@ -742,31 +755,7 @@ class OrderService {
     );
   }
 
-  // ==========================================================
-  // ADMIN DECLINES AN ORDER
-  //
-  // Used from admin_orders_page.dart when staff need to close out an
-  // order manually — most commonly because no provider is available /
-  // no one accepted it in a reasonable time, but usable for any
-  // admin-side decline. Unlike rejectOrder()/providerCancelOrder(),
-  // this is not tied to a specific provider (the order may still be
-  // unassigned, isAssigned == false, providerId == ''), so it does not
-  // reference providerName/providerId at all.
-  //
-  // Sets:
-  //   - status            -> OrderStatus.rejected
-  //   - declineReason / cancelReason -> the admin-entered reason
-  //   - cancelledBy       -> 'admin'
-  //   - adminDeclineNote  -> the admin-entered reason (kept alongside
-  //                          cancelReason so admin-specific tooling can
-  //                          query for it distinctly from provider
-  //                          cancellations if needed later)
-  //   - lastActionBy      -> 'admin' (admin_orders_page.dart already
-  //                          reads and displays this field per order)
-  //
-  // Always sends a NotificationType.adminDeclined notification (in-app
-  // doc + FCM queue entry via notifyUser()) to the customer so they
-  // know their booking was declined and why.
+
   // ==========================================================
   static Future<void> adminDeclineOrder({
     required String orderId,
@@ -860,21 +849,7 @@ class OrderService {
     }
   }
 
-  // ==========================================================
-  // FAN-OUT: notify ALL matching approved providers
-  //
-  // Uses the shared, strict-exact categoryMatchFuzzy() — identical
-  // function and identical arguments (providerCats + providerSubCats)
-  // to business_dashboard_page.dart's `_categoryMatch()` AND
-  // business_page.dart's badge counter, so "got notified" / "shows up
-  // in Available" / "badge count" can never disagree.
-  //
-  // As of the fix documented on placeOrder() above, this is now the
-  // ONLY path orders are ever notified through — there is no more
-  // "direct assignment, single provider only" branch. Every approved
-  // provider whose categories/subCategories match the order gets
-  // notified, equally, regardless of which business the customer
-  // happened to browse from.
+ 
   // ==========================================================
   static Future<void> _notifyMatchingProviders({
     required String orderId,

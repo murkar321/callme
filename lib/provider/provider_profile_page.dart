@@ -655,6 +655,39 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     );
   }
 
+  // ── CASCADE DELETE — wipes payments/notifications/fcm_queue tied to this
+  // provider before the provider doc itself is removed. Best-effort: never
+  // blocks the deletion flow. Orders are intentionally left untouched — see
+  // notes below the code for why.
+  Future<void> _deleteRelatedCollections(String providerId) async {
+    Future<void> deleteWhere(String collection, String field) async {
+      try {
+        final snap = await _db
+            .collection(collection)
+            .where(field, isEqualTo: providerId)
+            .get();
+        if (snap.docs.isEmpty) return;
+
+        for (var i = 0; i < snap.docs.length; i += 450) {
+          final chunk = snap.docs.skip(i).take(450);
+          final batch = _db.batch();
+          for (final doc in chunk) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+        }
+      } catch (e) {
+        debugPrint('[PROFILE] Cascade delete ($collection.$field) failed: $e');
+      }
+    }
+
+    await deleteWhere('payments', 'providerId');
+    await deleteWhere('notifications', 'receiverId');
+    await deleteWhere('notifications', 'userId');
+    await deleteWhere('fcm_queue', 'userId');
+    await deleteWhere('fcm_queue', 'receiverId');
+  }
+
   // ── Delete my profile (self) ──────────────────────────────────────────────
   // Two-step confirmation: first a standard confirm dialog, then the user
   // must type their business name to prevent accidental deletion.
@@ -773,22 +806,45 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     try {
       setState(() => _deleting = true);
 
-      // 1. Delete Firestore document
+      // 1. Delete everything tied to this provider across other collections.
+      await _deleteRelatedCollections(widget.providerId);
+
+      // 2. Delete Firestore document
       await _db
           .collection('providers')
           .doc(widget.providerId)
           .delete();
 
-      // 2. Delete Storage files — best-effort (don't block on errors)
+      // 3. Delete Storage files — best-effort (don't block on errors)
       await _deleteStorageFolder(
           'provider_images/${widget.providerId}');
       await _deleteStorageFolder(
           'provider_docs/${widget.providerId}');
 
-      // 3. Sign out if this provider is deleting their own account
+      // 4. Delete the Firebase Auth account itself if this provider is
+      //    deleting their own account (admins can't delete another user's
+      //    Auth account from the client SDK — that requires the Admin SDK).
       final currentUid = FirebaseAuth.instance.currentUser?.uid;
       if (!widget.isAdmin && currentUid == widget.providerId) {
-        await FirebaseAuth.instance.signOut();
+        try {
+          await FirebaseAuth.instance.currentUser?.delete();
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'requires-recent-login') {
+            // Firestore/Storage data is already gone at this point — sign
+            // the user out so they can't keep using a profile-less account,
+            // and let them know why the Auth record specifically survived.
+            await FirebaseAuth.instance.signOut();
+            if (mounted) {
+              _snack(
+                'Profile deleted. For security, please log in once more '
+                'to fully remove your login credentials.',
+                ok: true,
+              );
+            }
+          } else {
+            await FirebaseAuth.instance.signOut();
+          }
+        }
       }
 
       if (!mounted) return;
@@ -832,6 +888,9 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
 
     try {
       setState(() => _saving = true);
+
+      // Delete everything tied to this provider first.
+      await _deleteRelatedCollections(widget.providerId);
 
       await _db
           .collection('providers')

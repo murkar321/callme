@@ -1,14 +1,18 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 class PaymentPage extends StatefulWidget {
   final String serviceName;
   final int amount;
+  final String? orderId; // optional link back to the orders collection
 
   const PaymentPage({
     super.key,
     required this.serviceName,
     required this.amount,
+    this.orderId,
   });
 
   @override
@@ -52,14 +56,65 @@ class _PaymentPageState extends State<PaymentPage>
     _fadeController.forward();
   }
 
-  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+  // ── Firestore write: single source of truth for every payment attempt ──
+  Future<void> _savePaymentRecord({
+    required String method, // 'upi' | 'card' | 'cash'
+    required String status, // 'success' | 'failed' | 'pending_cash'
+    String? razorpayPaymentId,
+    String? razorpayOrderId,
+    String? failureReason,
+    int? errorCode,
+  }) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      await FirebaseFirestore.instance.collection('payments').add({
+        'orderId': widget.orderId,
+        'serviceName': widget.serviceName,
+        'amount': widget.amount,
+        'method': method,
+        'status': status,
+        'razorpayPaymentId': razorpayPaymentId,
+        'razorpayOrderId': razorpayOrderId,
+        'failureReason': failureReason,
+        'errorCode': errorCode,
+        'customerId': user?.uid,
+        'customerEmail': user?.email,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // Never let a logging failure block the payment UX,
+      // but surface it in debug so it doesn't go unnoticed.
+      debugPrint('Failed to save payment record: $e');
+    }
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
     setState(() => isLoading = false);
+
+    await _savePaymentRecord(
+      method: selectedMethod ?? 'unknown',
+      status: 'success',
+      razorpayPaymentId: response.paymentId,
+      razorpayOrderId: response.orderId,
+    );
+
+    if (!mounted) return;
     _showSnackBar('Payment Successful! 🎉', isSuccess: true);
     Navigator.pop(context, true);
   }
 
-  void _handlePaymentError(PaymentFailureResponse response) {
+  void _handlePaymentError(PaymentFailureResponse response) async {
     setState(() => isLoading = false);
+
+    await _savePaymentRecord(
+      method: selectedMethod ?? 'unknown',
+      status: 'failed',
+      failureReason: response.message ?? 'Payment Failed. Please try again.',
+      errorCode: response.code,
+    );
+
+    if (!mounted) return;
     _showSnackBar(response.message ?? 'Payment Failed. Please try again.');
   }
 
@@ -127,6 +182,24 @@ class _PaymentPageState extends State<PaymentPage>
       setState(() => isLoading = false);
       debugPrint(e.toString());
     }
+  }
+
+  Future<void> _handleOfflinePayment() async {
+    if (isLoading) return;
+    setState(() {
+      isLoading = true;
+      selectedMethod = 'cash';
+    });
+
+    await _savePaymentRecord(
+      method: 'cash',
+      status: 'pending_cash',
+    );
+
+    setState(() => isLoading = false);
+
+    if (!mounted) return;
+    Navigator.pop(context, 'offline');
   }
 
   @override
@@ -231,9 +304,8 @@ class _PaymentPageState extends State<PaymentPage>
                 title: 'Offline Payment',
                 subtitle: 'Pay cash after service completion',
                 isEnabled: true,
-                onTap: isLoading
-                    ? null
-                    : () => Navigator.pop(context, 'offline'),
+                isLoading: isLoading && selectedMethod == 'cash',
+                onTap: isLoading ? null : _handleOfflinePayment,
               ),
 
               const SizedBox(height: 12),

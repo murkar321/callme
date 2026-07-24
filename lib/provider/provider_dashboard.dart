@@ -334,27 +334,7 @@ String? _unavailableReason({
   //     return null; // available — no further checks needed
   //   }
   //
-  // i.e. ANY order whose providerId/providerUserId already pointed at
-  // THIS exact provider profile was marked "available" immediately,
-  // with NO service-type check and NO category check at all.
-  //
-  // Because most booking pages resolve to one specific provider up
-  // front (see _loadProvider() / initialProviderId in the booking
-  // pages) before ever calling OrderService.placeOrder(), the huge
-  // majority of orders in this app ARE "direct assignments" in that
-  // sense — which meant the category filter a provider configures at
-  // registration was being bypassed for nearly every order, and
-  // providers ended up seeing bookings completely outside the
-  // categories they selected.
-  //
-  // There is intentionally NO shortcut return here anymore. Every
-  // order — whether it was pre-assigned to this provider profile or
-  // not — must fall through to the isOpen / declinedBy / service-type
-  // / category checks below before it can be considered available.
-  // If a directly-booked order genuinely doesn't match any category
-  // this provider has registered, it will now correctly stay hidden;
-  // the fix for that is adding the missing category to the provider's
-  // profile, not bypassing the filter here.
+ 
   // ─────────────────────────────────────────────────────────────
   final bool isOrphanedAccept =
       status == OrderStatus.accepted && provUid.isEmpty;
@@ -421,17 +401,7 @@ bool _isAvailable({
   return reason == null;
 }
 
-// ─────────────────────────────────────────────────────────────
-// "My Jobs" must ONLY show orders that are explicitly and firmly
-// assigned to this provider — not pending/open ones.
-//
-// FIX: also scoped to the exact provider profile (myProviderId), not
-// just the login (myUid) — for the same multi-profile-per-login
-// reason documented above _unavailableReason(). Without this, a
-// resort booking accepted under RES-457227 could also show up in the
-// "My Jobs" tab of the Salon dashboard (SAL-118697) opened from the
-// same login.
-// ─────────────────────────────────────────────────────────────
+
 bool _isMine({
   required Map<String, dynamic> data,
   required String myUid,

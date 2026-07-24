@@ -1,3 +1,5 @@
+// lib/screens/home_page.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,6 +16,13 @@ import 'package:callme/screens/resort_page.dart';
 import 'package:callme/screens/laundry_service_page.dart';
 import 'package:callme/screens/education_services_page.dart';
 
+// ── Pastel brand palette ────────────────────────────────────────────────────
+const Color _kBgTop = Color(0xFFFDFBFF);
+const Color _kBgBottom = Color(0xFFF1EEFF);
+const Color _kPrimary = Color(0xFF6C5CE7); // pastel indigo
+const Color _kPrimaryDark = Color(0xFF3A2E5C);
+const Color _kAccentPink = Color(0xFFFF8FAB);
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -23,36 +32,38 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final ScrollController _scrollController = ScrollController();
-  double _offset = 0.0;
+
+  // Using a ValueNotifier instead of setState-on-every-scroll-pixel keeps
+  // the rest of the page (AppBar, StreamBuilder, grid/list) from rebuilding
+  // on every frame of the scroll — this is what was causing jank on Android.
+  final ValueNotifier<double> _offsetNotifier = ValueNotifier<double>(0.0);
 
   final String? _uid = FirebaseAuth.instance.currentUser?.uid;
+  final TextEditingController _searchController = TextEditingController();
 
   final List<ServiceCategory> categories = [
-    ServiceCategory(name: 'Education',      imagePath: 'assets/Education.jpg'),
-    ServiceCategory(name: 'Salon',          imagePath: 'assets/salon.png'),
-    ServiceCategory(name: 'Cleaning',       imagePath: 'assets/cleaning.jpg'),
-    ServiceCategory(name: 'Resorts',        imagePath: 'assets/resort.jpg'),
-    ServiceCategory(name: 'Plumbing',       imagePath: 'assets/plumbing.jpg'),
-    ServiceCategory(name: 'Laundry',        imagePath: 'assets/laundary.jpg'),
-    ServiceCategory(name: 'Hotel',          imagePath: 'assets/hotel.jfif'),
-    ServiceCategory(name: 'Water',          imagePath: 'assets/water services.jpeg'),
+    ServiceCategory(name: 'Education', imagePath: 'assets/Education.jpg'),
+    ServiceCategory(name: 'Salon', imagePath: 'assets/salon.png'),
+    ServiceCategory(name: 'Cleaning', imagePath: 'assets/cleaning.jpg'),
+    ServiceCategory(name: 'Resorts', imagePath: 'assets/resort.jpg'),
+    ServiceCategory(name: 'Plumbing', imagePath: 'assets/plumbing.jpg'),
+    ServiceCategory(name: 'Laundry', imagePath: 'assets/laundary.jpg'),
+    ServiceCategory(name: 'Hotel', imagePath: 'assets/hotel.jfif'),
+    ServiceCategory(name: 'Water', imagePath: 'assets/water services.jpeg'),
     ServiceCategory(name: 'Civil Services', imagePath: 'assets/civil.jpeg'),
   ];
 
-  /// 🔥 NEW: service-specific icon map.
-  /// Used as the fallback icon whenever an asset image fails to load,
-  /// AND as the icon shown in the vertical card's leading avatar
-  /// (previously this always fell back to the same generic icon
-  /// because HomePage never passed an `icon` to CategoryCard).
+  /// Service-specific icon map. Used as fallback icon on failed image
+  /// loads, and as the badge icon on vertical cards.
   static const Map<String, IconData> _categoryIcons = {
-    'Education':      Icons.school_rounded,
-    'Salon':          Icons.content_cut_rounded,
-    'Cleaning':       Icons.cleaning_services_rounded,
-    'Resorts':        Icons.beach_access_rounded,
-    'Plumbing':       Icons.plumbing_rounded,
-    'Laundry':        Icons.local_laundry_service_rounded,
-    'Hotel':          Icons.hotel_rounded,
-    'Water':          Icons.water_drop_rounded,
+    'Education': Icons.school_rounded,
+    'Salon': Icons.content_cut_rounded,
+    'Cleaning': Icons.cleaning_services_rounded,
+    'Resorts': Icons.beach_access_rounded,
+    'Plumbing': Icons.plumbing_rounded,
+    'Laundry': Icons.local_laundry_service_rounded,
+    'Hotel': Icons.hotel_rounded,
+    'Water': Icons.water_drop_rounded,
     'Civil Services': Icons.engineering_rounded,
   };
 
@@ -84,10 +95,17 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // Only updates the ValueNotifier — no setState() here, so the page
+    // doesn't rebuild on every scroll frame. Only widgets that actually
+    // listen to _offsetNotifier (the chip scale animation) rebuild.
     _scrollController.addListener(() {
-      if (mounted) setState(() => _offset = _scrollController.offset);
+      _offsetNotifier.value = _scrollController.offset;
     });
     Future.delayed(const Duration(milliseconds: 500), autoScroll);
+    _searchController.addListener(() {
+      // Rebuild so the live tagline hides/shows as the user types.
+      if (mounted) setState(() {});
+    });
   }
 
   void autoScroll() {
@@ -106,6 +124,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
+    _offsetNotifier.dispose();
     super.dispose();
   }
 
@@ -129,7 +149,6 @@ class _HomePageState extends State<HomePage> {
     Widget page;
 
     if (serviceName == 'Salon') {
-      // Show a loading indicator while fetching provider ID
       if (!mounted) return;
       showDialog(
         context: context,
@@ -192,12 +211,13 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 NEW: adaptive metrics based on available width.
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 600;
-    // Horizontal chip card scales with screen width but stays within sane bounds.
-    final chipWidth = (screenWidth / (isTablet ? 7 : 4)).clamp(84.0, 130.0);
-    // Cap text scaling so very large system font settings don't break layout.
+    final isSmallPhone = screenWidth < 340;
+    final chipWidth = (screenWidth / (isTablet ? 7 : 4)).clamp(
+      isSmallPhone ? 76.0 : 84.0,
+      130.0,
+    );
     final textScaler = MediaQuery.of(context).textScaler.clamp(
           minScaleFactor: 0.9,
           maxScaleFactor: 1.2,
@@ -206,17 +226,31 @@ class _HomePageState extends State<HomePage> {
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(textScaler: textScaler),
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FB),
-
+        extendBodyBehindAppBar: false,
         appBar: AppBar(
-          title: const Text(
-            'Callme Services',
-            style: TextStyle(fontWeight: FontWeight.w600),
+          // 🔹 Logo only — icon + "Callme Services" text removed.
+          title: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Image.asset(
+              'assets/logo.png',
+              height: 32,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Text(
+                'Callme Services',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: _kPrimaryDark,
+                ),
+              ),
+            ),
           ),
           centerTitle: true,
           backgroundColor: Colors.white,
-          foregroundColor: const Color.fromARGB(255, 45, 19, 111),
-          elevation: 1,
+          foregroundColor: _kPrimaryDark,
+          elevation: 0,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+          ),
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 12),
@@ -227,9 +261,16 @@ class _HomePageState extends State<HomePage> {
                   return Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications_rounded, size: 28),
-                        onPressed: _openNotifications,
+                      Container(
+                        decoration: BoxDecoration(
+                          color: _kPrimary.withOpacity(0.08),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.notifications_rounded,
+                              size: 26, color: _kPrimary),
+                          onPressed: _openNotifications,
+                        ),
                       ),
                       if (unreadCount > 0)
                         Positioned(
@@ -242,10 +283,10 @@ class _HomePageState extends State<HomePage> {
                               constraints: const BoxConstraints(
                                   minWidth: 18, minHeight: 18),
                               decoration: BoxDecoration(
-                                color: Colors.red,
+                                color: _kAccentPink,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                    color: Colors.white, width: 1.5),
+                                border:
+                                    Border.all(color: Colors.white, width: 1.5),
                               ),
                               child: Text(
                                 unreadCount > 99 ? '99+' : '$unreadCount',
@@ -268,45 +309,58 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
 
-        body: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: isTablet ? 24 : 12,
-              vertical: 12,
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [_kBgTop, _kBgBottom],
             ),
-            child: Column(
-              children: [
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: isTablet ? 24 : 14,
+                vertical: 12,
+              ),
+              child: Column(
+                children: [
+                  // 🔍 LIVE SEARCH BAR
+                  _LiveSearchBar(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      setState(() {
+                        searchQuery = value;
+                        selectedCategory = '';
+                      });
+                    },
+                  ),
 
-                // 🔍 SEARCH
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search for a service...',
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: BorderSide.none,
+                  const SizedBox(height: 16),
+
+                  // Section label
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 8),
+                      child: Text(
+                        'Quick pick',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _kPrimaryDark.withOpacity(0.65),
+                          letterSpacing: 0.3,
+                        ),
+                      ),
                     ),
                   ),
-                  onChanged: (value) {
-                    setState(() {
-                      searchQuery = value;
-                      selectedCategory = '';
-                    });
-                  },
-                ),
 
-                const SizedBox(height: 12),
-
-                // 🔹 HORIZONTAL SCROLL
-                SizedBox(
-                  height: 110,
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: (scroll) {
-                      setState(() => _offset = scroll.metrics.pixels);
-                      return true;
-                    },
+                  // 🔹 HORIZONTAL SCROLL
+                  // Height bumped up a bit + FittedBox inside CategoryCard
+                  // guarantees this never overflows, even with larger
+                  // system font scaling.
+                  SizedBox(
+                    height: 130,
                     child: ListView.builder(
                       controller: _scrollController,
                       scrollDirection: Axis.horizontal,
@@ -315,13 +369,21 @@ class _HomePageState extends State<HomePage> {
                       itemBuilder: (context, index) {
                         final category = filteredHorizontal[index];
                         final isSelected = selectedCategory == category.name;
-                        final width = chipWidth + 12; // card + margin
-                        final scale = 1 -
-                            (((_offset / width) - index).abs() * 0.18)
-                                .clamp(0.0, 0.18);
+                        final width = chipWidth + 12;
 
-                        return Transform.scale(
-                          scale: scale,
+                        // Only this single chip rebuilds when the scroll
+                        // offset changes — not the whole page.
+                        return ValueListenableBuilder<double>(
+                          valueListenable: _offsetNotifier,
+                          builder: (context, offset, child) {
+                            final scale = 1 -
+                                (((offset / width) - index).abs() * 0.18)
+                                    .clamp(0.0, 0.18);
+                            return Transform.scale(
+                              scale: scale,
+                              child: child,
+                            );
+                          },
                           child: GestureDetector(
                             onTap: () => setState(() {
                               selectedCategory =
@@ -343,61 +405,243 @@ class _HomePageState extends State<HomePage> {
                       },
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
-                // 🔹 VERTICAL LIST / GRID (adaptive: grid on wide screens)
-                Expanded(
-                  child: isTablet
-                      ? GridView.builder(
-                          itemCount: filteredCategories.length,
-                          padding: const EdgeInsets.only(bottom: 12),
-                          gridDelegate:
-                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 380,
-                            mainAxisExtent: 150,
-                            crossAxisSpacing: 14,
-                            mainAxisSpacing: 14,
-                          ),
-                          itemBuilder: (context, index) {
-                            final category = filteredCategories[index];
-                            return GestureDetector(
-                              onTap: () => _navigateToService(category.name),
-                              child: CategoryCard(
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 8),
+                      child: Text(
+                        'Explore services',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _kPrimaryDark.withOpacity(0.65),
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // 🔹 VERTICAL LIST / GRID (adaptive: grid on wide screens)
+                  Expanded(
+                    child: isTablet
+                        ? GridView.builder(
+                            itemCount: filteredCategories.length,
+                            padding: const EdgeInsets.only(bottom: 12),
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 380,
+                              mainAxisExtent: 150,
+                              crossAxisSpacing: 14,
+                              mainAxisSpacing: 14,
+                            ),
+                            itemBuilder: (context, index) {
+                              final category = filteredCategories[index];
+                              return CategoryCard(
                                 name: category.name,
                                 imagePath: category.imagePath,
                                 icon: _iconFor(category.name),
                                 showName: false,
-                              ),
-                            );
-                          },
-                        )
-                      : ListView.builder(
-                          itemCount: filteredCategories.length,
-                          padding: const EdgeInsets.only(bottom: 12),
-                          itemBuilder: (context, index) {
-                            final category = filteredCategories[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 14),
-                              child: GestureDetector(
-                                onTap: () =>
-                                    _navigateToService(category.name),
+                                onTap: () => _navigateToService(category.name),
+                              );
+                            },
+                          )
+                        : ListView.builder(
+                            itemCount: filteredCategories.length,
+                            padding: const EdgeInsets.only(bottom: 12),
+                            itemBuilder: (context, index) {
+                              final category = filteredCategories[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 14),
                                 child: CategoryCard(
                                   name: category.name,
                                   imagePath: category.imagePath,
                                   icon: _iconFor(category.name),
                                   showName: false,
+                                  onTap: () =>
+                                      _navigateToService(category.name),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Live typewriter search bar ──────────────────────────────────────────────
+// Shows a pastel search field. When empty, an animated typewriter caption
+// cycles through catchlines about the app; disappears the moment the user
+// types, and reappears if they clear the field.
+class _LiveSearchBar extends StatefulWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  const _LiveSearchBar({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  @override
+  State<_LiveSearchBar> createState() => _LiveSearchBarState();
+}
+
+class _LiveSearchBarState extends State<_LiveSearchBar> {
+  static const List<String> _taglines = [
+    'Find trusted salons near you...',
+    'Book plumbers in minutes...',
+    'Explore top-rated stays...',
+    'Home services, simplified...',
+    'One app, every service you need...',
+    'Reliable help, right around the corner...',
+  ];
+
+  Timer? _timer;
+  int _phraseIndex = 0;
+  int _charCount = 0;
+  bool _deleting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTyping();
+  }
+
+  void _startTyping() {
+    _timer = Timer.periodic(const Duration(milliseconds: 65), (timer) {
+      if (!mounted) return;
+      final phrase = _taglines[_phraseIndex];
+
+      setState(() {
+        if (!_deleting) {
+          if (_charCount < phrase.length) {
+            _charCount++;
+          } else {
+            _deleting = true;
+            _timer?.cancel();
+            _timer = Timer(const Duration(milliseconds: 1400), () {
+              _deleting = true;
+              _startTyping();
+            });
+          }
+        } else {
+          if (_charCount > 0) {
+            _charCount--;
+          } else {
+            _deleting = false;
+            _phraseIndex = (_phraseIndex + 1) % _taglines.length;
+          }
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final showTagline = widget.controller.text.isEmpty;
+    final visibleText = _taglines[_phraseIndex].substring(0, _charCount);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: _kPrimary.withOpacity(0.12),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          TextField(
+            controller: widget.controller,
+            onChanged: widget.onChanged,
+            style: const TextStyle(color: _kPrimaryDark),
+            decoration: InputDecoration(
+              hintText: showTagline ? '' : 'Search for a service...',
+              prefixIcon: const Icon(Icons.search, color: _kPrimary),
+              filled: true,
+              fillColor: Colors.transparent,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          if (showTagline)
+            Padding(
+              padding: const EdgeInsets.only(left: 48),
+              child: IgnorePointer(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        visibleText,
+                        style: TextStyle(
+                          color: _kPrimaryDark.withOpacity(0.45),
+                          fontSize: 15,
+                        ),
+                        overflow: TextOverflow.fade,
+                        softWrap: false,
+                        maxLines: 1,
+                      ),
+                    ),
+                    // simple blinking cursor for the "live" feel
+                    _BlinkingCursor(),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlinkingCursor extends StatefulWidget {
+  @override
+  State<_BlinkingCursor> createState() => _BlinkingCursorState();
+}
+
+class _BlinkingCursorState extends State<_BlinkingCursor>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 600),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _controller,
+      child: Container(
+        width: 2,
+        height: 16,
+        margin: const EdgeInsets.only(left: 2),
+        color: _kPrimary.withOpacity(0.6),
       ),
     );
   }

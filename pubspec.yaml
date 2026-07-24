@@ -74,6 +74,8 @@ dependencies:
 
   flutter_local_notifications: ^18.0.0
 
+  shared_preferences: ^2.2.3
+
 
   
 

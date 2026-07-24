@@ -314,7 +314,49 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // DELETE ACCOUNT — wipes Storage photo, Firestore doc, Auth user
+  // CASCADE DELETE — wipes orders/payments/notifications/fcm_queue
+  // tied to this user before the user doc itself is removed.
+  // Best-effort: a failure here should never block account deletion,
+  // so each query+batch is wrapped individually.
+  // ─────────────────────────────────────────────────────────────
+
+  Future<void> _deleteRelatedCollections(String uid) async {
+    final db = FirebaseFirestore.instance;
+
+    Future<void> deleteWhere(String collection, String field) async {
+      try {
+        final snap = await db
+            .collection(collection)
+            .where(field, isEqualTo: uid)
+            .get();
+        if (snap.docs.isEmpty) return;
+
+        // Firestore batches cap at 500 writes — chunk defensively.
+        for (var i = 0; i < snap.docs.length; i += 450) {
+          final chunk = snap.docs.skip(i).take(450);
+          final batch = db.batch();
+          for (final doc in chunk) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+        }
+      } catch (e) {
+        debugPrint('CASCADE DELETE ($collection.$field) non-fatal: $e');
+      }
+    }
+
+    await deleteWhere('orders', 'customerId');
+    await deleteWhere('orders', 'userId');
+    await deleteWhere('payments', 'customerId');
+    await deleteWhere('notifications', 'receiverId');
+    await deleteWhere('notifications', 'userId');
+    await deleteWhere('fcm_queue', 'userId');
+    await deleteWhere('fcm_queue', 'receiverId');
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // DELETE ACCOUNT — wipes related collections, Storage photo,
+  // Firestore doc, Auth user
   // ─────────────────────────────────────────────────────────────
 
   Future<void> _deleteAccount() async {
@@ -376,7 +418,10 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final email = _docId(user);
 
-      // 1. Delete profile photo from Storage (ignore if it never existed).
+      // 1. Delete everything tied to this user across other collections.
+      await _deleteRelatedCollections(user.uid);
+
+      // 2. Delete profile photo from Storage (ignore if it never existed).
       try {
         await FirebaseStorage.instance
             .ref('profile_images/${user.uid}/profile.jpg')
@@ -385,7 +430,7 @@ class _ProfilePageState extends State<ProfilePage> {
         debugPrint('STORAGE DELETE (non-fatal): $e');
       }
 
-      // 2. Delete the user's Firestore document (keyed by email).
+      // 3. Delete the user's Firestore document (keyed by email).
       try {
         await FirebaseFirestore.instance
             .collection('users')
@@ -395,7 +440,7 @@ class _ProfilePageState extends State<ProfilePage> {
         debugPrint('FIRESTORE DELETE (non-fatal): $e');
       }
 
-      // 3. Delete the Firebase Auth account itself.
+      // 4. Delete the Firebase Auth account itself.
       await user.delete();
 
       if (!mounted) return;
