@@ -115,15 +115,12 @@ class _CivilServiceDetailPageState extends State<CivilServiceDetailPage> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
-                    16, 20, 16,
+                    16, 22, 16,
                     90 + mq.viewPadding.bottom + 16,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _PriceCard(price: widget.service.price),
-                      const SizedBox(height: 22),
-
                       if (widget.service.about != null &&
                           widget.service.about!.isNotEmpty) ...[
                         const _SectionTitle(title: 'About this service'),
@@ -219,42 +216,24 @@ class _HeroSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  _Pill(
-                    color: Colors.green.shade600,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.star_rounded,
-                            color: Colors.white, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          service.rating.toStringAsFixed(1),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (service.discount > 0) ...[
-                    const SizedBox(width: 8),
-                    _Pill(
-                      color: Colors.red.shade600,
-                      child: Text(
-                        '${service.discount}% OFF',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
+              _Pill(
+                color: Colors.green.shade600,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded,
+                        color: Colors.white, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      service.rating.toStringAsFixed(1),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
-                ],
+                ),
               ),
             ],
           ),
@@ -294,63 +273,6 @@ class _SectionTitle extends StatelessWidget {
       );
 }
 
-class _PriceCard extends StatelessWidget {
-  final String price;
-  const _PriceCard({required this.price});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-                color: Colors.green.shade50, shape: BoxShape.circle),
-            child: Icon(Icons.currency_rupee,
-                color: Colors.green.shade700, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              price,
-              style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A1A2E)),
-            ),
-          ),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(20)),
-            child: Text(
-              'Best Price',
-              style: TextStyle(
-                  color: Colors.green.shade700,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _AboutCard extends StatelessWidget {
   final String about;
   const _AboutCard({required this.about});
@@ -365,9 +287,9 @@ class _AboutCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 3))
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
         ],
       ),
       child: Row(
@@ -410,8 +332,8 @@ class _FeatureRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 6,
               offset: const Offset(0, 2))
         ],
       ),
@@ -551,9 +473,9 @@ class _BottomActionBar extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.10),
-              blurRadius: 16,
-              offset: const Offset(0, -4))
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, -3))
         ],
       ),
       child: SizedBox(
@@ -621,9 +543,9 @@ class _PrimaryButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-                color: color.withOpacity(0.35),
-                blurRadius: 10,
-                offset: const Offset(0, 4))
+                color: color.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 3))
           ],
         ),
         alignment: Alignment.center,

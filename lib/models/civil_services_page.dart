@@ -18,6 +18,14 @@ class CivilServicesPage extends StatefulWidget {
 
 class _CivilServicesPageState extends State<CivilServicesPage> {
   int selectedIndex = 0;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   void _refresh() => setState(() {});
 
@@ -91,10 +99,16 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     final mq = MediaQuery.of(context);
     final categories = civilServices;
     final selectedService = categories[selectedIndex];
-    final subServices = selectedService.subServices;
+
+    // Filter sub-services by the search query, case-insensitive.
+    final query = _searchQuery.trim().toLowerCase();
+    final subServices = query.isEmpty
+        ? selectedService.subServices
+        : selectedService.subServices
+            .where((s) => s.name.toLowerCase().contains(query))
+            .toList();
 
     final totalItems = Cart.getTotalItems(kCivilServiceKey);
-    final totalPrice = Cart.getTotal(kCivilServiceKey);
     final bottomPad = mq.viewPadding.bottom;
 
     return Scaffold(
@@ -127,6 +141,25 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
         bottom: false,
         child: Column(
           children: [
+            // ── SEARCH BAR ───────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+              child: _SearchField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _searchQuery = v),
+                onClear: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                },
+              ),
+            ),
+
+            // ── HINT BANNER ──────────────────────────────────────────
+            const Padding(
+              padding: EdgeInsets.fromLTRB(14, 0, 14, 8),
+              child: _TapHintBanner(),
+            ),
+
             const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
 
             Expanded(
@@ -141,30 +174,33 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
 
                   // ── RIGHT SERVICE LIST ───────────────────────────────
                   Expanded(
-                    child: ListView.builder(
-                      padding: EdgeInsets.fromLTRB(
-                        10,
-                        10,
-                        10,
-                        totalItems > 0 ? 80 + bottomPad : 10 + bottomPad,
-                      ),
-                      itemCount: subServices.length,
-                      itemBuilder: (context, index) {
-                        final sub = subServices[index];
+                    child: subServices.isEmpty
+                        ? const _EmptySearchState()
+                        : ListView.builder(
+                            padding: EdgeInsets.fromLTRB(
+                              10,
+                              10,
+                              10,
+                              totalItems > 0 ? 80 + bottomPad : 10 + bottomPad,
+                            ),
+                            itemCount: subServices.length,
+                            itemBuilder: (context, index) {
+                              final sub = subServices[index];
 
-                        return CivilServiceCard(
-                          service: sub,
-                          categoryName: selectedService.name,
-                          categoryId: selectedService.id,
-                          onTap: () => _openDetail(sub, selectedService.id),
-                          onAddCart: () => _handleBooking(
-                            sub,
-                            selectedService.id,
-                            selectedService.name,
+                              return CivilServiceCard(
+                                service: sub,
+                                categoryName: selectedService.name,
+                                categoryId: selectedService.id,
+                                onTap: () =>
+                                    _openDetail(sub, selectedService.id),
+                                onAddCart: () => _handleBooking(
+                                  sub,
+                                  selectedService.id,
+                                  selectedService.name,
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
                   ),
                 ],
               ),
@@ -174,7 +210,6 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
             if (totalItems > 0)
               _ViewCartBar(
                 totalItems: totalItems,
-                totalPrice: totalPrice,
                 bottomPad: bottomPad,
                 onTap: _openCart,
               ),
@@ -186,6 +221,119 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+class _SearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  const _SearchField({
+    required this.controller,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A2E)),
+        decoration: InputDecoration(
+          hintText: 'Search civil services…',
+          hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+          prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade500),
+          suffixIcon: controller.text.isNotEmpty
+              ? IconButton(
+                  icon: Icon(Icons.close_rounded, color: Colors.grey.shade500),
+                  onPressed: onClear,
+                )
+              : null,
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TapHintBanner extends StatelessWidget {
+  const _TapHintBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1565C0).withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.touch_app_rounded,
+              color: const Color(0xFF1565C0), size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Tap on any card to view full service details',
+              style: TextStyle(
+                fontSize: 12,
+                color: const Color(0xFF1565C0).withOpacity(0.9),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptySearchState extends StatelessWidget {
+  const _EmptySearchState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off_rounded, size: 44, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            Text(
+              'No services match your search',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _CartIconButton extends StatelessWidget {
   final int count;
@@ -319,13 +467,11 @@ class _CategoryPanel extends StatelessWidget {
 
 class _ViewCartBar extends StatelessWidget {
   final int totalItems;
-  final int totalPrice;
   final double bottomPad;
   final VoidCallback onTap;
 
   const _ViewCartBar({
     required this.totalItems,
-    required this.totalPrice,
     required this.bottomPad,
     required this.onTap,
   });
@@ -336,37 +482,25 @@ class _ViewCartBar extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(14, 10, 14, 10 + bottomPad),
       decoration: const BoxDecoration(
-        color: Color.fromARGB(255, 239, 198, 36),
+        color: Color(0xFF1565C0),
         boxShadow: [
           BoxShadow(
             color: Colors.black26,
-            blurRadius: 12,
-            offset: Offset(0, -4),
+            blurRadius: 10,
+            offset: Offset(0, -3),
           ),
         ],
       ),
       child: Row(
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "$totalItems item${totalItems > 1 ? 's' : ''} selected",
-                  style:
-                      const TextStyle(color: Color.fromARGB(153, 211, 70, 70), fontSize: 11),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  "₹$totalPrice",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 17,
-                  ),
-                ),
-              ],
+            child: Text(
+              "$totalItems item${totalItems > 1 ? 's' : ''} selected",
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
             ),
           ),
           GestureDetector(
@@ -379,9 +513,9 @@ class _ViewCartBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.orange.withOpacity(0.4),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: Colors.orange.withOpacity(0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
                   ),
                 ],
               ),

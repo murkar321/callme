@@ -40,9 +40,9 @@ class CivilServiceCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.14),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -70,42 +70,36 @@ class CivilServiceCard extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      stops: const [0.0, 0.40, 1.0],
+                      stops: const [0.0, 0.45, 1.0],
                       colors: [
-                        Colors.black.withOpacity(0.10),
-                        Colors.black.withOpacity(0.20),
-                        Colors.black.withOpacity(0.82),
+                        Colors.black.withOpacity(0.05),
+                        Colors.black.withOpacity(0.15),
+                        Colors.black.withOpacity(0.78),
                       ],
                     ),
                   ),
                 ),
               ),
 
-              // ── DISCOUNT BADGE — top left ─────────────────────────
-              if (service.discount > 0)
-                Positioned(
-                  left: 10,
-                  top: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade600,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      "${service.discount}% OFF",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
+              // ── TAP HINT — top right, signals card is tappable ────
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.35),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.info_outline_rounded,
+                    color: Colors.white,
+                    size: 14,
                   ),
                 ),
+              ),
 
-              // ── BOTTOM ROW: name + price + BOOK/SELECT button ─────
+              // ── BOTTOM ROW: name + hint text + BOOK/SELECT button ──
               Positioned(
                 left: 12,
                 right: 10,
@@ -113,7 +107,6 @@ class CivilServiceCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Service name + price stacked
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,7 +118,7 @@ class CivilServiceCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 13,
+                              fontSize: 14,
                               fontWeight: FontWeight.w700,
                               height: 1.25,
                               shadows: [
@@ -133,30 +126,28 @@ class CivilServiceCard extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          // Price chip
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color.fromARGB(255, 235, 217, 27).withOpacity(0.55),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              service.price,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.2,
+                          const SizedBox(height: 3),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.touch_app_rounded,
+                                  color: Colors.white.withOpacity(0.75),
+                                  size: 11),
+                              const SizedBox(width: 3),
+                              Text(
+                                'Tap to view details',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.75),
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 10),
-                    // BOOK / SELECT button
                     _ActionButton(
                       inCart: inCart,
                       cartCount: cartCount,
@@ -208,15 +199,15 @@ class _ActionButton extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 220),
             padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: bgColor.withOpacity(0.45),
-                  blurRadius: 6,
-                  offset: const Offset(0, 3),
+                  color: bgColor.withOpacity(0.35),
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
