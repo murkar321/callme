@@ -318,6 +318,16 @@ bool categoryMatchFuzzy(
 class OrderService {
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  // ── Terminal statuses — the only ones a customer is allowed to
+  // delete from their own My Orders list. Kept as a named list (not
+  // inline in the method) so business_dashboard_page.dart or any
+  // future admin tooling can reuse the exact same rule if needed.
+  static const List<String> _deletableStatuses = [
+    OrderStatus.completed,
+    OrderStatus.rejected,
+    OrderStatus.cancelled,
+  ];
+
   // ==========================================================
   // ORDER ID GENERATOR
   // ==========================================================
@@ -584,6 +594,12 @@ class OrderService {
       'isAssigned':  false,
       'isCompleted': false,
 
+      // FIX (NEW): lets the customer pin an order in MyOrdersPage the
+      // same way notifications can be pinned — floats it to the top
+      // of their list client-side. Defaults false so existing orders
+      // just read as unpinned with no migration needed.
+      'pinned': false,
+
       'declineReason': '',
       'cancelReason':  '',
       'cancelledBy':   '',
@@ -616,6 +632,55 @@ class OrderService {
     );
 
     return docRef;
+  }
+
+  // ==========================================================
+  // FIX (NEW): customer-facing order management — pin & delete.
+  //
+  // Mirrors the pin/delete pattern already used for notifications,
+  // but lives here rather than being written inline in
+  // MyOrdersPage, matching how every other order mutation
+  // (accept/reject/complete/cancel) is centralized in this class
+  // rather than scattered across UI files.
+  // ==========================================================
+
+  /// Toggles the client-side "pinned" flag on an order. Purely a
+  /// display preference — has no effect on matching, status, or
+  /// provider visibility.
+  static Future<void> setOrderPinned({
+    required String orderId,
+    required bool pinned,
+  }) async {
+    await _db.collection('orders').doc(orderId).update({'pinned': pinned});
+  }
+
+  /// Deletes an order the customer no longer wants to see in their
+  /// list. Only allowed once the order has reached a terminal state
+  /// (completed / rejected / cancelled) — deleting a still-pending or
+  /// accepted order would let a customer erase evidence of an active
+  /// booking a provider is relying on, so this throws instead of
+  /// silently refusing.
+  ///
+  /// Returns the deleted document's data so the caller can offer an
+  /// "Undo" snackbar by writing it straight back with the same ID.
+  static Future<Map<String, dynamic>> deleteOrder({
+    required String orderId,
+  }) async {
+    final ref  = _db.collection('orders').doc(orderId);
+    final snap = await ref.get();
+    if (!snap.exists) {
+      throw 'Order not found.';
+    }
+
+    final data   = snap.data()!;
+    final status = (data['status'] ?? '').toString().trim().toLowerCase();
+
+    if (!_deletableStatuses.contains(status)) {
+      throw 'Only completed or cancelled orders can be deleted.';
+    }
+
+    await ref.delete();
+    return data;
   }
 
   // ==========================================================

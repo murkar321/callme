@@ -12,6 +12,25 @@ import 'orders_detail.dart';
 import 'providers_details.dart';
 import 'users_details.dart';
 
+// ── Theme-aware surface/text helpers ───────────────────────────────────────
+// Every card/chart/text color on this page used to be a flat const Color,
+// which is exactly why this screen stayed light under dark mode even
+// though bottom_nav_page.dart and account_page.dart correctly switched.
+// These small helpers take the current isDark flag (computed once per
+// build()) and are threaded through every builder method below.
+Color _pageBg(bool isDark) =>
+    isDark ? const Color(0xFF121016) : const Color(0xFFF0F2F8);
+Color _cardBg(bool isDark) => isDark ? const Color(0xFF1E1B29) : Colors.white;
+Color _textPrimary(bool isDark) =>
+    isDark ? Colors.white : const Color(0xFF1E293B);
+Color _textSecondary(bool isDark) =>
+    isDark ? Colors.white60 : const Color(0xFF64748B);
+Color _textMuted(bool isDark) =>
+    isDark ? Colors.white38 : const Color(0xFF94A3B8);
+Color _gridLine(bool isDark) =>
+    isDark ? Colors.white12 : const Color(0xFFE2E8F0);
+Color _cardShadow(bool isDark) => Colors.black.withOpacity(isDark ? 0.35 : 0.06);
+
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
 
@@ -571,8 +590,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F8),
+      backgroundColor: _pageBg(isDark),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -597,9 +618,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHeroHeader(metrics, pending),
+                    _buildHeroHeader(metrics, pending, isDark),
 
-                    if (_timedOut) _buildTimeoutBanner(metrics),
+                    if (_timedOut) _buildTimeoutBanner(metrics, isDark),
 
                     AnimatedSize(
                       duration: const Duration(milliseconds: 250),
@@ -618,32 +639,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           children: [
                             Row(
                               children: [
-                                _sectionLabel('Overview'),
+                                _sectionLabel('Overview', isDark),
                                 const Spacer(),
                                 if (_lastUpdated != null)
                                   Text(
                                     _lastUpdatedLabel(),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 11,
-                                        color: Color(0xFF94A3B8),
+                                        color: _textMuted(isDark),
                                         fontWeight: FontWeight.w600),
                                   ),
                               ],
                             ),
                             const SizedBox(height: 14),
-                            _buildStatsGrid(context, metrics),
+                            _buildStatsGrid(context, metrics, isDark),
                             const SizedBox(height: 30),
-                            _sectionLabel('Order Status Breakdown'),
+                            _sectionLabel('Order Status Breakdown', isDark),
                             const SizedBox(height: 14),
-                            _buildStatusPills(
-                                metrics, pending, accepted, completed, rejected),
+                            _buildStatusPills(metrics, pending, accepted,
+                                completed, rejected, isDark),
                             const SizedBox(height: 28),
                             _buildChart(metrics, maxValue, pending, accepted,
-                                completed, rejected),
+                                completed, rejected, isDark),
                             const SizedBox(height: 30),
-                            _sectionLabel('Quick Actions'),
+                            _sectionLabel('Quick Actions', isDark),
                             const SizedBox(height: 14),
-                            _buildQuickActions(context, metrics),
+                            _buildQuickActions(context, metrics, isDark),
                             const SizedBox(height: 30),
                           ],
                         ),
@@ -661,12 +682,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // ─── Timeout banner ───────────────────────────────────────────────────
 
-  Widget _buildTimeoutBanner(_ScreenMetrics m) {
+  Widget _buildTimeoutBanner(_ScreenMetrics m, bool isDark) {
     return Container(
       margin: EdgeInsets.fromLTRB(m.pagePadding, 14, m.pagePadding, 0),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF5E5),
+        color: isDark
+            ? const Color(0xFFF59E0B).withOpacity(0.14)
+            : const Color(0xFFFFF5E5),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
       ),
@@ -706,6 +729,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ─── Header ───────────────────────────────────────────────────────────
+  // NOTE: the hero header keeps its blue→purple gradient and the "new
+  // provider" banner keeps its navy gradient in BOTH themes on purpose —
+  // they're already dark, high-contrast panels with white text, so they
+  // read correctly on a light or dark scaffold without any changes.
 
   Widget _buildNewProviderBanner(_ScreenMetrics m) {
     return Container(
@@ -784,7 +811,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildHeroHeader(_ScreenMetrics m, int pending) {
+  Widget _buildHeroHeader(_ScreenMetrics m, int pending, bool isDark) {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -985,7 +1012,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             padding: EdgeInsets.fromLTRB(m.pagePadding, 20, m.pagePadding, 28),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _cardBg(isDark),
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
@@ -999,10 +1026,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 focusNode: _searchFocus,
                 textInputAction: TextInputAction.search,
                 onSubmitted: _submitSearch,
-                style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
+                style: TextStyle(fontSize: 14, color: _textPrimary(isDark)),
                 decoration: InputDecoration(
                   hintText: 'Search orders by name, phone, email, ID…',
-                  hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+                  hintStyle: TextStyle(
+                      color: isDark ? Colors.white38 : Colors.grey,
+                      fontSize: 14),
                   prefixIcon:
                       const Icon(Icons.search_rounded, color: Color(0xFF6D28D9)),
                   suffixIcon: IconButton(
@@ -1021,7 +1050,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _sectionLabel(String text) {
+  Widget _sectionLabel(String text, bool isDark) {
     return Row(
       children: [
         Container(
@@ -1035,8 +1064,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         const SizedBox(width: 10),
         Text(
           text,
-          style: const TextStyle(
-              fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+          style: TextStyle(
+              fontSize: 20, fontWeight: FontWeight.bold, color: _textPrimary(isDark)),
         ),
       ],
     );
@@ -1049,7 +1078,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // to the full AdminAnalyticsPage breakdown rather than a single-metric
   // detail page (since there's no dedicated page for either number alone).
 
-  Widget _buildStatsGrid(BuildContext context, _ScreenMetrics m) {
+  Widget _buildStatsGrid(BuildContext context, _ScreenMetrics m, bool isDark) {
     final double revenue = (dashboardData['todayRevenue'] ?? 0.0) as double;
     final double? rating = dashboardData['avgRating'] as double?;
 
@@ -1070,38 +1099,44 @@ class _AdminDashboardState extends State<AdminDashboard> {
             icon: Icons.people_alt_rounded,
             value: '${dashboardData['users']}',
             color: const Color(0xFF3B82F6),
-            page: UsersPage()),
+            page: UsersPage(),
+            isDark: isDark),
         _statCard(context,
             title: 'Providers',
             icon: Icons.storefront_rounded,
             value: '${dashboardData['providers']}',
             color: const Color(0xFF10B981),
-            page: ProvidersPage()),
+            page: ProvidersPage(),
+            isDark: isDark),
         _statCard(context,
             title: 'Orders',
             icon: Icons.receipt_long_rounded,
             value: '${dashboardData['orders']}',
             color: const Color(0xFFF59E0B),
-            page: const AdminOrdersPage()),
+            page: const AdminOrdersPage(),
+            isDark: isDark),
         _statCard(context,
             title: 'Approvals',
             icon: Icons.pending_actions_rounded,
             value: '${dashboardData['approvals']}',
             color: const Color(0xFFEF4444),
             page: const ApproveProvidersPage(),
-            highlight: (dashboardData['approvals'] ?? 0) > 0),
+            highlight: (dashboardData['approvals'] ?? 0) > 0,
+            isDark: isDark),
         _statCard(context,
             title: "Today's Revenue",
             icon: Icons.currency_rupee_rounded,
             value: '₹${revenue.toStringAsFixed(0)}',
             color: const Color(0xFF10B981),
-            page: const AdminAnalyticsPage()),
+            page: const AdminAnalyticsPage(),
+            isDark: isDark),
         _statCard(context,
             title: 'Avg Rating',
             icon: Icons.star_rounded,
             value: rating != null ? rating.toStringAsFixed(1) : '—',
             color: const Color(0xFFF59E0B),
-            page: const AdminAnalyticsPage()),
+            page: const AdminAnalyticsPage(),
+            isDark: isDark),
       ],
     );
   }
@@ -1113,6 +1148,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     required String value,
     required Color color,
     required Widget page,
+    required bool isDark,
     bool highlight = false,
   }) {
     return GestureDetector(
@@ -1120,12 +1156,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _cardBg(isDark),
           borderRadius: BorderRadius.circular(24),
           border: highlight ? Border.all(color: color.withOpacity(0.4), width: 1.5) : null,
           boxShadow: [
             BoxShadow(
-                color: color.withOpacity(0.08),
+                color: color.withOpacity(isDark ? 0.14 : 0.08),
                 blurRadius: 16,
                 offset: const Offset(0, 6)),
           ],
@@ -1137,7 +1173,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
+                color: color.withOpacity(isDark ? 0.22 : 0.12),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(icon, color: color, size: 22),
@@ -1161,10 +1197,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF64748B)),
+                        color: _textSecondary(isDark)),
                   ),
                 ),
               ],
@@ -1176,14 +1212,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ─── Status pills ─────────────────────────────────────────────────────
+  // Pill colors already work fine on dark surfaces (accent color at low
+  // opacity) — only the surrounding grid/row layout is unaffected.
 
-  Widget _buildStatusPills(
-      _ScreenMetrics m, int pending, int accepted, int completed, int rejected) {
+  Widget _buildStatusPills(_ScreenMetrics m, int pending, int accepted,
+      int completed, int rejected, bool isDark) {
     final pills = [
-      _statusPill('Pending', pending, const Color(0xFFF59E0B)),
-      _statusPill('Accepted', accepted, const Color(0xFF10B981)),
-      _statusPill('Done', completed, const Color(0xFF3B82F6)),
-      _statusPill('Rejected', rejected, const Color(0xFFEF4444)),
+      _statusPill('Pending', pending, const Color(0xFFF59E0B), isDark),
+      _statusPill('Accepted', accepted, const Color(0xFF10B981), isDark),
+      _statusPill('Done', completed, const Color(0xFF3B82F6), isDark),
+      _statusPill('Rejected', rejected, const Color(0xFFEF4444), isDark),
     ];
 
     if (m.isMobile) {
@@ -1210,11 +1248,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _statusPill(String label, int count, Color color) {
+  Widget _statusPill(String label, int count, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withOpacity(isDark ? 0.16 : 0.1),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: color.withOpacity(0.25)),
       ),
@@ -1236,16 +1274,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // ─── Chart ────────────────────────────────────────────────────────────
 
   Widget _buildChart(_ScreenMetrics m, int maxValue, int pending, int accepted,
-      int completed, int rejected) {
+      int completed, int rejected, bool isDark) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg(isDark),
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: _cardShadow(isDark),
               blurRadius: 12,
               offset: const Offset(0, 6)),
         ],
@@ -1258,14 +1296,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
               Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3B82F6).withOpacity(0.1),
+                  color: const Color(0xFF3B82F6).withOpacity(isDark ? 0.2 : 0.1),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(Icons.bar_chart_rounded,
                     color: Color(0xFF3B82F6), size: 22),
               ),
               const SizedBox(width: 14),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1274,12 +1312,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B)),
+                          color: _textPrimary(isDark)),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
                       'Live breakdown of all order statuses',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                      style: TextStyle(color: _textMuted(isDark), fontSize: 12),
                     ),
                   ],
                 ),
@@ -1292,7 +1330,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6D28D9).withOpacity(0.1),
+                    color: const Color(0xFF6D28D9).withOpacity(isDark ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -1316,9 +1354,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
           SizedBox(
             height: m.isMobile ? 220 : 300,
             child: maxValue == 0
-                ? const Center(
+                ? Center(
                     child: Text('No orders yet',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)))
+                        style: TextStyle(color: _textMuted(isDark), fontSize: 13)))
                 : BarChart(
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
@@ -1329,7 +1367,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         drawVerticalLine: false,
                         horizontalInterval: 1,
                         getDrawingHorizontalLine: (v) =>
-                            FlLine(color: const Color(0xFFE2E8F0), strokeWidth: 1),
+                            FlLine(color: _gridLine(isDark), strokeWidth: 1),
                       ),
                       titlesData: FlTitlesData(
                         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -1340,7 +1378,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             reservedSize: 28,
                             getTitlesWidget: (v, mm) => Text(
                               v.toInt().toString(),
-                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                              style: TextStyle(color: _textMuted(isDark), fontSize: 11),
                             ),
                           ),
                         ),
@@ -1356,7 +1394,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                   style: TextStyle(
                                     fontSize: m.isMobile ? 10 : 12,
                                     fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF64748B),
+                                    color: _textSecondary(isDark),
                                   ),
                                 ),
                               );
@@ -1378,10 +1416,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             spacing: 20,
             runSpacing: 10,
             children: [
-              _legend(const Color(0xFFF59E0B), 'Pending'),
-              _legend(const Color(0xFF10B981), 'Accepted'),
-              _legend(const Color(0xFF3B82F6), 'Completed'),
-              _legend(const Color(0xFFEF4444), 'Rejected'),
+              _legend(const Color(0xFFF59E0B), 'Pending', isDark),
+              _legend(const Color(0xFF10B981), 'Accepted', isDark),
+              _legend(const Color(0xFF3B82F6), 'Completed', isDark),
+              _legend(const Color(0xFFEF4444), 'Rejected', isDark),
             ],
           ),
         ],
@@ -1407,7 +1445,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _legend(Color color, String text) {
+  Widget _legend(Color color, String text, bool isDark) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1418,8 +1456,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
         const SizedBox(width: 6),
         Text(text,
-            style: const TextStyle(
-                fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+            style: TextStyle(
+                fontSize: 13, color: _textSecondary(isDark), fontWeight: FontWeight.w500)),
       ],
     );
   }
@@ -1429,7 +1467,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // Now 4 actions (Analytics added) — mobile switches to a 2x2 grid so
   // every tile stays evenly sized instead of wrapping 3+1 lopsided.
 
-  Widget _buildQuickActions(BuildContext context, _ScreenMetrics m) {
+  Widget _buildQuickActions(BuildContext context, _ScreenMetrics m, bool isDark) {
     final actions = [
       (
         label: 'Manage Users',
@@ -1475,7 +1513,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
         children: actions
             .map((a) => _actionButton(context,
-                label: a.label, icon: a.icon, color: a.color, page: a.page))
+                label: a.label, icon: a.icon, color: a.color, page: a.page, isDark: isDark))
             .toList(),
       );
     }
@@ -1488,7 +1526,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 label: actions[i].label,
                 icon: actions[i].icon,
                 color: actions[i].color,
-                page: actions[i].page),
+                page: actions[i].page,
+                isDark: isDark),
           ),
           if (i != actions.length - 1) const SizedBox(width: 12),
         ],
@@ -1502,6 +1541,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     required IconData icon,
     required Color color,
     required Widget page,
+    required bool isDark,
   }) {
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
@@ -1513,11 +1553,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
         // height comfortably clears the tile height with room to spare.
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _cardBg(isDark),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color: color.withOpacity(0.10), blurRadius: 12, offset: const Offset(0, 4)),
+                color: color.withOpacity(isDark ? 0.16 : 0.10),
+                blurRadius: 12,
+                offset: const Offset(0, 4)),
           ],
         ),
         child: Column(
@@ -1527,7 +1569,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
+                color: color.withOpacity(isDark ? 0.22 : 0.12),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(icon, color: color, size: 20),
@@ -1539,10 +1581,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151)),
+                    color: _textPrimary(isDark)),
               ),
             ),
           ],

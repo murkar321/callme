@@ -43,6 +43,25 @@ const _kMaxDocBytes   = 5  * 1024 * 1024; // 5 MB
 
 const _kCompulsoryDoc = 'Aadhaar Card';
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  FIX (NEW): admin notification target.
+//
+//  THIS WAS THE MISSING PIECE. Nothing anywhere in this file previously
+//  wrote a `notifications` doc or queued an FCM push when a provider
+//  registered — NotificationType.providerRegistered was defined in
+//  notification_service.dart but never actually used by any caller. So
+//  "new provider registered" silently did nothing: no doc in
+//  notifications/ (why it never showed on the admin's notification
+//  page) and no push ever sent (why it never rang/popped up either).
+//
+//  TODO: replace this with your actual admin UID — the same one
+//  hardcoded in isAdmin() in your Firestore security rules. Per project
+//  memory that check is hardcoded rather than role-based, so this must
+//  match it exactly or the notification will be written with a
+//  receiverId nobody is listening for.
+// ═════════════════════════════════════════════════════════════════════════════
+const String _kAdminUid = 'PUT_YOUR_ADMIN_UID_HERE';
+
 // ─── Readable document-ID prefix map ─────────────────────────────────────────
 //
 // Produces IDs like  CIV-765791 / CLE-961199 / EDU-003040 etc.
@@ -679,6 +698,25 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
             'refresh): $e');
       }
 
+      // ── 5. FIX (NEW): actually tell the admin a provider registered. ───────
+      //
+      // This is the piece that was missing entirely — nothing previously
+      // wrote to `notifications/` or queued a push for
+      // NotificationType.providerRegistered, so the admin never heard
+      // about new registrations at all, regardless of app state. Kept as
+      // its own try/catch, same pattern as step 4: registration must
+      // still succeed and take the provider to SuccessPage even if this
+      // fails, since the provider doc itself is already safely written.
+      try {
+        await _notifyAdminOfNewProvider(
+          readableId: readableId,
+          db: db,
+        );
+      } catch (e) {
+        debugPrint('[ServiceProviderForm] Admin notification failed '
+            '(non-fatal — provider doc was still created): $e');
+      }
+
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -695,6 +733,79 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FIX (NEW): the two writes that make a "new provider registered" event
+  // actually reach the admin.
+  //
+  //   (a) `notifications/{autoId}` — read by NotificationPage's
+  //       StreamBuilder (query is `receiverId == <admin uid>`, ordered by
+  //       createdAt). This alone is enough for it to show up in the
+  //       admin's notification list and unread badge, independent of
+  //       whether any push infrastructure exists.
+  //
+  //   (b) `fcm_queue/{autoId}` — your Firestore rules already allow
+  //       `create: if isSignedIn()` on this collection per project
+  //       memory, which strongly implies a Cloud Function is meant to
+  //       watch it and call the FCM Admin SDK (client code can never send
+  //       a push directly to another user's device — there's no server
+  //       key on the client, by design). The field names below
+  //       (`to`, `title`, `body`, `data`) are a reasonable default
+  //       shape, NOT confirmed against your actual function — please
+  //       check/adjust them to match whatever Cloud Function you already
+  //       have consuming this collection. If no such function exists
+  //       yet, this write is harmless (rules allow it) but won't produce
+  //       a push until one is deployed.
+  // ═══════════════════════════════════════════════════════════════════════════
+  Future<void> _notifyAdminOfNewProvider({
+    required String readableId,
+    required FirebaseFirestore db,
+  }) async {
+    final businessName = _businessCtrl.text.trim();
+    final serviceType  = widget.type.trim();
+    final title = 'New provider registration';
+    final body  = '$businessName ($serviceType) has applied — review pending.';
+
+    // (a) In-app notification doc — this is what NotificationPage reads.
+    await db.collection('notifications').add({
+      'receiverId':   _kAdminUid,
+      'type':         'provider_registered', // NotificationType.providerRegistered
+      'title':        title,
+      'body':         body,
+      'businessName': businessName,
+      'serviceType':  serviceType,
+      'providerId':   readableId,
+      'read':         false,
+      'pinned':       false,
+      'createdAt':    FieldValue.serverTimestamp(),
+    });
+
+    // (b) Push-delivery queue — needs a Cloud Function consumer to
+    // actually reach the admin's device. Look up the admin's current
+    // token from users/{adminUid} so the function doesn't have to.
+    String? adminToken;
+    try {
+      final adminUserDoc = await db.collection('users').doc(_kAdminUid).get();
+      adminToken = adminUserDoc.data()?['fcmToken'] as String?;
+    } catch (e) {
+      debugPrint('[ServiceProviderForm] Could not read admin fcmToken: $e');
+    }
+
+    await db.collection('fcm_queue').add({
+      'to':        adminToken,       // may be null — function should skip/log, not crash
+      'toUid':     _kAdminUid,       // fallback so the function can re-resolve the token itself
+      'title':     title,
+      'body':      body,
+      'data': {
+        'type':         'provider_registered',
+        'providerId':   readableId,
+        'businessName': businessName,
+        'serviceType':  serviceType,
+      },
+      'createdAt': FieldValue.serverTimestamp(),
+      'status':    'pending', // let the Cloud Function mark 'sent'/'failed'
+    });
   }
 
   // ── Snacks ────────────────────────────────────────────────────────────────────

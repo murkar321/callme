@@ -446,12 +446,17 @@ class _BusinessPageState extends State<BusinessPage>
 
   // ── Rejected dialog (visual polish only — same behavior) ──
   void _showRejectedDialog(ServiceCategoryStyle service, String reason) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color dialogBg = isDark ? const Color(0xFF232030) : Colors.white;
+    final Color titleColor = isDark ? Colors.white : const Color(0xFF212121);
+    final Color bodyColor = isDark ? Colors.white70 : const Color(0xFF757575);
+
     showDialog(
       context: context,
       builder: (_) => Dialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
+        backgroundColor: dialogBg,
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -461,21 +466,24 @@ class _BusinessPageState extends State<BusinessPage>
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFBE9E7),
+                  color: isDark
+                      ? const Color(0xFFD84315).withOpacity(0.18)
+                      : const Color(0xFFFBE9E7),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(Icons.cancel_rounded,
                     color: Color(0xFFD84315), size: 30),
               ),
               const SizedBox(height: 16),
-              const Text("Application Rejected",
-                  style:
-                      TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              Text("Application Rejected",
+                  style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: titleColor)),
               const SizedBox(height: 8),
               Text(reason,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: Color(0xFF757575), height: 1.5)),
+                  style: TextStyle(color: bodyColor, height: 1.5)),
               const SizedBox(height: 24),
               Row(
                 children: [
@@ -483,13 +491,19 @@ class _BusinessPageState extends State<BusinessPage>
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                        side: BorderSide(
+                            color: isDark
+                                ? Colors.white24
+                                : const Color(0xFFE0E0E0)),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 13),
                       ),
-                      child: const Text("Cancel",
-                          style: TextStyle(color: Color(0xFF424242))),
+                      child: Text("Cancel",
+                          style: TextStyle(
+                              color: isDark
+                                  ? Colors.white70
+                                  : const Color(0xFF424242))),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -521,12 +535,19 @@ class _BusinessPageState extends State<BusinessPage>
 
   // ── Provider type bottom sheet (visual polish only) ──
   void _showProviderTypeSelector(ServiceCategoryStyle service) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color sheetBg = isDark ? const Color(0xFF232030) : Colors.white;
+    final Color handleColor =
+        isDark ? Colors.white24 : const Color(0xFFE0E0E0);
+    final Color eyebrowColor = isDark ? Colors.white54 : Colors.grey[500]!;
+    final Color titleColor = isDark ? Colors.white : const Color(0xFF212121);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      backgroundColor: Colors.white,
+      backgroundColor: sheetBg,
       builder: (_) => Padding(
         padding: EdgeInsets.fromLTRB(
             20, 12, 20, 40 + MediaQuery.of(context).padding.bottom),
@@ -537,7 +558,7 @@ class _BusinessPageState extends State<BusinessPage>
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFFE0E0E0),
+                color: handleColor,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -561,37 +582,37 @@ class _BusinessPageState extends State<BusinessPage>
                     Text("Register as",
                         style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[500],
+                            color: eyebrowColor,
                             fontWeight: FontWeight.w500)),
                     Text(service.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF212121))),
+                            color: titleColor)),
                   ],
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            const Divider(height: 28),
+            Divider(height: 28, color: isDark ? Colors.white12 : null),
             _typeTile(service, "Individual", Icons.person_rounded,
-                const Color(0xFF5C6BC0)),
+                const Color(0xFF5C6BC0), isDark),
             const SizedBox(height: 8),
             _typeTile(service, "Agency", Icons.groups_rounded,
-                const Color(0xFF00897B)),
+                const Color(0xFF00897B), isDark),
             const SizedBox(height: 8),
             _typeTile(service, "Business", Icons.business_rounded,
-                const Color(0xFFF57C00)),
+                const Color(0xFFF57C00), isDark),
           ],
         ),
       ),
     );
   }
 
-  Widget _typeTile(ServiceCategoryStyle service, String type,
-      IconData icon, Color color) {
+  Widget _typeTile(ServiceCategoryStyle service, String type, IconData icon,
+      Color color, bool isDark) {
     return Material(
-      color: Colors.white,
+      color: isDark ? const Color(0xFF2B2740) : Colors.white,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -610,7 +631,8 @@ class _BusinessPageState extends State<BusinessPage>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFF0F0F0)),
+            border: Border.all(
+                color: isDark ? Colors.white12 : const Color(0xFFF0F0F0)),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
@@ -619,20 +641,21 @@ class _BusinessPageState extends State<BusinessPage>
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.10),
+                  color: color.withOpacity(isDark ? 0.18 : 0.10),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: color, size: 20),
               ),
               const SizedBox(width: 14),
               Text(type,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF212121))),
+                      color: isDark ? Colors.white : const Color(0xFF212121))),
               const Spacer(),
-              const Icon(Icons.chevron_right_rounded,
-                  color: Color(0xFFBDBDBD), size: 22),
+              Icon(Icons.chevron_right_rounded,
+                  color: isDark ? Colors.white38 : const Color(0xFFBDBDBD),
+                  size: 22),
             ],
           ),
         ),
@@ -645,6 +668,7 @@ class _BusinessPageState extends State<BusinessPage>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final r = _Responsive(size.width);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Real-device adaptivity: clamp the text scale so a phone with a
     // large system font/accessibility setting doesn't break the fixed
@@ -654,30 +678,40 @@ class _BusinessPageState extends State<BusinessPage>
     final clampedScaler =
         mq.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.15);
 
+    final Color pageBg = Theme.of(context).scaffoldBackgroundColor;
+    final Color sectionTitleColor =
+        isDark ? Colors.white : const Color(0xFF212121);
+    final Color countChipBg =
+        isDark ? const Color(0xFF5C6BC0).withOpacity(0.22) : const Color(0xFFE8EAF6);
+    final Color countChipText =
+        isDark ? const Color(0xFFB6C0F0) : const Color(0xFF5C6BC0);
+
     return MediaQuery(
       data: mq.copyWith(textScaler: clampedScaler),
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F8FC),
+        backgroundColor: pageBg,
         body: CustomScrollView(
           slivers: [
             SliverAppBar(
               expandedHeight: r.headerExpandedHeight,
               pinned: true,
-              backgroundColor: const Color(0xFFFFE3EC),
+              backgroundColor:
+                  isDark ? const Color(0xFF2A2338) : const Color(0xFFFFE3EC),
               surfaceTintColor: Colors.transparent,
               elevation: 0,
               centerTitle: true,
-              foregroundColor: const Color(0xFF3B2A4A),
+              foregroundColor:
+                  isDark ? Colors.white : const Color(0xFF3B2A4A),
               title: Text(
                 "Become a Provider",
                 style: TextStyle(
-                  color: const Color(0xFF3B2A4A),
+                  color: isDark ? Colors.white : const Color(0xFF3B2A4A),
                   fontWeight: FontWeight.w700,
                   fontSize: r.titleFontSize,
                 ),
               ),
               flexibleSpace: FlexibleSpaceBar(
-                background: _buildHeader(r),
+                background: _buildHeader(r, isDark),
               ),
             ),
 
@@ -687,12 +721,12 @@ class _BusinessPageState extends State<BusinessPage>
                     r.horizontalPagePadding, 20, r.horizontalPagePadding, 12),
                 child: Row(
                   children: [
-                    const Text(
+                    Text(
                       "Service Categories",
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF212121),
+                        color: sectionTitleColor,
                         letterSpacing: 0.2,
                       ),
                     ),
@@ -701,15 +735,15 @@ class _BusinessPageState extends State<BusinessPage>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 9, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE8EAF6),
+                        color: countChipBg,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         "${businessCategories.length}",
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF5C6BC0),
+                          color: countChipText,
                         ),
                       ),
                     ),
@@ -724,7 +758,7 @@ class _BusinessPageState extends State<BusinessPage>
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
                     r.horizontalPagePadding, 0, r.horizontalPagePadding, 24),
-                sliver: _buildGridSliver({}, {}, size),
+                sliver: _buildGridSliver({}, {}, size, isDark),
               )
             else
               SliverToBoxAdapter(
@@ -786,7 +820,7 @@ class _BusinessPageState extends State<BusinessPage>
                                   _sortedIndices(providerMap, orderCountMap);
                               final i = sorted[gridPosition];
                               return _buildCard(i, gridPosition, providerMap,
-                                  orderCountMap);
+                                  orderCountMap, isDark);
                             },
                           ),
                         );
@@ -802,47 +836,47 @@ class _BusinessPageState extends State<BusinessPage>
   }
 
   // =====================================================
-  // HEADER — completely redesigned, take two.
-  //
-  // What changed vs. before:
-  //   - No more "PROVIDER PROGRAM" eyebrow pill — removed entirely,
-  //     as requested.
-  //   - Deep navy panel replaced with a soft, warm pastel gradient
-  //     (blush pink → lilac → mint) — a friendlier, more playful
-  //     product feel instead of a corporate-dark hero.
-  //   - Two blurred pastel blobs now gently drift in a slow, looping
-  //     figure-eight (driven by `_headerController` + sine/cosine),
-  //     purely decorative, GPU-cheap, and never touches layout.
-  //   - A small sparkle icon subtly rotates + pulses next to the
-  //     headline for a touch of delight.
-  //   - Headline + rotating catchy subtitle: the subtitle now cycles
-  //     through a handful of short, punchy lines with a smooth
-  //     crossfade every few seconds, instead of one static sentence.
-  //   - Location chip restyled as a soft frosted-glass pill that sits
-  //     comfortably on the light pastel background (dark text now,
-  //     since the panel itself is light).
-  //
-  // No business/location logic touched — still the same
-  // loadingLocation / city state, same detection flow.
+  // HEADER — pastel in light mode, deepened/muted glass panel in
+  // dark mode so it doesn't glow against a dark scaffold. Layout,
+  // blob animation, and sparkle are all untouched — only colors flip.
   // =====================================================
-  Widget _buildHeader(_Responsive r) {
-    const navy = Color(0xFF3B2A4A);
+  Widget _buildHeader(_Responsive r, bool isDark) {
+    final Color headlineColor = isDark ? Colors.white : const Color(0xFF3B2A4A);
+    final Color taglineColor = isDark
+        ? Colors.white70
+        : const Color(0xFF3B2A4A).withOpacity(0.65);
+    final Color chipBg = isDark
+        ? Colors.white.withOpacity(0.08)
+        : Colors.white.withOpacity(0.55);
+    final Color chipBorder = isDark
+        ? Colors.white.withOpacity(0.14)
+        : Colors.white.withOpacity(0.8);
+    final Color pinColor = isDark ? const Color(0xFFE39CC2) : const Color(0xFFB05A8C);
 
     return ClipRect(
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Base pastel gradient panel
+          // Base panel — soft pastel gradient in light mode, deepened
+          // muted-purple gradient in dark mode (same hues, dropped
+          // lightness), matching the pattern already used elsewhere
+          // in the app (see AccountPage's _pastelPaletteDark).
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFFFE3EC), // blush pink
-                  Color(0xFFF1E6FF), // soft lilac
-                  Color(0xFFE1F7EE), // pale mint
-                ],
+                colors: isDark
+                    ? const [
+                        Color(0xFF3A2438), // muted blush
+                        Color(0xFF2B2440), // muted lilac
+                        Color(0xFF1E3A32), // muted mint
+                      ]
+                    : const [
+                        Color(0xFFFFE3EC), // blush pink
+                        Color(0xFFF1E6FF), // soft lilac
+                        Color(0xFFE1F7EE), // pale mint
+                      ],
               ),
             ),
           ),
@@ -854,22 +888,23 @@ class _BusinessPageState extends State<BusinessPage>
             animation: _headerController,
             builder: (context, _) {
               final t = _headerController.value * 2 * math.pi;
+              final opacityMul = isDark ? 0.6 : 1.0;
               return Stack(
                 children: [
                   Positioned(
                     top: -50 + math.sin(t) * 14,
                     right: -30 + math.cos(t) * 10,
-                    child: _blob(170, const Color(0xFFFFB6C1), 0.45),
+                    child: _blob(170, const Color(0xFFFFB6C1), 0.45 * opacityMul),
                   ),
                   Positioned(
                     bottom: -60 + math.cos(t) * 12,
                     left: -40 + math.sin(t) * 10,
-                    child: _blob(190, const Color(0xFFB39DDB), 0.35),
+                    child: _blob(190, const Color(0xFFB39DDB), 0.35 * opacityMul),
                   ),
                   Positioned(
                     top: 30 + math.sin(t + 1.2) * 8,
                     left: size_safe(r) * 0.55,
-                    child: _blob(90, const Color(0xFFA5D6C6), 0.4),
+                    child: _blob(90, const Color(0xFFA5D6C6), 0.4 * opacityMul),
                   ),
                 ],
               );
@@ -896,7 +931,7 @@ class _BusinessPageState extends State<BusinessPage>
                         style: TextStyle(
                           fontSize: r.taglineFontSize + 5,
                           fontWeight: FontWeight.w800,
-                          color: navy,
+                          color: headlineColor,
                           height: 1.18,
                         ),
                       ),
@@ -938,21 +973,21 @@ class _BusinessPageState extends State<BusinessPage>
                       key: ValueKey(_taglineIndex),
                       style: TextStyle(
                         fontSize: r.taglineFontSize,
-                        color: navy.withOpacity(0.65),
+                        color: taglineColor,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 14),
-                // Location chip — frosted glass, light-panel friendly
+                // Location chip — frosted glass, adapts to light/dark panel
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.55),
+                    color: chipBg,
                     borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: Colors.white.withOpacity(0.8)),
+                    border: Border.all(color: chipBorder),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -961,7 +996,7 @@ class _BusinessPageState extends State<BusinessPage>
                         loadingLocation
                             ? Icons.location_searching_rounded
                             : Icons.location_on_rounded,
-                        color: const Color(0xFFB05A8C),
+                        color: pinColor,
                         size: 15,
                       ),
                       const SizedBox(width: 6),
@@ -974,7 +1009,7 @@ class _BusinessPageState extends State<BusinessPage>
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: navy,
+                          color: headlineColor,
                         ),
                       ),
                     ],
@@ -1019,6 +1054,7 @@ class _BusinessPageState extends State<BusinessPage>
     Map<String, Map<String, dynamic>> providerMap,
     Map<String, int> orderCountMap,
     Size size,
+    bool isDark,
   ) {
     final sorted = _sortedIndices(providerMap, orderCountMap);
 
@@ -1030,8 +1066,8 @@ class _BusinessPageState extends State<BusinessPage>
         childAspectRatio: 1.05,
       ),
       delegate: SliverChildBuilderDelegate(
-        (_, gridPosition) => _buildCard(
-            sorted[gridPosition], gridPosition, providerMap, orderCountMap),
+        (_, gridPosition) => _buildCard(sorted[gridPosition], gridPosition,
+            providerMap, orderCountMap, isDark),
         childCount: businessCategories.length,
       ),
     );
@@ -1042,12 +1078,20 @@ class _BusinessPageState extends State<BusinessPage>
     int gridPosition,
     Map<String, Map<String, dynamic>> providerMap,
     Map<String, int> orderCountMap,
+    bool isDark,
   ) {
     final category = businessCategories[i];
     final serviceType = _getServiceType(category.name);
     final provider = providerMap[serviceType];
     final count = orderCountMap[serviceType] ?? 0;
     final status = provider?['status'];
+
+    final Color cardBg = isDark ? const Color(0xFF232030) : Colors.white;
+    final Color cardBorder =
+        isDark ? Colors.white12 : const Color(0xFFF0F0F0);
+    final Color titleColor = isDark ? Colors.white : const Color(0xFF212121);
+    final Color registerColor = isDark ? Colors.white38 : const Color(0xFF9E9E9E);
+    final Color registerIconColor = isDark ? Colors.white38 : const Color(0xFFBDBDBD);
 
     // NOTE: the stagger-in animation delay is keyed off `gridPosition`
     // (where the card actually lands on screen) instead of `i` (which
@@ -1076,12 +1120,12 @@ class _BusinessPageState extends State<BusinessPage>
         onTap: () => _handleTap(category, provider),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardBg,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFF0F0F0)),
+            border: Border.all(color: cardBorder),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withOpacity(isDark ? 0.25 : 0.05),
                 blurRadius: 14,
                 offset: const Offset(0, 4),
               ),
@@ -1098,7 +1142,9 @@ class _BusinessPageState extends State<BusinessPage>
                       width: 50,
                       height: 50,
                       decoration: BoxDecoration(
-                        color: category.iconBg,
+                        color: isDark
+                            ? category.iconColor.withOpacity(0.18)
+                            : category.iconBg,
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(category.icon,
@@ -1107,10 +1153,10 @@ class _BusinessPageState extends State<BusinessPage>
                     const Spacer(),
                     Text(
                       category.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF212121),
+                        color: titleColor,
                         height: 1.25,
                       ),
                       maxLines: 2,
@@ -1118,18 +1164,18 @@ class _BusinessPageState extends State<BusinessPage>
                     ),
                     const SizedBox(height: 6),
                     if (status != null)
-                      _statusPill(status)
+                      _statusPill(status, isDark)
                     else
                       Row(
-                        children: const [
+                        children: [
                           Icon(Icons.add_circle_outline_rounded,
-                              size: 12, color: Color(0xFFBDBDBD)),
-                          SizedBox(width: 4),
+                              size: 12, color: registerIconColor),
+                          const SizedBox(width: 4),
                           Text(
                             "Register",
                             style: TextStyle(
                               fontSize: 11,
-                              color: Color(0xFF9E9E9E),
+                              color: registerColor,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -1154,7 +1200,7 @@ class _BusinessPageState extends State<BusinessPage>
     );
   }
 
-  Widget _statusPill(String status) {
+  Widget _statusPill(String status, bool isDark) {
     late Color color;
     late Color bg;
     late String label;
@@ -1163,25 +1209,31 @@ class _BusinessPageState extends State<BusinessPage>
     switch (status) {
       case "approved":
         color = const Color(0xFF2E7D32);
-        bg = const Color(0xFFE8F5E9);
+        bg = isDark
+            ? const Color(0xFF2E7D32).withOpacity(0.18)
+            : const Color(0xFFE8F5E9);
         label = "Active";
         icon = Icons.check_circle_rounded;
         break;
       case "pending":
         color = const Color(0xFFE65100);
-        bg = const Color(0xFFFFF3E0);
+        bg = isDark
+            ? const Color(0xFFE65100).withOpacity(0.18)
+            : const Color(0xFFFFF3E0);
         label = "Pending";
         icon = Icons.hourglass_top_rounded;
         break;
       case "rejected":
         color = const Color(0xFFD84315);
-        bg = const Color(0xFFFBE9E7);
+        bg = isDark
+            ? const Color(0xFFD84315).withOpacity(0.18)
+            : const Color(0xFFFBE9E7);
         label = "Rejected";
         icon = Icons.cancel_rounded;
         break;
       default:
-        color = const Color(0xFF757575);
-        bg = const Color(0xFFF5F5F5);
+        color = isDark ? Colors.white60 : const Color(0xFF757575);
+        bg = isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFF5F5F5);
         label = status;
         icon = Icons.info_outline_rounded;
     }
@@ -1213,7 +1265,8 @@ class _BusinessPageState extends State<BusinessPage>
 // so a fresh/unread count actually catches the eye instead of
 // sitting there as a static number. Purely visual — the count
 // value and when it appears/disappears are still driven entirely
-// by _computeOrderCounts() in the page above.
+// by _computeOrderCounts() in the page above. Badge color is the
+// category accent, which already has good contrast in both themes.
 // =====================================================
 class _PulsingBadge extends StatefulWidget {
   final Color color;

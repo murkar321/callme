@@ -16,12 +16,41 @@ import 'package:callme/screens/resort_page.dart';
 import 'package:callme/screens/laundry_service_page.dart';
 import 'package:callme/screens/education_services_page.dart';
 
-// ── Pastel brand palette ────────────────────────────────────────────────────
-const Color _kBgTop = Color(0xFFFDFBFF);
-const Color _kBgBottom = Color(0xFFF1EEFF);
-const Color _kPrimary = Color(0xFF6C5CE7); // pastel indigo
-const Color _kPrimaryDark = Color(0xFF3A2E5C);
+// ── Theme-aware brand palette ───────────────────────────────────────────────
+// These used to be flat `const Color` values, which is exactly why this page
+// stayed light even after switching to dark mode. They're now small helper
+// functions keyed off Theme.of(context).brightness, so every widget that
+// calls them automatically follows whatever ThemeMode SettingsController is
+// currently set to — no per-widget wiring needed beyond calling the helper.
+Color _bgTop(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF1B1922)
+        : const Color(0xFFFDFBFF);
+
+Color _bgBottom(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF121016)
+        : const Color(0xFFF1EEFF);
+
+// Brand indigo reads fine on both light and dark backgrounds, so it stays
+// constant — only the neutrals (backgrounds/text) need to flip.
+const Color _kPrimary = Color(0xFF6C5CE7);
 const Color _kAccentPink = Color(0xFFFF8FAB);
+
+Color _primaryDark(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : const Color(0xFF3A2E5C);
+
+Color _mutedLabel(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? Colors.white70
+        : const Color(0xFF3A2E5C).withOpacity(0.65);
+
+Color _surfaceCard(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF232030)
+        : Colors.white;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -223,6 +252,14 @@ class _HomePageState extends State<HomePage> {
           maxScaleFactor: 1.2,
         );
 
+    // Theme-driven values computed once per build — this is what makes the
+    // page actually flip dark instead of only the bottom nav bar doing so.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color primaryDark = _primaryDark(context);
+    final Color mutedLabel = _mutedLabel(context);
+    final Color appBarBg = _surfaceCard(context);
+    final Color bellIconBg = _kPrimary.withOpacity(isDark ? 0.18 : 0.08);
+
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(textScaler: textScaler),
       child: Scaffold(
@@ -235,18 +272,18 @@ class _HomePageState extends State<HomePage> {
               'assets/logo.png',
               height: 32,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Text(
+              errorBuilder: (_, __, ___) => Text(
                 'Callme Services',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: _kPrimaryDark,
+                  color: primaryDark,
                 ),
               ),
             ),
           ),
           centerTitle: true,
-          backgroundColor: Colors.white,
-          foregroundColor: _kPrimaryDark,
+          backgroundColor: appBarBg,
+          foregroundColor: primaryDark,
           elevation: 0,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
@@ -263,7 +300,7 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Container(
                         decoration: BoxDecoration(
-                          color: _kPrimary.withOpacity(0.08),
+                          color: bellIconBg,
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
@@ -285,8 +322,8 @@ class _HomePageState extends State<HomePage> {
                               decoration: BoxDecoration(
                                 color: _kAccentPink,
                                 borderRadius: BorderRadius.circular(10),
-                                border:
-                                    Border.all(color: Colors.white, width: 1.5),
+                                border: Border.all(
+                                    color: appBarBg, width: 1.5),
                               ),
                               child: Text(
                                 unreadCount > 99 ? '99+' : '$unreadCount',
@@ -310,11 +347,11 @@ class _HomePageState extends State<HomePage> {
         ),
 
         body: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [_kBgTop, _kBgBottom],
+              colors: [_bgTop(context), _bgBottom(context)],
             ),
           ),
           child: SafeArea(
@@ -348,7 +385,7 @@ class _HomePageState extends State<HomePage> {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: _kPrimaryDark.withOpacity(0.65),
+                          color: mutedLabel,
                           letterSpacing: 0.3,
                         ),
                       ),
@@ -417,7 +454,7 @@ class _HomePageState extends State<HomePage> {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: _kPrimaryDark.withOpacity(0.65),
+                          color: mutedLabel,
                           letterSpacing: 0.3,
                         ),
                       ),
@@ -555,9 +592,13 @@ class _LiveSearchBarState extends State<_LiveSearchBar> {
     final showTagline = widget.controller.text.isEmpty;
     final visibleText = _taglines[_phraseIndex].substring(0, _charCount);
 
+    final Color fieldBg = _surfaceCard(context);
+    final Color textColor = _primaryDark(context);
+    final Color taglineColor = _mutedLabel(context);
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: fieldBg,
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
@@ -573,9 +614,10 @@ class _LiveSearchBarState extends State<_LiveSearchBar> {
           TextField(
             controller: widget.controller,
             onChanged: widget.onChanged,
-            style: const TextStyle(color: _kPrimaryDark),
+            style: TextStyle(color: textColor),
             decoration: InputDecoration(
               hintText: showTagline ? '' : 'Search for a service...',
+              hintStyle: TextStyle(color: taglineColor),
               prefixIcon: const Icon(Icons.search, color: _kPrimary),
               filled: true,
               fillColor: Colors.transparent,
@@ -595,7 +637,7 @@ class _LiveSearchBarState extends State<_LiveSearchBar> {
                       child: Text(
                         visibleText,
                         style: TextStyle(
-                          color: _kPrimaryDark.withOpacity(0.45),
+                          color: taglineColor,
                           fontSize: 15,
                         ),
                         overflow: TextOverflow.fade,
@@ -604,7 +646,7 @@ class _LiveSearchBarState extends State<_LiveSearchBar> {
                       ),
                     ),
                     // simple blinking cursor for the "live" feel
-                    _BlinkingCursor(),
+                    const _BlinkingCursor(),
                   ],
                 ),
               ),
@@ -616,6 +658,8 @@ class _LiveSearchBarState extends State<_LiveSearchBar> {
 }
 
 class _BlinkingCursor extends StatefulWidget {
+  const _BlinkingCursor();
+
   @override
   State<_BlinkingCursor> createState() => _BlinkingCursorState();
 }
