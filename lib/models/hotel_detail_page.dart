@@ -75,9 +75,16 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                       return Stack(
                         fit: StackFit.expand,
                         children: [
+                          // ✅ BLUR FIX: FilterQuality.high replaces the
+                          // default FilterQuality.low bilinear filter, which
+                          // looked soft/blurry whenever the source image was
+                          // scaled to fit this box. gaplessPlayback avoids a
+                          // blank flash while swapping pages.
                           Image.asset(
                             _galleryImages[index]['path']!,
                             fit: BoxFit.cover,
+                            filterQuality: FilterQuality.high,
+                            gaplessPlayback: true,
                             errorBuilder: (_, __, ___) => Container(
                               color: Colors.grey.shade200,
                               child: Icon(Icons.image,
@@ -258,9 +265,14 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
+                        // ✅ BLUR FIX: same FilterQuality.high treatment for
+                        // the small thumbnails, which showed the softness
+                        // most obviously since they're scaled down hard.
                         child: Image.asset(
                           _galleryImages[index]['path']!,
                           fit: BoxFit.cover,
+                          filterQuality: FilterQuality.high,
+                          gaplessPlayback: true,
                           errorBuilder: (_, __, ___) => Container(
                             color: Colors.grey.shade200,
                             child: Icon(Icons.image,

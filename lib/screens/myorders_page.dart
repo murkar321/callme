@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -84,11 +85,39 @@ _PaymentMethodConfig _paymentMethodConfig(String method) {
 
 // =============================================================
 // MY ORDERS PAGE  —  StatefulWidget for proper stream lifecycle
+//
+// FIX (NEW): `highlightOrderId` — when navigating here from a
+// notification tap (order accepted / rejected / completed / etc.),
+// pass the affected order's Firestore doc id. This page will:
+//   1. Wait for the orders stream to load and locate that doc
+//      (regardless of its current status — pending, accepted,
+//      rejected, cancelled, completed, enquiry — the lookup is by
+//      orderId only, not by status).
+//   2. Auto-scroll it into view with Scrollable.ensureVisible().
+//   3. Draw a temporary glowing highlight border around that exact
+//      card for a few seconds so it's unmistakable which order
+//      triggered the notification, then fade it back to normal.
+//
+// Call-site example (e.g. from your notification tap / router):
+//
+//   Navigator.push(context, MaterialPageRoute(
+//     builder: (_) => MyOrdersPage(
+//       phone: phone,
+//       highlightOrderId: orderId, // from the notification payload
+//     ),
+//   ));
 // =============================================================
 class MyOrdersPage extends StatefulWidget {
   final String phone;
 
-  const MyOrdersPage({super.key, required this.phone});
+  // FIX (NEW): optional — the exact order to scroll to & highlight.
+  final String? highlightOrderId;
+
+  const MyOrdersPage({
+    super.key,
+    required this.phone,
+    this.highlightOrderId,
+  });
 
   @override
   State<MyOrdersPage> createState() => _MyOrdersPageState();
@@ -109,10 +138,51 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
     'cancelled',
   };
 
+  // ── FIX (NEW): scroll-to-order + highlight machinery ─────────
+  // One GlobalKey per order doc id so Scrollable.ensureVisible()
+  // can find that exact card's RenderObject once it's built.
+  final Map<String, GlobalKey> _cardKeys = {};
+
+  // Guards against re-scrolling on every subsequent stream rebuild
+  // once we've already jumped to the target order once.
+  bool _didScrollToHighlight = false;
+
+  // Which order id is currently glowing. Cleared automatically after
+  // a few seconds by _highlightTimer.
+  String? _highlightedOrderId;
+  Timer? _highlightTimer;
+
+  GlobalKey _keyFor(String orderId) =>
+      _cardKeys.putIfAbsent(orderId, () => GlobalKey());
+
+  void _armHighlight(String orderId) {
+    _highlightTimer?.cancel();
+    setState(() => _highlightedOrderId = orderId);
+    _highlightTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _highlightedOrderId = null);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _initStream();
+    if (widget.highlightOrderId != null) {
+      _highlightedOrderId = widget.highlightOrderId;
+    }
+  }
+
+  // FIX (NEW): if this page is reused (e.g. Navigator replaces args)
+  // with a new highlightOrderId while already mounted, re-arm the
+  // scroll + glow for the new target instead of silently ignoring it.
+  @override
+  void didUpdateWidget(covariant MyOrdersPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.highlightOrderId != null &&
+        widget.highlightOrderId != oldWidget.highlightOrderId) {
+      _didScrollToHighlight = false;
+      _armHighlight(widget.highlightOrderId!);
+    }
   }
 
   void _initStream() {
@@ -123,6 +193,12 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
         .collection('orders')
         .where('userId', isEqualTo: user.uid)
         .snapshots();
+  }
+
+  @override
+  void dispose() {
+    _highlightTimer?.cancel();
+    super.dispose();
   }
 
   void _showSnack(String message, {SnackBarAction? action, Color? bg}) {
@@ -435,7 +511,10 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
   }
 
   // ── Order card ───────────────────────────────────────────────
-  Widget _orderCard(QueryDocumentSnapshot doc, bool isDark) {
+  // FIX (NEW): `isHighlighted` — when true, draws a glowing accent
+  // border/shadow so this exact card stands out from the rest of the
+  // list right after being scrolled into view.
+  Widget _orderCard(QueryDocumentSnapshot doc, bool isDark, {required bool isHighlighted}) {
     final data        = doc.data() as Map<String, dynamic>;
     final schedule    = (data['schedule'] as Map<String, dynamic>?) ?? {};
     final location    = (data['location'] as Map<String, dynamic>?) ?? {};
@@ -452,6 +531,15 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
     final Color cardBg = isDark ? const Color(0xFF232030) : Colors.white;
     final Color titleColor = isDark ? Colors.white : const Color(0xFF111827);
     final Color messageColor = isDark ? Colors.white60 : Colors.grey.shade600;
+
+    // FIX (NEW): the highlight accent always uses the status color
+    // itself (green for accepted, red for rejected, blue for
+    // completed, etc.) so the glow visually reinforces what actually
+    // happened, rather than a single generic highlight color for
+    // every status.
+    const Color highlightBorderFallback = Color(0xFF6C5CE7);
+    final Color highlightColor =
+        isHighlighted ? cfg.color : highlightBorderFallback;
 
     final services = (data['services'] as List?)
             ?.map((e) => e.toString())
@@ -530,16 +618,24 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
       },
       onDismissed: (_) => _deleteWithUndo(doc, status),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 350),
         curve: Curves.easeOut,
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
           color: cardBg,
           borderRadius: BorderRadius.circular(20),
-          border: isPinned
-              ? Border.all(color: Colors.amber.shade600, width: 1.4)
-              : (isDark ? Border.all(color: Colors.white12) : null),
+          border: isHighlighted
+              ? Border.all(color: highlightColor, width: 2.2)
+              : (isPinned
+                  ? Border.all(color: Colors.amber.shade600, width: 1.4)
+                  : (isDark ? Border.all(color: Colors.white12) : null)),
           boxShadow: [
+            if (isHighlighted)
+              BoxShadow(
+                color: highlightColor.withOpacity(0.45),
+                blurRadius: 22,
+                spreadRadius: 1,
+              ),
             BoxShadow(
               color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
               blurRadius: 12,
@@ -550,15 +646,46 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
         child: Column(
           children: [
 
+            // FIX (NEW): small "you're here for this one" ribbon —
+            // only shown while the highlight is active, so it's
+            // obvious even before the reader scans the status banner.
+            if (isHighlighted)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: highlightColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.notifications_active_rounded,
+                        size: 14, color: Colors.white),
+                    const SizedBox(width: 6),
+                    Text(
+                      'This is the order from your notification',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // ── Status banner ────────────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               decoration: BoxDecoration(
                 color: statusBg,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
+                borderRadius: isHighlighted
+                    ? BorderRadius.zero
+                    : const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Row(
                 children: [
@@ -949,6 +1076,29 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
                   return bT.compareTo(aT);
                 });
 
+          // FIX (NEW): once the target order is actually present in
+          // the loaded snapshot, schedule a one-time scroll to it.
+          // Guarded by _didScrollToHighlight so it only fires once —
+          // otherwise every stream update (e.g. a status changing
+          // live) would yank the scroll position back again.
+          final targetId = widget.highlightOrderId;
+          if (targetId != null &&
+              !_didScrollToHighlight &&
+              orders.any((d) => d.id == targetId)) {
+            _didScrollToHighlight = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final ctx = _cardKeys[targetId]?.currentContext;
+              if (ctx != null) {
+                Scrollable.ensureVisible(
+                  ctx,
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeInOut,
+                  alignment: 0.08, // near the top, not dead-center
+                );
+              }
+            });
+          }
+
           if (orders.isEmpty) {
             return Center(
               child: Column(
@@ -985,16 +1135,22 @@ class _MyOrdersPageState extends State<MyOrdersPage> {
             physics: const BouncingScrollPhysics(),
             itemCount: orders.length,
             itemBuilder: (context, index) {
+              final doc = orders[index];
               final showPinnedHeader = index == 0 && pinnedCount > 0;
               final showOthersHeader =
                   pinnedCount > 0 && index == pinnedCount && pinnedCount < orders.length;
+              final isHighlighted = doc.id == _highlightedOrderId;
 
               return Column(
+                // FIX (NEW): key lives on the wrapping Column so
+                // Scrollable.ensureVisible() has a stable, unique
+                // RenderObject to target for this exact order.
+                key: _keyFor(doc.id),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (showPinnedHeader) _sectionHeader('Pinned', isDark),
                   if (showOthersHeader) _sectionHeader('Others', isDark),
-                  _orderCard(orders[index], isDark),
+                  _orderCard(doc, isDark, isHighlighted: isHighlighted),
                 ],
               );
             },

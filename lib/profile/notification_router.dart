@@ -123,20 +123,33 @@ Future<void> _doRoute(NavigatorState navigator, Map<String, dynamic> data) async
       break;
 
     // ── Customer: booking status or provider assigned ─────────────────────────
-    // FIX: phoneNumber is null for email-auth → use email.
+    // FIX (NEW): every one of these payloads carries the affected order's
+    // Firestore doc id (`orderId`), the same field OrderService writes into
+    // every fcm_queue entry it creates. Instead of just opening MyOrdersPage
+    // at the top of the list, we now pass that id through as
+    // `highlightOrderId` so MyOrdersPage scrolls straight to that exact
+    // order and glows its card for a few seconds — no more hunting through
+    // the list to figure out which booking the notification was about.
     case NotificationType.bookingAccepted:
     case NotificationType.bookingRejected:
     case NotificationType.providerFound:
-      final email = FirebaseAuth.instance.currentUser?.email ?? '';
-      if (email.isEmpty) {
-        debugPrint('[NOTIF-ROUTE] ⚠ No email for current user — cannot open MyOrdersPage');
-        return;
-      }
-      navigator.push(
-        MaterialPageRoute(
-          builder: (_) => MyOrdersPage(phone: email),
-        ),
-      );
+      await _routeToCustomerOrder(navigator, data);
+      break;
+
+    // ── Customer: provider generated the job-completion OTP ────────────────────
+    // NEW: sent by the provider dashboard's OTP-gated completion flow
+    // (kWorkInProgress → _OtpDialog) when the provider marks a job as
+    // in-progress and the 6-digit OTP is pushed to the customer. Same
+    // fast path as accepted/rejected/providerFound above — jump straight
+    // to that order in MyOrdersPage and highlight it, since the OTP itself
+    // is delivered in the notification body/tray, not this in-app route.
+    //
+    // NOTE: adjust the string below ('otp_generated') if the actual type
+    // string used when the OTP notification is queued (in the provider
+    // dashboard / order_service.dart) is spelled differently — it should
+    // match exactly what's written into the fcm_queue doc's `type` field.
+    case 'otp_generated':
+      await _routeToCustomerOrder(navigator, data);
       break;
 
     // ── Admin: new provider registration waiting for approval ─────────────────
@@ -161,27 +174,64 @@ Future<void> _doRoute(NavigatorState navigator, Map<String, dynamic> data) async
       );
       break;
 
-    // ── Customer: service completed → leave a review ──────────────────────────
-    // FIX: was missing `const` — FeedbackPage takes no params.
+    // ── Customer: service completed → jump to that order, then leave a review ──
+    // FIX (NEW): previously this pushed straight to FeedbackPage with no
+    // context at all about which booking finished. Now it first opens
+    // MyOrdersPage highlighted on the exact completed order (same as
+    // accepted/rejected/providerFound/OTP above) so the customer can see
+    // what was completed, then routes on to FeedbackPage so they can leave
+    // a review right after.
     case NotificationType.serviceCompleted:
+      await _routeToCustomerOrder(navigator, data);
       navigator.push(
-        MaterialPageRoute(builder: (_) =>  FeedbackPage()),
+        MaterialPageRoute(builder: (_) => FeedbackPage()),
       );
       break;
 
     // ── Fallback ──────────────────────────────────────────────────────────────
+    // FIX: this used to reference undefined variables (`context`, `phone`,
+    // `orderId`) and would fail to compile. Rewritten to use the same
+    // email-lookup + orderId-from-payload pattern as everywhere else in
+    // this file.
     default:
-      final email = FirebaseAuth.instance.currentUser?.email ?? '';
-      if (email.isEmpty) {
-        debugPrint('[NOTIF-ROUTE] ⚠ No email — fallback navigation skipped');
-        return;
-      }
-      navigator.push(
-        MaterialPageRoute(
-          builder: (_) => MyOrdersPage(phone: email),
-        ),
-      );
+      await _routeToCustomerOrder(navigator, data);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _routeToCustomerOrder
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared helper for every customer-facing notification that refers to a
+// specific order (accepted / rejected / providerFound / OTP generated /
+// serviceCompleted / and the generic fallback). Pulls `orderId` out of the
+// notification payload and opens MyOrdersPage with `highlightOrderId` set,
+// so the page auto-scrolls to and glows that exact order's card instead of
+// just landing on the top of the list.
+// ─────────────────────────────────────────────────────────────────────────────
+Future<void> _routeToCustomerOrder(
+  NavigatorState navigator,
+  Map<String, dynamic> data,
+) async {
+  final email = FirebaseAuth.instance.currentUser?.email ?? '';
+  if (email.isEmpty) {
+    debugPrint('[NOTIF-ROUTE] ⚠ No email for current user — cannot open MyOrdersPage');
+    return;
+  }
+
+  final orderId = data['orderId']?.toString().trim() ?? '';
+  if (orderId.isEmpty) {
+    debugPrint('[NOTIF-ROUTE] ⚠ Payload missing orderId — opening MyOrdersPage without highlight');
+  }
+
+  debugPrint('[NOTIF-ROUTE] → MyOrdersPage (highlightOrderId=$orderId)');
+  navigator.push(
+    MaterialPageRoute(
+      builder: (_) => MyOrdersPage(
+        phone: email,
+        highlightOrderId: orderId.isEmpty ? null : orderId,
+      ),
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

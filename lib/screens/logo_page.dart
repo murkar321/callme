@@ -155,7 +155,12 @@ class _LogoPageState extends State<LogoPage>
             children: [
               SizedBox(
                 width: 200,
-                height: 200,
+                // Reduced from 200 -> 90. The logo box was a 200x200
+                // square, but the "Callme" wordmark is much shorter than
+                // it is wide, so BoxFit.contain was centering it inside
+                // a tall box and leaving a large empty band below it.
+                // Tightening this height removes that dead space.
+                height: 90,
                 child: AnimatedBuilder(
                   animation: _controller,
                   builder: (context, child) {
@@ -172,7 +177,7 @@ class _LogoPageState extends State<LogoPage>
                               child: Image.asset(
                                 'assets/logo.png',
                                 width: 200,
-                                height: 200,
+                                height: 90,
                                 fit: BoxFit.contain,
                               ),
                             ),
@@ -186,7 +191,7 @@ class _LogoPageState extends State<LogoPage>
                               child: Image.asset(
                                 'assets/logo.png',
                                 width: 200,
-                                height: 200,
+                                height: 90,
                                 fit: BoxFit.contain,
                               ),
                             ),
@@ -197,7 +202,8 @@ class _LogoPageState extends State<LogoPage>
                   },
                 ),
               ),
-              const SizedBox(height: 4),
+              // Removed the extra SizedBox(height: 4) gap that sat
+              // between the logo box and the text.
               AnimatedBuilder(
                 animation: _controller,
                 builder: (context, child) {

@@ -396,6 +396,13 @@ class _HomePageState extends State<HomePage> {
                   // Height bumped up a bit + FittedBox inside CategoryCard
                   // guarantees this never overflows, even with larger
                   // system font scaling.
+                  //
+                  // NOTE: tapping a chip now navigates straight to that
+                  // service's page — same behavior as tapping a vertical
+                  // card below. It still updates `selectedCategory` first
+                  // (so the vertical list is filtered/highlighted if the
+                  // user backs out of the pushed page), then pushes the
+                  // matching service page via `_navigateToService`.
                   SizedBox(
                     height: 130,
                     child: ListView.builder(
@@ -422,10 +429,13 @@ class _HomePageState extends State<HomePage> {
                             );
                           },
                           child: GestureDetector(
-                            onTap: () => setState(() {
-                              selectedCategory =
-                                  isSelected ? '' : category.name;
-                            }),
+                            onTap: () {
+                              setState(() {
+                                selectedCategory =
+                                    isSelected ? '' : category.name;
+                              });
+                              _navigateToService(category.name);
+                            },
                             child: Padding(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 6),
