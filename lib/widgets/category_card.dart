@@ -14,7 +14,9 @@ class CategoryCard extends StatefulWidget {
   /// Layout
   final bool showName;
 
-  /// Navigation callback
+  /// Navigation callback — used by BOTH the horizontal chip and the
+  /// vertical list/grid card, so tapping either always fires the same
+  /// navigation logic in HomePage (_navigateToService).
   final VoidCallback? onTap;
 
   /// Adaptive width for the horizontal chip card.
@@ -238,7 +240,11 @@ class _CategoryCardState extends State<CategoryCard> {
       );
     }
 
-    /// 🔥 Tactile press animation for a bit of "liveness"
+    /// 🔥 Tactile press animation for a bit of "liveness".
+    /// widget.onTap fires the SAME callback whether this card is used
+    /// as a horizontal chip or a vertical list/grid tile — HomePage is
+    /// what decides the destination via _navigateToService, so both
+    /// layouts always resolve to the identical service page.
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) => setState(() => _pressed = false),

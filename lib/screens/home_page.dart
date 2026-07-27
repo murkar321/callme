@@ -174,6 +174,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ── Navigate to the correct page for each service ────────────────────────
+  // Used by BOTH the horizontal quick-pick chips and the vertical
+  // "Explore services" list/grid, so tapping a category always lands on
+  // the exact same destination page regardless of which section it was
+  // tapped from.
   Future<void> _navigateToService(String serviceName) async {
     Widget page;
 
@@ -397,12 +401,13 @@ class _HomePageState extends State<HomePage> {
                   // guarantees this never overflows, even with larger
                   // system font scaling.
                   //
-                  // NOTE: tapping a chip now navigates straight to that
-                  // service's page — same behavior as tapping a vertical
-                  // card below. It still updates `selectedCategory` first
-                  // (so the vertical list is filtered/highlighted if the
-                  // user backs out of the pushed page), then pushes the
-                  // matching service page via `_navigateToService`.
+                  // Tapping a chip navigates straight to that service's
+                  // page via `_navigateToService` — the SAME function the
+                  // vertical list below uses, so both sections always
+                  // land on the identical destination page for a given
+                  // category. It also updates `selectedCategory` first
+                  // (so the vertical list stays filtered/highlighted if
+                  // the user backs out of the pushed page).
                   SizedBox(
                     height: 130,
                     child: ListView.builder(
@@ -428,24 +433,22 @@ class _HomePageState extends State<HomePage> {
                               child: child,
                             );
                           },
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                selectedCategory =
-                                    isSelected ? '' : category.name;
-                              });
-                              _navigateToService(category.name);
-                            },
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 6),
-                              child: CategoryCard(
-                                name: category.name,
-                                imagePath: category.imagePath,
-                                icon: _iconFor(category.name),
-                                showName: true,
-                                cardWidth: chipWidth,
-                              ),
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 6),
+                            child: CategoryCard(
+                              name: category.name,
+                              imagePath: category.imagePath,
+                              icon: _iconFor(category.name),
+                              showName: true,
+                              cardWidth: chipWidth,
+                              onTap: () {
+                                setState(() {
+                                  selectedCategory =
+                                      isSelected ? '' : category.name;
+                                });
+                                _navigateToService(category.name);
+                              },
                             ),
                           ),
                         );
@@ -472,6 +475,11 @@ class _HomePageState extends State<HomePage> {
                   ),
 
                   // 🔹 VERTICAL LIST / GRID (adaptive: grid on wide screens)
+                  // Same `_navigateToService(category.name)` call as the
+                  // horizontal chips above — tapping "Salon" here fetches
+                  // the provider and opens SalonPage; any other category
+                  // opens its matching static page. Identical destination
+                  // to tapping the same category as a chip.
                   Expanded(
                     child: isTablet
                         ? GridView.builder(
