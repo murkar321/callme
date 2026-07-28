@@ -19,6 +19,14 @@ class _ContactUsPageState extends State<ContactUsPage> {
   static const String _callNumber = '+918668425211'; // Direct dialer format
   static const String _emailAddress = 'allinone@gmail.com';
 
+  // ── Dark theme tokens ────────────────────────────────────────────────────
+  static const Color _bgColor = Color(0xFF0F1115);
+  static const Color _surface = Color(0xFF1A1D24);
+  static const Color _surfaceAlt = Color(0xFF20242C);
+  static const Color _border = Color(0xFF2A2E37);
+  static const Color _textPrimary = Color(0xFFF1F3F5);
+  static const Color _textMuted = Color(0xFF9AA0AC);
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -101,7 +109,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: success ? Colors.green.shade600 : Colors.red.shade600,
+        backgroundColor: success ? Colors.green.shade700 : Colors.red.shade700,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(16),
@@ -113,16 +121,16 @@ class _ContactUsPageState extends State<ContactUsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: _bgColor,
       appBar: AppBar(
-        elevation: 1,
-        backgroundColor: Colors.white,
+        elevation: 0,
+        backgroundColor: _bgColor,
         title: const Text(
           'Contact Us',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+          style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: const IconThemeData(color: _textPrimary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -134,7 +142,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF1565C0), Color(0xFF42A5F5)],
+                  colors: [Color(0xFF0D3B77), Color(0xFF1E63B0)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -169,7 +177,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
                   child: _actionButton(
                     icon: Icons.call,
                     label: 'Call',
-                    color: const Color(0xFF1E88E5),
+                    color: const Color(0xFF1565C0),
                     onTap: _makeCall,
                   ),
                 ),
@@ -178,7 +186,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
                   child: _actionButton(
                     icon: Icons.chat,
                     label: 'WhatsApp',
-                    color: const Color(0xFF25D366),
+                    color: const Color(0xFF1D9A54),
                     onTap: _openWhatsApp,
                   ),
                 ),
@@ -187,7 +195,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
                   child: _actionButton(
                     icon: Icons.email_outlined,
                     label: 'Email',
-                    color: const Color(0xFF1565C0),
+                    color: const Color(0xFF0D3B77),
                     onTap: _openEmail,
                   ),
                 ),
@@ -222,11 +230,12 @@ class _ContactUsPageState extends State<ContactUsPage> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _surface,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _border, width: 1),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withOpacity(0.35),
                     blurRadius: 12,
                     offset: const Offset(0, 6),
                   ),
@@ -240,12 +249,16 @@ class _ContactUsPageState extends State<ContactUsPage> {
                   children: [
                     const Text(
                       'Send us a message',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: _textPrimary,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     const Text(
                       'We\'ll reply via WhatsApp or email.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: _textMuted),
                     ),
                     const SizedBox(height: 16),
                     _formField(
@@ -298,7 +311,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
                         ),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          backgroundColor: const Color(0xFF25D366),
+                          backgroundColor: const Color(0xFF1D9A54),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -372,14 +385,14 @@ class _ContactUsPageState extends State<ContactUsPage> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surface,
         borderRadius: BorderRadius.circular(14),
         border: onTap != null
-            ? Border.all(color: Colors.blue.shade50, width: 1.5)
-            : null,
+            ? Border.all(color: const Color(0xFF1E3A5F), width: 1.5)
+            : Border.all(color: _border, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(0.3),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -395,8 +408,8 @@ class _ContactUsPageState extends State<ContactUsPage> {
                 children: [
                   CircleAvatar(
                     radius: 22,
-                    backgroundColor: Colors.blue.withOpacity(0.1),
-                    child: Icon(icon, color: Colors.blue),
+                    backgroundColor: const Color(0xFF4A90D9).withOpacity(0.15),
+                    child: Icon(icon, color: const Color(0xFF4A90D9)),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -405,7 +418,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
                       children: [
                         Text(
                           title,
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          style: const TextStyle(fontSize: 12, color: _textMuted),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -413,6 +426,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
+                            color: _textPrimary,
                           ),
                         ),
                       ],
@@ -421,7 +435,7 @@ class _ContactUsPageState extends State<ContactUsPage> {
                   if (onTap != null && !trailingCallButton) ...[
                     const SizedBox(width: 8),
                     Icon(Icons.arrow_forward_ios_rounded,
-                        size: 14, color: Colors.grey.shade400),
+                        size: 14, color: _textMuted.withOpacity(0.6)),
                   ],
                 ],
               ),
@@ -436,10 +450,10 @@ class _ContactUsPageState extends State<ContactUsPage> {
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: const Color(0xFF1D9A54).withOpacity(0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.call, color: Colors.green, size: 20),
+                child: const Icon(Icons.call, color: Color(0xFF3DDC84), size: 20),
               ),
             ),
           ],
@@ -463,11 +477,13 @@ class _ContactUsPageState extends State<ContactUsPage> {
         maxLines: maxLines,
         keyboardType: keyboardType,
         validator: validator,
+        style: const TextStyle(color: _textPrimary),
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon, size: 20, color: Colors.grey.shade500),
+          labelStyle: const TextStyle(color: _textMuted),
+          prefixIcon: Icon(icon, size: 20, color: _textMuted),
           filled: true,
-          fillColor: const Color(0xFFF5F7FB),
+          fillColor: _surfaceAlt,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: OutlineInputBorder(
@@ -480,15 +496,15 @@ class _ContactUsPageState extends State<ContactUsPage> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+            borderSide: const BorderSide(color: Color(0xFF4A90D9), width: 1.5),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.red, width: 1.5),
+            borderSide: const BorderSide(color: Color(0xFFE57373), width: 1.5),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.red, width: 1.5),
+            borderSide: const BorderSide(color: Color(0xFFE57373), width: 1.5),
           ),
         ),
       ),

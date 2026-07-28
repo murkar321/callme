@@ -20,12 +20,14 @@ class _FeedbackPageState extends State<FeedbackPage> {
   int _rating = 0;
   bool _isSending = false;
 
-  // ── Design tokens ──────────────────────────────────────────────────────────
-  static const Color _brandBlue = Color(0xFF3B5BDB);
-  static const Color _bgColor = Color(0xFFF0F4FF);
-    
-  static const Color _textPrimary = Color(0xFF1A1D2E);
-  static const Color _textMuted = Color(0xFF8B92A5);
+  // ── Design tokens (dark) ──────────────────────────────────────────────────
+  static const Color _brandBlue = Color(0xFF5B7FE0);
+  static const Color _bgColor = Color(0xFF0F1115);
+  static const Color _cardColor = Color(0xFF1A1D24);
+  static const Color _fieldFill = Color(0xFF20242C);
+
+  static const Color _textPrimary = Color(0xFFF1F3F5);
+  static const Color _textMuted = Color(0xFF9AA0AC);
 
   static const List<String> _labels = [
     '', 'Terrible', 'Poor', 'Okay', 'Good', 'Excellent',
@@ -33,11 +35,11 @@ class _FeedbackPageState extends State<FeedbackPage> {
   static const List<String> _emojis = ['', '😣', '😕', '😐', '😊', '🤩'];
   static const List<Color> _starColors = [
     Colors.transparent,
-    Color(0xFFE53935),
-    Color(0xFFFF7043),
-    Color(0xFFFFB300),
-    Color(0xFF43A047),
-    Color(0xFF1E88E5),
+    Color(0xFFE57373),
+    Color(0xFFFF8A65),
+    Color(0xFFFFCA5C),
+    Color(0xFF66BB6A),
+    Color(0xFF5B9EE8),
   ];
 
   Color get _accent => _rating > 0 ? _starColors[_rating] : _brandBlue;
@@ -342,8 +344,8 @@ class _RatingCard extends StatelessWidget {
                             : Icons.star_outline_rounded,
                         size: 40,
                         color: filled
-                            ? const Color(0xFFFFB300)
-                            : Colors.grey.shade300,
+                            ? const Color(0xFFFFCA5C)
+                            : const Color(0xFF3A3F4B),
                       ),
                     ),
                   ),
@@ -365,7 +367,7 @@ class _RatingCard extends StatelessWidget {
                     key: const ValueKey('empty'),
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey.shade400,
+                      color: _FeedbackPageState._textMuted,
                     ),
                   ),
           ),
@@ -386,9 +388,9 @@ class _RatingPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.11),
+        color: color.withOpacity(0.16),
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withOpacity(0.4)),
       ),
       child: Text(
         label,
@@ -447,10 +449,12 @@ class _TagSection extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                 decoration: BoxDecoration(
-                  color: sel ? accent.withOpacity(0.1) : Colors.white,
+                  color: sel
+                      ? accent.withOpacity(0.16)
+                      : _FeedbackPageState._cardColor,
                   borderRadius: BorderRadius.circular(32),
                   border: Border.all(
-                    color: sel ? accent : Colors.grey.shade200,
+                    color: sel ? accent : const Color(0xFF2A2E37),
                     width: 1.5,
                   ),
                 ),
@@ -460,7 +464,7 @@ class _TagSection extends StatelessWidget {
                     fontSize: 12,
                     fontWeight:
                         sel ? FontWeight.w700 : FontWeight.w400,
-                    color: sel ? accent : Colors.grey.shade600,
+                    color: sel ? accent : _FeedbackPageState._textMuted,
                   ),
                 ),
               ),
@@ -522,9 +526,11 @@ class _FeedbackField extends StatelessWidget {
               hintText:
                   'Tell us what you liked or what can be improved…',
               hintStyle: TextStyle(
-                  color: Colors.grey.shade400, fontSize: 13, height: 1.5),
+                  color: _FeedbackPageState._textMuted.withOpacity(0.7),
+                  fontSize: 13,
+                  height: 1.5),
               filled: true,
-              fillColor: const Color(0xFFF4F6FC),
+              fillColor: _FeedbackPageState._fieldFill,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide.none,
@@ -624,11 +630,12 @@ class _Card extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _FeedbackPageState._cardColor,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF2A2E37), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(0.35),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
