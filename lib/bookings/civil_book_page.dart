@@ -3,6 +3,11 @@ import 'package:callme/provider/order_service.dart';
 import 'package:callme/screens/bottom_nav_page.dart';
 import 'package:callme/screens/map_picker_page.dart';
 
+// ⚠️ UPDATE THIS PATH to wherever SettingsController actually lives in your
+// project (e.g. package:callme/controller/settings_controller.dart or
+// package:callme/services/settings_controller.dart).
+import 'package:callme/payment/settings_controller.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -55,12 +60,25 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   bool _isLoadingProvider = true;
   bool _phoneComplete     = false;
 
+  // ✅ Auto-fill + edit-lock state. When a value is successfully pulled
+  // from the `users` collection, the field starts locked (read-only,
+  // shown with an edit pencil) so users don't accidentally retype details
+  // that are already correct — tapping the pencil unlocks it for editing.
+  bool _nameLocked  = false;
+  bool _phoneLocked = false;
+
   LatLng? _pickedLatLng;
   String  _enquiryId = '';
 
   String? _providerId;
   String? _providerName;
   String? _noProviderMessage;
+
+  // ✅ Dark-mode flag, recomputed every build from SettingsController so
+  // it stays in sync with whatever the user picks on the Settings page
+  // (including "System" mode, which is resolved against the platform's
+  // current brightness).
+  bool _isDark = false;
 
   // ✅ The canonical category resolved from what the customer picked —
   // reused as-is when the order is placed, so what we matched a provider
@@ -69,36 +87,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   // resolveCanonicalCategory()/categoryMatchFuzzy() pipeline in
   // order_service.dart).
   String _resolvedCategory = '';
-
-  // ═════════════════════════════════════════════════════════════════════
-  // ✅ FIX (root cause of "civil enquiries never become available to any
-  // provider"):
-  //
-  // resolveCanonicalCategory() in order_service.dart is DESIGNED to
-  // collapse a specific pick (e.g. "Kitchen Renovation") down to its
-  // broad PARENT category (e.g. "Renovation") — that's how it snaps
-  // free-text onto a category providers can register under. But this
-  // page used to throw the specific pick away completely once that
-  // happened, and never sent a `subCategory` to OrderService.placeOrder()
-  // at all.
-  //
-  // Category matching in order_service.dart (`categoryMatch()`) is a
-  // STRICT, EXACT, normalized match — there's no fuzzy word-overlap
-  // fallback. So a provider who registered specifically under the
-  // "Kitchen Renovation" subCategory — without separately also ticking
-  // the broad "Renovation" main category — could NEVER exact-match an
-  // order that only ever carried "Renovation". That order stayed
-  // invisible to that provider's Available tab and no notification was
-  // ever sent, no matter how correctly the provider had registered.
-  //
-  // Fix: keep BOTH values —
-  //   _resolvedCategory    → the broad parent, matches providers
-  //                          registered under the main category
-  //   _resolvedSubCategory → the exact original pick, matches providers
-  //                          registered under that specific subCategory
-  // — and send both to OrderService.placeOrder(). Either kind of
-  // provider registration will now match.
-  // ═════════════════════════════════════════════════════════════════════
   String _resolvedSubCategory = '';
 
   late final AnimationController _pageAnim;
@@ -109,6 +97,18 @@ class _CivilBookingPageState extends State<CivilBookingPage>
 
   static const _accent  = Color(0xFF6A5AE0);
   static const _accent2 = Color(0xFF8F7CFF);
+
+  // ── Theme tokens (light / dark aware) ────────────────────────────────────
+  Color get _bgColor      => _isDark ? const Color(0xFF121218) : const Color(0xFFF0F1F8);
+  Color get _cardColor    => _isDark ? const Color(0xFF1E1E27) : Colors.white;
+  Color get _cardBorder   => _isDark ? const Color(0xFF2C2C38) : Colors.grey.shade200;
+  Color get _inputFill    => _isDark ? const Color(0xFF262631) : const Color(0xFFF5F6FC);
+  Color get _textPrimary  => _isDark ? const Color(0xFFEDEDF3) : const Color(0xFF1A1A2E);
+  Color get _textSecondary=> _isDark ? const Color(0xFFA1A1B5) : Colors.grey.shade500;
+  Color get _textFaint    => _isDark ? const Color(0xFF7B7B90) : Colors.grey.shade400;
+  Color get _dividerColor => _isDark ? const Color(0xFF2A2A36) : Colors.grey.shade100;
+  Color get _shadowColor  => _isDark ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.05);
+  Color get _chipBg       => _isDark ? const Color(0xFF262631) : Colors.grey.shade100;
 
   // ── Init ─────────────────────────────────────────────────────────────────
   @override
@@ -126,19 +126,17 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     _pageAnim.forward();
     _phoneController.addListener(_onPhoneChanged);
 
-    // Pre-fill phone
+    // Pre-fill phone from FirebaseAuth first (fast, no network round trip)…
     final user = FirebaseAuth.instance.currentUser;
     if (user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty) {
       final digits = user.phoneNumber!.replaceAll(RegExp(r'[^\d]'), '');
       _phoneController.text = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
     }
 
-    // ✅ FIX: this used to only happen inside _loadProvider(), which is
-    // SKIPPED below whenever initialProviderId is supplied — meaning
-    // _resolvedCategory/_resolvedSubCategory were NEVER set on that path
-    // and the order was later saved with an unresolved/empty category.
-    // Resolving it here, unconditionally, up front, guarantees it always
-    // runs regardless of which branch below executes.
+    // …then refine/complete from the `users` collection (name + phone),
+    // which also drives the lock state on those fields.
+    _fetchUserProfile();
+
     _resolveCategorySelection();
 
     if (widget.initialProviderId != null && widget.initialProviderId!.isNotEmpty) {
@@ -147,6 +145,42 @@ class _CivilBookingPageState extends State<CivilBookingPage>
       _fetchProviderName(widget.initialProviderId!);
     } else {
       _loadProvider();
+    }
+  }
+
+  // ✅ Pulls name + phone from the `users` collection (doc ID = the
+  // logged-in user's email, per the app's existing schema — see
+  // notification_service.dart / order_service.dart FCM mirroring) and
+  // pre-fills + locks whichever fields come back non-empty. If a field
+  // is already filled some other way, or the lookup finds nothing, it's
+  // simply left editable.
+  Future<void> _fetchUserProfile() async {
+    try {
+      final user  = FirebaseAuth.instance.currentUser;
+      final email = user?.email?.trim().toLowerCase();
+      if (email == null || email.isEmpty) return;
+
+      final doc = await FirebaseFirestore.instance.collection('users').doc(email).get();
+      if (!mounted || !doc.exists) return;
+
+      final data          = doc.data() ?? {};
+      final fetchedName   = (data['name'] ?? '').toString().trim();
+      final fetchedPhone  = (data['phone'] ?? '').toString().trim();
+
+      setState(() {
+        if (fetchedName.isNotEmpty && _nameController.text.trim().isEmpty) {
+          _nameController.text = fetchedName;
+          _nameLocked = true;
+        }
+        if (fetchedPhone.isNotEmpty && _phoneController.text.trim().isEmpty) {
+          final digits = fetchedPhone.replaceAll(RegExp(r'[^\d]'), '');
+          _phoneController.text = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+          _phoneLocked = true;
+        }
+      });
+      _onPhoneChanged();
+    } catch (e) {
+      debugPrint('[Civil] Could not fetch user profile: $e');
     }
   }
 
@@ -185,14 +219,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     } catch (_) {}
   }
 
-  /// ✅ FIX — see the big comment above `_resolvedSubCategory` for the
-  /// full explanation. Resolves what this booking is "about" into BOTH a
-  /// parent `_resolvedCategory` and (when applicable) a specific
-  /// `_resolvedSubCategory`, instead of collapsing everything down to
-  /// just the parent and losing the customer's specific pick. Called
-  /// exactly once, unconditionally, from initState() — not just inside
-  /// _loadProvider() — so it always runs regardless of whether this page
-  /// was opened with an initialProviderId or not.
   void _resolveCategorySelection() {
     final normalizedServiceType = widget.serviceType.trim().toLowerCase();
     final serviceNames = _hasCartItems
@@ -204,11 +230,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     final rawCategoryInput =
         serviceNames.isNotEmpty ? serviceNames.first : widget.serviceName;
 
-    // Does this raw pick match a specific, registered sub-service? If so,
-    // keep BOTH its parent (so providers registered at the main-category
-    // level still match) AND the raw item itself as the subCategory (so
-    // providers registered specifically under that sub-service — without
-    // necessarily also ticking the parent — still match too).
     final subParent =
         parentCategoryForSubService(rawCategoryInput, normalizedServiceType);
 
@@ -216,10 +237,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
       _resolvedCategory    = subParent;
       _resolvedSubCategory = cleanSubCategory(rawCategoryInput);
     } else {
-      // No specific sub-service recognized — resolveCanonicalCategory()
-      // snaps whatever the user picked onto the exact category string
-      // providers register under (serviceConfigs). The SAME resolver
-      // OrderService.placeOrder() uses, so this stays consistent.
       _resolvedCategory    = resolveCanonicalCategory(rawCategoryInput, normalizedServiceType);
       _resolvedSubCategory = '';
     }
@@ -228,12 +245,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         'subCategory="$_resolvedSubCategory" from raw="$rawCategoryInput"');
   }
 
-  /// Everything this booking is "about", in the shape order_service.dart's
-  /// categoryMatchFuzzy()/orderCategoryCandidates() expect. Used only to
-  /// find a provider to DISPLAY in the header while _loadProvider() runs —
-  /// the actual fan-out to every matching provider still happens
-  /// independently inside OrderService.placeOrder(), so this lookup never
-  /// locks the order to whichever provider it happens to find first.
   Map<String, dynamic> _orderLikeDataForLookup(String normalizedServiceType) {
     final serviceNames = _hasCartItems
         ? _cartItems.map((e) => e.name).toList()
@@ -255,27 +266,18 @@ class _CivilBookingPageState extends State<CivilBookingPage>
 
     try {
       final normalizedServiceType = widget.serviceType.trim().toLowerCase();
-      // Category/subCategory were already resolved once in initState()
-      // via _resolveCategorySelection() — reuse that instead of
-      // resolving it a second time here.
       final orderLikeData = _orderLikeDataForLookup(normalizedServiceType);
 
       debugPrint('[Civil] serviceType="$normalizedServiceType" '
           'resolvedCategory="$_resolvedCategory" '
           'resolvedSubCategory="$_resolvedSubCategory"');
 
-      // Primary: fast indexed query — exact serviceType + approved.
       final primarySnap = await FirebaseFirestore.instance
           .collection('providers')
           .where('status', isEqualTo: 'approved')
           .where('serviceType', isEqualTo: normalizedServiceType)
           .get();
 
-      // Fallback: broad scan of ALL approved providers, filtered
-      // client-side via normalizeServiceType() — rescues providers whose
-      // serviceType field has different casing/spacing. Same pattern
-      // OrderService._notifyMatchingProviders() uses, so lookup here and
-      // fan-out later never disagree on who counts as a "civil" provider.
       final fallbackSnap = await FirebaseFirestore.instance
           .collection('providers')
           .where('status', isEqualTo: 'approved')
@@ -298,9 +300,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
       debugPrint('[Civil] ${candidates.length} approved $normalizedServiceType '
           'provider(s) to check');
 
-      // Stage A — prefer a provider whose registered categories/subCategories
-      // actually match this booking, via the shared categoryMatchFuzzy()
-      // pipeline (now checking both category AND subCategory candidates).
       for (final doc in candidates) {
         final data    = doc.data();
         final cats    = providerCategories(data);
@@ -320,9 +319,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         }
       }
 
-      // Stage B — no provider has this exact category configured yet.
-      // Fall back to any approved provider registered under this
-      // serviceType so the enquiry still reaches someone.
       if (candidates.isNotEmpty) {
         debugPrint('[Civil] no category match — falling back to first '
             'approved $normalizedServiceType provider: ${candidates.first.id}');
@@ -330,7 +326,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         return;
       }
 
-      // Nothing at all.
       if (mounted) {
         setState(() {
           _noProviderMessage =
@@ -367,38 +362,12 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   int            get _cartTotal =>
       _cartItems.fold(0, (sum, item) => sum + item.price * (item.quantity));
 
-  // =====================================================
-  // ✅ FIX — CLEAR CART AFTER BOOKING (the actual bug)
-  //
-  // What was happening before:
-  //   `widget.cart` here is NOT the live cart storage — it's whatever
-  //   `Cart.getItems(service)` in cart.dart handed to CartPage, and that
-  //   method does `_items.where(...).toList()`. `.toList()` allocates a
-  //   BRAND NEW list. So `widget.cart` is a disconnected *copy*.
-  //   Calling `widget.cart!.clear()` only emptied that copy — the real
-  //   `Cart._items` store (a static list inside cart.dart) was never
-  //   touched, so the cart badge/count everywhere else in the app kept
-  //   showing the old items after a successful booking.
-  //
-  //   On top of that, `_goHome()` uses `Navigator.pushAndRemoveUntil(...)`
-  //   straight to BottomNavPage instead of popping back to CartPage with
-  //   `true` — so CartPage's own fallback
-  //   (`if (result == true) Cart.clear(widget.service)`) never even ran
-  //   for the Civil flow, since CartPage itself is wiped off the stack
-  //   before that check executes.
-  //
-  // The fix: clear the real `Cart` singleton directly, using the exact
-  // key the items were added under. `widget.serviceName` is passed in by
-  // CartPage as `widget.service` (its own cart key, e.g. "Civil" — see
-  // `kCivilServiceKey` in civil_services_page.dart), so it's guaranteed
-  // to match.
-  // =====================================================
   void _clearCartAfterBooking() {
     final cartKey = widget.serviceName.trim();
     if (cartKey.isEmpty) return;
 
-    Cart.clear(cartKey);          // ✅ clears the REAL cart store
-    widget.cart?.clear();         // harmless: also clears the local copy
+    Cart.clear(cartKey);
+    widget.cart?.clear();
 
     debugPrint('[Civil] Cart cleared after booking (Done tapped) for "$cartKey".');
   }
@@ -406,6 +375,20 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    // ✅ Dark theme: reacts live to SettingsController, resolving
+    // ThemeMode.system against the current platform brightness.
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: SettingsController.instance.themeMode,
+      builder: (context, mode, _) {
+        final platformBrightness = MediaQuery.platformBrightnessOf(context);
+        _isDark = mode == ThemeMode.dark ||
+            (mode == ThemeMode.system && platformBrightness == Brightness.dark);
+        return _buildScaffold(context);
+      },
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(
         textScaler: TextScaler.linear(
@@ -413,7 +396,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         ),
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F1F8),
+        backgroundColor: _bgColor,
         body: _isSuccess ? _buildSuccessView() : _buildMainView(),
         bottomNavigationBar: _isSuccess ? null : _buildBottomBar(),
       ),
@@ -444,7 +427,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       const CircularProgressIndicator(color: _accent),
       const SizedBox(height: 16),
-      Text('Finding a provider…', style: TextStyle(color: Colors.grey.shade500)),
+      Text('Finding a provider…', style: TextStyle(color: _textSecondary)),
     ]),
   );
 
@@ -500,10 +483,10 @@ class _CivilBookingPageState extends State<CivilBookingPage>
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _accent.withOpacity(0.15)),
-        boxShadow: [BoxShadow(blurRadius: 14, offset: const Offset(0, 5), color: Colors.black.withOpacity(0.05))],
+        border: Border.all(color: _accent.withOpacity(_isDark ? 0.28 : 0.15)),
+        boxShadow: [BoxShadow(blurRadius: 14, offset: const Offset(0, 5), color: _shadowColor)],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
@@ -539,18 +522,18 @@ class _CivilBookingPageState extends State<CivilBookingPage>
           child: Column(children: [
             ..._cartItems.asMap().entries.map((e) => Column(children: [
               _buildCartItemRow(e.value, isSmall: isSmall),
-              if (e.key < _cartItems.length - 1) Divider(height: 20, color: Colors.grey.shade100),
+              if (e.key < _cartItems.length - 1) Divider(height: 20, color: _dividerColor),
             ])),
             const SizedBox(height: 4),
             Container(
               margin: const EdgeInsets.only(top: 8),
               padding: EdgeInsets.symmetric(horizontal: isSmall ? 12 : 14, vertical: isSmall ? 10 : 12),
-              decoration: BoxDecoration(color: _accent.withOpacity(0.06), borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(color: _accent.withOpacity(_isDark ? 0.14 : 0.06), borderRadius: BorderRadius.circular(14)),
               child: Row(children: [
                 const Icon(Icons.currency_rupee_rounded, color: _accent, size: 16),
                 const SizedBox(width: 6),
-                const Expanded(child: Text('Estimated Total',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF2D2D3A)))),
+                Expanded(child: Text('Estimated Total',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: _textPrimary))),
                 Text('₹$_cartTotal',
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: _accent)),
               ]),
@@ -561,7 +544,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
               const SizedBox(width: 6),
               Expanded(child: Text(
                 'Prices are indicative. Final quote confirmed by provider.',
-                style: TextStyle(color: Colors.amber.shade800, fontSize: 11, height: 1.4, fontWeight: FontWeight.w500),
+                style: TextStyle(color: Colors.amber.shade700, fontSize: 11, height: 1.4, fontWeight: FontWeight.w500),
               )),
             ]),
           ]),
@@ -577,10 +560,10 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         borderRadius: BorderRadius.circular(10),
         child: Container(
           width: isSmall ? 48 : 56, height: isSmall ? 48 : 56,
-          color: Colors.grey.shade100,
+          color: _chipBg,
           child: item.image != null
               ? Image.asset(item.image!, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(Icons.image_outlined, color: Colors.grey.shade400, size: 22))
+                  errorBuilder: (_, __, ___) => Icon(Icons.image_outlined, color: _textFaint, size: 22))
               : Icon(Icons.construction_rounded, color: _accent.withOpacity(0.4), size: 22),
         ),
       ),
@@ -588,23 +571,23 @@ class _CivilBookingPageState extends State<CivilBookingPage>
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(item.name,
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: isSmall ? 13 : 14,
-                color: const Color(0xFF1A1A2E), height: 1.3),
+                color: _textPrimary, height: 1.3),
             maxLines: 2, overflow: TextOverflow.ellipsis),
         const SizedBox(height: 4),
         Row(children: [
           Text('₹${item.price}', style: const TextStyle(color: _accent, fontWeight: FontWeight.w700, fontSize: 13)),
-          const Text(' / unit', style: TextStyle(color: Color(0xFF9E9EAF), fontSize: 11)),
+          Text(' / unit', style: TextStyle(color: _textFaint, fontSize: 11)),
         ]),
       ])),
       Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(color: _accent.withOpacity(0.09), borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(color: _accent.withOpacity(_isDark ? 0.18 : 0.09), borderRadius: BorderRadius.circular(20)),
           child: Text('x$qty', style: const TextStyle(color: _accent, fontWeight: FontWeight.w700, fontSize: 12)),
         ),
         const SizedBox(height: 6),
         Text('₹${item.price * qty}',
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF1A1A2E))),
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: _textPrimary)),
       ]),
     ]);
   }
@@ -615,10 +598,10 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _accent.withOpacity(0.18)),
-        boxShadow: [BoxShadow(blurRadius: 14, offset: const Offset(0, 5), color: Colors.black.withOpacity(0.05))],
+        border: Border.all(color: _accent.withOpacity(_isDark ? 0.30 : 0.18)),
+        boxShadow: [BoxShadow(blurRadius: 14, offset: const Offset(0, 5), color: _shadowColor)],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -632,26 +615,26 @@ class _CivilBookingPageState extends State<CivilBookingPage>
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(widget.serviceName,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1A2E))),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _textPrimary)),
             Text('${items.length} service${items.length > 1 ? 's' : ''} selected',
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                style: TextStyle(color: _textSecondary, fontSize: 12)),
           ])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: _accent.withOpacity(0.10), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: _accent.withOpacity(_isDark ? 0.2 : 0.10), borderRadius: BorderRadius.circular(20)),
             child: Text('${items.length}',
                 style: const TextStyle(color: _accent, fontWeight: FontWeight.w800, fontSize: 14)),
           ),
         ]),
-        const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: Color(0xFFEEEEF5))),
+        Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: _dividerColor)),
         Wrap(
           spacing: 8, runSpacing: 8,
           children: items.map((item) => Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-                color: _accent.withOpacity(0.07),
+                color: _accent.withOpacity(_isDark ? 0.16 : 0.07),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _accent.withOpacity(0.20), width: 1)),
+                border: Border.all(color: _accent.withOpacity(_isDark ? 0.35 : 0.20), width: 1)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.check_circle_rounded, color: _accent.withOpacity(0.7), size: 13),
               const SizedBox(width: 5),
@@ -704,7 +687,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
             style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
         const SizedBox(height: 3),
         Row(children: [
-          // ✅ Show package name (serviceName) in header, not serviceType
           Flexible(child: Text(widget.serviceName, overflow: TextOverflow.ellipsis,
               style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13))),
           if (_hasCartItems) ...[
@@ -729,13 +711,13 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
-            child: Icon(Icons.store_mall_directory_outlined, size: 52, color: Colors.grey.shade400),
+            decoration: BoxDecoration(color: _chipBg, shape: BoxShape.circle),
+            child: Icon(Icons.store_mall_directory_outlined, size: 52, color: _textFaint),
           ),
           const SizedBox(height: 20),
           Text(_noProviderMessage ?? 'No provider available',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.6)),
+              style: TextStyle(color: _textSecondary, fontSize: 14, height: 1.6)),
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: _loadProvider,
@@ -772,20 +754,29 @@ class _CivilBookingPageState extends State<CivilBookingPage>
             ),
       const SizedBox(width: 10),
       Expanded(child: Text(label,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E), letterSpacing: -0.2))),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textPrimary, letterSpacing: -0.2))),
     ]);
   }
 
   // ── Details card ──────────────────────────────────────────────────────────
   Widget _buildDetailsCard() {
     return _card(child: Column(children: [
-      _field(controller: _nameController, hint: 'Full Name', icon: Icons.person_outline_rounded),
+      _field(
+        controller: _nameController,
+        hint: 'Full Name',
+        icon: Icons.person_outline_rounded,
+        readOnly: _nameLocked,
+        suffix: _nameLocked ? _editIcon(() => setState(() => _nameLocked = false)) : null,
+      ),
       const SizedBox(height: 14),
       _field(
         controller: _phoneController, hint: 'Mobile Number (10 digits)',
         icon: Icons.phone_outlined, keyboard: TextInputType.phone, focusNode: _phoneFocus,
+        readOnly: _phoneLocked,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
-        suffix: _phoneComplete ? const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20) : null,
+        suffix: _phoneLocked
+            ? _editIcon(() => setState(() => _phoneLocked = false))
+            : (_phoneComplete ? const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20) : null),
       ),
       AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
@@ -794,18 +785,16 @@ class _CivilBookingPageState extends State<CivilBookingPage>
                 key: const ValueKey('hint'),
                 padding: const EdgeInsets.only(top: 8, left: 4),
                 child: Row(children: [
-                  Icon(Icons.info_outline, size: 13, color: Colors.grey.shade400),
+                  Icon(Icons.info_outline, size: 13, color: _textFaint),
                   const SizedBox(width: 6),
                   Text('Enter 10-digit phone to continue',
-                      style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+                      style: TextStyle(color: _textFaint, fontSize: 12)),
                 ]))
             : const SizedBox.shrink(key: ValueKey('no-hint')),
       ),
       const SizedBox(height: 14),
       _field(controller: _addressController, hint: 'Project Address', icon: Icons.location_on_outlined, maxLines: 3),
       const SizedBox(height: 12),
-      // ✅ GPS auto-detect removed — Pick on Map is now the single,
-      // full-width way to set the project location.
       SizedBox(
         width: double.infinity,
         child: OutlinedButton.icon(
@@ -824,6 +813,14 @@ class _CivilBookingPageState extends State<CivilBookingPage>
           icon: Icons.notes_rounded, maxLines: 3),
     ]));
   }
+
+  // ✅ Small reusable "edit" affordance shown on locked/auto-filled fields.
+  Widget _editIcon(VoidCallback onTap) => IconButton(
+    icon: Icon(Icons.edit_outlined, size: 18, color: _accent),
+    splashRadius: 18,
+    tooltip: 'Edit',
+    onPressed: onTap,
+  );
 
   // ── Date / time row ───────────────────────────────────────────────────────
   Widget _buildDateTimeRow() => Row(children: [
@@ -848,23 +845,23 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected ? _accent.withOpacity(0.06) : Colors.white,
+          color: selected ? _accent.withOpacity(_isDark ? 0.14 : 0.06) : _cardColor,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: selected ? _accent.withOpacity(0.5) : Colors.grey.shade200, width: 1.5),
-          boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black.withOpacity(0.04))],
+          border: Border.all(color: selected ? _accent.withOpacity(0.5) : _cardBorder, width: 1.5),
+          boxShadow: [BoxShadow(blurRadius: 10, color: _shadowColor)],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-                color: selected ? _accent.withOpacity(0.12) : Colors.grey.shade100,
+                color: selected ? _accent.withOpacity(_isDark ? 0.22 : 0.12) : _chipBg,
                 borderRadius: BorderRadius.circular(9)),
-            child: Icon(icon, color: selected ? _accent : Colors.grey.shade500, size: 17),
+            child: Icon(icon, color: selected ? _accent : _textFaint, size: 17),
           ),
           const SizedBox(height: 10),
-          Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w500)),
           const SizedBox(height: 3),
-          Text(value, style: TextStyle(color: selected ? _accent : Colors.grey.shade400,
+          Text(value, style: TextStyle(color: selected ? _accent : _textFaint,
               fontWeight: FontWeight.w700, fontSize: 12)),
         ]),
       ),
@@ -872,25 +869,21 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   }
 
   // ── Provider contact note ─────────────────────────────────────────────────
-  // ✅ Replaces the old Step-3 "Enquiry Summary" card, which just repeated
-  // what _buildBookingSummaryCard() already shows at the top of the page.
-  // Only the one-line note is kept, since it's the only bit of information
-  // that card was adding beyond the top summary.
   Widget _buildProviderContactNote() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: _accent.withOpacity(0.07),
+        color: _accent.withOpacity(_isDark ? 0.14 : 0.07),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _accent.withOpacity(0.18), width: 1),
+        border: Border.all(color: _accent.withOpacity(_isDark ? 0.3 : 0.18), width: 1),
       ),
       child: Row(children: [
         Icon(Icons.info_outline_rounded, size: 16, color: _accent.withOpacity(0.8)),
         const SizedBox(width: 8),
         Expanded(child: Text(
           'A provider will contact you with a quote after reviewing your enquiry.',
-          style: TextStyle(color: _accent.withOpacity(0.8), fontSize: 12, height: 1.4),
+          style: TextStyle(color: _accent.withOpacity(0.9), fontSize: 12, height: 1.4),
         )),
       ]),
     );
@@ -905,9 +898,9 @@ class _CivilBookingPageState extends State<CivilBookingPage>
       padding: EdgeInsets.fromLTRB(18, 12, 18,
           mq.viewInsets.bottom > 0 ? 8 : mq.viewPadding.bottom + 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: [BoxShadow(blurRadius: 18, color: Colors.black.withOpacity(0.07))],
+        boxShadow: [BoxShadow(blurRadius: 18, color: _shadowColor)],
       ),
       child: SafeArea(top: false, child: Column(mainAxisSize: MainAxisSize.min, children: [
         _buildStepProgress(),
@@ -916,14 +909,14 @@ class _CivilBookingPageState extends State<CivilBookingPage>
           Container(
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(color: _accent.withOpacity(0.07), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: _accent.withOpacity(_isDark ? 0.14 : 0.07), borderRadius: BorderRadius.circular(12)),
             child: Row(children: [
               const Icon(Icons.receipt_long_rounded, color: _accent, size: 15),
               const SizedBox(width: 8),
               Text('${_cartItems.length} item${_cartItems.length == 1 ? '' : 's'}',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                  style: TextStyle(color: _textSecondary, fontSize: 12)),
               const Spacer(),
-              Text('Total: ', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+              Text('Total: ', style: TextStyle(color: _textSecondary, fontSize: 12)),
               Text('₹$_cartTotal',
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: _accent)),
             ]),
@@ -933,7 +926,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
           child: ElevatedButton(
             onPressed: canProceed && _phoneComplete ? _validateAndSubmit : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _accent, disabledBackgroundColor: Colors.grey.shade300,
+              backgroundColor: _accent, disabledBackgroundColor: _isDark ? const Color(0xFF35353F) : Colors.grey.shade300,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               elevation: 0,
@@ -968,10 +961,10 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     child: Column(children: [
       AnimatedContainer(duration: const Duration(milliseconds: 300),
           width: 10, height: 10,
-          decoration: BoxDecoration(color: done ? _accent : Colors.grey.shade300, shape: BoxShape.circle)),
+          decoration: BoxDecoration(color: done ? _accent : (_isDark ? const Color(0xFF35353F) : Colors.grey.shade300), shape: BoxShape.circle)),
       const SizedBox(height: 4),
       Text(label, style: TextStyle(fontSize: 10,
-          color: done ? _accent : Colors.grey.shade400,
+          color: done ? _accent : _textFaint,
           fontWeight: done ? FontWeight.w600 : FontWeight.normal)),
     ]),
   );
@@ -979,7 +972,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   Widget _progressLine({required bool done}) => AnimatedContainer(
     duration: const Duration(milliseconds: 300),
     height: 2, width: 32,
-    color: done ? _accent : Colors.grey.shade200,
+    color: done ? _accent : _dividerColor,
   );
 
   // ── Success view ──────────────────────────────────────────────────────────
@@ -995,14 +988,14 @@ class _CivilBookingPageState extends State<CivilBookingPage>
               child: const Icon(Icons.check_rounded, color: Colors.green, size: 64),
             ),
             const SizedBox(height: 24),
-            const Text('Enquiry Submitted!',
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+            Text('Enquiry Submitted!',
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.5, color: _textPrimary)),
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: _chipBg, borderRadius: BorderRadius.circular(20)),
               child: Text('ID: $_enquiryId',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontFamily: 'monospace')),
+                  style: TextStyle(color: _textSecondary, fontSize: 12, fontFamily: 'monospace')),
             ),
             if (_hasCartItems) ...[
               const SizedBox(height: 20),
@@ -1010,9 +1003,9 @@ class _CivilBookingPageState extends State<CivilBookingPage>
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                    color: const Color(0xFFF5F5FF),
+                    color: _isDark ? const Color(0xFF1D1D28) : const Color(0xFFF5F5FF),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: _accent.withOpacity(0.15))),
+                    border: Border.all(color: _accent.withOpacity(_isDark ? 0.28 : 0.15))),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('YOUR ORDER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800,
                       color: _accent, letterSpacing: 0.8)),
@@ -1021,15 +1014,15 @@ class _CivilBookingPageState extends State<CivilBookingPage>
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Row(children: [
                       Expanded(child: Text(item.name,
-                          style: const TextStyle(fontSize: 13, color: Color(0xFF2D2D3A)))),
+                          style: TextStyle(fontSize: 13, color: _textPrimary))),
                       Text('₹${item.price * (item.quantity)}',
                           style: const TextStyle(fontWeight: FontWeight.w600, color: _accent, fontSize: 13)),
                     ]),
                   )),
-                  const Divider(color: Color(0xFFDDDDF5)),
+                  Divider(color: _dividerColor),
                   Row(children: [
-                    const Expanded(child: Text('Total',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+                    Expanded(child: Text('Total',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: _textPrimary))),
                     Text('₹$_cartTotal',
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _accent)),
                   ]),
@@ -1039,7 +1032,7 @@ class _CivilBookingPageState extends State<CivilBookingPage>
             const SizedBox(height: 14),
             Text('We will contact you shortly with a quote and confirm your visit.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 14, height: 1.6)),
+                style: TextStyle(color: _textSecondary, fontSize: 14, height: 1.6)),
             const SizedBox(height: 36),
             SizedBox(
               width: double.infinity, height: 52,
@@ -1060,10 +1053,6 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   }
 
   void _goHome() {
-    // ✅ Cart is emptied right here — the user has seen their order summary
-    // on the success screen and is now navigating away, so this is the
-    // correct point to consider the cart "used up." See the fixed
-    // _clearCartAfterBooking() above for why this now actually works.
     _clearCartAfterBooking();
 
     final user = FirebaseAuth.instance.currentUser;
@@ -1083,7 +1072,8 @@ class _CivilBookingPageState extends State<CivilBookingPage>
       context: context, initialDate: DateTime.now(),
       firstDate: DateTime.now(), lastDate: DateTime(2100),
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: _accent)),
+        data: (_isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
+            colorScheme: ColorScheme.fromSeed(seedColor: _accent, brightness: _isDark ? Brightness.dark : Brightness.light)),
         child: child!,
       ),
     );
@@ -1094,7 +1084,8 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     final picked = await showTimePicker(
       context: context, initialTime: TimeOfDay.now(),
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: _accent)),
+        data: (_isDark ? ThemeData.dark() : ThemeData.light()).copyWith(
+            colorScheme: ColorScheme.fromSeed(seedColor: _accent, brightness: _isDark ? Brightness.dark : Brightness.light)),
         child: child!,
       ),
     );
@@ -1136,19 +1127,9 @@ class _CivilBookingPageState extends State<CivilBookingPage>
               : [widget.serviceName];
 
       final docRef = await OrderService.placeOrder(
-        // ✅ Store serviceType ('civil') in Firestore, not the package name
         serviceType:   widget.serviceType.trim().toLowerCase(),
         services:      servicesList,
-        // ✅ Pass the canonical category resolved during provider lookup so
-        // the order is stored under the exact same category it was matched
-        // on — placeOrder() would otherwise re-derive it from services[0]
-        // and could (in theory) land on a different canonical value.
         category:      _resolvedCategory.isNotEmpty ? _resolvedCategory : null,
-        // ✅ FIX: previously never passed at all. Without this, a provider
-        // registered specifically under this exact subCategory (without
-        // separately ticking the broad parent category too) could never
-        // exact-match this order — see the big comment above
-        // `_resolvedSubCategory` for the full explanation.
         subCategory:   _resolvedSubCategory.isNotEmpty ? _resolvedSubCategory : null,
         userId:        user?.uid ?? '',
         userName:      _nameController.text.trim(),
@@ -1187,9 +1168,9 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   Widget _card({required Widget child}) => Container(
     padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: _cardColor,
       borderRadius: BorderRadius.circular(22),
-      boxShadow: [BoxShadow(blurRadius: 16, offset: const Offset(0, 5), color: Colors.black.withOpacity(0.05))],
+      boxShadow: [BoxShadow(blurRadius: 16, offset: const Offset(0, 5), color: _shadowColor)],
     ),
     child: child,
   );
@@ -1200,21 +1181,23 @@ class _CivilBookingPageState extends State<CivilBookingPage>
     required IconData icon,
     TextInputType keyboard = TextInputType.text,
     int maxLines = 1,
+    bool readOnly = false,
     FocusNode? focusNode,
     List<TextInputFormatter>? inputFormatters,
     Widget? suffix,
   }) =>
       Container(
-        decoration: BoxDecoration(color: const Color(0xFFF5F6FC), borderRadius: BorderRadius.circular(14)),
+        decoration: BoxDecoration(color: _inputFill, borderRadius: BorderRadius.circular(14)),
         child: TextField(
           controller: controller, keyboardType: keyboard,
           maxLines: maxLines, focusNode: focusNode,
+          readOnly: readOnly,
           inputFormatters: inputFormatters,
-          style: const TextStyle(fontSize: 14),
+          style: TextStyle(fontSize: 14, color: _textPrimary),
           decoration: InputDecoration(
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            hintText: hint, hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+            hintText: hint, hintStyle: TextStyle(color: _textFaint, fontSize: 14),
             prefixIcon: Icon(icon, color: _accent, size: 19),
             suffixIcon: suffix != null ? Padding(padding: const EdgeInsets.only(right: 12), child: suffix) : null,
             suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
@@ -1222,378 +1205,3 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         ),
       );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

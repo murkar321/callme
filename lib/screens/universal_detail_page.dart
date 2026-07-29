@@ -96,9 +96,17 @@ class UniversalDetailPage extends StatelessWidget {
   // ── BUILD ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final cardColor = theme.cardColor;
+    final onSurface = theme.colorScheme.onSurface;
+    final subTextColor = onSurface.withOpacity(0.65);
+    final shadowOpacity = isDark ? 0.30 : 0.05;
+    final imagePlaceholder = isDark ? Colors.grey.shade800 : Colors.grey.shade200;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: scaffoldBg,
 
       // ── APP BAR ───────────────────────────────────────────────────────────
       appBar: AppBar(
@@ -116,7 +124,7 @@ class UniversalDetailPage extends StatelessWidget {
 
       // ── BODY ──────────────────────────────────────────────────────────────
       body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 110),
+        padding: const EdgeInsets.only(bottom: 100),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -125,16 +133,16 @@ class UniversalDetailPage extends StatelessWidget {
             Stack(
               children: [
                 Container(
-                  height: 300,
+                  height: 240,
                   width: double.infinity,
-                  color: Colors.grey.shade200,
+                  color: imagePlaceholder,
                   child: Image.asset(
                     image,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Icon(
                       Icons.image,
-                      size: 70,
-                      color: Colors.grey.shade400,
+                      size: 60,
+                      color: subTextColor,
                     ),
                   ),
                 ),
@@ -158,11 +166,11 @@ class UniversalDetailPage extends StatelessWidget {
                 // Discount badge
                 if (discount > 0)
                   Positioned(
-                    top: 16,
-                    right: 16,
+                    top: 14,
+                    right: 14,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: Colors.green,
                         borderRadius: BorderRadius.circular(30),
@@ -172,6 +180,7 @@ class UniversalDetailPage extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
                       ),
                     ),
@@ -179,14 +188,14 @@ class UniversalDetailPage extends StatelessWidget {
 
                 // Title over image
                 Positioned(
-                  left: 18,
-                  right: 18,
-                  bottom: 20,
+                  left: 16,
+                  right: 16,
+                  bottom: 16,
                   child: Text(
                     data.name,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 30,
+                      fontSize: 24,
                       fontWeight: FontWeight.bold,
                       height: 1.2,
                     ),
@@ -197,7 +206,7 @@ class UniversalDetailPage extends StatelessWidget {
 
             // ── CONTENT ───────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -205,54 +214,55 @@ class UniversalDetailPage extends StatelessWidget {
                   // Rating + Time row
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
+                        horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withOpacity(shadowOpacity),
                           blurRadius: 8,
                         ),
                       ],
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.star, color: Colors.orange, size: 22),
-                        const SizedBox(width: 6),
+                        const Icon(Icons.star, color: Colors.orange, size: 20),
+                        const SizedBox(width: 5),
                         Text(
                           rating.toString(),
-                          style: const TextStyle(
-                            fontSize: 16,
+                          style: TextStyle(
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
+                            color: onSurface,
                           ),
                         ),
-                        const SizedBox(width: 20),
-                        Icon(Icons.access_time,
-                            color: Colors.grey.shade700, size: 20),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 16),
+                        Icon(Icons.access_time, color: subTextColor, size: 18),
+                        const SizedBox(width: 5),
                         Text(
                           time,
-                          style: const TextStyle(
-                            fontSize: 16,
+                          style: TextStyle(
+                            fontSize: 15,
                             fontWeight: FontWeight.w500,
+                            color: onSurface,
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
 
                   // Price card
                   Container(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(18),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withOpacity(shadowOpacity),
                           blurRadius: 10,
                         ),
                       ],
@@ -261,18 +271,19 @@ class UniversalDetailPage extends StatelessWidget {
                       children: [
                         Text(
                           '₹$finalPrice',
-                          style: const TextStyle(
-                            fontSize: 34,
+                          style: TextStyle(
+                            fontSize: 28,
                             fontWeight: FontWeight.bold,
+                            color: onSurface,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         if (discount > 0)
                           Text(
                             '₹$price',
                             style: TextStyle(
-                              fontSize: 22,
-                              color: Colors.grey.shade500,
+                              fontSize: 18,
+                              color: subTextColor,
                               decoration: TextDecoration.lineThrough,
                             ),
                           ),
@@ -280,38 +291,53 @@ class UniversalDetailPage extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   // About
                   if (description.isNotEmpty)
                     _section(
                       title: 'About',
+                      cardColor: cardColor,
+                      onSurface: onSurface,
+                      shadowOpacity: shadowOpacity,
                       child: Text(
                         description,
                         style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade800,
+                          fontSize: 14.5,
+                          color: subTextColor,
                           height: 1.5,
                         ),
                       ),
                     ),
 
-                  if (includes.isNotEmpty) _listSection('Includes', includes),
-                  if (process.isNotEmpty)  _listSection('Process',  process),
-                  if (steps.isNotEmpty)    _listSection('Steps',    steps),
+                  if (includes.isNotEmpty)
+                    _listSection('Includes', includes, cardColor, onSurface,
+                        subTextColor, shadowOpacity),
+                  if (process.isNotEmpty)
+                    _listSection('Process', process, cardColor, onSurface,
+                        subTextColor, shadowOpacity),
+                  if (steps.isNotEmpty)
+                    _listSection('Steps', steps, cardColor, onSurface,
+                        subTextColor, shadowOpacity),
 
                   if (tools.isNotEmpty)
                     _section(
                       title: 'Tools Required',
+                      cardColor: cardColor,
+                      onSurface: onSurface,
+                      shadowOpacity: shadowOpacity,
                       child: Text(tools,
-                          style: const TextStyle(fontSize: 15)),
+                          style: TextStyle(fontSize: 14, color: subTextColor)),
                     ),
 
                   if (warranty.isNotEmpty)
                     _section(
                       title: 'Warranty / Support',
+                      cardColor: cardColor,
+                      onSurface: onSurface,
+                      shadowOpacity: shadowOpacity,
                       child: Text(warranty,
-                          style: const TextStyle(fontSize: 15)),
+                          style: TextStyle(fontSize: 14, color: subTextColor)),
                     ),
                 ],
               ),
@@ -323,32 +349,32 @@ class UniversalDetailPage extends StatelessWidget {
       // ── FIXED BOTTOM BUTTON ───────────────────────────────────────────────
       bottomNavigationBar: SafeArea(
         child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardColor,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withOpacity(isDark ? 0.35 : 0.08),
                 blurRadius: 10,
                 offset: const Offset(0, -2),
               ),
             ],
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: SizedBox(
-            height: 56,
+            height: 50,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 elevation: 0,
                 backgroundColor: color,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18)),
+                    borderRadius: BorderRadius.circular(16)),
               ),
               onPressed: () => _handleAction(context),
               child: Text(
                 isWater ? 'Book Now' : 'Add to Cart',
                 style: const TextStyle(
-                  fontSize: 17,
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
                 ),
@@ -406,17 +432,23 @@ class UniversalDetailPage extends StatelessWidget {
   }
 
   // ── SECTION WIDGET ────────────────────────────────────────────────────────
-  Widget _section({required String title, required Widget child}) {
+  Widget _section({
+    required String title,
+    required Widget child,
+    required Color cardColor,
+    required Color onSurface,
+    required double shadowOpacity,
+  }) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(shadowOpacity),
             blurRadius: 8,
           ),
         ],
@@ -425,9 +457,11 @@ class UniversalDetailPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 24)),
-          const SizedBox(height: 12),
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  color: onSurface)),
+          const SizedBox(height: 10),
           child,
         ],
       ),
@@ -435,21 +469,32 @@ class UniversalDetailPage extends StatelessWidget {
   }
 
   // ── LIST SECTION WIDGET ───────────────────────────────────────────────────
-  Widget _listSection(String title, List<String> items) {
+  Widget _listSection(
+    String title,
+    List<String> items,
+    Color cardColor,
+    Color onSurface,
+    Color subTextColor,
+    double shadowOpacity,
+  ) {
     return _section(
       title: title,
+      cardColor: cardColor,
+      onSurface: onSurface,
+      shadowOpacity: shadowOpacity,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: items.map((e) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.only(bottom: 8),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('• ', style: TextStyle(fontSize: 18)),
+                Text('• ', style: TextStyle(fontSize: 16, color: onSurface)),
                 Expanded(
                   child: Text(e,
-                      style: const TextStyle(fontSize: 16, height: 1.4)),
+                      style: TextStyle(
+                          fontSize: 14.5, height: 1.4, color: subTextColor)),
                 ),
               ],
             ),

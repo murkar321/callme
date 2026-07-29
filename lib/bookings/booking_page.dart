@@ -16,19 +16,41 @@ import 'package:callme/screens/map_picker_page.dart';
 import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTS
+// THEME
+//
+// Centralized light/dark palette. Every color the UI needs comes from an
+// instance of this class instead of hardcoded top-level consts, so the whole
+// page reacts correctly to Theme.of(context).brightness (system/app dark
+// mode) without needing separate widget trees for light vs dark.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const _kAccent     = Color(0xFF5B4FCF);
-const _kAccentSoft = Color(0xFF7B6FE8);
-const _kBg         = Color(0xFFF4F3FB);
-const _kCard       = Colors.white;
-const _kSuccess    = Color(0xFF34C759);
+class _Pal {
+  final bool dark;
+  const _Pal(this.dark);
+
+  Color get accent     => const Color(0xFF6E62E8);
+  Color get accentSoft => dark ? const Color(0xFF9B90FF) : const Color(0xFF7B6FE8);
+  Color get success    => const Color(0xFF34C759);
+
+  Color get bg      => dark ? const Color(0xFF121016) : const Color(0xFFF4F3FB);
+  Color get card    => dark ? const Color(0xFF1C1A24) : Colors.white;
+  Color get fieldBg => dark ? const Color(0xFF262330) : const Color(0xFFF3F2FB);
+  Color get chipBg   => dark ? const Color(0xFF2A2735) : const Color(0xFFF0EEF9);
+
+  Color get border => dark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200;
+
+  Color get textPrimary   => dark ? Colors.white : const Color(0xFF1A1A1A);
+  Color get textSecondary => dark ? Colors.white70 : Colors.grey.shade600;
+  Color get textFaint     => dark ? Colors.white38 : Colors.grey.shade400;
+
+  Color get shadow => dark ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.05);
+
+  List<Color> get headerGradient =>
+      dark ? [const Color(0xFF443CA8), const Color(0xFF6E62E8)] : [accent, accentSoft];
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BOOKING PAGE
-//
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 class BookingPage extends StatefulWidget {
@@ -60,6 +82,7 @@ class _BookingPageState extends State<BookingPage>
   final _addressCtrl = TextEditingController();
   final _noteCtrl    = TextEditingController();
   final _phoneFocus  = FocusNode();
+  final _nameFocus   = FocusNode();
   final _scrollCtrl  = ScrollController();
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -71,6 +94,14 @@ class _BookingPageState extends State<BookingPage>
   bool _isLoadingProvider = true;
   bool _phoneComplete     = false;
   bool _summaryExpanded   = true;
+
+  // FIX: NEW — profile auto-fill state. Name/phone are pre-filled from the
+  // `users` collection (keyed by email) when available, but remain fully
+  // editable. These flags just drive a small "from your profile" hint that
+  // disappears the moment the user actually edits the field themselves.
+  bool _nameAutoFilled  = false;
+  bool _phoneAutoFilled = false;
+  bool _profileLoading  = true;
 
   LatLng? _pickedLatLng;
   String  _bookingId = '';
@@ -110,6 +141,8 @@ class _BookingPageState extends State<BookingPage>
 
     _pageAnim.forward();
     _phoneCtrl.addListener(_onPhoneChanged);
+    _phoneCtrl.addListener(_onPhoneEditedByUser);
+    _nameCtrl.addListener(_onNameEditedByUser);
 
     if (_isPinnedProvider) {
       _providerId        = widget.initialProviderId;
@@ -118,6 +151,8 @@ class _BookingPageState extends State<BookingPage>
     } else {
       _loadProvider();
     }
+
+    _loadUserProfile();
   }
 
   void _onPhoneChanged() {
@@ -128,18 +163,89 @@ class _BookingPageState extends State<BookingPage>
     }
   }
 
+  // FIX: NEW — clears the "auto-filled" hint the instant the user actually
+  // types into a field that was populated from their saved profile. This is
+  // purely a UI signal; it never blocks or reverts what the user typed.
+  void _onNameEditedByUser() {
+    if (_nameAutoFilled) setState(() => _nameAutoFilled = false);
+  }
+
+  void _onPhoneEditedByUser() {
+    if (_phoneAutoFilled) setState(() => _phoneAutoFilled = false);
+  }
+
   @override
   void dispose() {
     _pageAnim.dispose();
     _revealAnim.dispose();
     _phoneCtrl.removeListener(_onPhoneChanged);
+    _phoneCtrl.removeListener(_onPhoneEditedByUser);
+    _nameCtrl.removeListener(_onNameEditedByUser);
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
     _noteCtrl.dispose();
     _phoneFocus.dispose();
+    _nameFocus.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PROFILE AUTO-FILL (users collection, keyed by email)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _loadUserProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.isEmpty) {
+      if (mounted) setState(() => _profileLoading = false);
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(email)
+          .get();
+
+      if (!mounted) return;
+
+      String name  = '';
+      String phone = '';
+
+      if (doc.exists) {
+        final d = doc.data() ?? {};
+        name = (d['name'] ?? d['fullName'] ?? d['displayName'] ?? '')
+            .toString()
+            .trim();
+        phone = (d['phone'] ?? d['phoneNumber'] ?? d['mobile'] ?? '')
+            .toString()
+            .trim();
+      }
+
+      // Fall back to whatever FirebaseAuth already knows if Firestore
+      // didn't have it.
+      if (name.isEmpty) name = (user.displayName ?? '').trim();
+      if (phone.isEmpty) phone = (user.phoneNumber ?? '').trim();
+
+      setState(() {
+        if (name.isNotEmpty && _nameCtrl.text.trim().isEmpty) {
+          _nameCtrl.text = name;
+          _nameAutoFilled = true;
+        }
+        if (phone.isNotEmpty && _phoneCtrl.text.trim().isEmpty) {
+          final digits = phone.replaceAll(RegExp(r'\D'), '');
+          final last10 =
+              digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+          _phoneCtrl.text = last10;
+          _phoneAutoFilled = last10.length >= 10;
+        }
+        _profileLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _profileLoading = false);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -250,8 +356,6 @@ class _BookingPageState extends State<BookingPage>
 
   // ─────────────────────────────────────────────────────────────────────────
   // PROVIDER PREVIEW LOOKUP
-  //
-
   // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _fetchProviderName(String id) async {
@@ -318,7 +422,6 @@ class _BookingPageState extends State<BookingPage>
         }
       }
 
-    
       final best = categoryMatchDoc ?? unrestrictedLegacy ?? svcOnlyMatch;
 
       if (best != null) {
@@ -382,10 +485,7 @@ class _BookingPageState extends State<BookingPage>
   /// variant/fabric + quantity) sent to `OrderService.placeOrder()` as
   /// `itemBreakdown`. This is saved to Firestore purely for DISPLAY on
   /// the provider/admin dashboards, completely separate from the
-  /// cleaned/canonical `services` field used for matching. This is what
-  /// actually fixes "Washing, Washing" showing up with no way to tell
-  /// which fabric is which — the provider dashboard can now render
-  /// "Washing: 1 Wool, 1 Denim" using this exact structure.
+  /// cleaned/canonical `services` field used for matching.
   List<Map<String, dynamic>> get _itemBreakdown {
     if (!_isCart || _cartItems.isEmpty) return [];
     return _cartItems.map((item) {
@@ -403,10 +503,7 @@ class _BookingPageState extends State<BookingPage>
   /// base service name with each variant/fabric + quantity listed under
   /// it, e.g. "Washing: 1 Wool, 1 Denim". This is prepended to the
   /// booking note so the fabric/quantity choice from the popup is
-  /// GUARANTEED visible on the provider's dashboard card (which renders
-  /// the note prominently) — regardless of how category matching turns
-  /// out, and regardless of whether the admin/provider UI has been
-  /// updated yet to read the new `itemBreakdown` field directly.
+  /// GUARANTEED visible on the provider's dashboard card.
   String get _autoItemsNote {
     if (!_isCart || _cartItems.isEmpty) return '';
 
@@ -425,19 +522,40 @@ class _BookingPageState extends State<BookingPage>
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // ADAPTIVE SCALE (sw/390 pattern, clamped 0.85–1.25)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  double _scaleOf(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    return (w / 390).clamp(0.85, 1.25);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // BUILD
   // ─────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        backgroundColor: _kBg,
-        extendBody: true,
-        resizeToAvoidBottomInset: true,
-        body: _isSuccess ? _buildSuccessView() : _buildMainView(),
-        bottomNavigationBar: _isSuccess ? null : _buildBottomBar(),
+    final pal = _Pal(Theme.of(context).brightness == Brightness.dark);
+    final mq  = MediaQuery.of(context);
+    final clampedTextScale =
+        mq.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.15);
+
+    return MediaQuery(
+      data: mq.copyWith(textScaler: clampedTextScale),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: pal.dark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.light,
+        child: Scaffold(
+          backgroundColor: pal.bg,
+          extendBody: true,
+          resizeToAvoidBottomInset: true,
+          body: _isSuccess
+              ? _buildSuccessView(pal)
+              : _buildMainView(pal),
+          bottomNavigationBar: _isSuccess ? null : _buildBottomBar(pal),
+        ),
       ),
     );
   }
@@ -446,18 +564,18 @@ class _BookingPageState extends State<BookingPage>
   // MAIN VIEW
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildMainView() {
+  Widget _buildMainView(_Pal pal) {
     return FadeTransition(
       opacity: _pageFade,
       child: Column(
         children: [
-          _buildHeader(),
+          _buildHeader(pal),
           Expanded(
             child: _isLoadingProvider
-                ? _buildLoadingState()
+                ? _buildLoadingState(pal)
                 : _noProviderMessage != null
-                    ? _buildNoProviderState()
-                    : _buildBody(),
+                    ? _buildNoProviderState(pal)
+                    : _buildBody(pal),
           ),
         ],
       ),
@@ -465,20 +583,21 @@ class _BookingPageState extends State<BookingPage>
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // HEADER  (safe-area aware)
+  // HEADER  (safe-area aware, adaptive)
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildHeader() {
-    final top = MediaQuery.of(context).padding.top;
+  Widget _buildHeader(_Pal pal) {
+    final top   = MediaQuery.of(context).padding.top;
+    final scale = _scaleOf(context);
     return Container(
-      padding: EdgeInsets.fromLTRB(20, top + 14, 20, 22),
-      decoration: const BoxDecoration(
+      padding: EdgeInsets.fromLTRB(20 * scale, top + 14, 20 * scale, 22 * scale),
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [_kAccent, _kAccentSoft],
+          colors: pal.headerGradient,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
       ),
       child: Row(
         children: [
@@ -486,21 +605,25 @@ class _BookingPageState extends State<BookingPage>
             icon:  Icons.arrow_back_ios_new_rounded,
             onTap: () => Navigator.pop(context),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: 14 * scale),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Book Service',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.3)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text('Book Service',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22 * scale,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.3)),
+                ),
                 const SizedBox(height: 2),
                 Text(widget.serviceName,
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 13),
+                    style: TextStyle(
+                        color: Colors.white70, fontSize: 13 * scale),
                     overflow: TextOverflow.ellipsis),
               ],
             ),
@@ -562,16 +685,19 @@ class _BookingPageState extends State<BookingPage>
   // BODY
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildBody() {
+  Widget _buildBody(_Pal pal) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final scale        = _scaleOf(context);
 
     return ListView(
       controller: _scrollCtrl,
-      padding: EdgeInsets.fromLTRB(16, 18, 16, 16 + bottomInset),
+      padding: EdgeInsets.fromLTRB(
+          16 * scale, 18 * scale, 16 * scale, 16 * scale + bottomInset),
       children: [
 
         // ── SERVICES SUMMARY (always visible, collapsible) ──────────────
         _ServicesSummaryCard(
+          pal:         pal,
           cartItems:   _isCart ? _cartItems : null,
           productName: _isSingle
               ? (widget.product?.name ?? widget.serviceName)
@@ -582,12 +708,12 @@ class _BookingPageState extends State<BookingPage>
               setState(() => _summaryExpanded = !_summaryExpanded),
         ),
 
-        const SizedBox(height: 20),
+        SizedBox(height: 20 * scale),
 
         // ── STEP 1 ──────────────────────────────────────────────────────
-        _StepHeader(number: 1, label: 'Your Details'),
-        const SizedBox(height: 10),
-        _buildDetailsCard(),
+        _StepHeader(pal: pal, number: 1, label: 'Your Details'),
+        SizedBox(height: 10 * scale),
+        _buildDetailsCard(pal),
 
         // ── STEPS 2 & 3 revealed after phone is complete ────────────────
         AnimatedSize(
@@ -601,14 +727,14 @@ class _BookingPageState extends State<BookingPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 24),
-                        _StepHeader(number: 2, label: 'Schedule'),
-                        const SizedBox(height: 10),
-                        _buildDateTimeRow(),
-                        const SizedBox(height: 24),
-                        _StepHeader(number: 3, label: 'Additional Note'),
-                        const SizedBox(height: 10),
-                        _buildNoteCard(),
+                        SizedBox(height: 24 * scale),
+                        _StepHeader(pal: pal, number: 2, label: 'Schedule'),
+                        SizedBox(height: 10 * scale),
+                        _buildDateTimeRow(pal),
+                        SizedBox(height: 24 * scale),
+                        _StepHeader(pal: pal, number: 3, label: 'Additional Note'),
+                        SizedBox(height: 10 * scale),
+                        _buildNoteCard(pal),
                       ],
                     ),
                   ),
@@ -616,27 +742,49 @@ class _BookingPageState extends State<BookingPage>
               : const SizedBox.shrink(),
         ),
 
-        const SizedBox(height: 120),
+        SizedBox(height: 120 * scale),
       ],
     );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // STEP 1 — Details card
+  // STEP 1 — Details card (with profile auto-fill + edit)
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildDetailsCard() {
+  Widget _buildDetailsCard(_Pal pal) {
     return _Card(
+      pal: pal,
       child: Column(
         children: [
           _Field(
+            pal: pal,
             controller: _nameCtrl,
             hint: 'Full name',
             icon: Icons.person_outline_rounded,
+            focusNode: _nameFocus,
             onChanged: (_) => setState(() {}),
+            trailing: _nameAutoFilled
+                ? _EditBadge(
+                    pal: pal,
+                    onTap: () {
+                      setState(() => _nameAutoFilled = false);
+                      _nameFocus.requestFocus();
+                      _nameCtrl.selection = TextSelection(
+                          baseOffset: 0, extentOffset: _nameCtrl.text.length);
+                    },
+                  )
+                : null,
           ),
+          if (_profileLoading) ...[
+            const SizedBox(height: 6),
+            _hintRow(pal, 'Loading your saved details…'),
+          ] else if (_nameAutoFilled) ...[
+            const SizedBox(height: 6),
+            _hintRow(pal, 'From your profile · tap the pencil to edit'),
+          ],
           const SizedBox(height: 12),
           _Field(
+            pal: pal,
             controller: _phoneCtrl,
             hint: 'Mobile number',
             icon: Icons.phone_outlined,
@@ -646,17 +794,32 @@ class _BookingPageState extends State<BookingPage>
               FilteringTextInputFormatter.digitsOnly,
               LengthLimitingTextInputFormatter(10),
             ],
-            suffix: _phoneComplete
-                ? const Icon(Icons.check_circle_rounded,
-                    color: _kSuccess, size: 20)
-                : null,
+            trailing: _phoneComplete
+                ? Icon(Icons.check_circle_rounded,
+                    color: pal.success, size: 20)
+                : (_phoneAutoFilled
+                    ? _EditBadge(
+                        pal: pal,
+                        onTap: () {
+                          setState(() => _phoneAutoFilled = false);
+                          _phoneFocus.requestFocus();
+                          _phoneCtrl.selection = TextSelection(
+                              baseOffset: 0,
+                              extentOffset: _phoneCtrl.text.length);
+                        },
+                      )
+                    : null),
           ),
           if (!_phoneComplete) ...[
             const SizedBox(height: 6),
-            _hintRow('Enter 10-digit number to unlock schedule'),
+            _hintRow(pal, 'Enter 10-digit number to unlock schedule'),
+          ] else if (_phoneAutoFilled) ...[
+            const SizedBox(height: 6),
+            _hintRow(pal, 'From your profile · tap the pencil to edit'),
           ],
           const SizedBox(height: 12),
           _Field(
+            pal: pal,
             controller: _addressCtrl,
             hint: 'Full address',
             icon: Icons.location_on_outlined,
@@ -667,6 +830,7 @@ class _BookingPageState extends State<BookingPage>
           SizedBox(
             width: double.infinity,
             child: _OutlineBtn(
+              pal: pal,
               icon:  Icons.map_outlined,
               label: 'Pick on Map',
               onTap: _openMapPicker,
@@ -681,11 +845,12 @@ class _BookingPageState extends State<BookingPage>
   // STEP 2 — Date + Time
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildDateTimeRow() {
+  Widget _buildDateTimeRow(_Pal pal) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final narrow = constraints.maxWidth < 320;
         final dateTile = _PickerTile(
+          pal: pal,
           icon:     Icons.calendar_month_rounded,
           label:    'Date',
           value:    _date == null
@@ -695,6 +860,7 @@ class _BookingPageState extends State<BookingPage>
           onTap:    _pickDate,
         );
         final timeTile = _PickerTile(
+          pal: pal,
           icon:     Icons.access_time_rounded,
           label:    'Time',
           value:    _time == null ? 'Tap to pick' : _time!.format(context),
@@ -726,12 +892,14 @@ class _BookingPageState extends State<BookingPage>
   // STEP 3 — Note
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildNoteCard() {
+  Widget _buildNoteCard(_Pal pal) {
     return _Card(
+      pal: pal,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _Field(
+            pal: pal,
             controller: _noteCtrl,
             hint: 'Any special request? (optional)',
             icon: Icons.notes_rounded,
@@ -747,21 +915,21 @@ class _BookingPageState extends State<BookingPage>
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F2FB),
+                color: pal.fieldBg,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.checklist_rounded,
-                      size: 15, color: _kAccent),
+                  Icon(Icons.checklist_rounded,
+                      size: 15, color: pal.accent),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _autoItemsNote,
                       style: TextStyle(
                           fontSize: 11.5,
-                          color: Colors.grey.shade600,
+                          color: pal.textSecondary,
                           height: 1.5),
                     ),
                   ),
@@ -778,8 +946,9 @@ class _BookingPageState extends State<BookingPage>
   // BOTTOM BAR
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildBottomBar() {
+  Widget _buildBottomBar(_Pal pal) {
     final bottom     = MediaQuery.of(context).viewPadding.bottom;
+    final scale      = _scaleOf(context);
     final canProceed =
         !_isLoading && !_isLoadingProvider && _providerId != null;
 
@@ -791,32 +960,35 @@ class _BookingPageState extends State<BookingPage>
     return SafeArea(
       top: false,
       child: Container(
-        padding: EdgeInsets.fromLTRB(16, 14, 16, 14 + bottom),
-        decoration: const BoxDecoration(
-          color: _kCard,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        padding: EdgeInsets.fromLTRB(
+            16 * scale, 14 * scale, 16 * scale, 14 * scale + bottom),
+        decoration: BoxDecoration(
+          color: pal.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           boxShadow: [
             BoxShadow(
-              color: Color(0x12000000),
+              color: pal.shadow,
               blurRadius: 20,
-              offset: Offset(0, -4),
+              offset: const Offset(0, -4),
             ),
           ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _ProgressRow(step1: _phoneComplete, step2: step1Done && step2Done),
-            const SizedBox(height: 14),
+            _ProgressRow(pal: pal, step1: _phoneComplete, step2: step1Done && step2Done),
+            SizedBox(height: 14 * scale),
             SizedBox(
               width: double.infinity,
-              height: 56,
+              height: 56 * scale.clamp(0.9, 1.1),
               child: ElevatedButton(
                 onPressed:
                     (canProceed && _phoneComplete) ? _validateAndPay : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:         _kAccent,
-                  disabledBackgroundColor: const Color(0xFFD0CBEE),
+                  backgroundColor:         pal.accent,
+                  disabledBackgroundColor: pal.dark
+                      ? const Color(0xFF3A3650)
+                      : const Color(0xFFD0CBEE),
                   foregroundColor:         Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -827,26 +999,29 @@ class _BookingPageState extends State<BookingPage>
                         width: 22, height: 22,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2.5))
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('Proceed to Payment',
-                              style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold)),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('Proceed to Payment',
+                                style: TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.bold)),
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text('₹${_total.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14)),
                             ),
-                            child: Text('₹${_total.toStringAsFixed(0)}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14)),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
               ),
             ),
@@ -860,7 +1035,7 @@ class _BookingPageState extends State<BookingPage>
   // SUCCESS VIEW
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildSuccessView() {
+  Widget _buildSuccessView(_Pal pal) {
     final bottom = MediaQuery.of(context).viewPadding.bottom;
     final top    = MediaQuery.of(context).padding.top;
     return SingleChildScrollView(
@@ -875,15 +1050,16 @@ class _BookingPageState extends State<BookingPage>
             Container(
               width: 110, height: 110,
               decoration: BoxDecoration(
-                color: _kSuccess.withOpacity(0.1),
+                color: pal.success.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.check_rounded,
-                  color: _kSuccess, size: 60),
+              child: Icon(Icons.check_rounded,
+                  color: pal.success, size: 60),
             ),
             const SizedBox(height: 28),
-            const Text('All Done!',
+            Text('All Done!',
                 style: TextStyle(
+                    color: pal.textPrimary,
                     fontSize: 30,
                     fontWeight: FontWeight.bold,
                     letterSpacing: -0.5)),
@@ -893,24 +1069,24 @@ class _BookingPageState extends State<BookingPage>
               'We\'ll notify you once a provider accepts.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: Colors.grey.shade500, fontSize: 14, height: 1.6),
+                  color: pal.textSecondary, fontSize: 14, height: 1.6),
             ),
             const SizedBox(height: 18),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFF0EEF9),
+                color: pal.chipBg,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.confirmation_number_outlined,
-                      size: 15, color: _kAccent),
+                  Icon(Icons.confirmation_number_outlined,
+                      size: 15, color: pal.accent),
                   const SizedBox(width: 6),
                   Text('ID: $_bookingId',
-                      style: const TextStyle(
-                          color: _kAccent,
+                      style: TextStyle(
+                          color: pal.accent,
                           fontFamily: 'monospace',
                           fontSize: 12,
                           fontWeight: FontWeight.w600)),
@@ -924,7 +1100,7 @@ class _BookingPageState extends State<BookingPage>
               child: ElevatedButton(
                 onPressed: _goHome,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _kAccent,
+                  backgroundColor: pal.accent,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -945,19 +1121,19 @@ class _BookingPageState extends State<BookingPage>
   // LOADING / NO-PROVIDER
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildLoadingState() => const Center(
+  Widget _buildLoadingState(_Pal pal) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: _kAccent),
-            SizedBox(height: 16),
+            CircularProgressIndicator(color: pal.accent),
+            const SizedBox(height: 16),
             Text('Finding a provider…',
-                style: TextStyle(color: Colors.grey)),
+                style: TextStyle(color: pal.textSecondary)),
           ],
         ),
       );
 
-  Widget _buildNoProviderState() => Center(
+  Widget _buildNoProviderState(_Pal pal) => Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
@@ -966,17 +1142,17 @@ class _BookingPageState extends State<BookingPage>
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: pal.fieldBg,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(Icons.store_mall_directory_outlined,
-                    size: 52, color: Colors.grey.shade400),
+                    size: 52, color: pal.textFaint),
               ),
               const SizedBox(height: 20),
               Text(_noProviderMessage ?? 'No provider available',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                      color: Colors.grey.shade600,
+                      color: pal.textSecondary,
                       fontSize: 15,
                       height: 1.6)),
               const SizedBox(height: 24),
@@ -985,7 +1161,7 @@ class _BookingPageState extends State<BookingPage>
                 icon: const Icon(Icons.refresh_rounded),
                 label: const Text('Try Again'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _kAccent,
+                  backgroundColor: pal.accent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 24, vertical: 14),
@@ -1003,6 +1179,7 @@ class _BookingPageState extends State<BookingPage>
   // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _pickDate() async {
+    final pal = _Pal(Theme.of(context).brightness == Brightness.dark);
     final picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
@@ -1010,7 +1187,8 @@ class _BookingPageState extends State<BookingPage>
       lastDate: DateTime(2100),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: _kAccent),
+          colorScheme: (pal.dark ? const ColorScheme.dark() : const ColorScheme.light())
+              .copyWith(primary: pal.accent),
         ),
         child: child!,
       ),
@@ -1019,12 +1197,14 @@ class _BookingPageState extends State<BookingPage>
   }
 
   Future<void> _pickTime() async {
+    final pal = _Pal(Theme.of(context).brightness == Brightness.dark);
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: _kAccent),
+          colorScheme: (pal.dark ? const ColorScheme.dark() : const ColorScheme.light())
+              .copyWith(primary: pal.accent),
         ),
         child: child!,
       ),
@@ -1191,16 +1371,41 @@ class _BookingPageState extends State<BookingPage>
     ));
   }
 
-  Widget _hintRow(String text) {
+  Widget _hintRow(_Pal pal, String text) {
     return Row(
       children: [
-        Icon(Icons.info_outline, size: 13, color: Colors.grey.shade400),
+        Icon(Icons.info_outline, size: 13, color: pal.textFaint),
         const SizedBox(width: 6),
         Expanded(
           child: Text(text,
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+              style: TextStyle(color: pal.textFaint, fontSize: 12)),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDIT BADGE — small pencil affordance shown on auto-filled fields
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EditBadge extends StatelessWidget {
+  final _Pal pal;
+  final VoidCallback onTap;
+  const _EditBadge({required this.pal, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: pal.accent.withOpacity(0.12),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(Icons.edit_rounded, size: 14, color: pal.accent),
+      ),
     );
   }
 }
@@ -1210,13 +1415,15 @@ class _BookingPageState extends State<BookingPage>
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ServicesSummaryCard extends StatelessWidget {
-  final List<CartItem>? cartItems;
-  final String?         productName;
-  final double          total;
-  final bool            expanded;
-  final VoidCallback    onToggle;
+  final _Pal             pal;
+  final List<CartItem>?  cartItems;
+  final String?          productName;
+  final double           total;
+  final bool             expanded;
+  final VoidCallback     onToggle;
 
   const _ServicesSummaryCard({
+    required this.pal,
     required this.total,
     required this.expanded,
     required this.onToggle,
@@ -1230,15 +1437,15 @@ class _ServicesSummaryCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF5B4FCF), Color(0xFF7B6FE8)],
+        gradient: LinearGradient(
+          colors: pal.headerGradient,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF5B4FCF).withOpacity(0.28),
+            color: pal.accent.withOpacity(0.28),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
@@ -1256,12 +1463,14 @@ class _ServicesSummaryCard extends StatelessWidget {
                   const Icon(Icons.receipt_long_rounded,
                       color: Colors.white70, size: 20),
                   const SizedBox(width: 10),
-                  const Text('Your Services',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15)),
-                  const Spacer(),
+                  const Expanded(
+                    child: Text('Your Services',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15),
+                        overflow: TextOverflow.ellipsis),
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 5),
@@ -1393,10 +1602,11 @@ class _SummaryRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StepHeader extends StatelessWidget {
+  final _Pal   pal;
   final int    number;
   final String label;
 
-  const _StepHeader({required this.number, required this.label});
+  const _StepHeader({required this.pal, required this.number, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1405,8 +1615,8 @@ class _StepHeader extends StatelessWidget {
         Container(
           width: 28, height: 28,
           alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(colors: [_kAccent, _kAccentSoft]),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: pal.headerGradient),
             shape: BoxShape.circle,
           ),
           child: Text('$number',
@@ -1416,11 +1626,15 @@ class _StepHeader extends StatelessWidget {
                   fontWeight: FontWeight.bold)),
         ),
         const SizedBox(width: 10),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.2)),
+        Expanded(
+          child: Text(label,
+              style: TextStyle(
+                  color: pal.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2),
+              overflow: TextOverflow.ellipsis),
+        ),
       ],
     );
   }
@@ -1431,10 +1645,11 @@ class _StepHeader extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ProgressRow extends StatelessWidget {
+  final _Pal pal;
   final bool step1;
   final bool step2;
 
-  const _ProgressRow({required this.step1, required this.step2});
+  const _ProgressRow({required this.pal, required this.step1, required this.step2});
 
   @override
   Widget build(BuildContext context) {
@@ -1457,7 +1672,9 @@ class _ProgressRow extends StatelessWidget {
             duration: const Duration(milliseconds: 300),
             width: 10, height: 10,
             decoration: BoxDecoration(
-              color: done ? _kAccent : const Color(0xFFDDDAF5),
+              color: done ? pal.accent : (pal.dark
+                  ? const Color(0xFF3A3650)
+                  : const Color(0xFFDDDAF5)),
               shape: BoxShape.circle,
             ),
           ),
@@ -1465,7 +1682,7 @@ class _ProgressRow extends StatelessWidget {
           Text(label,
               style: TextStyle(
                   fontSize: 10,
-                  color: done ? _kAccent : Colors.grey.shade400,
+                  color: done ? pal.accent : pal.textFaint,
                   fontWeight: done ? FontWeight.w600 : FontWeight.normal)),
         ],
       ),
@@ -1476,7 +1693,9 @@ class _ProgressRow extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       height: 2, width: 36,
-      color: done ? _kAccent : const Color(0xFFE8E6F7),
+      color: done
+          ? pal.accent
+          : (pal.dark ? const Color(0xFF302C42) : const Color(0xFFE8E6F7)),
     );
   }
 }
@@ -1486,6 +1705,7 @@ class _ProgressRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PickerTile extends StatelessWidget {
+  final _Pal         pal;
   final IconData     icon;
   final String       label;
   final String       value;
@@ -1493,6 +1713,7 @@ class _PickerTile extends StatelessWidget {
   final VoidCallback onTap;
 
   const _PickerTile({
+    required this.pal,
     required this.icon,
     required this.label,
     required this.value,
@@ -1508,17 +1729,16 @@ class _PickerTile extends StatelessWidget {
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? _kAccent.withOpacity(0.06) : Colors.white,
+          color: selected ? pal.accent.withOpacity(0.08) : pal.card,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: selected
-                ? _kAccent.withOpacity(0.5)
-                : Colors.grey.shade200,
+                ? pal.accent.withOpacity(0.5)
+                : pal.border,
             width: 1.5,
           ),
           boxShadow: [
-            BoxShadow(blurRadius: 10,
-                color: Colors.black.withOpacity(0.04)),
+            BoxShadow(blurRadius: 10, color: pal.shadow),
           ],
         ),
         child: Column(
@@ -1528,26 +1748,30 @@ class _PickerTile extends StatelessWidget {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: selected
-                    ? _kAccent.withOpacity(0.12)
-                    : Colors.grey.shade100,
+                    ? pal.accent.withOpacity(0.14)
+                    : pal.fieldBg,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon,
-                  color: selected ? _kAccent : Colors.grey.shade400,
+                  color: selected ? pal.accent : pal.textFaint,
                   size: 18),
             ),
             const SizedBox(height: 12),
             Text(label,
                 style: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: pal.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w500)),
             const SizedBox(height: 4),
-            Text(value,
-                style: TextStyle(
-                    color: selected ? _kAccent : Colors.grey.shade400,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(value,
+                  style: TextStyle(
+                      color: selected ? pal.accent : pal.textFaint,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13)),
+            ),
           ],
         ),
       ),
@@ -1560,22 +1784,24 @@ class _PickerTile extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _Card extends StatelessWidget {
+  final _Pal   pal;
   final Widget child;
 
-  const _Card({required this.child});
+  const _Card({required this.pal, required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _kCard,
+        color: pal.card,
         borderRadius: BorderRadius.circular(22),
+        border: pal.dark ? Border.all(color: pal.border) : null,
         boxShadow: [
           BoxShadow(
             blurRadius: 16,
             offset: const Offset(0, 4),
-            color: Colors.black.withOpacity(0.05),
+            color: pal.shadow,
           ),
         ],
       ),
@@ -1589,6 +1815,7 @@ class _Card extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _Field extends StatelessWidget {
+  final _Pal                         pal;
   final TextEditingController        controller;
   final String                       hint;
   final IconData                     icon;
@@ -1596,10 +1823,11 @@ class _Field extends StatelessWidget {
   final int                          maxLines;
   final FocusNode?                   focusNode;
   final List<TextInputFormatter>?    formatters;
-  final Widget?                      suffix;
+  final Widget?                      trailing;
   final ValueChanged<String>?        onChanged;
 
   const _Field({
+    required this.pal,
     required this.controller,
     required this.hint,
     required this.icon,
@@ -1607,7 +1835,7 @@ class _Field extends StatelessWidget {
     this.maxLines  = 1,
     this.focusNode,
     this.formatters,
-    this.suffix,
+    this.trailing,
     this.onChanged,
   });
 
@@ -1615,7 +1843,7 @@ class _Field extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F2FB),
+        color: pal.fieldBg,
         borderRadius: BorderRadius.circular(14),
       ),
       child: TextField(
@@ -1625,18 +1853,20 @@ class _Field extends StatelessWidget {
         focusNode:       focusNode,
         inputFormatters: formatters,
         onChanged:       onChanged,
+        style: TextStyle(color: pal.textPrimary, fontSize: 14),
+        cursorColor: pal.accent,
         decoration: InputDecoration(
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           hintText: hint,
           hintStyle:
-              TextStyle(color: Colors.grey.shade400, fontSize: 14),
-          prefixIcon: Icon(icon, color: _kAccent, size: 20),
-          suffixIcon: suffix != null
+              TextStyle(color: pal.textFaint, fontSize: 14),
+          prefixIcon: Icon(icon, color: pal.accent, size: 20),
+          suffixIcon: trailing != null
               ? Padding(
                   padding: const EdgeInsets.only(right: 12),
-                  child: suffix)
+                  child: trailing)
               : null,
           suffixIconConstraints:
               const BoxConstraints(minWidth: 0, minHeight: 0),
@@ -1651,12 +1881,14 @@ class _Field extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _OutlineBtn extends StatelessWidget {
-  final IconData?     icon;
-  final String        label;
-  final bool          loading;
-  final VoidCallback? onTap;
+  final _Pal           pal;
+  final IconData?      icon;
+  final String         label;
+  final bool           loading;
+  final VoidCallback?  onTap;
 
   const _OutlineBtn({
+    required this.pal,
     required this.label,
     this.icon,
     bool loading = false,
@@ -1668,17 +1900,17 @@ class _OutlineBtn extends StatelessWidget {
     return OutlinedButton.icon(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        foregroundColor: _kAccent,
-        side: const BorderSide(color: _kAccent, width: 1.4),
+        foregroundColor: pal.accent,
+        side: BorderSide(color: pal.accent, width: 1.4),
         padding: const EdgeInsets.symmetric(vertical: 13),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14)),
       ),
       icon: loading
-          ? const SizedBox(
+          ? SizedBox(
               width: 16, height: 16,
               child: CircularProgressIndicator(
-                  color: _kAccent, strokeWidth: 2))
+                  color: pal.accent, strokeWidth: 2))
           : Icon(icon, size: 17),
       label: Text(label,
           style: const TextStyle(

@@ -99,25 +99,26 @@ class _CartPageState extends State<CartPage>
   @override
   Widget build(BuildContext context) {
     final items = Cart.getItems(widget.service);
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeIn,
           child: Column(
             children: [
-              _buildHeader(items.length),
+              _buildHeader(context, items.length),
               Expanded(
                 child: items.isEmpty
-                    ? _buildEmptyState()
-                    : _buildItemList(items),
+                    ? _buildEmptyState(context)
+                    : _buildItemList(context, items),
               ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: items.isEmpty ? null : _buildBottomBar(items),
+      bottomNavigationBar: items.isEmpty ? null : _buildBottomBar(context, items),
     );
   }
 
@@ -125,17 +126,24 @@ class _CartPageState extends State<CartPage>
   // HEADER
   // =========================================================
 
-  Widget _buildHeader(int count) {
+  Widget _buildHeader(BuildContext context, int count) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final onSurface = theme.colorScheme.onSurface;
+    final subTextColor = onSurface.withOpacity(0.55);
+    final iconBgColor =
+        isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius:
             const BorderRadius.vertical(bottom: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
             blurRadius: 16,
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
             offset: const Offset(0, 4),
           ),
         ],
@@ -147,10 +155,10 @@ class _CartPageState extends State<CartPage>
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: iconBgColor,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.arrow_back, size: 20),
+              child: Icon(Icons.arrow_back, size: 20, color: onSurface),
             ),
           ),
           const SizedBox(width: 14),
@@ -163,17 +171,18 @@ class _CartPageState extends State<CartPage>
                   widget.serviceName.isNotEmpty
                       ? widget.serviceName
                       : '${widget.service} Cart',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 20,
                     letterSpacing: -0.3,
+                    color: onSurface,
                   ),
                 ),
                 if (count > 0)
                   Text(
                     '$count item${count == 1 ? '' : 's'}',
                     style: TextStyle(
-                      color: Colors.grey.shade500,
+                      color: subTextColor,
                       fontSize: 13,
                     ),
                   ),
@@ -218,16 +227,27 @@ class _CartPageState extends State<CartPage>
   // ITEM LIST
   // =========================================================
 
-  Widget _buildItemList(List<CartItem> items) {
+  Widget _buildItemList(BuildContext context, List<CartItem> items) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       itemCount: items.length,
-      itemBuilder: (_, index) => _buildCartItem(items[index]),
+      itemBuilder: (_, index) => _buildCartItem(context, items[index]),
     );
   }
 
-  Widget _buildCartItem(CartItem item) {
+  Widget _buildCartItem(BuildContext context, CartItem item) {
     final visitLabel = _visitLabel(item);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final onSurface = theme.colorScheme.onSurface;
+    final subTextColor = onSurface.withOpacity(0.55);
+    final imagePlaceholder =
+        isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100;
+    final placeholderIconColor =
+        isDark ? Colors.white.withOpacity(0.35) : Colors.grey.shade400;
+    final stepperBg =
+        isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100;
+    final dismissBg = isDark ? const Color(0xFF3A1F1F) : Colors.red.shade50;
 
     return Dismissible(
       key: ValueKey('${widget.service}_${item.id}'),
@@ -237,7 +257,7 @@ class _CartPageState extends State<CartPage>
         padding: const EdgeInsets.only(right: 20),
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
-          color: Colors.red.shade50,
+          color: dismissBg,
           borderRadius: BorderRadius.circular(22),
         ),
         child: const Icon(Icons.delete_outline_rounded,
@@ -250,11 +270,11 @@ class _CartPageState extends State<CartPage>
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: theme.cardColor,
           borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -271,18 +291,18 @@ class _CartPageState extends State<CartPage>
                 child: Container(
                   width: 90,
                   height: 90,
-                  color: Colors.grey.shade100,
+                  color: imagePlaceholder,
                   child: item.image != null
                       ? Image.asset(
                           item.image!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Icon(
                             Icons.image_outlined,
-                            color: Colors.grey.shade400,
+                            color: placeholderIconColor,
                           ),
                         )
                       : Icon(Icons.image_outlined,
-                          color: Colors.grey.shade400),
+                          color: placeholderIconColor),
                 ),
               ),
               const SizedBox(width: 14),
@@ -296,10 +316,11 @@ class _CartPageState extends State<CartPage>
                       item.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
                         height: 1.3,
+                        color: onSurface,
                       ),
                     ),
 
@@ -331,7 +352,7 @@ class _CartPageState extends State<CartPage>
                         // Qty stepper
                         Container(
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
+                            color: stepperBg,
                             borderRadius: BorderRadius.circular(30),
                           ),
                           child: Row(
@@ -339,6 +360,7 @@ class _CartPageState extends State<CartPage>
                             children: [
                               _stepButton(
                                 icon: Icons.remove,
+                                color: onSurface.withOpacity(0.75),
                                 onTap: () {
                                   Cart.removeById(item.id, widget.service);
                                   _refresh();
@@ -349,9 +371,10 @@ class _CartPageState extends State<CartPage>
                                 child: Text(
                                   '${Cart.getItemCount(item.id, widget.service)}',
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
+                                    color: onSurface,
                                   ),
                                 ),
                               ),
@@ -373,7 +396,7 @@ class _CartPageState extends State<CartPage>
                     Text(
                       'Subtotal: ₹${item.price * Cart.getItemCount(item.id, widget.service)}',
                       style: TextStyle(
-                        color: Colors.grey.shade500,
+                        color: subTextColor,
                         fontSize: 12,
                       ),
                     ),
@@ -391,16 +414,21 @@ class _CartPageState extends State<CartPage>
   // BOTTOM BAR
   // =========================================================
 
-  Widget _buildBottomBar(List<CartItem> items) {
+  Widget _buildBottomBar(BuildContext context, List<CartItem> items) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final onSurface = theme.colorScheme.onSurface;
+    final subTextColor = onSurface.withOpacity(0.55);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius:
             const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.07),
+            color: Colors.black.withOpacity(isDark ? 0.35 : 0.07),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -453,16 +481,17 @@ class _CartPageState extends State<CartPage>
                       Text(
                         'Total Amount',
                         style: TextStyle(
-                          color: Colors.grey.shade500,
+                          color: subTextColor,
                           fontSize: 13,
                         ),
                       ),
                       Text(
                         '₹$_totalAmount',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.bold,
                           letterSpacing: -0.5,
+                          color: onSurface,
                         ),
                       ),
                     ],
@@ -628,7 +657,16 @@ class _CartPageState extends State<CartPage>
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final onSurface = theme.colorScheme.onSurface;
+    final subTextColor = onSurface.withOpacity(0.55);
+    final iconBgColor =
+        isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100;
+    final iconColor =
+        isDark ? Colors.white.withOpacity(0.35) : Colors.grey.shade400;
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -636,24 +674,25 @@ class _CartPageState extends State<CartPage>
           Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: iconBgColor,
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.shopping_cart_outlined,
               size: 52,
-              color: Colors.grey.shade400,
+              color: iconColor,
             ),
           ),
           const SizedBox(height: 20),
-          const Text(
+          Text(
             'Your cart is empty',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w700, color: onSurface),
           ),
           const SizedBox(height: 8),
           Text(
             'Add items to get started',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+            style: TextStyle(color: subTextColor, fontSize: 14),
           ),
           const SizedBox(height: 28),
           ElevatedButton.icon(

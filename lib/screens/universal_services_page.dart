@@ -10,7 +10,7 @@ import '../models/cart_page.dart';
 import 'universal_detail_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UNIVERSAL SERVICES PAGE  – Android-safe, adaptive layout
+// UNIVERSAL SERVICES PAGE  – Android-safe, adaptive layout, theme-aware
 // ─────────────────────────────────────────────────────────────────────────────
 
 class UniversalServicesPage extends StatefulWidget {
@@ -99,13 +99,24 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
   // ── BUILD ───────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final surfaceColor = theme.cardColor;
+    final onSurface = theme.colorScheme.onSurface;
+    final subTextColor = onSurface.withOpacity(0.6);
+
     final data = getData();
     final categories = data.keys.toList();
 
     if (categories.isEmpty) {
       return Scaffold(
+        backgroundColor: scaffoldBg,
         appBar: AppBar(title: Text(widget.serviceName)),
-        body: const Center(child: Text('No services found')),
+        body: Center(
+          child: Text('No services found',
+              style: TextStyle(color: subTextColor)),
+        ),
       );
     }
 
@@ -119,7 +130,7 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
     final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F5F8),
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
@@ -151,7 +162,7 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                 clipBehavior: Clip.none,
                 children: [
                   const Icon(Icons.shopping_cart_outlined,
-                      color: Colors.white, size: 26),
+                      color: Colors.white, size: 24),
                   if (totalItems > 0)
                     Positioned(
                       top: -6,
@@ -161,7 +172,7 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                         decoration: const BoxDecoration(
                             color: Colors.red, shape: BoxShape.circle),
                         constraints:
-                            const BoxConstraints(minWidth: 18, minHeight: 18),
+                            const BoxConstraints(minWidth: 17, minHeight: 17),
                         child: Text(
                           totalItems > 99 ? '99+' : '$totalItems',
                           style: const TextStyle(
@@ -183,16 +194,18 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
         children: [
           // ── Search ──────────────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 5),
             child: TextField(
+              style: TextStyle(color: onSurface, fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Search...',
-                prefixIcon: const Icon(Icons.search),
+                hintStyle: TextStyle(color: subTextColor),
+                prefixIcon: Icon(Icons.search, color: subTextColor),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: surfaceColor,
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
                 ),
               ),
@@ -208,8 +221,8 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
               children: [
                 // ── Left: category rail ──────────────────────────────────
                 Container(
-                  width: 90,
-                  color: Colors.white,
+                  width: 82,
+                  color: surfaceColor,
                   child: ListView.builder(
                     padding: const EdgeInsets.only(top: 6),
                     itemCount: categories.length,
@@ -229,26 +242,29 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                       return GestureDetector(
                         onTap: () => setState(() => selectedIndex = i),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Column(
                             children: [
                               CircleAvatar(
-                                radius: 28,
-                                backgroundColor:
-                                    selected ? color : Colors.grey.shade200,
+                                radius: 25,
+                                backgroundColor: selected
+                                    ? color
+                                    : (isDark
+                                        ? Colors.white.withOpacity(0.08)
+                                        : Colors.grey.shade200),
                                 child: CircleAvatar(
-                                  radius: 24,
+                                  radius: 21,
                                   backgroundImage: AssetImage(image),
                                 ),
                               ),
-                              const SizedBox(height: 5),
+                              const SizedBox(height: 4),
                               Text(
                                 category,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10.5,
                                   fontWeight: FontWeight.bold,
-                                  color: selected ? color : Colors.black87,
+                                  color: selected ? color : subTextColor,
                                 ),
                               ),
                             ],
@@ -263,7 +279,7 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                 Expanded(
                   child: ListView.builder(
                     padding: EdgeInsets.fromLTRB(
-                        4, 6, 4, totalItems > 0 ? 68 + bottomPad + 10 : 10),
+                        4, 5, 4, totalItems > 0 ? 62 + bottomPad + 8 : 8),
                     itemCount: items.length,
                     itemBuilder: (_, i) {
                       final item = items[i];
@@ -352,12 +368,12 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
           ? SafeArea(
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: color,
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
+                        color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
                         blurRadius: 8,
                         offset: const Offset(0, -2)),
                   ],
@@ -372,18 +388,18 @@ class _UniversalServicesPageState extends State<UniversalServicesPage> {
                             color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     SizedBox(
-                      height: 40,
+                      height: 36,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: color,
                           elevation: 0,
                           padding:
-                              const EdgeInsets.symmetric(horizontal: 20),
+                              const EdgeInsets.symmetric(horizontal: 18),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30)),
+                              borderRadius: BorderRadius.circular(28)),
                         ),
                         onPressed: () {
                           Navigator.push(
