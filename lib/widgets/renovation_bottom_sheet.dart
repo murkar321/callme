@@ -99,11 +99,28 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
     final options = renovationOptions[widget.packageId] ?? [];
     final pkgColor = _packageColor;
 
+    // ── DARK MODE AWARENESS ──────────────────────────────────────────
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color sheetBg = isDark ? const Color(0xFF121016) : const Color(0xFFF6F7FB);
+    final Color handleColor = isDark ? Colors.white24 : Colors.grey.shade300;
+    final Color sectionLabelColor = isDark ? Colors.white70 : Colors.grey.shade700;
+    final Color optionCardBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color optionCardBorderIdle = Colors.transparent;
+    final Color checkboxBorderIdle = isDark ? Colors.white24 : Colors.grey.shade300;
+    final Color optionTextIdle = isDark ? Colors.white70 : const Color(0xFF2D2D3A);
+    final Color optionPriceIdle = isDark ? Colors.white38 : Colors.grey.shade500;
+    final Color bottomBarBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color countLabelColor = isDark ? Colors.white54 : Colors.grey.shade500;
+    final Color totalTextColor = isDark ? Colors.white : const Color(0xFF1A1A2E);
+    final Color totalTextEmptyColor = isDark ? Colors.white24 : Colors.grey.shade400;
+    final Color disabledBtnBg = isDark ? const Color(0xFF2A2733) : Colors.grey.shade300;
+    final Color disabledBtnText = isDark ? Colors.white38 : Colors.grey.shade500;
+
     return Container(
       height: screenHeight * 0.88,
-      decoration: const BoxDecoration(
-        color: Color(0xFFF6F7FB),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
@@ -113,7 +130,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey.shade300,
+              color: handleColor,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -199,7 +216,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: Colors.grey.shade700,
+                    color: sectionLabelColor,
                     letterSpacing: 0.2,
                   ),
                 ),
@@ -209,7 +226,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: pkgColor.withOpacity(0.12),
+                      color: pkgColor.withOpacity(isDark ? 0.22 : 0.12),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -245,18 +262,18 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                         horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? pkgColor.withOpacity(0.07)
-                          : Colors.white,
+                          ? pkgColor.withOpacity(isDark ? 0.16 : 0.07)
+                          : optionCardBg,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isSelected
                             ? pkgColor.withOpacity(0.5)
-                            : Colors.transparent,
+                            : optionCardBorderIdle,
                         width: 1.5,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -274,7 +291,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                             border: Border.all(
                               color: isSelected
                                   ? pkgColor
-                                  : Colors.grey.shade300,
+                                  : checkboxBorderIdle,
                               width: 2,
                             ),
                           ),
@@ -294,7 +311,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                                   : FontWeight.w400,
                               color: isSelected
                                   ? pkgColor
-                                  : const Color(0xFF2D2D3A),
+                                  : optionTextIdle,
                             ),
                           ),
                         ),
@@ -306,7 +323,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                               fontWeight: FontWeight.w600,
                               color: isSelected
                                   ? pkgColor
-                                  : Colors.grey.shade500,
+                                  : optionPriceIdle,
                             ),
                           ),
                       ],
@@ -321,10 +338,10 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
           Container(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPad),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: bottomBarBg,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.07),
+                  color: Colors.black.withOpacity(isDark ? 0.4 : 0.07),
                   blurRadius: 16,
                   offset: const Offset(0, -4),
                 ),
@@ -340,7 +357,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                       Text(
                         '${selected.length} service${selected.length == 1 ? '' : 's'}',
                         style: TextStyle(
-                          color: Colors.grey.shade500,
+                          color: countLabelColor,
                           fontSize: 12,
                         ),
                       ),
@@ -351,8 +368,8 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
                           color: total > 0
-                              ? const Color(0xFF1A1A2E)
-                              : Colors.grey.shade400,
+                              ? totalTextColor
+                              : totalTextEmptyColor,
                         ),
                       ),
                     ],
@@ -367,7 +384,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                         horizontal: 24, vertical: 14),
                     decoration: BoxDecoration(
                       color: selected.isEmpty
-                          ? Colors.grey.shade300
+                          ? disabledBtnBg
                           : pkgColor,
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: selected.isEmpty
@@ -390,7 +407,7 @@ class _RenovationBottomSheetState extends State<RenovationBottomSheet> {
                           selected.isEmpty ? 'Select items' : 'Proceed',
                           style: TextStyle(
                             color: selected.isEmpty
-                                ? Colors.grey.shade500
+                                ? disabledBtnText
                                 : Colors.white,
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
