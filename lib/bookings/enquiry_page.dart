@@ -23,17 +23,38 @@ class EnquiryPage extends StatefulWidget {
 
 class _EnquiryPageState extends State<EnquiryPage>
     with SingleTickerProviderStateMixin {
-  // ─── DARK THEME TOKENS ───────────────────────────────────────
-  static const Color _primary     = Color(0xFFB39DFF);
-  static const Color _primarySoft = Color(0xFF241F42);
-  static const Color _bg          = Color(0xFF0F0D1B);
-  static const Color _surface     = Color(0xFF1B1830);
-  static const Color _fieldFill   = Color(0xFF211D3A);
-  static const Color _textLight   = Color(0xFFF3F1FA);
-  static const Color _textMid     = Color(0xFFA9A4C4);
-  static const Color _border      = Color(0xFF322C54);
-  static const Color _error       = Color(0xFFFF6B6B);
-  static const Color _success     = Color(0xFF4ADE80);
+  // ─── THEME TOKENS (light + purple by default, dark when enabled) ──
+  // These are computed from the current Theme brightness at the top of
+  // build() via `_isDark`, so every getter below flips automatically
+  // when the user toggles dark mode from Settings.
+  bool _isDark = false;
+
+  Color get _primary =>
+      _isDark ? const Color(0xFFB39DFF) : const Color(0xFF6A5AE0);
+  // Text/icon color that sits ON TOP of a solid `_primary` fill
+  // (buttons, selected date-picker day, etc).
+  Color get _onPrimary =>
+      _isDark ? const Color(0xFF120E24) : Colors.white;
+  Color get _primarySoft =>
+      _isDark ? const Color(0xFF241F42) : const Color(0xFFEDE9FB);
+  Color get _bg =>
+      _isDark ? const Color(0xFF0F0D1B) : const Color(0xFFF6F5FB);
+  Color get _surface =>
+      _isDark ? const Color(0xFF1B1830) : Colors.white;
+  Color get _fieldFill =>
+      _isDark ? const Color(0xFF211D3A) : const Color(0xFFF3F1FA);
+  Color get _textLight =>
+      _isDark ? const Color(0xFFF3F1FA) : const Color(0xFF1A1A2E);
+  Color get _textMid =>
+      _isDark ? const Color(0xFFA9A4C4) : const Color(0xFF6B6688);
+  Color get _border =>
+      _isDark ? const Color(0xFF322C54) : const Color(0xFFE1DDF2);
+  Color get _error =>
+      _isDark ? const Color(0xFFFF6B6B) : const Color(0xFFE5484D);
+  Color get _success =>
+      _isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
+  Color get _cardShadow =>
+      _isDark ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.06);
 
   // ─── KEYS / CONTROLLERS ─────────────────────────────────────
   final _formKey        = GlobalKey<FormState>();
@@ -436,7 +457,7 @@ class _EnquiryPageState extends State<EnquiryPage>
               size: _s(18),
             ),
             SizedBox(width: _s(10)),
-            Expanded(child: Text(msg, style: TextStyle(fontSize: _s(14)))),
+            Expanded(child: Text(msg, style: TextStyle(fontSize: _s(14), color: Colors.white))),
           ],
         ),
         backgroundColor: isError ? _error : _success,
@@ -458,13 +479,21 @@ class _EnquiryPageState extends State<EnquiryPage>
       initialDate: selectedDate ?? now,
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary:        _primary,
-            onPrimary:      Color(0xFF120E24),
-            surface:        _surface,
-            onSurface:      _textLight,
-            surfaceVariant: _primarySoft,
-          ),
+          colorScheme: _isDark
+              ? const ColorScheme.dark(
+                  primary:        Color(0xFFB39DFF),
+                  onPrimary:      Color(0xFF120E24),
+                  surface:        Color(0xFF1B1830),
+                  onSurface:      Color(0xFFF3F1FA),
+                  surfaceVariant: Color(0xFF241F42),
+                )
+              : const ColorScheme.light(
+                  primary:        Color(0xFF6A5AE0),
+                  onPrimary:      Colors.white,
+                  surface:        Colors.white,
+                  onSurface:      Color(0xFF1A1A2E),
+                  surfaceVariant: Color(0xFFEDE9FB),
+                ),
           dialogBackgroundColor: _surface,
         ),
         child: child!,
@@ -479,12 +508,19 @@ class _EnquiryPageState extends State<EnquiryPage>
       initialTime: selectedTime ?? TimeOfDay.now(),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary:   _primary,
-            onPrimary: Color(0xFF120E24),
-            surface:   _surface,
-            onSurface: _textLight,
-          ),
+          colorScheme: _isDark
+              ? const ColorScheme.dark(
+                  primary:   Color(0xFFB39DFF),
+                  onPrimary: Color(0xFF120E24),
+                  surface:   Color(0xFF1B1830),
+                  onSurface: Color(0xFFF3F1FA),
+                )
+              : const ColorScheme.light(
+                  primary:   Color(0xFF6A5AE0),
+                  onPrimary: Colors.white,
+                  surface:   Colors.white,
+                  onSurface: Color(0xFF1A1A2E),
+                ),
           dialogBackgroundColor: _surface,
         ),
         child: child!,
@@ -496,15 +532,20 @@ class _EnquiryPageState extends State<EnquiryPage>
   // ─── BUILD ──────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    // Follows the app-wide theme (system default / user setting from
+    // SettingsController). White + purple until dark mode is enabled.
+    _isDark = Theme.of(context).brightness == Brightness.dark;
+
     final mq = MediaQuery.of(context);
     // sw/390 baseline scale, clamped so tiny/huge screens stay usable.
     _scale = (mq.size.width / 390).clamp(0.85, 1.25);
     final isWide = mq.size.width > 600;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor:           Colors.transparent,
-        statusBarIconBrightness:  Brightness.light,
+        statusBarIconBrightness:  _isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness:      _isDark ? Brightness.dark : Brightness.light,
       ),
       child: Scaffold(
         backgroundColor: _bg,
@@ -577,7 +618,7 @@ class _EnquiryPageState extends State<EnquiryPage>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(color: _primary, strokeWidth: 2.5),
+          CircularProgressIndicator(color: _primary, strokeWidth: 2.5),
           SizedBox(height: _s(16)),
           Text('Finding a provider…',
               style: TextStyle(color: _textMid, fontSize: _s(14))),
@@ -596,7 +637,7 @@ class _EnquiryPageState extends State<EnquiryPage>
           children: [
             Container(
               padding: EdgeInsets.all(_s(20)),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color:  _primarySoft,
                 shape:  BoxShape.circle,
               ),
@@ -631,7 +672,7 @@ class _EnquiryPageState extends State<EnquiryPage>
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: _s(14))),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _primary,
-                  foregroundColor: const Color(0xFF120E24),
+                  foregroundColor: _onPrimary,
                   elevation:       0,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
@@ -677,7 +718,7 @@ class _EnquiryPageState extends State<EnquiryPage>
         border:       Border.all(color: _border, width: 1),
         boxShadow: [
           BoxShadow(
-            color:      Colors.black.withOpacity(0.35),
+            color:      _cardShadow,
             blurRadius: 24,
             offset:     const Offset(0, 8),
           ),
@@ -692,7 +733,12 @@ class _EnquiryPageState extends State<EnquiryPage>
             if (_hasCart) _cartPreview(),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: _s(20)),
-              child: _SectionLabel(label: 'Your Details', scale: _scale),
+              child: _SectionLabel(
+                label: 'Your Details',
+                scale: _scale,
+                accentColor: _primary,
+                dividerColor: _border,
+              ),
             ),
             if (isPrefillingUser)
               Padding(
@@ -756,7 +802,12 @@ class _EnquiryPageState extends State<EnquiryPage>
             SizedBox(height: _s(20)),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: _s(20)),
-              child: _SectionLabel(label: 'Schedule', scale: _scale),
+              child: _SectionLabel(
+                label: 'Schedule',
+                scale: _scale,
+                accentColor: _primary,
+                dividerColor: _border,
+              ),
             ),
             SizedBox(height: _s(12)),
             Padding(
@@ -784,9 +835,9 @@ class _EnquiryPageState extends State<EnquiryPage>
   Widget _cardHeader() {
     return Container(
       padding: EdgeInsets.fromLTRB(_s(20), _s(22), _s(20), _s(18)),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: _primarySoft,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Row(
         children: [
@@ -911,26 +962,26 @@ class _EnquiryPageState extends State<EnquiryPage>
         decoration: InputDecoration(
           labelText:    label,
           hintText:     hint,
-          hintStyle:    TextStyle(color: const Color(0xFF6B6688), fontSize: _s(13)),
+          hintStyle:    TextStyle(color: _textMid, fontSize: _s(13)),
           labelStyle:   TextStyle(color: _textMid, fontSize: _s(13)),
           prefixIcon:   Icon(icon, color: _primary, size: _s(20)),
           filled:       true,
           fillColor:    _fieldFill,
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide:   const BorderSide(color: _border, width: 1.2),
+            borderSide:   BorderSide(color: _border, width: 1.2),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide:   const BorderSide(color: _primary, width: 1.6),
+            borderSide:   BorderSide(color: _primary, width: 1.6),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide:   const BorderSide(color: _error, width: 1.2),
+            borderSide:   BorderSide(color: _error, width: 1.2),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide:   const BorderSide(color: _error, width: 1.6),
+            borderSide:   BorderSide(color: _error, width: 1.6),
           ),
           errorStyle: TextStyle(fontSize: _s(11.5), color: _error),
           contentPadding: EdgeInsets.symmetric(
@@ -1029,7 +1080,7 @@ class _EnquiryPageState extends State<EnquiryPage>
         style: ElevatedButton.styleFrom(
           backgroundColor:            _primary,
           disabledBackgroundColor:    _primary.withOpacity(0.4),
-          foregroundColor:            const Color(0xFF120E24),
+          foregroundColor:            _onPrimary,
           elevation:                  0,
           shadowColor:                Colors.transparent,
           shape: RoundedRectangleBorder(
@@ -1039,8 +1090,8 @@ class _EnquiryPageState extends State<EnquiryPage>
             ? SizedBox(
                 width:  _s(20),
                 height: _s(20),
-                child: const CircularProgressIndicator(
-                    color:       Color(0xFF120E24),
+                child: CircularProgressIndicator(
+                    color:       _onPrimary,
                     strokeWidth: 2.2),
               )
             : Row(
@@ -1064,7 +1115,15 @@ class _EnquiryPageState extends State<EnquiryPage>
 class _SectionLabel extends StatelessWidget {
   final String label;
   final double scale;
-  const _SectionLabel({required this.label, this.scale = 1.0});
+  final Color accentColor;
+  final Color dividerColor;
+
+  const _SectionLabel({
+    required this.label,
+    this.scale = 1.0,
+    this.accentColor = const Color(0xFFB39DFF),
+    this.dividerColor = const Color(0xFF322C54),
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1075,12 +1134,12 @@ class _SectionLabel extends StatelessWidget {
           style: TextStyle(
               fontSize:      11 * scale,
               fontWeight:    FontWeight.w700,
-              color:         const Color(0xFFB39DFF),
+              color:         accentColor,
               letterSpacing: 1.2),
         ),
         SizedBox(width: 10 * scale),
-        const Expanded(
-          child: Divider(color: Color(0xFF322C54), thickness: 1),
+        Expanded(
+          child: Divider(color: dividerColor, thickness: 1),
         ),
       ],
     );
