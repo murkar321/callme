@@ -111,28 +111,38 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
     final totalItems = Cart.getTotalItems(kCivilServiceKey);
     final bottomPad = mq.viewPadding.bottom;
 
+    // ── DARK MODE AWARENESS ──────────────────────────────────────────
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color scaffoldBg = isDark ? const Color(0xFF121016) : const Color(0xFFF6F7FB);
+    final Color appBarBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color titleColor = isDark ? Colors.white : const Color(0xFF1A1A2E);
+    final Color categoryPanelBg = isDark ? const Color(0xFF1B1922) : const Color(0xFFF0F0F5);
+    final Color categoryPanelSelectedBg = isDark ? const Color(0xFF2A2733) : Colors.white;
+    final Color dividerColor = isDark ? Colors.white12 : const Color(0xFFEEEEEE);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: appBarBg,
         elevation: 0,
-        surfaceTintColor: Colors.white,
-        title: const Text(
+        surfaceTintColor: appBarBg,
+        title: Text(
           "Civil Contract Services",
           style: TextStyle(
             fontWeight: FontWeight.w800,
             fontSize: 17,
-            color: Color(0xFF1A1A2E),
+            color: titleColor,
           ),
         ),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Color(0xFF1A1A2E)),
+        iconTheme: IconThemeData(color: titleColor),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: _CartIconButton(
               count: totalItems,
               onTap: totalItems > 0 ? _openCart : null,
+              isDark: isDark,
             ),
           ),
         ],
@@ -151,16 +161,17 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                   _searchController.clear();
                   setState(() => _searchQuery = '');
                 },
+                isDark: isDark,
               ),
             ),
 
             // ── HINT BANNER ──────────────────────────────────────────
-            const Padding(
-              padding: EdgeInsets.fromLTRB(14, 0, 14, 8),
-              child: _TapHintBanner(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+              child: _TapHintBanner(isDark: isDark),
             ),
 
-            const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+            Divider(height: 1, thickness: 1, color: dividerColor),
 
             Expanded(
               child: Row(
@@ -170,12 +181,15 @@ class _CivilServicesPageState extends State<CivilServicesPage> {
                     categories: categories,
                     selectedIndex: selectedIndex,
                     onSelect: (i) => setState(() => selectedIndex = i),
+                    isDark: isDark,
+                    panelBg: categoryPanelBg,
+                    selectedBg: categoryPanelSelectedBg,
                   ),
 
                   // ── RIGHT SERVICE LIST ───────────────────────────────
                   Expanded(
                     child: subServices.isEmpty
-                        ? const _EmptySearchState()
+                        ? _EmptySearchState(isDark: isDark)
                         : ListView.builder(
                             padding: EdgeInsets.fromLTRB(
                               10,
@@ -226,22 +240,29 @@ class _SearchField extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
+  final bool isDark;
 
   const _SearchField({
     required this.controller,
     required this.onChanged,
     required this.onClear,
+    this.isDark = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final Color fieldBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color textColor = isDark ? Colors.white : const Color(0xFF1A1A2E);
+    final Color hintColor = isDark ? Colors.white38 : Colors.grey.shade500;
+    final Color iconColor = isDark ? Colors.white54 : Colors.grey.shade500;
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: fieldBg,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -250,19 +271,20 @@ class _SearchField extends StatelessWidget {
       child: TextField(
         controller: controller,
         onChanged: onChanged,
-        style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A2E)),
+        style: TextStyle(fontSize: 14, color: textColor),
+        cursorColor: const Color(0xFF1565C0),
         decoration: InputDecoration(
           hintText: 'Search civil services…',
-          hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-          prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade500),
+          hintStyle: TextStyle(color: hintColor, fontSize: 14),
+          prefixIcon: Icon(Icons.search_rounded, color: iconColor),
           suffixIcon: controller.text.isNotEmpty
               ? IconButton(
-                  icon: Icon(Icons.close_rounded, color: Colors.grey.shade500),
+                  icon: Icon(Icons.close_rounded, color: iconColor),
                   onPressed: onClear,
                 )
               : null,
           filled: true,
-          fillColor: Colors.white,
+          fillColor: fieldBg,
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
@@ -275,14 +297,15 @@ class _SearchField extends StatelessWidget {
 }
 
 class _TapHintBanner extends StatelessWidget {
-  const _TapHintBanner();
+  final bool isDark;
+  const _TapHintBanner({this.isDark = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: const Color(0xFF1565C0).withOpacity(0.06),
+        color: const Color(0xFF1565C0).withOpacity(isDark ? 0.18 : 0.06),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -295,7 +318,9 @@ class _TapHintBanner extends StatelessWidget {
               'Tap on any card to view full service details',
               style: TextStyle(
                 fontSize: 12,
-                color: const Color(0xFF1565C0).withOpacity(0.9),
+                color: isDark
+                    ? const Color(0xFF6FA8DC)
+                    : const Color(0xFF1565C0).withOpacity(0.9),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -307,7 +332,8 @@ class _TapHintBanner extends StatelessWidget {
 }
 
 class _EmptySearchState extends StatelessWidget {
-  const _EmptySearchState();
+  final bool isDark;
+  const _EmptySearchState({this.isDark = false});
 
   @override
   Widget build(BuildContext context) {
@@ -317,14 +343,15 @@ class _EmptySearchState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off_rounded, size: 44, color: Colors.grey.shade400),
+            Icon(Icons.search_off_rounded,
+                size: 44, color: isDark ? Colors.white24 : Colors.grey.shade400),
             const SizedBox(height: 12),
             Text(
               'No services match your search',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey.shade600,
+                color: isDark ? Colors.white60 : Colors.grey.shade600,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -338,8 +365,9 @@ class _EmptySearchState extends StatelessWidget {
 class _CartIconButton extends StatelessWidget {
   final int count;
   final VoidCallback? onTap;
+  final bool isDark;
 
-  const _CartIconButton({required this.count, this.onTap});
+  const _CartIconButton({required this.count, this.onTap, this.isDark = false});
 
   @override
   Widget build(BuildContext context) {
@@ -351,7 +379,7 @@ class _CartIconButton extends StatelessWidget {
             Icons.shopping_cart_outlined,
             color: count > 0
                 ? const Color(0xFF1565C0)
-                : Colors.grey.shade500,
+                : (isDark ? Colors.white38 : Colors.grey.shade500),
           ),
           onPressed: onTap,
         ),
@@ -386,18 +414,24 @@ class _CategoryPanel extends StatelessWidget {
   final List<CivilService> categories;
   final int selectedIndex;
   final ValueChanged<int> onSelect;
+  final bool isDark;
+  final Color panelBg;
+  final Color selectedBg;
 
   const _CategoryPanel({
     required this.categories,
     required this.selectedIndex,
     required this.onSelect,
+    this.isDark = false,
+    this.panelBg = const Color(0xFFF0F0F5),
+    this.selectedBg = Colors.white,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 92,
-      color: const Color(0xFFF0F0F5),
+      color: panelBg,
       child: ListView.builder(
         itemCount: categories.length,
         itemBuilder: (context, index) {
@@ -411,7 +445,7 @@ class _CategoryPanel extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
               decoration: BoxDecoration(
-                color: isSelected ? Colors.white : Colors.transparent,
+                color: isSelected ? selectedBg : Colors.transparent,
                 border: Border(
                   left: BorderSide(
                     color: isSelected
@@ -430,7 +464,7 @@ class _CategoryPanel extends StatelessWidget {
                       border: Border.all(
                         color: isSelected
                             ? const Color(0xFF1565C0)
-                            : Colors.grey.shade300,
+                            : (isDark ? Colors.white24 : Colors.grey.shade300),
                         width: 2,
                       ),
                     ),
@@ -452,7 +486,7 @@ class _CategoryPanel extends StatelessWidget {
                           : FontWeight.w400,
                       color: isSelected
                           ? const Color(0xFF1565C0)
-                          : Colors.grey.shade600,
+                          : (isDark ? Colors.white60 : Colors.grey.shade600),
                     ),
                   ),
                 ],

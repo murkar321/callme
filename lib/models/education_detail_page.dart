@@ -27,8 +27,13 @@ class EducationDetailPage extends StatelessWidget {
     final sw = mq.size.width;
     final double sp = sw / 390; // scale factor relative to 390px base
 
+    // ── DARK MODE AWARENESS ──────────────────────────────────────────
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color scaffoldBg = isDark ? const Color(0xFF121016) : const Color(0xFFF6F7FB);
+    final Color aboutTextColor = isDark ? Colors.white70 : const Color(0xFF4B5563);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: scaffoldBg,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -76,14 +81,14 @@ class EducationDetailPage extends StatelessWidget {
                         children: [
                           _Chip(
                             label: service.category,
-                            color: accent.withOpacity(0.12),
+                            color: accent.withOpacity(isDark ? 0.22 : 0.12),
                             textColor: accent,
                           ),
                           _Chip(
                             icon: Icons.schedule_outlined,
                             label: service.duration,
-                            color: Colors.grey.shade100,
-                            textColor: Colors.grey.shade700,
+                            color: isDark ? const Color(0xFF1B1922) : Colors.grey.shade100,
+                            textColor: isDark ? Colors.white70 : Colors.grey.shade700,
                           ),
                         ],
                       ),
@@ -91,13 +96,13 @@ class EducationDetailPage extends StatelessWidget {
                       const SizedBox(height: 20),
 
                       // About section
-                      _SectionTitle("About this course"),
+                      _SectionTitle("About this course", isDark: isDark),
                       const SizedBox(height: 8),
                       Text(
                         service.description,
                         style: TextStyle(
                           fontSize: 14 * sp,
-                          color: const Color(0xFF4B5563),
+                          color: aboutTextColor,
                           height: 1.65,
                         ),
                       ),
@@ -111,6 +116,7 @@ class EducationDetailPage extends StatelessWidget {
                           items: service.includes,
                           iconColor: accent,
                           sp: sp, iconData: Icons.check,
+                          isDark: isDark,
                         ),
                         const SizedBox(height: 16),
                       ],
@@ -121,6 +127,7 @@ class EducationDetailPage extends StatelessWidget {
                           steps: service.steps,
                           accent: accent,
                           sp: sp,
+                          isDark: isDark,
                         ),
                         const SizedBox(height: 16),
                       ],
@@ -133,6 +140,7 @@ class EducationDetailPage extends StatelessWidget {
                           body: service.tools,
                           accent: accent,
                           sp: sp,
+                          isDark: isDark,
                         ),
                         const SizedBox(height: 16),
                       ],
@@ -145,6 +153,7 @@ class EducationDetailPage extends StatelessWidget {
                           body: service.warranty,
                           accent: accent,
                           sp: sp,
+                          isDark: isDark,
                         ),
                       ],
                     ],
@@ -164,6 +173,7 @@ class EducationDetailPage extends StatelessWidget {
               accent: accent,
               sp: sp,
               context: context,
+              isDark: isDark,
             ),
           ),
         ],
@@ -279,16 +289,17 @@ class _Chip extends StatelessWidget {
 
 class _SectionTitle extends StatelessWidget {
   final String text;
-  const _SectionTitle(this.text);
+  final bool isDark;
+  const _SectionTitle(this.text, {this.isDark = false});
 
   @override
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w700,
-        color: Color(0xFF111827),
+        color: isDark ? Colors.white : const Color(0xFF111827),
         letterSpacing: -0.2,
       ),
     );
@@ -305,6 +316,7 @@ class _BulletCard extends StatelessWidget {
   final Color iconColor;
   final IconData iconData;
   final double sp;
+  final bool isDark;
 
   const _BulletCard({
     required this.title,
@@ -312,6 +324,7 @@ class _BulletCard extends StatelessWidget {
     required this.iconColor,
     required this.iconData,
     required this.sp,
+    required this.isDark,
   });
 
   @override
@@ -319,11 +332,13 @@ class _BulletCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1B1922) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: isDark
+                ? Colors.black.withOpacity(0.35)
+                : Colors.black.withOpacity(0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -332,7 +347,7 @@ class _BulletCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionTitle(title),
+          _SectionTitle(title, isDark: isDark),
           const SizedBox(height: 12),
           ...items.map(
             (item) => Padding(
@@ -355,7 +370,7 @@ class _BulletCard extends StatelessWidget {
                       item,
                       style: TextStyle(
                         fontSize: 13.5 * sp,
-                        color: const Color(0xFF374151),
+                        color: isDark ? Colors.white70 : const Color(0xFF374151),
                         height: 1.5,
                       ),
                     ),
@@ -378,11 +393,13 @@ class _StepsCard extends StatelessWidget {
   final List<String> steps;
   final Color accent;
   final double sp;
+  final bool isDark;
 
   const _StepsCard({
     required this.steps,
     required this.accent,
     required this.sp,
+    required this.isDark,
   });
 
   @override
@@ -390,11 +407,13 @@ class _StepsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1B1922) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: isDark
+                ? Colors.black.withOpacity(0.35)
+                : Colors.black.withOpacity(0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -403,7 +422,7 @@ class _StepsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle("Course flow"),
+          _SectionTitle("Course flow", isDark: isDark),
           const SizedBox(height: 12),
           ...steps.asMap().entries.map(
             (entry) {
@@ -450,7 +469,7 @@ class _StepsCard extends StatelessWidget {
                         entry.value,
                         style: TextStyle(
                           fontSize: 13.5 * sp,
-                          color: const Color(0xFF374151),
+                          color: isDark ? Colors.white70 : const Color(0xFF374151),
                           height: 1.5,
                         ),
                       ),
@@ -476,6 +495,7 @@ class _InfoCard extends StatelessWidget {
   final String body;
   final Color accent;
   final double sp;
+  final bool isDark;
 
   const _InfoCard({
     required this.icon,
@@ -483,6 +503,7 @@ class _InfoCard extends StatelessWidget {
     required this.body,
     required this.accent,
     required this.sp,
+    required this.isDark,
   });
 
   @override
@@ -490,11 +511,13 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1B1922) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: isDark
+                ? Colors.black.withOpacity(0.35)
+                : Colors.black.withOpacity(0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -518,10 +541,10 @@ class _InfoCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
+                    color: isDark ? Colors.white : const Color(0xFF111827),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -529,7 +552,7 @@ class _InfoCard extends StatelessWidget {
                   body,
                   style: TextStyle(
                     fontSize: 13.5 * sp,
-                    color: const Color(0xFF4B5563),
+                    color: isDark ? Colors.white70 : const Color(0xFF4B5563),
                     height: 1.55,
                   ),
                 ),
@@ -551,12 +574,14 @@ class _BottomBar extends StatelessWidget {
   final Color accent;
   final double sp;
   final BuildContext context;
+  final bool isDark;
 
   const _BottomBar({
     required this.service,
     required this.accent,
     required this.sp,
     required this.context,
+    required this.isDark,
   });
 
   @override
@@ -566,10 +591,10 @@ class _BottomBar extends StatelessWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottom),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1B1922) : Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.07),
+            color: Colors.black.withOpacity(isDark ? 0.4 : 0.07),
             blurRadius: 16,
             offset: const Offset(0, -4),
           ),

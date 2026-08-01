@@ -17,6 +17,7 @@ class SalonDetailPage extends StatefulWidget {
 
 class _SalonDetailPageState extends State<SalonDetailPage> {
   static const String serviceName = "Salon";
+  static const Color _brand = Color(0xFFAE91BA);
 
   void refresh() => setState(() {});
 
@@ -29,6 +30,13 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final Color cardBg = theme.cardColor;
+    final Color subtleText = cs.onSurface.withOpacity(0.6);
+
     /// Bottom system navigation bar height (handles gesture bar & button nav)
     final double bottomPadding = MediaQuery.of(context).padding.bottom;
 
@@ -36,7 +44,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
     final double bottomBarHeight = 84 + bottomPadding;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4FA),
+      backgroundColor: theme.scaffoldBackgroundColor,
 
       body: Stack(
         children: [
@@ -49,7 +57,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
               SliverAppBar(
                 expandedHeight: 320,
                 pinned: true,
-                backgroundColor: const Color(0xFFAE91BA),
+                backgroundColor: _brand,
 
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
@@ -146,11 +154,11 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(22),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
+                              color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -164,11 +172,9 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                               crossAxisAlignment:
                                   CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   "Starting Price",
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                  ),
+                                  style: TextStyle(color: subtleText),
                                 ),
 
                                 const SizedBox(height: 6),
@@ -188,10 +194,10 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                                     if (widget.service.discount > 0)
                                       Text(
                                         "₹${widget.service.price}",
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           decoration:
                                               TextDecoration.lineThrough,
-                                          color: Colors.grey,
+                                          color: subtleText,
                                           fontSize: 16,
                                         ),
                                       ),
@@ -210,14 +216,18 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                                   vertical: 10,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.green.shade100,
+                                  color: isDark
+                                      ? Colors.green.withOpacity(0.18)
+                                      : Colors.green.shade100,
                                   borderRadius:
                                       BorderRadius.circular(14),
                                 ),
                                 child: Text(
                                   "${widget.service.discount}% OFF",
                                   style: TextStyle(
-                                    color: Colors.green.shade700,
+                                    color: isDark
+                                        ? Colors.greenAccent.shade200
+                                        : Colors.green.shade700,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -236,7 +246,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -258,7 +268,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Column(
@@ -274,13 +284,15 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                                   Container(
                                     padding: const EdgeInsets.all(5),
                                     decoration: BoxDecoration(
-                                      color:
-                                          Colors.green.withOpacity(0.1),
+                                      color: Colors.green
+                                          .withOpacity(isDark ? 0.18 : 0.1),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.check,
-                                      color: Colors.green,
+                                      color: isDark
+                                          ? Colors.greenAccent.shade200
+                                          : Colors.green,
                                       size: 18,
                                     ),
                                   ),
@@ -330,7 +342,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                 14 + bottomPadding,              // ← key fix
               ),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: cardBg,
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(22),
                   topRight: Radius.circular(22),
@@ -339,7 +351,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
                     blurRadius: 12,
                     offset: const Offset(0, -3),
                   ),
@@ -355,6 +367,8 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size(0, 55),
+                          foregroundColor: theme.textTheme.bodyMedium?.color,
+                          side: BorderSide(color: cs.onSurface.withOpacity(0.2)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -386,7 +400,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                     flex: 2,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFAE91BA),
+                        backgroundColor: _brand,
                         elevation: 0,
                         minimumSize: const Size(0, 55),
                         shape: RoundedRectangleBorder(
@@ -397,6 +411,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                       child: Text(
                         totalQty == 0 ? "Book Appointment" : "Add More",
                         style: const TextStyle(
+                          color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -426,6 +441,9 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
   /// ================= CENTER BOOKING POPUP =================
   void _showBookingPopup(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     showGeneralDialog(
       context: context,
@@ -451,12 +469,12 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
               padding: const EdgeInsets.all(22),
 
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.cardColor,
                 borderRadius: BorderRadius.circular(30),
 
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withOpacity(isDark ? 0.5 : 0.15),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -478,12 +496,13 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
+                            color: cs.onSurface.withOpacity(0.08),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.close_rounded,
                             size: 22,
+                            color: cs.onSurface,
                           ),
                         ),
                       ),
@@ -495,12 +514,12 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFAE91BA).withOpacity(0.12),
+                        color: _brand.withOpacity(isDark ? 0.2 : 0.12),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
                         Icons.content_cut_rounded,
-                        color: Color(0xFFAE91BA),
+                        color: _brand,
                         size: 40,
                       ),
                     ),
@@ -524,7 +543,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
                       "Select your preferred service experience",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.grey.shade600,
+                        color: cs.onSurface.withOpacity(0.6),
                         fontSize: 15,
                       ),
                     ),
@@ -533,6 +552,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
                     /// HOME APPOINTMENT
                     _appointmentCard(
+                      context: context,
                       icon: Icons.home_rounded,
                       title: "Home Appointment",
                       subtitle: "Professional visits your home",
@@ -557,6 +577,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
                     /// SALON APPOINTMENT
                     _appointmentCard(
+                      context: context,
                       icon: Icons.storefront_rounded,
                       title: "Salon Visit",
                       subtitle: "Visit salon for premium experience",
@@ -601,12 +622,16 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
   /// ================= APPOINTMENT CARD =================
   Widget _appointmentCard({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required String subtitle,
     required Color color,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final subtitleColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.65);
+
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
@@ -615,9 +640,9 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: color.withOpacity(0.2),
+            color: color.withOpacity(isDark ? 0.35 : 0.2),
           ),
-          color: color.withOpacity(0.05),
+          color: color.withOpacity(isDark ? 0.12 : 0.05),
         ),
         child: Row(
           children: [
@@ -626,7 +651,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withOpacity(isDark ? 0.25 : 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: color, size: 28),
@@ -651,9 +676,7 @@ class _SalonDetailPageState extends State<SalonDetailPage> {
 
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: Colors.grey,
-                    ),
+                    style: TextStyle(color: subtitleColor),
                   ),
                 ],
               ),

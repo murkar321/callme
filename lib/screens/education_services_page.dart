@@ -45,11 +45,27 @@ class _EducationServicesPageState
 
     const Color themeColor = Color(0xFFAE91BA);
 
+    // ── DARK MODE AWARENESS ────────────────────────────────────────────
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color scaffoldBg = isDark ? const Color(0xFF121016) : Colors.grey[100]!;
+    final Color panelBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color searchFieldBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color categoryTextColor = isDark ? Colors.white70 : Colors.black87;
+    final Color categoryTextColorSelected = isDark ? Colors.white : Colors.black87;
+    final Color inputTextColor = isDark ? Colors.white : Colors.black87;
+    final Color hintTextColor = isDark ? Colors.white38 : Colors.black38;
+
     /// 🛑 EMPTY STATE
     if (categories.isEmpty) {
       return Scaffold(
+        backgroundColor: scaffoldBg,
         appBar: AppBar(title: const Text("Education Services")),
-        body: const Center(child: Text("No services found")),
+        body: Center(
+          child: Text(
+            "No services found",
+            style: TextStyle(color: isDark ? Colors.white70 : Colors.black87),
+          ),
+        ),
       );
     }
 
@@ -65,7 +81,7 @@ class _EducationServicesPageState
     final totalPrice = Cart.getTotal("Education");
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: scaffoldBg,
 
       /// 🔝 APP BAR
       appBar: AppBar(
@@ -152,13 +168,16 @@ class _EducationServicesPageState
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
             child: TextField(
+              style: TextStyle(color: inputTextColor),
+              cursorColor: themeColor,
               decoration: InputDecoration(
                 hintText: "Search courses or category...",
-                prefixIcon: const Icon(Icons.search),
+                hintStyle: TextStyle(color: hintTextColor),
+                prefixIcon: Icon(Icons.search, color: isDark ? Colors.white54 : Colors.black54),
                 contentPadding:
                     const EdgeInsets.symmetric(vertical: 0),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: searchFieldBg,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
@@ -180,7 +199,7 @@ class _EducationServicesPageState
                 /// 📂 LEFT CATEGORY PANEL
                 Container(
                   width: MediaQuery.of(context).size.width * 0.28,
-                  color: Colors.white,
+                  color: panelBg,
                   child: ListView.builder(
                     itemCount: categories.length,
                     itemBuilder: (context, index) {
@@ -203,7 +222,7 @@ class _EducationServicesPageState
                               const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? const Color(0xFFAE91BA).withOpacity(0.12)
+                                ? themeColor.withOpacity(isDark ? 0.22 : 0.12)
                                 : Colors.transparent,
                             border: Border(
                               left: BorderSide(
@@ -235,6 +254,9 @@ class _EducationServicesPageState
                                     fontWeight: isSelected
                                         ? FontWeight.bold
                                         : FontWeight.normal,
+                                    color: isSelected
+                                        ? categoryTextColorSelected
+                                        : categoryTextColor,
                                   ),
                                 ),
                               ),

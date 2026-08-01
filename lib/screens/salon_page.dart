@@ -5,7 +5,7 @@ import '../models/cart_page.dart';
 import '../widgets/salon_service_card.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SALON PAGE  – Android-safe, adaptive layout, with cross-category search
+// SALON PAGE  – Android-safe, adaptive layout, theme-aware, cross-category search
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SalonPage extends StatefulWidget {
@@ -58,6 +58,15 @@ class _SalonPageState extends State<SalonPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final Color cardBg = theme.cardColor;
+    final Color searchBoxBg = cs.onSurface.withOpacity(0.05);
+    final Color borderColor = cs.onSurface.withOpacity(0.12);
+    final Color subtleText = cs.onSurface.withOpacity(0.6);
+
     final categories = salonCategories;
 
     if (categories.isEmpty) {
@@ -79,7 +88,7 @@ class _SalonPageState extends State<SalonPage> {
     final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Salon Services',
             style: TextStyle(
@@ -144,31 +153,31 @@ class _SalonPageState extends State<SalonPage> {
           // ── Search bar ─────────────────────────────────────────────────
           Container(
             width: double.infinity,
-            color: Colors.white,
+            color: cardBg,
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             child: Container(
               height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFFF5F6FA),
+                color: searchBoxBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200, width: 1),
+                border: Border.all(color: borderColor, width: 1),
               ),
               child: Row(
                 children: [
                   const SizedBox(width: 12),
-                  Icon(Icons.search, size: 20, color: Colors.grey.shade500),
+                  Icon(Icons.search, size: 20, color: subtleText),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       controller: _searchController,
                       onChanged: _onSearchChanged,
                       textInputAction: TextInputAction.search,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Search all salon services...',
-                        hintStyle: TextStyle(fontSize: 13.5, color: Colors.grey),
+                        hintStyle: TextStyle(fontSize: 13.5, color: subtleText),
                         border: InputBorder.none,
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       style: const TextStyle(fontSize: 13.5),
                     ),
@@ -178,8 +187,7 @@ class _SalonPageState extends State<SalonPage> {
                       onTap: _clearSearch,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Icon(Icons.close,
-                            size: 18, color: Colors.grey.shade500),
+                        child: Icon(Icons.close, size: 18, color: subtleText),
                       ),
                     ),
                 ],
@@ -190,11 +198,11 @@ class _SalonPageState extends State<SalonPage> {
           if (_isSearching)
             Container(
               width: double.infinity,
-              color: Colors.white,
+              color: cardBg,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
               child: Text(
                 '${searchResults.length} result${searchResults.length == 1 ? '' : 's'} for "${_searchQuery.trim()}"',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 12, color: subtleText),
               ),
             ),
 
@@ -203,7 +211,8 @@ class _SalonPageState extends State<SalonPage> {
             child: _isSearching
                 ? _buildSearchResults(searchResults, totalItems, bottomPad)
                 : _buildCategoryBrowser(
-                    categories, categoryServices, totalItems, bottomPad),
+                    categories, categoryServices, totalItems, bottomPad,
+                    cardBg, isDark),
           ),
         ],
       ),
@@ -219,7 +228,7 @@ class _SalonPageState extends State<SalonPage> {
                   color: _theme,
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
+                        color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
                         blurRadius: 8,
                         offset: const Offset(0, -2)),
                   ],
@@ -275,17 +284,18 @@ class _SalonPageState extends State<SalonPage> {
 
   // ── Category browser (rail + list) — default view ─────────────────────
   Widget _buildCategoryBrowser(List<String> categories,
-      List<SalonService> services, int totalItems, double bottomPad) {
+      List<SalonService> services, int totalItems, double bottomPad,
+      Color cardBg, bool isDark) {
     return Row(
       children: [
         // ── Left: category rail ─────────────────────────────────────────
         Container(
           width: 90,
-          color: Colors.white,
+          color: cardBg,
           child: ListView.builder(
             padding: const EdgeInsets.only(top: 6),
             itemCount: categories.length,
-            itemBuilder: (_, index) {
+            itemBuilder: (context, index) {
               final category = categories[index];
               final isSelected = selectedIndex == index;
               final firstItem = salonServices
@@ -294,6 +304,7 @@ class _SalonPageState extends State<SalonPage> {
               final image = firstItem.isNotEmpty
                   ? firstItem.first.image
                   : 'assets/salon.png';
+              final onSurface = Theme.of(context).colorScheme.onSurface;
 
               return GestureDetector(
                 onTap: () => setState(() => selectedIndex = index),
@@ -304,7 +315,7 @@ class _SalonPageState extends State<SalonPage> {
                       CircleAvatar(
                         radius: 28,
                         backgroundColor:
-                            isSelected ? _theme : Colors.grey.shade200,
+                            isSelected ? _theme : onSurface.withOpacity(0.08),
                         child: CircleAvatar(
                           radius: 24,
                           backgroundImage: AssetImage(image),
@@ -319,7 +330,7 @@ class _SalonPageState extends State<SalonPage> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: isSelected ? _theme : Colors.black87,
+                          color: isSelected ? _theme : onSurface.withOpacity(0.75),
                         ),
                       ),
                     ],
@@ -333,9 +344,11 @@ class _SalonPageState extends State<SalonPage> {
         // ── Right: services list ────────────────────────────────────────
         Expanded(
           child: services.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text('No services in this category',
-                      style: TextStyle(color: Colors.grey, fontSize: 14)),
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          fontSize: 14)),
                 )
               : ListView.builder(
                   physics: const BouncingScrollPhysics(),
@@ -357,25 +370,26 @@ class _SalonPageState extends State<SalonPage> {
   Widget _buildSearchResults(
       List<SalonService> results, int totalItems, double bottomPad) {
     if (results.isEmpty) {
+      final subtleText = Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+      final faintText = Theme.of(context).colorScheme.onSurface.withOpacity(0.4);
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.search_off_rounded,
-                  size: 44, color: Colors.grey.shade400),
+              Icon(Icons.search_off_rounded, size: 44, color: faintText),
               const SizedBox(height: 12),
               Text(
                 'No services found for "${_searchQuery.trim()}"',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 13.5),
+                style: TextStyle(color: subtleText, fontSize: 13.5),
               ),
               const SizedBox(height: 6),
               Text(
                 'Try a different keyword or category name',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                style: TextStyle(color: faintText, fontSize: 12),
               ),
             ],
           ),

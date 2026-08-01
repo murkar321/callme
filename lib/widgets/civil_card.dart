@@ -7,6 +7,10 @@ const kCivilCartKey = "Civil";
 /// Card that works directly with [SubService].
 /// - Tapping the card body → [onTap] (navigate to detail)
 /// - Tapping BOOK / SELECT button → [onAddCart] (cart action only)
+///
+/// No dark-mode changes needed here: the card is a full-bleed photo with a
+/// black gradient overlay and white text/icons on top, so it already reads
+/// correctly in both light and dark themes.
 class CivilServiceCard extends StatelessWidget {
   final SubService service;
   final String categoryName;

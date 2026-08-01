@@ -13,9 +13,40 @@ import 'package:callme/payment/payment_page.dart';
 
 const _kAccent     = Color(0xFF5B4FCF);
 const _kAccentSoft = Color(0xFF7B6FE8);
-const _kBg         = Color(0xFFF4F3FB);
-const _kCard       = Colors.white;
 const _kSuccess    = Color(0xFF34C759);
+
+// ── Theme-aware token helpers ────────────────────────────────────────────
+// NEW: this page (and its shared _Card / _Field / _PickerTile /
+// _ProgressRow / _StepHeader pieces below) used to be hardcoded to light
+// colors (_kBg / _kCard / Colors.white / Colors.grey.shadeXXX), so
+// switching to dark mode in Settings had no visible effect here.
+// `_ThemeTokens` centralizes the light/dark color pairs so every widget in
+// this file (including the small standalone StatelessWidgets that have
+// their own BuildContext) can resolve consistent colors from
+// `Theme.of(context).brightness`.
+class _ThemeTokens {
+  final bool isDark;
+  const _ThemeTokens(this.isDark);
+
+  factory _ThemeTokens.of(BuildContext context) =>
+      _ThemeTokens(Theme.of(context).brightness == Brightness.dark);
+
+  Color get bg           => isDark ? const Color(0xFF121218) : const Color(0xFFF4F3FB);
+  Color get card         => isDark ? const Color(0xFF1E1E27) : Colors.white;
+  Color get inputFill    => isDark ? const Color(0xFF262631) : const Color(0xFFF3F2FB);
+  Color get chipBg       => isDark ? const Color(0xFF262631) : Colors.grey.shade100;
+  Color get border       => isDark ? const Color(0xFF2C2C38) : Colors.grey.shade200;
+  Color get borderSoft   => isDark ? const Color(0xFF35353F) : Colors.grey.shade300;
+  Color get textPrimary  => isDark ? const Color(0xFFEDEDF3) : Colors.black87;
+  Color get textSecondary=> isDark ? const Color(0xFFA1A1B5) : Colors.grey.shade600;
+  Color get textFaint    => isDark ? const Color(0xFF7B7B90) : Colors.grey.shade400;
+  Color get textMuted    => isDark ? const Color(0xFF8B8BA0) : Colors.grey.shade500;
+  Color get shadow       => isDark ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.05);
+  Color get shadowSoft   => isDark ? Colors.black.withOpacity(0.30) : Colors.black.withOpacity(0.04);
+  Color get dotInactive  => isDark ? const Color(0xFF35353F) : const Color(0xFFDDDAF5);
+  Color get lineInactive => isDark ? const Color(0xFF2A2A36) : const Color(0xFFE8E6F7);
+  Color get disabledBtn  => isDark ? const Color(0xFF3A3550) : const Color(0xFFD0CBEE);
+}
 
 class ResortBookingPage extends StatefulWidget {
   final Resort resort;
@@ -54,6 +85,11 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   // a specific "enter a valid 10-digit number" message instead of lumping
   // name+phone into one generic error.
   bool _phoneComplete = false;
+
+  // ✅ Theme awareness — refreshed from Theme.of(context) at the top of
+  // build() every rebuild, since Theme is an InheritedWidget this page
+  // automatically follows the app's light/dark/system setting.
+  late _ThemeTokens _t;
 
   // ✅ NEW — facilities the customer wants for this visit, chosen from the
   // resort's own registered facility list (widget.resort.facilities).
@@ -286,8 +322,9 @@ class _ResortBookingPageState extends State<ResortBookingPage>
 
   @override
   Widget build(BuildContext context) {
+    _t = _ThemeTokens.of(context);
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: _t.bg,
       body: FadeTransition(
         opacity: _fadeIn,
         child: _isLoadingProvider
@@ -314,7 +351,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
           const CircularProgressIndicator(color: _kAccent),
           const SizedBox(height: 16),
           Text('Finding a resort provider…',
-              style: TextStyle(color: Colors.grey.shade500)),
+              style: TextStyle(color: _t.textSecondary)),
         ],
       ),
     );
@@ -330,16 +367,16 @@ class _ResortBookingPageState extends State<ResortBookingPage>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                  color: Colors.grey.shade100, shape: BoxShape.circle),
+                  color: _t.chipBg, shape: BoxShape.circle),
               child: Icon(Icons.villa_outlined,
-                  size: 52, color: Colors.grey.shade400),
+                  size: 52, color: _t.textFaint),
             ),
             const SizedBox(height: 20),
             Text(
               _noProviderMessage ?? 'No provider available',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: Colors.grey.shade600, fontSize: 15, height: 1.6),
+                  color: _t.textSecondary, fontSize: 15, height: 1.6),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -427,14 +464,15 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   }
 
   // ==========================================================================
-  // SLIVER APP BAR
+  // SLIVER APP BAR (over an image — overlay colors kept as-is regardless of
+  // theme, since it's always drawn on top of a photo + dark gradient).
   // ==========================================================================
 
   Widget _buildSliverAppBar() {
     return SliverAppBar(
       expandedHeight: 260,
       pinned: true,
-      backgroundColor: Colors.white,
+      backgroundColor: _t.card,
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
@@ -527,6 +565,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   }
 
   // ── Gradient summary card (mirrors booking_page.dart's services card) ───
+  // Sits on its own purple gradient regardless of theme — left unchanged.
 
   Widget _buildSummaryCard() {
     return Container(
@@ -698,7 +737,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
             'Choose the facilities you\'d like to use at ${widget.resort.name}',
             style: TextStyle(
               fontSize: 13,
-              color: Colors.grey.shade600,
+              color: _t.textSecondary,
               height: 1.4,
             ),
           ),
@@ -721,10 +760,10 @@ class _ResortBookingPageState extends State<ResortBookingPage>
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: selected ? _kAccent : const Color(0xFFF3F2FB),
+                    color: selected ? _kAccent : _t.inputFill,
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(
-                      color: selected ? _kAccent : Colors.grey.shade200,
+                      color: selected ? _kAccent : _t.border,
                       width: 1.2,
                     ),
                   ),
@@ -736,7 +775,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
                             ? Icons.check_circle_rounded
                             : Icons.add_circle_outline_rounded,
                         size: 16,
-                        color: selected ? Colors.white : Colors.grey.shade500,
+                        color: selected ? Colors.white : _t.textMuted,
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -744,7 +783,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: selected ? Colors.white : Colors.grey.shade700,
+                          color: selected ? Colors.white : _t.textPrimary.withOpacity(0.85),
                         ),
                       ),
                     ],
@@ -775,7 +814,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
           _infoRow('City', widget.resort.city),
           _infoRow('Price Per Adult', '₹${widget.resort.price.toStringAsFixed(0)}'),
           _infoRow('Rating', '⭐ ${widget.resort.rating}'),
-          const Divider(height: 24),
+          Divider(height: 24, color: _t.border),
           _counterTile(
             title: 'Adults',
             subtitle: '₹${widget.resort.price.toStringAsFixed(0)} each',
@@ -785,7 +824,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
             },
             onPlus: () => setState(() => adults++),
           ),
-          const Divider(height: 20),
+          Divider(height: 20, color: _t.border),
           _counterTile(
             title: 'Children',
             subtitle: '₹${(widget.resort.price / 2).toStringAsFixed(0)} each (50% off)',
@@ -853,11 +892,11 @@ class _ResortBookingPageState extends State<ResortBookingPage>
   Widget _hintRow(String text) {
     return Row(
       children: [
-        Icon(Icons.info_outline, size: 13, color: Colors.grey.shade400),
+        Icon(Icons.info_outline, size: 13, color: _t.textFaint),
         const SizedBox(width: 6),
         Expanded(
           child: Text(text,
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+              style: TextStyle(color: _t.textFaint, fontSize: 12)),
         ),
       ],
     );
@@ -922,14 +961,14 @@ class _ResortBookingPageState extends State<ResortBookingPage>
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        decoration: const BoxDecoration(
-          color: _kCard,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: _t.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           boxShadow: [
             BoxShadow(
-              color: Color(0x12000000),
+              color: _t.shadow,
               blurRadius: 20,
-              offset: Offset(0, -4),
+              offset: const Offset(0, -4),
             ),
           ],
         ),
@@ -949,7 +988,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
                 onPressed: canPay ? _payNow : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _kAccent,
-                  disabledBackgroundColor: const Color(0xFFD0CBEE),
+                  disabledBackgroundColor: _t.disabledBtn,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape:
@@ -1134,7 +1173,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
       lastDate: DateTime(2100),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: _kAccent),
+          colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: _kAccent),
         ),
         child: child!,
       ),
@@ -1148,7 +1187,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
       initialTime: TimeOfDay.now(),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: _kAccent),
+          colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: _kAccent),
         ),
         child: child!,
       ),
@@ -1179,12 +1218,12 @@ class _ResortBookingPageState extends State<ResortBookingPage>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(title,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+                style: TextStyle(color: _t.textSecondary, fontSize: 14)),
             Flexible(
               child: Text(
                 value,
                 textAlign: TextAlign.end,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: TextStyle(fontWeight: FontWeight.w600, color: _t.textPrimary),
               ),
             ),
           ],
@@ -1205,17 +1244,17 @@ class _ResortBookingPageState extends State<ResortBookingPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600)),
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600, color: _t.textPrimary)),
                 Text(subtitle,
                     style: TextStyle(
-                        color: Colors.grey.shade500, fontSize: 12)),
+                        color: _t.textMuted, fontSize: 12)),
               ],
             ),
           ),
           Container(
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: _t.chipBg,
               borderRadius: BorderRadius.circular(30),
             ),
             child: Row(
@@ -1229,7 +1268,7 @@ class _ResortBookingPageState extends State<ResortBookingPage>
                         size: 18,
                         color: value > (title == 'Adults' ? 1 : 0)
                             ? _kAccent
-                            : Colors.grey.shade400),
+                            : _t.textFaint),
                   ),
                 ),
                 SizedBox(
@@ -1237,8 +1276,8 @@ class _ResortBookingPageState extends State<ResortBookingPage>
                   child: Text(
                     '$value',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold, color: _t.textPrimary),
                   ),
                 ),
                 InkWell(
@@ -1264,15 +1303,16 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _ThemeTokens.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _kCard,
+        color: t.card,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: t.shadow,
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -1306,9 +1346,10 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _ThemeTokens.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F2FB),
+        color: t.inputFill,
         borderRadius: BorderRadius.circular(14),
       ),
       child: TextField(
@@ -1317,11 +1358,12 @@ class _Field extends StatelessWidget {
         maxLines: maxLines,
         inputFormatters: formatters,
         onChanged: onChanged,
+        style: TextStyle(color: t.textPrimary, fontSize: 14),
         decoration: InputDecoration(
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           hintText: hint,
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          hintStyle: TextStyle(color: t.textFaint, fontSize: 14),
           prefixIcon: Icon(icon, color: _kAccent, size: 20),
           suffixIcon: suffix != null
               ? Padding(padding: const EdgeInsets.only(right: 12), child: suffix)
@@ -1350,20 +1392,21 @@ class _PickerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _ThemeTokens.of(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? _kAccent.withOpacity(0.06) : Colors.white,
+          color: selected ? _kAccent.withOpacity(t.isDark ? 0.14 : 0.06) : t.card,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? _kAccent.withOpacity(0.5) : Colors.grey.shade200,
+            color: selected ? _kAccent.withOpacity(0.5) : t.border,
             width: 1.5,
           ),
           boxShadow: [
-            BoxShadow(blurRadius: 10, color: Colors.black.withOpacity(0.04)),
+            BoxShadow(blurRadius: 10, color: t.shadowSoft),
           ],
         ),
         child: Column(
@@ -1372,22 +1415,22 @@ class _PickerTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: selected ? _kAccent.withOpacity(0.12) : Colors.grey.shade100,
+                color: selected ? _kAccent.withOpacity(t.isDark ? 0.22 : 0.12) : t.chipBg,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon,
-                  color: selected ? _kAccent : Colors.grey.shade400, size: 18),
+                  color: selected ? _kAccent : t.textFaint, size: 18),
             ),
             const SizedBox(height: 12),
             Text(label,
                 style: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: t.textMuted,
                     fontSize: 11,
                     fontWeight: FontWeight.w500)),
             const SizedBox(height: 4),
             Text(value,
                 style: TextStyle(
-                    color: selected ? _kAccent : Colors.grey.shade400,
+                    color: selected ? _kAccent : t.textFaint,
                     fontWeight: FontWeight.w700,
                     fontSize: 13)),
           ],
@@ -1411,20 +1454,21 @@ class _ProgressRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _ThemeTokens.of(context);
     return Row(
       children: [
-        _dot(done: facilities, label: 'Facilities'),
-        _line(done: facilities),
-        _dot(done: step1, label: 'Details'),
-        _line(done: step1),
-        _dot(done: step2, label: 'Schedule'),
-        _line(done: step2),
-        _dot(done: false, label: 'Payment'),
+        _dot(t: t, done: facilities, label: 'Facilities'),
+        _line(t: t, done: facilities),
+        _dot(t: t, done: step1, label: 'Details'),
+        _line(t: t, done: step1),
+        _dot(t: t, done: step2, label: 'Schedule'),
+        _line(t: t, done: step2),
+        _dot(t: t, done: false, label: 'Payment'),
       ],
     );
   }
 
-  Widget _dot({required bool done, required String label}) {
+  Widget _dot({required _ThemeTokens t, required bool done, required String label}) {
     return Expanded(
       child: Column(
         children: [
@@ -1433,7 +1477,7 @@ class _ProgressRow extends StatelessWidget {
             width: 10,
             height: 10,
             decoration: BoxDecoration(
-              color: done ? _kAccent : const Color(0xFFDDDAF5),
+              color: done ? _kAccent : t.dotInactive,
               shape: BoxShape.circle,
             ),
           ),
@@ -1441,19 +1485,19 @@ class _ProgressRow extends StatelessWidget {
           Text(label,
               style: TextStyle(
                   fontSize: 10,
-                  color: done ? _kAccent : Colors.grey.shade400,
+                  color: done ? _kAccent : t.textFaint,
                   fontWeight: done ? FontWeight.w600 : FontWeight.normal)),
         ],
       ),
     );
   }
 
-  Widget _line({required bool done}) {
+  Widget _line({required _ThemeTokens t, required bool done}) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       height: 2,
       width: 28,
-      color: done ? _kAccent : const Color(0xFFE8E6F7),
+      color: done ? _kAccent : t.lineInactive,
     );
   }
 }
@@ -1468,6 +1512,7 @@ class _StepHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _ThemeTokens.of(context);
     return Row(
       children: [
         Container(
@@ -1486,7 +1531,7 @@ class _StepHeader extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           label,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2, color: t.textPrimary),
         ),
       ],
     );

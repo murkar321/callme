@@ -5,7 +5,7 @@ import '../screens/salon_detail_page.dart';
 import '../models/cart_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SALON SERVICE CARD  – Android-safe, adaptive
+// SALON SERVICE CARD  – Android-safe, adaptive, theme-aware
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SalonServiceCard extends StatefulWidget {
@@ -62,6 +62,16 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final Color cardBg = theme.cardColor;
+    final Color subtleText = cs.onSurface.withOpacity(0.62);
+    final Color faintText = cs.onSurface.withOpacity(0.42);
+    final Color chipBg = cs.onSurface.withOpacity(0.06);
+    final Color borderColor = cs.onSurface.withOpacity(0.14);
+
     final homeQty = _getQty('Home');
     final salonQty = _getQty('Salon');
     final totalQty = homeQty + salonQty;
@@ -69,11 +79,11 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withOpacity(isDark ? 0.35 : 0.06),
               blurRadius: 8,
               offset: const Offset(0, 4)),
         ],
@@ -135,7 +145,7 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: _theme.withOpacity(0.08),
+                      color: _theme.withOpacity(isDark ? 0.18 : 0.08),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -153,7 +163,7 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                         fontWeight: FontWeight.bold, fontSize: 15)),
                 const SizedBox(height: 4),
                 Text(widget.service.slogan,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    style: TextStyle(color: subtleText, fontSize: 12),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 6),
@@ -161,12 +171,11 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                   const Icon(Icons.star, size: 14, color: Colors.orange),
                   const SizedBox(width: 4),
                   Text(_rating.toStringAsFixed(1),
-                      style: const TextStyle(fontSize: 12)),
+                      style: TextStyle(fontSize: 12, color: theme.textTheme.bodyMedium?.color)),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(widget.service.time,
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade500),
+                        style: TextStyle(fontSize: 12, color: faintText),
                         overflow: TextOverflow.ellipsis),
                   ),
                 ]),
@@ -180,14 +189,14 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                     Text('₹${widget.service.price}',
                         style: TextStyle(
                             decoration: TextDecoration.lineThrough,
-                            color: Colors.grey.shade400,
+                            color: faintText,
                             fontSize: 12)),
                   const SizedBox(width: 8),
                   if (widget.service.discount > 0)
                     Text('${widget.service.discount}% OFF',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 10,
-                            color: Colors.green,
+                            color: isDark ? Colors.greenAccent.shade200 : Colors.green,
                             fontWeight: FontWeight.bold)),
                 ]),
                 const SizedBox(height: 12),
@@ -208,8 +217,8 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                           ),
                           style: OutlinedButton.styleFrom(
                             padding: EdgeInsets.zero,
-                            side: BorderSide(
-                                color: Colors.grey.shade300, width: 1.2),
+                            foregroundColor: theme.textTheme.bodyMedium?.color,
+                            side: BorderSide(color: borderColor, width: 1.2),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10)),
                           ),
@@ -243,9 +252,9 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                 else
                   Column(
                     children: [
-                      _qtyRow('Home', homeQty),
+                      _qtyRow('Home', homeQty, chipBg, isDark),
                       const SizedBox(height: 6),
-                      _qtyRow('Salon', salonQty),
+                      _qtyRow('Salon', salonQty, chipBg, isDark),
                       const SizedBox(height: 10),
                       SizedBox(
                         width: double.infinity,
@@ -286,13 +295,13 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
   }
 
   // ── Qty row ────────────────────────────────────────────────────────────────
-  Widget _qtyRow(String type, int qty) {
+  Widget _qtyRow(String type, int qty, Color chipBg, bool isDark) {
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
+            color: chipBg,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text(type,
@@ -306,7 +315,7 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               decoration: BoxDecoration(
-                color: _theme.withOpacity(0.1),
+                color: _theme.withOpacity(isDark ? 0.2 : 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text('Add',
@@ -318,7 +327,7 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
           )
         else
           Row(children: [
-            _smallBtn(Icons.remove, () => _remove(type)),
+            _smallBtn(Icons.remove, () => _remove(type), isDark),
             SizedBox(
               width: 28,
               child: Text('$qty',
@@ -326,19 +335,19 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                   style: const TextStyle(
                       fontSize: 14, fontWeight: FontWeight.bold)),
             ),
-            _smallBtn(Icons.add, () => _add(type)),
+            _smallBtn(Icons.add, () => _add(type), isDark),
           ]),
       ],
     );
   }
 
-  Widget _smallBtn(IconData icon, VoidCallback onTap) => GestureDetector(
+  Widget _smallBtn(IconData icon, VoidCallback onTap, bool isDark) => GestureDetector(
         onTap: onTap,
         child: Container(
           width: 28,
           height: 28,
           decoration: BoxDecoration(
-              color: _theme.withOpacity(0.12), shape: BoxShape.circle),
+              color: _theme.withOpacity(isDark ? 0.22 : 0.12), shape: BoxShape.circle),
           child: Icon(icon, size: 15, color: _theme),
         ),
       );
@@ -346,6 +355,8 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
   // ── Bottom sheet popup ─────────────────────────────────────────────────────
   void _showPopup(BuildContext context) {
     final bottomPad = MediaQuery.of(context).viewPadding.bottom;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     showModalBottomSheet(
       context: context,
@@ -356,9 +367,9 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
         top: false,
         child: Container(
           padding: EdgeInsets.fromLTRB(18, 14, 18, bottomPad + 18),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -367,7 +378,7 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                 child: Container(
                   width: 44, height: 5,
                   decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: cs.onSurface.withOpacity(0.18),
                       borderRadius: BorderRadius.circular(10)),
                 ),
               ),
@@ -377,6 +388,7 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                       fontSize: 17, fontWeight: FontWeight.bold)),
               const SizedBox(height: 18),
               _optionCard(
+                context: ctx,
                 icon: Icons.home_rounded,
                 title: 'Home Appointment',
                 subtitle: 'Professional visits your home',
@@ -388,6 +400,7 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
               ),
               const SizedBox(height: 12),
               _optionCard(
+                context: ctx,
                 icon: Icons.storefront_rounded,
                 title: 'Salon Visit',
                 subtitle: 'Visit salon for premium experience',
@@ -405,12 +418,16 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
   }
 
   Widget _optionCard({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required String subtitle,
     required Color color,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final subtitleColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -418,15 +435,15 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: color.withOpacity(0.04),
-          border: Border.all(color: color.withOpacity(0.2), width: 1.3),
+          color: color.withOpacity(isDark ? 0.1 : 0.04),
+          border: Border.all(color: color.withOpacity(isDark ? 0.35 : 0.2), width: 1.3),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                  color: color.withOpacity(0.12), shape: BoxShape.circle),
+                  color: color.withOpacity(isDark ? 0.2 : 0.12), shape: BoxShape.circle),
               child: Icon(icon, color: color, size: 24),
             ),
             const SizedBox(width: 14),
@@ -439,8 +456,7 @@ class _SalonServiceCardState extends State<SalonServiceCard> {
                           fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 2),
                   Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.grey.shade600)),
+                      style: TextStyle(fontSize: 12, color: subtitleColor)),
                 ],
               ),
             ),

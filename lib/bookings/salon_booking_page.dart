@@ -71,6 +71,24 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   late final AnimationController _animController;
   late final Animation<double>    _fadeIn;
 
+  // ── Theme awareness ──────────────────────────────────────────────────────
+  // NEW: this page now follows the app's light/dark setting instead of
+  // being hardcoded to light colors. `_isDark` is refreshed from
+  // Theme.of(context) at the top of build() every time the theme changes
+  // (Theme is an InheritedWidget, so this page rebuilds automatically when
+  // the user flips the setting — no manual ValueListenableBuilder needed).
+  bool _isDark = false;
+
+  Color get _bgColor        => _isDark ? const Color(0xFF121218) : const Color(0xFFF6F7FB);
+  Color get _cardColor      => _isDark ? const Color(0xFF1E1E27) : Colors.white;
+  Color get _cardShadow     => _isDark ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.05);
+  Color get _inputFill      => _isDark ? const Color(0xFF262631) : const Color(0xFFF8F9FD);
+  Color get _textPrimary    => _isDark ? const Color(0xFFEDEDF3) : const Color(0xFF1A1A2E);
+  Color get _textSecondary  => _isDark ? const Color(0xFFA1A1B5) : Colors.grey.shade600;
+  Color get _textFaint      => _isDark ? const Color(0xFF7B7B90) : Colors.grey.shade400;
+  Color get _chipInactiveBg => _isDark ? const Color(0xFF262631) : Colors.grey.shade200;
+  Color get _iconMuted      => _isDark ? const Color(0xFFA1A1B5) : Colors.black54;
+
   // ── Visit-type helpers ──────────────────────────────────────────────────
   bool get _hasHome  => widget.cartItems.any((e) => e.id.toString().contains('Home'));
   bool get _hasSalon => widget.cartItems.any((e) => !e.id.toString().contains('Home'));
@@ -336,10 +354,16 @@ class _SalonBookingPageState extends State<SalonBookingPage>
 
   @override
   Widget build(BuildContext context) {
+    // Refresh dark/light from the ambient Theme every rebuild. Theme is an
+    // InheritedWidget, so this page automatically rebuilds whenever
+    // MaterialApp's themeMode changes (light/dark/system), keeping this in
+    // sync with whatever was picked on the Settings page.
+    _isDark = Theme.of(context).brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: const Color(0xFFF6F7FB),
+        backgroundColor: _bgColor,
         resizeToAvoidBottomInset: true,
         body: SafeArea(
           child: FadeTransition(
@@ -379,7 +403,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
           SizedBox(height: _sp(context, 16)),
           Text('Finding a salon provider…',
               style: TextStyle(
-                  color: Colors.grey.shade500,
+                  color: _textSecondary,
                   fontSize: _sp(context, 14))),
         ],
       ),
@@ -396,16 +420,16 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             Container(
               padding: EdgeInsets.all(_sp(context, 24)),
               decoration: BoxDecoration(
-                  color: Colors.grey.shade100, shape: BoxShape.circle),
+                  color: _chipInactiveBg, shape: BoxShape.circle),
               child: Icon(Icons.store_mall_directory_outlined,
-                  size: _sp(context, 52), color: Colors.grey.shade400),
+                  size: _sp(context, 52), color: _textFaint),
             ),
             SizedBox(height: _sp(context, 20)),
             Text(
               _noProviderMessage ?? 'No provider available',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: Colors.grey.shade600,
+                  color: _textSecondary,
                   fontSize: _sp(context, 15),
                   height: 1.6),
             ),
@@ -562,7 +586,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             margin: EdgeInsets.only(bottom: _sp(context, 14)),
             padding: EdgeInsets.all(_sp(context, 14)),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8F9FD),
+              color: _inputFill,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -588,6 +612,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                         item.name,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
+                            color: _textPrimary,
                             fontWeight: FontWeight.bold,
                             fontSize: _sp(context, 15)),
                       ),
@@ -595,7 +620,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                       Text(
                         '${isHome ? "Home Visit" : "Salon Visit"} • Qty ${item.quantity}',
                         style: TextStyle(
-                            color: Colors.grey.shade600,
+                            color: _textSecondary,
                             fontSize: _sp(context, 13)),
                       ),
                     ],
@@ -605,6 +630,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 Text(
                   '₹${(item.price * item.quantity).toStringAsFixed(0)}',
                   style: TextStyle(
+                      color: _textPrimary,
                       fontWeight: FontWeight.bold, fontSize: _sp(context, 16)),
                 ),
               ],
@@ -679,7 +705,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         padding: EdgeInsets.symmetric(
             horizontal: _sp(context, 14), vertical: _sp(context, 14)),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8F9FD),
+          color: _inputFill,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
@@ -693,13 +719,14 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 children: [
                   Text(label,
                       style: TextStyle(
-                          color: Colors.grey.shade500,
+                          color: _textSecondary,
                           fontSize: _sp(context, 11))),
                   SizedBox(height: _sp(context, 2)),
                   Text(
                     value,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
+                        color: _textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: _sp(context, 14)),
                   ),
@@ -851,10 +878,10 @@ class _SalonBookingPageState extends State<SalonBookingPage>
       padding: EdgeInsets.fromLTRB(
           _sp(context, 18), _sp(context, 16), _sp(context, 18), 0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
-          BoxShadow(blurRadius: 20, color: Colors.black.withOpacity(0.07)),
+          BoxShadow(blurRadius: 20, color: _cardShadow),
         ],
       ),
       child: SafeArea(
@@ -867,10 +894,11 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 children: [
                   Text('Total Amount',
                       style: TextStyle(
-                          color: Colors.grey, fontSize: _sp(context, 13))),
+                          color: _textSecondary, fontSize: _sp(context, 13))),
                   Text(
                     '₹${_totalAmount.toStringAsFixed(0)}',
                     style: TextStyle(
+                        color: _textPrimary,
                         fontSize: _sp(context, 24),
                         fontWeight: FontWeight.bold),
                   ),
@@ -1106,7 +1134,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
   }
 
   // ==========================================================================
-  // POPUP  (kept exactly as original)
+  // POPUP  (theme-aware)
   // ==========================================================================
 
   void _showPopup(String message, bool success) {
@@ -1119,7 +1147,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         child: Container(
           padding: EdgeInsets.all(_sp(context, 28)),
           decoration: BoxDecoration(
-              color: Colors.white, borderRadius: BorderRadius.circular(28)),
+              color: _cardColor, borderRadius: BorderRadius.circular(28)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1143,6 +1171,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 message,
                 textAlign: TextAlign.center,
                 style: TextStyle(
+                    color: _textPrimary,
                     fontSize: _sp(context, 17), fontWeight: FontWeight.bold),
               ),
             ],
@@ -1164,6 +1193,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
         padding: EdgeInsets.only(bottom: _sp(context, 10)),
         child: Text(title,
             style: TextStyle(
+                color: _textPrimary,
                 fontSize: _sp(context, 17), fontWeight: FontWeight.bold)),
       );
 
@@ -1171,13 +1201,13 @@ class _SalonBookingPageState extends State<SalonBookingPage>
       Container(
         padding: EdgeInsets.all(_sp(context, 18)),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _cardColor,
           borderRadius: BorderRadius.circular(26),
           boxShadow: [
             BoxShadow(
               blurRadius: 20,
               offset: const Offset(0, 8),
-              color: Colors.black.withOpacity(0.05),
+              color: _cardShadow,
             ),
           ],
         ),
@@ -1194,7 +1224,7 @@ class _SalonBookingPageState extends State<SalonBookingPage>
                 ? const LinearGradient(
                     colors: [Color(0xFFB38BFA), Color(0xFFE8A0BF)])
                 : null,
-            color: active ? null : Colors.grey.shade200,
+            color: active ? null : _chipInactiveBg,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -1202,12 +1232,12 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             children: [
               Icon(icon,
                   size: _sp(context, 18),
-                  color: active ? Colors.white : Colors.black54),
+                  color: active ? Colors.white : _iconMuted),
               SizedBox(width: _sp(context, 6)),
               Text(
                 label,
                 style: TextStyle(
-                  color: active ? Colors.white : Colors.black54,
+                  color: active ? Colors.white : _iconMuted,
                   fontWeight: FontWeight.w600,
                   fontSize: _sp(context, 14),
                 ),
@@ -1239,10 +1269,10 @@ class _SalonBookingPageState extends State<SalonBookingPage>
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       validator: validator,
-      style: TextStyle(fontSize: _sp(context, 15)),
+      style: TextStyle(color: _textPrimary, fontSize: _sp(context, 15)),
       decoration: InputDecoration(
         filled: true,
-        fillColor: const Color(0xFFF8F9FD),
+        fillColor: _inputFill,
         counterText: '',
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(20),
@@ -1268,10 +1298,12 @@ class _SalonBookingPageState extends State<SalonBookingPage>
             horizontal: _sp(context, 20), vertical: _sp(context, 18)),
         hintText: hint,
         hintStyle:
-            TextStyle(color: Colors.grey.shade400, fontSize: _sp(context, 15)),
+            TextStyle(color: _textFaint, fontSize: _sp(context, 15)),
         prefixIcon: Icon(icon,
             color: const Color(0xFFB38BFA), size: _sp(context, 22)),
-        suffixIcon: readOnly ? const Icon(Icons.map_rounded, size: 18) : null,
+        suffixIcon: readOnly
+            ? Icon(Icons.map_rounded, size: 18, color: _iconMuted)
+            : null,
         errorStyle: TextStyle(fontSize: _sp(context, 12)),
       ),
     );

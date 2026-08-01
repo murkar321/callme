@@ -3,11 +3,6 @@ import 'package:callme/provider/order_service.dart';
 import 'package:callme/screens/bottom_nav_page.dart';
 import 'package:callme/screens/map_picker_page.dart';
 
-// ⚠️ UPDATE THIS PATH to wherever SettingsController actually lives in your
-// project (e.g. package:callme/controller/settings_controller.dart or
-// package:callme/services/settings_controller.dart).
-import 'package:callme/payment/settings_controller.dart';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -74,20 +69,24 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   String? _providerName;
   String? _noProviderMessage;
 
-  // ✅ Dark-mode flag, recomputed every build from SettingsController so
-  // it stays in sync with whatever the user picks on the Settings page
-  // (including "System" mode, which is resolved against the platform's
-  // current brightness).
+  // ✅ Dark-mode flag. FIX: this used to be derived manually from
+  // SettingsController.instance.themeMode + MediaQuery.platformBrightnessOf
+  // inside a ValueListenableBuilder wrapping the whole scaffold. That
+  // extra layer could fall out of sync with what the rest of the app
+  // (and MaterialApp.themeMode, which is already wired to
+  // SettingsController) was actually showing — which is why this page
+  // could stay light even after switching to dark in Settings.
+  //
+  // Theme.of(context) always reflects the FINAL resolved brightness
+  // (light/dark/system already resolved by Flutter), and since Theme is
+  // an InheritedWidget, this page rebuilds automatically whenever the
+  // app's theme changes — no manual listening required.
   bool _isDark = false;
 
-  // ✅ The canonical category resolved from what the customer picked —
-  // reused as-is when the order is placed, so what we matched a provider
-  // on is exactly what gets stored on the order (and later re-matched by
-  // the dashboard / FCM fan-out via the same
-  // resolveCanonicalCategory()/categoryMatchFuzzy() pipeline in
-  // order_service.dart).
-  String _resolvedCategory = '';
-  String _resolvedSubCategory = '';
+  String get _resolvedCategory => _resolvedCategoryValue;
+  String get _resolvedSubCategory => _resolvedSubCategoryValue;
+  String _resolvedCategoryValue = '';
+  String _resolvedSubCategoryValue = '';
 
   late final AnimationController _pageAnim;
   late final AnimationController _revealAnim;
@@ -234,15 +233,15 @@ class _CivilBookingPageState extends State<CivilBookingPage>
         parentCategoryForSubService(rawCategoryInput, normalizedServiceType);
 
     if (subParent != null) {
-      _resolvedCategory    = subParent;
-      _resolvedSubCategory = cleanSubCategory(rawCategoryInput);
+      _resolvedCategoryValue    = subParent;
+      _resolvedSubCategoryValue = cleanSubCategory(rawCategoryInput);
     } else {
-      _resolvedCategory    = resolveCanonicalCategory(rawCategoryInput, normalizedServiceType);
-      _resolvedSubCategory = '';
+      _resolvedCategoryValue    = resolveCanonicalCategory(rawCategoryInput, normalizedServiceType);
+      _resolvedSubCategoryValue = '';
     }
 
-    debugPrint('[Civil] resolved category="$_resolvedCategory" '
-        'subCategory="$_resolvedSubCategory" from raw="$rawCategoryInput"');
+    debugPrint('[Civil] resolved category="$_resolvedCategoryValue" '
+        'subCategory="$_resolvedSubCategoryValue" from raw="$rawCategoryInput"');
   }
 
   Map<String, dynamic> _orderLikeDataForLookup(String normalizedServiceType) {
@@ -375,17 +374,12 @@ class _CivilBookingPageState extends State<CivilBookingPage>
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    // ✅ Dark theme: reacts live to SettingsController, resolving
-    // ThemeMode.system against the current platform brightness.
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: SettingsController.instance.themeMode,
-      builder: (context, mode, _) {
-        final platformBrightness = MediaQuery.platformBrightnessOf(context);
-        _isDark = mode == ThemeMode.dark ||
-            (mode == ThemeMode.system && platformBrightness == Brightness.dark);
-        return _buildScaffold(context);
-      },
-    );
+    // ✅ Read the resolved brightness straight from the ambient Theme.
+    // This is the same theme MaterialApp already resolves from
+    // SettingsController (including "System" mode), so this page just
+    // follows it directly instead of re-deriving it a second time.
+    _isDark = Theme.of(context).brightness == Brightness.dark;
+    return _buildScaffold(context);
   }
 
   Widget _buildScaffold(BuildContext context) {

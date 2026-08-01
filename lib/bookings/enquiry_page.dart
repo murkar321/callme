@@ -23,16 +23,17 @@ class EnquiryPage extends StatefulWidget {
 
 class _EnquiryPageState extends State<EnquiryPage>
     with SingleTickerProviderStateMixin {
-  // ─── THEME TOKENS ────────────────────────────────────────────
-  static const Color _primary    = Color(0xFF7C5CBF);
-  static const Color _primarySoft= Color(0xFFEDE7F6);
-  static const Color _surface    = Color(0xFFFFFFFF);
-  static const Color _bg         = Color(0xFFF6F4FB);
-  static const Color _textDark   = Color(0xFF1A1235);
-  static const Color _textMid    = Color(0xFF6B6880);
-  static const Color _border     = Color(0xFFE0DAF0);
-  static const Color _error      = Color(0xFFD32F2F);
-  static const Color _success    = Color(0xFF2E7D32);
+  // ─── DARK THEME TOKENS ───────────────────────────────────────
+  static const Color _primary     = Color(0xFFB39DFF);
+  static const Color _primarySoft = Color(0xFF241F42);
+  static const Color _bg          = Color(0xFF0F0D1B);
+  static const Color _surface     = Color(0xFF1B1830);
+  static const Color _fieldFill   = Color(0xFF211D3A);
+  static const Color _textLight   = Color(0xFFF3F1FA);
+  static const Color _textMid     = Color(0xFFA9A4C4);
+  static const Color _border      = Color(0xFF322C54);
+  static const Color _error       = Color(0xFFFF6B6B);
+  static const Color _success     = Color(0xFF4ADE80);
 
   // ─── KEYS / CONTROLLERS ─────────────────────────────────────
   final _formKey        = GlobalKey<FormState>();
@@ -52,6 +53,7 @@ class _EnquiryPageState extends State<EnquiryPage>
   TimeOfDay? selectedTime;
   bool isLoading         = false;
   bool isLoadingProvider = true;
+  bool isPrefillingUser  = true;
   String? _providerId;
   String? _noProviderMessage;
 
@@ -69,6 +71,7 @@ class _EnquiryPageState extends State<EnquiryPage>
     );
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _loadProvider();
+    _prefillUserDetails();
   }
 
   @override
@@ -81,6 +84,56 @@ class _EnquiryPageState extends State<EnquiryPage>
     _emailFocus.dispose();
     _fadeCtrl.dispose();
     super.dispose();
+  }
+
+  // ─── USER AUTO-FILL ─────────────────────────────────────────
+  // Pulls the current user's saved name / phone / email from the
+  // `users` collection (doc id = auth uid) so the person doesn't have
+  // to retype it every time. Values stay fully editable — this only
+  // sets the starting text, it never locks the fields.
+  Future<void> _prefillUserDetails() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => isPrefillingUser = false);
+      return;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!mounted) return;
+      final data = doc.data() ?? {};
+
+      final name = (data['name'] ??
+              data['fullName'] ??
+              data['userName'] ??
+              user.displayName ??
+              '')
+          .toString()
+          .trim();
+      final phone = (data['phone'] ??
+              data['phoneNumber'] ??
+              data['mobile'] ??
+              user.phoneNumber ??
+              '')
+          .toString()
+          .trim();
+      final email =
+          (data['email'] ?? user.email ?? '').toString().trim();
+
+      setState(() {
+        if (name.isNotEmpty)  nameController.text  = name;
+        if (phone.isNotEmpty) phoneController.text = phone;
+        if (email.isNotEmpty) emailController.text = email;
+        isPrefillingUser = false;
+      });
+    } catch (_) {
+      // If this fails, the fields simply stay empty/editable — no need
+      // to block or error out the whole enquiry flow over it.
+      if (mounted) setState(() => isPrefillingUser = false);
+    }
   }
 
   // ─── CATEGORY HELPERS ───────────────────────────────────────
@@ -405,12 +458,14 @@ class _EnquiryPageState extends State<EnquiryPage>
       initialDate: selectedDate ?? now,
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary:      _primary,
-            onPrimary:    Colors.white,
-            onSurface:    _textDark,
+          colorScheme: const ColorScheme.dark(
+            primary:        _primary,
+            onPrimary:      Color(0xFF120E24),
+            surface:        _surface,
+            onSurface:      _textLight,
             surfaceVariant: _primarySoft,
           ),
+          dialogBackgroundColor: _surface,
         ),
         child: child!,
       ),
@@ -424,11 +479,13 @@ class _EnquiryPageState extends State<EnquiryPage>
       initialTime: selectedTime ?? TimeOfDay.now(),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
+          colorScheme: const ColorScheme.dark(
             primary:   _primary,
-            onPrimary: Colors.white,
-            onSurface: _textDark,
+            onPrimary: Color(0xFF120E24),
+            surface:   _surface,
+            onSurface: _textLight,
           ),
+          dialogBackgroundColor: _surface,
         ),
         child: child!,
       ),
@@ -447,7 +504,7 @@ class _EnquiryPageState extends State<EnquiryPage>
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor:           Colors.transparent,
-        statusBarIconBrightness:  Brightness.dark,
+        statusBarIconBrightness:  Brightness.light,
       ),
       child: Scaffold(
         backgroundColor: _bg,
@@ -473,8 +530,8 @@ class _EnquiryPageState extends State<EnquiryPage>
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor:    Colors.white,
-      foregroundColor:    _textDark,
+      backgroundColor:    _surface,
+      foregroundColor:    _textLight,
       elevation:          0,
       scrolledUnderElevation: 1,
       shadowColor:        _border,
@@ -491,7 +548,7 @@ class _EnquiryPageState extends State<EnquiryPage>
             style: TextStyle(
               fontSize:   _s(17),
               fontWeight: FontWeight.w700,
-              color:      _textDark,
+              color:      _textLight,
             ),
           ),
           Text(
@@ -552,7 +609,7 @@ class _EnquiryPageState extends State<EnquiryPage>
               style: TextStyle(
                   fontSize:   _s(18),
                   fontWeight: FontWeight.w700,
-                  color:      _textDark),
+                  color:      _textLight),
             ),
             SizedBox(height: _s(10)),
             Text(
@@ -574,7 +631,7 @@ class _EnquiryPageState extends State<EnquiryPage>
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: _s(14))),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF120E24),
                   elevation:       0,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
@@ -617,9 +674,10 @@ class _EnquiryPageState extends State<EnquiryPage>
       decoration: BoxDecoration(
         color:        _surface,
         borderRadius: BorderRadius.circular(20),
+        border:       Border.all(color: _border, width: 1),
         boxShadow: [
           BoxShadow(
-            color:      const Color(0xFF7C5CBF).withOpacity(0.08),
+            color:      Colors.black.withOpacity(0.35),
             blurRadius: 24,
             offset:     const Offset(0, 8),
           ),
@@ -636,6 +694,22 @@ class _EnquiryPageState extends State<EnquiryPage>
               padding: EdgeInsets.symmetric(horizontal: _s(20)),
               child: _SectionLabel(label: 'Your Details', scale: _scale),
             ),
+            if (isPrefillingUser)
+              Padding(
+                padding: EdgeInsets.fromLTRB(_s(20), _s(8), _s(20), 0),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: _s(12), height: _s(12),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 1.8, color: _primary),
+                    ),
+                    SizedBox(width: _s(8)),
+                    Text('Fetching your saved details…',
+                        style: TextStyle(color: _textMid, fontSize: _s(12))),
+                  ],
+                ),
+              ),
             SizedBox(height: _s(12)),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: _s(20)),
@@ -719,7 +793,7 @@ class _EnquiryPageState extends State<EnquiryPage>
           Container(
             padding: EdgeInsets.all(_s(10)),
             decoration: BoxDecoration(
-              color:        _primary.withOpacity(0.12),
+              color:        _primary.withOpacity(0.18),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(Icons.support_agent_rounded,
@@ -737,7 +811,7 @@ class _EnquiryPageState extends State<EnquiryPage>
                   style: TextStyle(
                       fontSize:   _s(16),
                       fontWeight: FontWeight.w700,
-                      color:      _textDark),
+                      color:      _textLight),
                 ),
                 SizedBox(height: _s(2)),
                 Text(
@@ -758,7 +832,7 @@ class _EnquiryPageState extends State<EnquiryPage>
       margin:  EdgeInsets.fromLTRB(_s(20), _s(16), _s(20), 0),
       padding: EdgeInsets.all(_s(14)),
       decoration: BoxDecoration(
-        color:        const Color(0xFFF3F0FB),
+        color:        _fieldFill,
         borderRadius: BorderRadius.circular(12),
         border:       Border.all(color: _border),
       ),
@@ -790,7 +864,7 @@ class _EnquiryPageState extends State<EnquiryPage>
                   Expanded(
                     child: Text(e,
                         style: TextStyle(
-                            fontSize: _s(13), color: _textDark)),
+                            fontSize: _s(13), color: _textLight)),
                   ),
                 ],
               ),
@@ -832,15 +906,16 @@ class _EnquiryPageState extends State<EnquiryPage>
           }
         },
         style: TextStyle(
-            fontSize: _s(14), color: _textDark, fontWeight: FontWeight.w500),
+            fontSize: _s(14), color: _textLight, fontWeight: FontWeight.w500),
+        cursorColor: _primary,
         decoration: InputDecoration(
           labelText:    label,
           hintText:     hint,
-          hintStyle:    TextStyle(color: const Color(0xFFB0ABCB), fontSize: _s(13)),
+          hintStyle:    TextStyle(color: const Color(0xFF6B6688), fontSize: _s(13)),
           labelStyle:   TextStyle(color: _textMid, fontSize: _s(13)),
           prefixIcon:   Icon(icon, color: _primary, size: _s(20)),
           filled:       true,
-          fillColor:    const Color(0xFFFAF9FD),
+          fillColor:    _fieldFill,
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
             borderSide:   const BorderSide(color: _border, width: 1.2),
@@ -904,7 +979,7 @@ class _EnquiryPageState extends State<EnquiryPage>
         duration: const Duration(milliseconds: 200),
         padding:  EdgeInsets.symmetric(horizontal: _s(14), vertical: _s(13)),
         decoration: BoxDecoration(
-          color:        selected ? _primarySoft : const Color(0xFFFAF9FD),
+          color:        selected ? _primarySoft : _fieldFill,
           borderRadius: BorderRadius.circular(13),
           border: Border.all(
             color: selected ? _primary : _border,
@@ -930,7 +1005,7 @@ class _EnquiryPageState extends State<EnquiryPage>
                   Text(value,
                       style: TextStyle(
                           fontSize:   _s(13),
-                          color:      selected ? _textDark : _textMid,
+                          color:      selected ? _textLight : _textMid,
                           fontWeight: selected
                               ? FontWeight.w600
                               : FontWeight.w400),
@@ -953,8 +1028,8 @@ class _EnquiryPageState extends State<EnquiryPage>
         onPressed: isLoading ? null : submitEnquiry,
         style: ElevatedButton.styleFrom(
           backgroundColor:            _primary,
-          disabledBackgroundColor:    _primary.withOpacity(0.55),
-          foregroundColor:            Colors.white,
+          disabledBackgroundColor:    _primary.withOpacity(0.4),
+          foregroundColor:            const Color(0xFF120E24),
           elevation:                  0,
           shadowColor:                Colors.transparent,
           shape: RoundedRectangleBorder(
@@ -965,7 +1040,7 @@ class _EnquiryPageState extends State<EnquiryPage>
                 width:  _s(20),
                 height: _s(20),
                 child: const CircularProgressIndicator(
-                    color:       Colors.white,
+                    color:       Color(0xFF120E24),
                     strokeWidth: 2.2),
               )
             : Row(
@@ -1000,12 +1075,12 @@ class _SectionLabel extends StatelessWidget {
           style: TextStyle(
               fontSize:      11 * scale,
               fontWeight:    FontWeight.w700,
-              color:         const Color(0xFF7C5CBF),
+              color:         const Color(0xFFB39DFF),
               letterSpacing: 1.2),
         ),
         SizedBox(width: 10 * scale),
         const Expanded(
-          child: Divider(color: Color(0xFFE0DAF0), thickness: 1),
+          child: Divider(color: Color(0xFF322C54), thickness: 1),
         ),
       ],
     );

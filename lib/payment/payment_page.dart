@@ -3,6 +3,59 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
+// ═══════════════════════════════════════════════════════════════════════
+// PaymentResult
+//
+// NEW: PaymentPage used to pop a bare `true` (online success) or the
+// String `'offline'` (cash) — callers had no way to know WHICH online
+// method was actually used (UPI vs Card), so every booking page that
+// called OrderService.placeOrder() afterwards either omitted
+// `paymentMethod` entirely or hardcoded a guess. That's why "payment
+// type" wasn't landing correctly in Firestore.
+//
+// This class carries the real method + Razorpay ids back to the caller,
+// BUT overrides `==` so every EXISTING call site that still does:
+//     if (result == true)         // online success
+//     if (result == 'offline')    // cash
+// keeps working completely unchanged — zero other booking pages need to
+// be touched. Only call sites that want the exact method (like the
+// updated SalonBookingPage) need to check `result is PaymentResult`.
+// ═══════════════════════════════════════════════════════════════════════
+class PaymentResult {
+  final bool success;
+  final String method; // 'upi' | 'card' | 'cash'
+  final String? razorpayPaymentId;
+  final String? razorpayOrderId;
+
+  const PaymentResult({
+    required this.success,
+    required this.method,
+    this.razorpayPaymentId,
+    this.razorpayOrderId,
+  });
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    // Legacy bool check: `result == true`
+    if (other is bool) return other == success;
+    // Legacy string check: `result == 'offline'`
+    if (other is String) return other == 'offline' && method == 'cash' && success;
+    return other is PaymentResult &&
+        other.success == success &&
+        other.method == method &&
+        other.razorpayPaymentId == razorpayPaymentId &&
+        other.razorpayOrderId == razorpayOrderId;
+  }
+
+  @override
+  int get hashCode => Object.hash(success, method, razorpayPaymentId, razorpayOrderId);
+
+  @override
+  String toString() =>
+      'PaymentResult(success: $success, method: $method, paymentId: $razorpayPaymentId)';
+}
+
 class PaymentPage extends StatefulWidget {
   final String serviceName;
   final int amount;
@@ -92,8 +145,10 @@ class _PaymentPageState extends State<PaymentPage>
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
     setState(() => isLoading = false);
 
+    final method = selectedMethod ?? 'unknown';
+
     await _savePaymentRecord(
-      method: selectedMethod ?? 'unknown',
+      method: method,
       status: 'success',
       razorpayPaymentId: response.paymentId,
       razorpayOrderId: response.orderId,
@@ -101,7 +156,19 @@ class _PaymentPageState extends State<PaymentPage>
 
     if (!mounted) return;
     _showSnackBar('Payment Successful! 🎉', isSuccess: true);
-    Navigator.pop(context, true);
+
+    // NEW: pop a PaymentResult carrying the exact method used, instead of
+    // a bare `true`. Old callers checking `result == true` still work
+    // unchanged thanks to PaymentResult's overridden `==`.
+    Navigator.pop(
+      context,
+      PaymentResult(
+        success: true,
+        method: method,
+        razorpayPaymentId: response.paymentId,
+        razorpayOrderId: response.orderId,
+      ),
+    );
   }
 
   void _handlePaymentError(PaymentFailureResponse response) async {
@@ -199,7 +266,14 @@ class _PaymentPageState extends State<PaymentPage>
     setState(() => isLoading = false);
 
     if (!mounted) return;
-    Navigator.pop(context, 'offline');
+
+    // NEW: pop a PaymentResult(method: 'cash') instead of the bare string
+    // 'offline'. Old callers checking `result == 'offline'` still work
+    // unchanged thanks to PaymentResult's overridden `==`.
+    Navigator.pop(
+      context,
+      const PaymentResult(success: true, method: 'cash'),
+    );
   }
 
   @override

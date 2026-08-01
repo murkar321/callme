@@ -44,6 +44,52 @@ class _C {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// SURFACE / THEME-AWARE COLOR HELPER
+//
+// NEW: this dashboard was built entirely on hardcoded light-mode
+// colors (Colors.white cards, _C.bg scaffold, _C.text/_C.sub for
+// text, _C.divider for borders). None of that inverted when the
+// app's dark theme was enabled, so cards stayed white-on-dark and
+// text stayed near-invisible.
+//
+// _Surf resolves the *structural* surface colors (card background,
+// scaffold background, primary/secondary text, dividers, dialog
+// fills) against Theme.of(context).brightness at each call site.
+// The semantic accent colors in _C (indigo/green/red/orange/teal/
+// amber and their "Sft" tints) are left untouched — they're brand/
+// status colors, not surface colors, and read fine as tinted chips
+// on both light and dark backgrounds.
+// ═══════════════════════════════════════════════════════════════
+class _Surf {
+  static bool isDark(BuildContext c) =>
+      Theme.of(c).brightness == Brightness.dark;
+
+  static Color scaffold(BuildContext c) =>
+      isDark(c) ? const Color(0xFF121016) : _C.bg;
+
+  static Color card(BuildContext c) =>
+      isDark(c) ? const Color(0xFF1B1922) : Colors.white;
+
+  static Color text(BuildContext c) =>
+      isDark(c) ? Colors.white : _C.text;
+
+  static Color sub(BuildContext c) =>
+      isDark(c) ? Colors.white60 : _C.sub;
+
+  static Color divider(BuildContext c) =>
+      isDark(c) ? Colors.white12 : _C.divider;
+
+  static Color fill(BuildContext c) =>
+      isDark(c) ? Colors.white.withOpacity(0.06) : const Color(0xFFF7F8FC);
+
+  static Color trackBg(BuildContext c) =>
+      isDark(c) ? Colors.white.withOpacity(0.06) : const Color(0xFFF0F2F8);
+
+  static Color shadow(BuildContext c) =>
+      Colors.black.withOpacity(isDark(c) ? 0.35 : 0.04);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // SERVICE ICON STYLE
 //
 // FIX: the dashboard header used to always render a generic
@@ -1067,14 +1113,14 @@ class _BDPState extends State<BusinessDashboardPage> {
   @override
   Widget build(BuildContext context) {
     if (!_authReady) {
-      return const Scaffold(
-        backgroundColor: _C.bg,
-        body: Center(child: CircularProgressIndicator(color: _C.indigo)),
+      return Scaffold(
+        backgroundColor: _Surf.scaffold(context),
+        body: const Center(child: CircularProgressIndicator(color: _C.indigo)),
       );
     }
 
     return Scaffold(
-      backgroundColor: _C.bg,
+      backgroundColor: _Surf.scaffold(context),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: _providerSnap,
         builder: (ctx, snap) {
@@ -1789,11 +1835,11 @@ class _CardState extends State<_Card> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
-          color:        Colors.white,
+          color:        _Surf.card(context),
           borderRadius: BorderRadius.circular(20),
-          border:       Border.all(color: _C.divider),
+          border:       Border.all(color: _Surf.divider(context)),
           boxShadow: [BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: _Surf.shadow(context),
               blurRadius: 12, offset: const Offset(0, 4))],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1847,11 +1893,11 @@ class _CardState extends State<_Card> {
                 Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  Text(name, style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700, color: _C.text)),
+                  Text(name, style: TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700, color: _Surf.text(context))),
                   const SizedBox(height: 2),
                   Text(widget.serviceType,
-                      style: const TextStyle(color: _C.sub, fontSize: 12)),
+                      style: TextStyle(color: _Surf.sub(context), fontSize: 12)),
                 ])),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
@@ -1891,7 +1937,7 @@ class _CardState extends State<_Card> {
               ],
 
               const SizedBox(height: 12),
-              const Divider(height: 1, color: _C.divider),
+              Divider(height: 1, color: _Surf.divider(context)),
               const SizedBox(height: 12),
 
               // Payment status — how (and whether) the customer paid.
@@ -1933,8 +1979,8 @@ class _CardState extends State<_Card> {
                     Expanded(child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      const Text('Customer Mobile',
-                          style: TextStyle(color: _C.sub, fontSize: 10,
+                      Text('Customer Mobile',
+                          style: TextStyle(color: _Surf.sub(context), fontSize: 10,
                               fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
                       Text(phone, style: const TextStyle(
@@ -2238,7 +2284,7 @@ class _InfoRow extends StatelessWidget {
         Expanded(child: Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(value,
-                style: const TextStyle(fontSize: 13, color: _C.text, height: 1.4)))),
+                style: TextStyle(fontSize: 13, color: _Surf.text(context), height: 1.4)))),
       ]),
     );
   }
@@ -2293,11 +2339,11 @@ class _Empty extends StatelessWidget {
                 decoration: const BoxDecoration(color: _C.indigoSft, shape: BoxShape.circle),
                 child: Icon(icon, size: 48, color: _C.indigo)),
             const SizedBox(height: 20),
-            Text(title, textAlign: TextAlign.center, style: const TextStyle(
-                fontSize: 21, fontWeight: FontWeight.w700, color: _C.text)),
+            Text(title, textAlign: TextAlign.center, style: TextStyle(
+                fontSize: 21, fontWeight: FontWeight.w700, color: _Surf.text(context))),
             const SizedBox(height: 8),
             Text(msg, textAlign: TextAlign.center,
-                style: const TextStyle(color: _C.sub, fontSize: 13, height: 1.6)),
+                style: TextStyle(color: _Surf.sub(context), fontSize: 13, height: 1.6)),
           ]),
         ),
       ),
@@ -2330,8 +2376,8 @@ class _ErrorRetry extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(message, textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: _C.sub, fontSize: 14, height: 1.5)),
+                  style: TextStyle(
+                      color: _Surf.sub(context), fontSize: 14, height: 1.5)),
               const SizedBox(height: 18),
               ElevatedButton.icon(
                 onPressed: onRetry,
@@ -2367,14 +2413,14 @@ class _PendingBody extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(children: [
-            const BackButton(color: _C.text),
+            BackButton(color: _Surf.text(context)),
             const SizedBox(width: 4),
-            const Text('Dashboard', style: TextStyle(
-                color: _C.text, fontWeight: FontWeight.w700, fontSize: 18)),
+            Text('Dashboard', style: TextStyle(
+                color: _Surf.text(context), fontWeight: FontWeight.w700, fontSize: 18)),
           ]),
         ),
       ),
-      const Divider(height: 1, color: _C.divider),
+      Divider(height: 1, color: _Surf.divider(context)),
       Expanded(child: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -2386,12 +2432,12 @@ class _PendingBody extends StatelessWidget {
                 child: const Icon(Icons.hourglass_top_rounded,
                     size: 52, color: _C.indigo)),
             const SizedBox(height: 28),
-            const Text('Pending Approval', style: TextStyle(
-                fontSize: 24, fontWeight: FontWeight.w700, color: _C.text)),
+            Text('Pending Approval', style: TextStyle(
+                fontSize: 24, fontWeight: FontWeight.w700, color: _Surf.text(context))),
             const SizedBox(height: 10),
-            const Text("Your account is under review.\nYou'll be notified once approved.",
+            Text("Your account is under review.\nYou'll be notified once approved.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: _C.sub, fontSize: 14, height: 1.6)),
+                style: TextStyle(color: _Surf.sub(context), fontSize: 14, height: 1.6)),
             const SizedBox(height: 28),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -2451,9 +2497,9 @@ class _Header extends StatelessWidget {
     final iconStyle = _ServiceIcons.forServiceType(serviceType);
 
     return Container(
-      decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(bottom: BorderSide(color: _C.divider))),
+      decoration: BoxDecoration(
+          color: _Surf.card(context),
+          border: Border(bottom: BorderSide(color: _Surf.divider(context)))),
       child: SafeArea(
         bottom: false,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2473,8 +2519,8 @@ class _Header extends StatelessWidget {
                   children: [
                 Text(businessName,
                     maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700, color: _Surf.text(context))),
                 const SizedBox(height: 3),
                 Row(children: [
                   Container(width: 7, height: 7,
@@ -2482,7 +2528,7 @@ class _Header extends StatelessWidget {
                           color: _C.green, shape: BoxShape.circle)),
                   const SizedBox(width: 6),
                   Text(serviceType,
-                      style: const TextStyle(color: _C.sub, fontSize: 12)),
+                      style: TextStyle(color: _Surf.sub(context), fontSize: 12)),
                 ]),
               ])),
               GestureDetector(
@@ -2533,8 +2579,8 @@ class _Header extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Receiving jobs for:',
-                    style: TextStyle(color: _C.sub, fontSize: 11,
+                Text('Receiving jobs for:',
+                    style: TextStyle(color: _Surf.sub(context), fontSize: 11,
                         fontWeight: FontWeight.w600, letterSpacing: 0.3)),
                 const SizedBox(height: 6),
                 Wrap(spacing: 6, runSpacing: 6,
@@ -2585,7 +2631,7 @@ class _Header extends StatelessWidget {
             child: Container(
               height: 46,
               decoration: BoxDecoration(
-                  color: const Color(0xFFF0F2F8),
+                  color: _Surf.trackBg(context),
                   borderRadius: BorderRadius.circular(14)),
               child: Row(children: [
                 _TabBtn(
@@ -2663,7 +2709,7 @@ class _TabBtn extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: active ? Colors.white : Colors.transparent,
+          color: active ? _Surf.card(context) : Colors.transparent,
           borderRadius: BorderRadius.circular(11),
           boxShadow: active
               ? [BoxShadow(color: Colors.black.withOpacity(0.07),
@@ -2672,7 +2718,7 @@ class _TabBtn extends StatelessWidget {
         ),
         child: Center(child: Text(label,
             style: TextStyle(
-              color:      active ? _C.indigo : _C.sub,
+              color:      active ? _C.indigo : _Surf.sub(context),
               fontWeight: active ? FontWeight.w700 : FontWeight.w500,
               fontSize:   13,
             ))),
@@ -2753,7 +2799,7 @@ class _DialogState extends State<_Dialog> {
     canPop: false,
     onPopInvokedWithResult: (didPop, _) { if (didPop) return; _keep(); },
     child: Dialog(
-      backgroundColor: Colors.white,
+      backgroundColor: _Surf.card(context),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -2770,18 +2816,18 @@ class _DialogState extends State<_Dialog> {
                   child: Icon(Icons.info_outline_rounded,
                       color: widget.btnColor, size: 26)),
               const SizedBox(height: 14),
-              Text(widget.title, style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
+              Text(widget.title, style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w700, color: _Surf.text(context))),
               const SizedBox(height: 4),
               Text(widget.subtitle, textAlign: TextAlign.center,
-                  style: const TextStyle(color: _C.sub, fontSize: 13)),
+                  style: TextStyle(color: _Surf.sub(context), fontSize: 13)),
               const SizedBox(height: 16),
               TextField(
                 controller: _ctrl, maxLines: 3,
                 decoration: InputDecoration(
                   hintText: widget.hint,
-                  hintStyle: const TextStyle(color: _C.sub, fontSize: 13),
-                  filled: true, fillColor: const Color(0xFFF7F8FC),
+                  hintStyle: TextStyle(color: _Surf.sub(context), fontSize: 13),
+                  filled: true, fillColor: _Surf.fill(context),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(13),
                       borderSide: BorderSide.none),
@@ -2793,11 +2839,11 @@ class _DialogState extends State<_Dialog> {
                   onPressed: _keep,
                   style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 13),
-                      side: const BorderSide(color: _C.divider),
+                      side: BorderSide(color: _Surf.divider(context)),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12))),
                   child: Text(widget.keepLabel,
-                      style: const TextStyle(color: _C.sub)),
+                      style: TextStyle(color: _Surf.sub(context))),
                 )),
                 const SizedBox(width: 12),
                 Expanded(child: ElevatedButton(
@@ -2871,7 +2917,7 @@ class _OtpDialogState extends State<_OtpDialog> {
     canPop: false,
     onPopInvokedWithResult: (didPop, _) { if (didPop) return; _cancel(); },
     child: Dialog(
-      backgroundColor: Colors.white,
+      backgroundColor: _Surf.card(context),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -2888,11 +2934,11 @@ class _OtpDialogState extends State<_OtpDialog> {
                   child: const Icon(Icons.lock_outline_rounded,
                       color: _C.green, size: 26)),
               const SizedBox(height: 14),
-              Text(widget.title, style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: _C.text)),
+              Text(widget.title, style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w700, color: _Surf.text(context))),
               const SizedBox(height: 4),
               Text(widget.subtitle, textAlign: TextAlign.center,
-                  style: const TextStyle(color: _C.sub, fontSize: 13, height: 1.4)),
+                  style: TextStyle(color: _Surf.sub(context), fontSize: 13, height: 1.4)),
               const SizedBox(height: 16),
               TextField(
                 controller: _ctrl,
@@ -2900,8 +2946,8 @@ class _OtpDialogState extends State<_OtpDialog> {
                 keyboardType: TextInputType.number,
                 maxLength: 6,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800,
-                    letterSpacing: 8, color: _C.text),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800,
+                    letterSpacing: 8, color: _Surf.text(context)),
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(6),
@@ -2909,8 +2955,8 @@ class _OtpDialogState extends State<_OtpDialog> {
                 decoration: InputDecoration(
                   counterText: '',
                   hintText: '••••••',
-                  hintStyle: const TextStyle(color: _C.sub, fontSize: 20, letterSpacing: 8),
-                  filled: true, fillColor: const Color(0xFFF7F8FC),
+                  hintStyle: TextStyle(color: _Surf.sub(context), fontSize: 20, letterSpacing: 8),
+                  filled: true, fillColor: _Surf.fill(context),
                   errorText: _error,
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(13),
@@ -2932,10 +2978,10 @@ class _OtpDialogState extends State<_OtpDialog> {
                   onPressed: _cancel,
                   style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 13),
-                      side: const BorderSide(color: _C.divider),
+                      side: BorderSide(color: _Surf.divider(context)),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12))),
-                  child: const Text('Cancel', style: TextStyle(color: _C.sub)),
+                  child: Text('Cancel', style: TextStyle(color: _Surf.sub(context))),
                 )),
                 const SizedBox(width: 12),
                 Expanded(child: ElevatedButton(

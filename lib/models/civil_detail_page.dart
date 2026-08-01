@@ -79,8 +79,13 @@ class _CivilServiceDetailPageState extends State<CivilServiceDetailPage> {
     final screenWidth = mq.size.width;
     final heroHeight = screenWidth * 0.72;
 
+    // ── DARK MODE AWARENESS ──────────────────────────────────────────
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color scaffoldBg = isDark ? const Color(0xFF121016) : const Color(0xFFF6F7FB);
+    final Color appBarBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: scaffoldBg,
       body: Stack(
         children: [
           CustomScrollView(
@@ -88,7 +93,7 @@ class _CivilServiceDetailPageState extends State<CivilServiceDetailPage> {
               SliverAppBar(
                 expandedHeight: heroHeight,
                 pinned: true,
-                backgroundColor: Colors.white,
+                backgroundColor: appBarBg,
                 elevation: 0,
                 systemOverlayStyle: SystemUiOverlayStyle.light,
                 automaticallyImplyLeading: false,
@@ -123,26 +128,26 @@ class _CivilServiceDetailPageState extends State<CivilServiceDetailPage> {
                     children: [
                       if (widget.service.about != null &&
                           widget.service.about!.isNotEmpty) ...[
-                        const _SectionTitle(title: 'About this service'),
+                        _SectionTitle(title: 'About this service', isDark: isDark),
                         const SizedBox(height: 10),
-                        _AboutCard(about: widget.service.about!),
+                        _AboutCard(about: widget.service.about!, isDark: isDark),
                         const SizedBox(height: 22),
                       ],
 
                       if (widget.service.features != null &&
                           widget.service.features!.isNotEmpty) ...[
-                        const _SectionTitle(title: "What's included"),
+                        _SectionTitle(title: "What's included", isDark: isDark),
                         const SizedBox(height: 12),
                         ...widget.service.features!
-                            .map((f) => _FeatureRow(label: f)),
+                            .map((f) => _FeatureRow(label: f, isDark: isDark)),
                         const SizedBox(height: 22),
                       ],
 
                       if (!_isRenovation && _addedToCart)
-                        const _CartAddedBanner(),
+                        _CartAddedBanner(isDark: isDark),
                       if (!_isRenovation && !_addedToCart)
-                        const _BookInfoBanner(),
-                      if (_isRenovation) const _RenovationHint(),
+                        _BookInfoBanner(isDark: isDark),
+                      if (_isRenovation) _RenovationHint(isDark: isDark),
                     ],
                   ),
                 ),
@@ -159,6 +164,7 @@ class _CivilServiceDetailPageState extends State<CivilServiceDetailPage> {
               addedToCart: _addedToCart,
               onPrimary: _handlePrimaryAction,
               onViewCart: _openCart,
+              isDark: isDark,
             ),
           ),
         ],
@@ -259,15 +265,16 @@ class _Pill extends StatelessWidget {
 
 class _SectionTitle extends StatelessWidget {
   final String title;
-  const _SectionTitle({required this.title});
+  final bool isDark;
+  const _SectionTitle({required this.title, this.isDark = false});
 
   @override
   Widget build(BuildContext context) => Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 17,
           fontWeight: FontWeight.w800,
-          color: Color(0xFF1A1A2E),
+          color: isDark ? Colors.white : const Color(0xFF1A1A2E),
           letterSpacing: 0.1,
         ),
       );
@@ -275,7 +282,8 @@ class _SectionTitle extends StatelessWidget {
 
 class _AboutCard extends StatelessWidget {
   final String about;
-  const _AboutCard({required this.about});
+  final bool isDark;
+  const _AboutCard({required this.about, this.isDark = false});
 
   @override
   Widget build(BuildContext context) {
@@ -283,11 +291,13 @@ class _AboutCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1B1922) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: isDark
+                  ? Colors.black.withOpacity(0.35)
+                  : Colors.black.withOpacity(0.04),
               blurRadius: 8,
               offset: const Offset(0, 2))
         ],
@@ -298,7 +308,7 @@ class _AboutCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: const Color(0xFF1565C0).withOpacity(0.08),
+              color: const Color(0xFF1565C0).withOpacity(isDark ? 0.18 : 0.08),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.info_outline_rounded,
@@ -308,8 +318,10 @@ class _AboutCard extends StatelessWidget {
           Expanded(
             child: Text(
               about,
-              style: const TextStyle(
-                  fontSize: 14, color: Color(0xFF3D3D50), height: 1.6),
+              style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : const Color(0xFF3D3D50),
+                  height: 1.6),
             ),
           ),
         ],
@@ -320,7 +332,8 @@ class _AboutCard extends StatelessWidget {
 
 class _FeatureRow extends StatelessWidget {
   final String label;
-  const _FeatureRow({required this.label});
+  final bool isDark;
+  const _FeatureRow({required this.label, this.isDark = false});
 
   @override
   Widget build(BuildContext context) {
@@ -328,11 +341,13 @@ class _FeatureRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1B1922) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: isDark
+                  ? Colors.black.withOpacity(0.3)
+                  : Colors.black.withOpacity(0.03),
               blurRadius: 6,
               offset: const Offset(0, 2))
         ],
@@ -342,16 +357,20 @@ class _FeatureRow extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
-                color: Colors.green.shade50, shape: BoxShape.circle),
+                color: isDark
+                    ? Colors.green.withOpacity(0.15)
+                    : Colors.green.shade50,
+                shape: BoxShape.circle),
             child: Icon(Icons.check_rounded,
-                color: Colors.green.shade700, size: 16),
+                color: isDark ? Colors.greenAccent.shade200 : Colors.green.shade700,
+                size: 16),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(label,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF2D2D3A),
+                    color: isDark ? Colors.white70 : const Color(0xFF2D2D3A),
                     height: 1.4)),
           ),
         ],
@@ -361,28 +380,30 @@ class _FeatureRow extends StatelessWidget {
 }
 
 class _RenovationHint extends StatelessWidget {
-  const _RenovationHint();
+  final bool isDark;
+  const _RenovationHint({this.isDark = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.orange.shade50,
+        color: isDark ? Colors.orange.withOpacity(0.12) : Colors.orange.shade50,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.orange.shade200),
+        border: Border.all(
+            color: isDark ? Colors.orange.withOpacity(0.4) : Colors.orange.shade200),
       ),
       child: Row(
         children: [
           Icon(Icons.touch_app_rounded,
-              color: Colors.orange.shade700, size: 20),
+              color: isDark ? Colors.orange.shade300 : Colors.orange.shade700, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               "Tap 'Customize & Book' to choose specific services for this package.",
               style: TextStyle(
                   fontSize: 13,
-                  color: Colors.orange.shade800,
+                  color: isDark ? Colors.orange.shade200 : Colors.orange.shade800,
                   height: 1.4),
             ),
           ),
@@ -393,26 +414,31 @@ class _RenovationHint extends StatelessWidget {
 }
 
 class _CartAddedBanner extends StatelessWidget {
-  const _CartAddedBanner();
+  final bool isDark;
+  const _CartAddedBanner({this.isDark = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.green.shade50,
+        color: isDark ? Colors.green.withOpacity(0.12) : Colors.green.shade50,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.green.shade200),
+        border: Border.all(
+            color: isDark ? Colors.green.withOpacity(0.4) : Colors.green.shade200),
       ),
       child: Row(
         children: [
           Icon(Icons.check_circle_rounded,
-              color: Colors.green.shade600, size: 22),
+              color: isDark ? Colors.greenAccent.shade200 : Colors.green.shade600,
+              size: 22),
           const SizedBox(width: 10),
-          const Expanded(
+          Expanded(
             child: Text(
               "Added to cart! Tap 'View Cart' to proceed.",
-              style: TextStyle(fontSize: 13, color: Color(0xFF2D5A27)),
+              style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.green.shade100 : const Color(0xFF2D5A27)),
             ),
           ),
         ],
@@ -422,26 +448,30 @@ class _CartAddedBanner extends StatelessWidget {
 }
 
 class _BookInfoBanner extends StatelessWidget {
-  const _BookInfoBanner();
+  final bool isDark;
+  const _BookInfoBanner({this.isDark = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: isDark ? Colors.blue.withOpacity(0.12) : Colors.blue.shade50,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.blue.shade200),
+        border: Border.all(
+            color: isDark ? Colors.blue.withOpacity(0.4) : Colors.blue.shade200),
       ),
       child: Row(
         children: [
           Icon(Icons.info_outline_rounded,
-              color: Colors.blue.shade600, size: 22),
+              color: isDark ? Colors.blue.shade200 : Colors.blue.shade600, size: 22),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               "Tap 'Book Now' to add this service to your cart.",
-              style: TextStyle(fontSize: 13, color: Colors.blue.shade800),
+              style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.blue.shade100 : Colors.blue.shade800),
             ),
           ),
         ],
@@ -455,12 +485,14 @@ class _BottomActionBar extends StatelessWidget {
   final bool addedToCart;
   final VoidCallback onPrimary;
   final VoidCallback onViewCart;
+  final bool isDark;
 
   const _BottomActionBar({
     required this.isRenovation,
     required this.addedToCart,
     required this.onPrimary,
     required this.onViewCart,
+    this.isDark = false,
   });
 
   @override
@@ -470,10 +502,10 @@ class _BottomActionBar extends StatelessWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPad),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1B1922) : Colors.white,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
               blurRadius: 12,
               offset: const Offset(0, -3))
         ],
@@ -494,7 +526,7 @@ class _BottomActionBar extends StatelessWidget {
                         child: _PrimaryButton(
                           label: 'Book Another',
                           icon: Icons.add_rounded,
-                          color: Colors.grey.shade700,
+                          color: isDark ? Colors.grey.shade600 : Colors.grey.shade700,
                           onTap: onPrimary,
                         ),
                       ),

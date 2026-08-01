@@ -29,6 +29,17 @@ class EducationServiceCard extends StatelessWidget {
     final sw = mq.size.width;
     final sh = mq.size.height;
 
+    // ── DARK MODE AWARENESS ──────────────────────────────────────────
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color cardBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color titleColor = isDark ? Colors.white : const Color(0xFF111827);
+    final Color descColor = isDark ? Colors.white60 : Colors.grey.shade600;
+    final Color viewBtnBorder = isDark ? Colors.white24 : Colors.grey.shade300;
+    final Color viewBtnText = isDark ? Colors.white70 : const Color(0xFF374151);
+    final Color shadowColor = isDark
+        ? Colors.black.withOpacity(0.45)
+        : Colors.black.withOpacity(0.06);
+
     // Adaptive scaling — base 390w, 844h
     final double wScale = (sw / 390).clamp(0.75, 1.3);
     final double hScale = (sh / 844).clamp(0.75, 1.3);
@@ -57,11 +68,11 @@ class EducationServiceCard extends StatelessWidget {
         vertical: (8 * hScale).clamp(6.0, 12.0),
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular((20 * wScale).clamp(14.0, 26.0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: shadowColor,
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -207,7 +218,7 @@ class EducationServiceCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: titleSize,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF111827),
+                    color: titleColor,
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -221,7 +232,7 @@ class EducationServiceCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: descSize,
-                    color: Colors.grey.shade600,
+                    color: descColor,
                     height: 1.45,
                   ),
                 ),
@@ -239,7 +250,7 @@ class EducationServiceCard extends StatelessWidget {
                           height: btnHeight,
                           child: OutlinedButton(
                             style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.grey.shade300),
+                              side: BorderSide(color: viewBtnBorder),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(
                                   (12 * wScale).clamp(8.0, 16.0),
@@ -260,7 +271,7 @@ class EducationServiceCard extends StatelessWidget {
                               "View",
                               style: TextStyle(
                                 fontSize: btnFontSize,
-                                color: const Color(0xFF374151),
+                                color: viewBtnText,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
