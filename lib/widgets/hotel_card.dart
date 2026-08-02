@@ -13,14 +13,24 @@ class HotelCard extends StatelessWidget {
     final width = MediaQuery.of(context).size.width;
     final discountedPrice = hotel.price - (hotel.price * hotel.discount ~/ 100);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor      = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final textPrimary    = isDark ? Colors.white : const Color(0xFF111827);
+    final textSecondary  = isDark ? Colors.white70 : Colors.grey.shade800;
+    final textMuted      = isDark ? Colors.white54 : Colors.grey.shade600;
+    final chipBg         = isDark ? Colors.white.withOpacity(0.06) : Colors.grey.shade100;
+    final chipText       = isDark ? Colors.white70 : Colors.grey.shade800;
+    final outlineBorder  = isDark ? Colors.white24 : Colors.grey.shade400;
+    final ratingBg       = isDark ? Colors.orange.withOpacity(0.15) : Colors.orange.shade50;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withOpacity(isDark ? 0.35 : 0.06),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
@@ -155,7 +165,7 @@ class HotelCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13.5,
                           height: 1.5,
-                          color: Colors.grey.shade800,
+                          color: textSecondary,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -176,7 +186,7 @@ class HotelCard extends StatelessWidget {
                       children: [
                         Text(
                           "Price Per Night",
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                          style: TextStyle(color: textMuted, fontSize: 12),
                         ),
                         const SizedBox(height: 4),
                         Row(
@@ -195,7 +205,7 @@ class HotelCard extends StatelessWidget {
                               Text(
                                 "₹${hotel.price}",
                                 style: TextStyle(
-                                  color: Colors.grey.shade400,
+                                  color: textMuted,
                                   fontSize: 13,
                                   decoration: TextDecoration.lineThrough,
                                 ),
@@ -210,7 +220,7 @@ class HotelCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
+                        color: ratingBg,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -219,9 +229,10 @@ class HotelCard extends StatelessWidget {
                           const SizedBox(width: 5),
                           Text(
                             hotel.rating.toString(),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
+                              color: textPrimary,
                             ),
                           ),
                         ],
@@ -241,14 +252,14 @@ class HotelCard extends StatelessWidget {
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: chipBg,
                           borderRadius: BorderRadius.circular(30),
                         ),
                         child: Text(
                           amenity,
                           style: TextStyle(
                             fontSize: 11.5,
-                            color: Colors.grey.shade800,
+                            color: chipText,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -274,15 +285,15 @@ class HotelCard extends StatelessWidget {
                             ),
                           ),
                           style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: Colors.grey.shade400),
+                            side: BorderSide(color: outlineBorder),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          child: const Text(
+                          child: Text(
                             "View Details",
                             style: TextStyle(
-                              color: Colors.black,
+                              color: textPrimary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),

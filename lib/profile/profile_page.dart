@@ -46,14 +46,20 @@ class _ProfilePageState extends State<ProfilePage> {
   String _networkImage = '';   // URL from Firestore or Google
   bool   _isDirty      = false;
 
-  // ── Dark theme tokens ────────────────────────────────────────────────────
-  static const Color _bgColor      = Color(0xFF0F1115);
-  static const Color _surface      = Color(0xFF1A1D24);
-  static const Color _surfaceAlt   = Color(0xFF20242C);
-  static const Color _border       = Color(0xFF2A2E37);
-  static const Color _textPrimary  = Color(0xFFF1F3F5);
-  static const Color _textMuted    = Color(0xFF9AA0AC);
-  static const Color _accentIndigo = Color(0xFF6E7CE8);
+  // ── Theme-aware tokens ───────────────────────────────────────────────────
+  // These now follow Theme.of(context).brightness instead of being hardcoded
+  // to dark, so the page respects your app's ThemeMode (system/light/dark)
+  // set from SettingsController.
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _bgColor      => _isDark ? const Color(0xFF0F1115) : const Color(0xFFF7F8FC);
+  Color get _surface      => _isDark ? const Color(0xFF1A1D24) : Colors.white;
+  Color get _surfaceAlt   => _isDark ? const Color(0xFF20242C) : const Color(0xFFF2F3F7);
+  Color get _border       => _isDark ? const Color(0xFF2A2E37) : const Color(0xFFE3E5EA);
+  Color get _textPrimary  => _isDark ? const Color(0xFFF1F3F5) : const Color(0xFF111827);
+  Color get _textMuted    => _isDark ? const Color(0xFF9AA0AC) : const Color(0xFF6B7280);
+  Color get _accentIndigo => const Color(0xFF6E7CE8); // same in both themes
+  Color get _readOnlyFill => _isDark ? const Color(0xFF181B22) : const Color(0xFFECEEF3);
 
   // ── Doc ID = email ──────────────────────────────────────────
   String _docId(User user) => user.email!.toLowerCase().trim();
@@ -297,12 +303,12 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (_) => AlertDialog(
         backgroundColor: _surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title:   const Text('Log out?', style: TextStyle(color: _textPrimary)),
-        content: const Text('You will be signed out of your account.',
+        title:   Text('Log out?', style: TextStyle(color: _textPrimary)),
+        content: Text('You will be signed out of your account.',
             style: TextStyle(color: _textMuted)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel', style: TextStyle(color: _textMuted))),
+              child: Text('Cancel', style: TextStyle(color: _textMuted))),
           TextButton(onPressed: () => Navigator.pop(context, true),
               child: const Text('Log out',
                   style: TextStyle(color: Colors.redAccent))),
@@ -376,8 +382,8 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (_) => AlertDialog(
         backgroundColor: _surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete your account?', style: TextStyle(color: _textPrimary)),
-        content: const Text(
+        title: Text('Delete your account?', style: TextStyle(color: _textPrimary)),
+        content: Text(
           'This will permanently delete your profile, saved address and '
           'photo. This action cannot be undone.',
           style: TextStyle(color: _textMuted),
@@ -385,7 +391,7 @@ class _ProfilePageState extends State<ProfilePage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: _textMuted)),
+            child: Text('Cancel', style: TextStyle(color: _textMuted)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -402,15 +408,15 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (_) => AlertDialog(
         backgroundColor: _surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Are you absolutely sure?', style: TextStyle(color: _textPrimary)),
-        content: const Text(
+        title: Text('Are you absolutely sure?', style: TextStyle(color: _textPrimary)),
+        content: Text(
           'Your account and all associated data will be permanently removed.',
           style: TextStyle(color: _textMuted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: _textMuted)),
+            child: Text('Cancel', style: TextStyle(color: _textMuted)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -546,12 +552,12 @@ class _ProfilePageState extends State<ProfilePage> {
         elevation:       0,
         backgroundColor: Colors.transparent,
         centerTitle:     true,
-        title: const Text('My Profile',
+        title: Text('My Profile',
             style: TextStyle(
                 color: _textPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18)),
-        iconTheme: const IconThemeData(color: _textPrimary),
+        iconTheme: IconThemeData(color: _textPrimary),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -571,7 +577,7 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           SafeArea(
             child: _isLoading
-                ? const Center(
+                ? Center(
                     child: CircularProgressIndicator(color: _accentIndigo))
                 : SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(
@@ -799,7 +805,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Uploading photo…',
+                      Text('Uploading photo…',
                           style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
@@ -819,7 +825,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       const SizedBox(height: 10),
                       Text('${(_uploadProgress * 100).toStringAsFixed(0)}%',
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: _accentIndigo, fontWeight: FontWeight.bold)),
                     ],
                   ),
@@ -837,7 +843,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   decoration: BoxDecoration(
                       color: _surface,
                       borderRadius: BorderRadius.circular(20)),
-                  child: const Column(
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text('Deleting your account…',
@@ -845,8 +851,8 @@ class _ProfilePageState extends State<ProfilePage> {
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
                               color: _textPrimary)),
-                      SizedBox(height: 16),
-                      CircularProgressIndicator(
+                      const SizedBox(height: 16),
+                      const CircularProgressIndicator(
                           strokeWidth: 2.5, color: Colors.redAccent),
                     ],
                   ),
@@ -873,7 +879,7 @@ class _ProfilePageState extends State<ProfilePage> {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-              color:      Colors.black.withOpacity(0.4),
+              color:      Colors.black.withOpacity(_isDark ? 0.4 : 0.15),
               blurRadius: 20,
               offset:     const Offset(0, 8)),
         ],
@@ -914,7 +920,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 strokeWidth: 2,
                                 value: _uploadProgress > 0 ? _uploadProgress : null,
                                 color: _accentIndigo))
-                        : const Icon(Icons.camera_alt,
+                        : Icon(Icons.camera_alt,
                             size: 16, color: _accentIndigo),
                   ),
                 ),
@@ -994,7 +1000,7 @@ class _ProfilePageState extends State<ProfilePage> {
         border: Border.all(color: _border, width: 1),
         boxShadow: [
           BoxShadow(
-              color:      Colors.black.withOpacity(0.35),
+              color:      Colors.black.withOpacity(_isDark ? 0.35 : 0.06),
               blurRadius: 14,
               offset:     const Offset(0, 5)),
         ],
@@ -1003,7 +1009,7 @@ class _ProfilePageState extends State<ProfilePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 17, fontWeight: FontWeight.w700,
                   color: _textPrimary)),
           const SizedBox(height: 18),
@@ -1045,7 +1051,7 @@ class _ProfilePageState extends State<ProfilePage> {
         inputFormatters:    inputFormatters,
         maxLines:           maxLines,
         readOnly:           readOnly,
-        style: const TextStyle(color: _textPrimary),
+        style: TextStyle(color: _textPrimary),
         onFieldSubmitted: (_) {
           if (nextFocus != null) {
             FocusScope.of(context).requestFocus(nextFocus);
@@ -1065,21 +1071,21 @@ class _ProfilePageState extends State<ProfilePage> {
           hintStyle:   TextStyle(color: _textMuted.withOpacity(0.7), fontSize: 14),
           prefixIcon:  Icon(icon, color: _accentIndigo, size: 20),
           prefixText:  prefixText,
-          prefixStyle: const TextStyle(
+          prefixStyle: TextStyle(
               color: _textPrimary, fontWeight: FontWeight.w500),
           suffixIcon: readOnly
               ? Icon(Icons.lock_outline, size: 15, color: _textMuted)
               : null,
           filled:    true,
-          fillColor: readOnly ? const Color(0xFF181B22) : _surfaceAlt,
+          fillColor: readOnly ? _readOnlyFill : _surfaceAlt,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide:  const BorderSide(color: _border)),
+              borderSide:  BorderSide(color: _border)),
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: _accentIndigo, width: 1.4)),
+              borderSide: BorderSide(color: _accentIndigo, width: 1.4)),
           errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide:  const BorderSide(color: Color(0xFFE57373))),

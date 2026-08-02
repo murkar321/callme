@@ -13,6 +13,33 @@ class _HotelServicePageState extends State<HotelServicePage> {
   final TextEditingController searchController = TextEditingController();
   String selectedCity = "All";
 
+  // ══════════════════════════════════════════════════════════════════
+  // FIX (DARK THEME): same root cause as the other hotel pages — every
+  // color here was a hardcoded light-mode value (Colors.grey.shade100,
+  // Colors.white, Colors.black87, ...), so the page never looked at
+  // Theme.of(context).brightness and always rendered light regardless
+  // of the app's theme mode. These getters make the search bar, city
+  // chips, and empty state adapt. The red app bar / selected-chip color
+  // is a brand accent and is left unchanged — it reads fine in both
+  // themes.
+  // ══════════════════════════════════════════════════════════════════
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _pageBg =>
+      _isDark ? const Color(0xFF121016) : Colors.grey.shade100;
+  Color get _cardBg =>
+      _isDark ? const Color(0xFF1E1B27) : Colors.white;
+  Color get _textHigh =>
+      _isDark ? Colors.white : Colors.black87;
+  Color get _textMid =>
+      _isDark ? Colors.white70 : Colors.grey.shade700;
+  Color get _textLow =>
+      _isDark ? Colors.white54 : Colors.grey.shade600;
+  Color get _textFainter =>
+      _isDark ? Colors.white24 : Colors.grey.shade400;
+  Color get _divider =>
+      _isDark ? Colors.white24 : Colors.grey.shade300;
+
   List<String> get cities {
     final list = hotels.map((e) => e.city).toSet().toList();
     list.sort();
@@ -39,7 +66,8 @@ class _HotelServicePageState extends State<HotelServicePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      // FIX (DARK THEME): was Colors.grey.shade100.
+      backgroundColor: _pageBg,
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
@@ -59,7 +87,8 @@ class _HotelServicePageState extends State<HotelServicePage> {
               child: Container(
                 height: 56,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  // FIX (DARK THEME): was Colors.white.
+                  color: _cardBg,
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
@@ -72,10 +101,17 @@ class _HotelServicePageState extends State<HotelServicePage> {
                 child: TextField(
                   controller: searchController,
                   onChanged: (_) => setState(() {}),
+                  // FIX (DARK THEME): input text itself had no explicit
+                  // color, so it would default to black on a dark field.
+                  style: TextStyle(color: _textHigh),
                   decoration: InputDecoration(
                     hintText: "Search hotels or city...",
-                    hintStyle: TextStyle(color: Colors.grey.shade500),
-                    prefixIcon: const Icon(Icons.search),
+                    // FIX (DARK THEME): was Colors.grey.shade500.
+                    hintStyle: TextStyle(color: _textLow),
+                    // FIX (DARK THEME): dropped `const`, gave the icon an
+                    // explicit adaptive color instead of the default
+                    // (theme-dependent) icon color.
+                    prefixIcon: Icon(Icons.search, color: _textLow),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 16),
                   ),
@@ -101,11 +137,13 @@ class _HotelServicePageState extends State<HotelServicePage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 20, vertical: 12),
                       decoration: BoxDecoration(
-                        color: isSelected ? Colors.red : Colors.white,
+                        // FIX (DARK THEME): unselected chip was
+                        // Colors.white.
+                        color: isSelected ? Colors.red : _cardBg,
                         borderRadius: BorderRadius.circular(30),
                         border: Border.all(
-                          color:
-                              isSelected ? Colors.red : Colors.grey.shade300,
+                          // FIX (DARK THEME): was Colors.grey.shade300.
+                          color: isSelected ? Colors.red : _divider,
                         ),
                         boxShadow: [
                           BoxShadow(
@@ -119,7 +157,9 @@ class _HotelServicePageState extends State<HotelServicePage> {
                         child: Text(
                           city,
                           style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.black87,
+                            // FIX (DARK THEME): unselected text was
+                            // Colors.black87.
+                            color: isSelected ? Colors.white : _textHigh,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
@@ -140,21 +180,24 @@ class _HotelServicePageState extends State<HotelServicePage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          // FIX (DARK THEME): was Colors.grey.shade400.
                           Icon(Icons.hotel,
-                              size: 75, color: Colors.grey.shade400),
+                              size: 75, color: _textFainter),
                           const SizedBox(height: 14),
                           Text(
                             "No hotels available",
+                            // FIX (DARK THEME): was Colors.grey.shade700.
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade700,
+                              color: _textMid,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             "Try another search or city",
-                            style: TextStyle(color: Colors.grey.shade600),
+                            // FIX (DARK THEME): was Colors.grey.shade600.
+                            style: TextStyle(color: _textLow),
                           ),
                         ],
                       ),

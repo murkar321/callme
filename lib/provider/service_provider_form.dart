@@ -21,18 +21,28 @@ import '../provider/succespage.dart';
 import '../profile/notification_service.dart';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
+//
+// FIX (DARK THEME): _kBg, _kCard, _kFieldBg, _kBorder, _kTextHigh,
+// _kTextMid, and _kTextLow used to be plain top-level `const Color(...)`
+// values. That's exactly why the form never turned dark — nothing here
+// ever looked at Theme.of(context).brightness, so it always rendered the
+// same light palette regardless of SettingsController.themeMode.
+//
+// Those seven tokens have been moved into instance getters on
+// _ServiceProviderFormState (further down) that pick a light or dark
+// value based on the current brightness. Every place in this file that
+// referenced them by name still works unchanged — Dart resolves an
+// unqualified identifier to an instance member first, so the getters
+// transparently take over from the old top-level constants.
+//
+// _kPurple, _kPurpleLt, _kDanger, and _kSuccess are brand/status accent
+// colors that read fine on both light and dark surfaces, so they stay as
+// real compile-time constants.
 
 const _kPurple    = Color(0xFF5C35CC);
 const _kPurpleLt  = Color(0xFF7C6EFF);
-const _kBg        = Color(0xFFF4F6FB);
-const _kCard      = Colors.white;
 const _kDanger    = Color(0xFFE53935);
 const _kSuccess   = Color(0xFF2E7D32);
-const _kFieldBg   = Color(0xFFF7F8FC);
-const _kBorder    = Color(0xFFE2E4EE);
-const _kTextHigh  = Color(0xFF1A1D2E);
-const _kTextMid   = Color(0xFF555A72);
-const _kTextLow   = Color(0xFF9398B0);
 
 // ─── File-size limits ─────────────────────────────────────────────────────────
 
@@ -137,6 +147,46 @@ class ServiceProviderForm extends StatefulWidget {
 
 class _ServiceProviderFormState extends State<ServiceProviderForm>
     with SingleTickerProviderStateMixin {
+
+  // ══════════════════════════════════════════════════════════════════
+  //  FIX (DARK THEME): theme-adaptive color tokens.
+  //
+  //  These replace the old top-level `const Color(...)` values of the
+  //  same name. Because they're instance getters that read
+  //  Theme.of(context).brightness, every widget below that references
+  //  `_kBg`, `_kCard`, `_kFieldBg`, `_kBorder`, `_kTextHigh`,
+  //  `_kTextMid`, or `_kTextLow` now automatically renders correctly in
+  //  both light and dark mode — no call-site renaming needed.
+  //
+  //  A few extra adaptive surfaces (_kSurfaceAlt, _kSurfaceAlt2,
+  //  _kDivider) were added for spots that used a hardcoded
+  //  Colors.grey.shadeXXX directly — those looked fine in light mode but
+  //  turned into a flat, wrong-looking block (or vanished entirely) on a
+  //  dark background.
+  // ══════════════════════════════════════════════════════════════════
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _kBg =>
+      _isDark ? const Color(0xFF121016) : const Color(0xFFF4F6FB);
+  Color get _kCard =>
+      _isDark ? const Color(0xFF1E1B27) : Colors.white;
+  Color get _kFieldBg =>
+      _isDark ? const Color(0xFF262233) : const Color(0xFFF7F8FC);
+  Color get _kBorder =>
+      _isDark ? Colors.white12 : const Color(0xFFE2E4EE);
+  Color get _kTextHigh =>
+      _isDark ? Colors.white : const Color(0xFF1A1D2E);
+  Color get _kTextMid =>
+      _isDark ? Colors.white70 : const Color(0xFF555A72);
+  Color get _kTextLow =>
+      _isDark ? Colors.white38 : const Color(0xFF9398B0);
+
+  Color get _kSurfaceAlt =>
+      _isDark ? Colors.white.withOpacity(0.04) : Colors.grey.shade50;
+  Color get _kSurfaceAlt2 =>
+      _isDark ? Colors.white.withOpacity(0.06) : Colors.grey.shade100;
+  Color get _kDivider =>
+      _isDark ? Colors.white24 : Colors.grey.shade300;
 
   // ── Pagination ──────────────────────────────────────────────────────────────
   int  _step     = 0;
@@ -408,7 +458,12 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                         color: _kDanger, size: 22),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  // FIX (DARK THEME): was `const Expanded(...)`. Its Text
+                  // used color: _kTextHigh, which is no longer a
+                  // compile-time constant now that it depends on
+                  // Theme.of(context) — so this subtree can't be const
+                  // anymore.
+                  Expanded(
                     child: Text(
                       'Please complete this step',
                       style: TextStyle(
@@ -433,7 +488,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                           Expanded(
                             child: Text(
                               issue,
-                              style: const TextStyle(
+                              // FIX (DARK THEME): dropped `const` — uses
+                              // the now-dynamic _kTextMid.
+                              style: TextStyle(
                                   fontSize: 14,
                                   color: _kTextMid,
                                   height: 1.4,
@@ -859,7 +916,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
             maxChildSize: 0.95,
             expand: false,
             builder: (_, sc) => Container(
-              decoration: const BoxDecoration(
+              // FIX (DARK THEME): dropped `const` — decoration now uses
+              // the dynamic _kCard getter.
+              decoration: BoxDecoration(
                 color: _kCard,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
               ),
@@ -892,14 +951,15 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                             duration: const Duration(milliseconds: 200),
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
+                              // FIX (DARK THEME): was Colors.green/grey.shade100
+                              // fixed light tokens; grey.shade100 in particular
+                              // read as a near-white block on a dark sheet.
                               color: accepted
                                   ? Colors.green.withOpacity(0.08)
-                                  : Colors.grey.shade100,
+                                  : _kSurfaceAlt2,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: accepted
-                                    ? Colors.green
-                                    : Colors.grey.shade300,
+                                color: accepted ? Colors.green : _kDivider,
                               ),
                             ),
                             child: Row(
@@ -911,15 +971,20 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                                   onChanged: (v) =>
                                       setLocal(() => accepted = v ?? false),
                                 ),
-                                const Expanded(
+                                // FIX (DARK THEME): dropped `const` and
+                                // added an explicit color so this text
+                                // doesn't default to black on a dark
+                                // sheet.
+                                Expanded(
                                   child: Padding(
-                                    padding: EdgeInsets.only(top: 10),
+                                    padding: const EdgeInsets.only(top: 10),
                                     child: Text(
                                       'I confirm all details are genuine and I agree to the provider terms.',
                                       style: TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w600,
-                                          height: 1.5),
+                                          height: 1.5,
+                                          color: _kTextHigh),
                                     ),
                                   ),
                                 ),
@@ -979,7 +1044,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: Colors.white,
+        // FIX (DARK THEME): was hardcoded Colors.white — now follows the
+        // same card surface as the rest of the form.
+        backgroundColor: _kCard,
         foregroundColor: _kTextHigh,
         centerTitle: true,
         title: Text('${widget.type} Registration',
@@ -1057,7 +1124,8 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                   ? _kPurple
                   : active
                       ? _kPurpleLt
-                      : Colors.grey.shade300,
+                      // FIX (DARK THEME): was Colors.grey.shade300.
+                      : _kDivider,
               borderRadius: BorderRadius.circular(100),
             ),
           ),
@@ -1088,7 +1156,8 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                     ? _kPurple
                     : done
                         ? _kPurple.withOpacity(0.5)
-                        : Colors.grey.shade400,
+                        // FIX (DARK THEME): was Colors.grey.shade400.
+                        : _kTextLow,
               ),
             ),
           ]),
@@ -1148,10 +1217,14 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: sel ? _kPurple : Colors.white,
+                // FIX (DARK THEME): unselected chip was hardcoded
+                // Colors.white, which sat flush with a dark card and
+                // became invisible. Uses the field surface instead so it
+                // still reads as a distinct chip in both themes.
+                color: sel ? _kPurple : _kFieldBg,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: sel ? _kPurple : Colors.grey.shade300),
+                    color: sel ? _kPurple : _kDivider),
                 boxShadow: sel
                     ? [
                         BoxShadow(
@@ -1234,7 +1307,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
             ),
           ),
           const SizedBox(height: 6),
-          const Center(
+          // FIX (DARK THEME): dropped `const` — Text style uses the
+          // dynamic _kTextLow.
+          Center(
             child: Text('Tap to change · max 500 KB · optional',
                 style: TextStyle(fontSize: 11, color: _kTextLow)),
           ),
@@ -1342,12 +1417,14 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
           activeColor: _kPurple,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          title: const Text('I have my own tools & equipment',
+          // FIX (DARK THEME): dropped `const` on both Text widgets below —
+          // they use the dynamic _kTextHigh / _kTextLow.
+          title: Text('I have my own tools & equipment',
               style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                   color: _kTextHigh)),
-          subtitle: const Text('Turn on if you bring your own equipment',
+          subtitle: Text('Turn on if you bring your own equipment',
               style: TextStyle(fontSize: 12, color: _kTextLow)),
           onChanged: (v) => setState(() => _ownTools = v),
         ),
@@ -1436,14 +1513,16 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                   ? Colors.green.withOpacity(0.06)
                   : isCompulsory
                       ? _kPurple.withOpacity(0.04)
-                      : Colors.grey.shade50,
+                      // FIX (DARK THEME): was Colors.grey.shade50.
+                      : _kSurfaceAlt,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: uploaded
                     ? Colors.green
                     : isCompulsory
                         ? _kPurple.withOpacity(0.5)
-                        : Colors.grey.shade300,
+                        // FIX (DARK THEME): was Colors.grey.shade300.
+                        : _kDivider,
                 width: uploaded || isCompulsory ? 1.5 : 1,
               ),
             ),
@@ -1470,8 +1549,10 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                   Wrap(spacing: 6, runSpacing: 4, children: [
+                    // FIX (DARK THEME): dropped `const` — uses the
+                    // dynamic _kTextHigh.
                     Text(doc,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
                             color: _kTextHigh)),
@@ -1553,14 +1634,16 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
         padding: const EdgeInsets.all(22),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // FIX (DARK THEME): dropped `const` on both Text widgets below —
+          // they use the dynamic _kTextHigh / _kTextMid.
           Text(title,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.bold,
                   color: _kTextHigh)),
           const SizedBox(height: 5),
           Text(subtitle,
-              style: const TextStyle(fontSize: 13, color: _kTextMid)),
+              style: TextStyle(fontSize: 13, color: _kTextMid)),
           const SizedBox(height: 22),
           child,
         ]),
@@ -1587,16 +1670,19 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
         textCapitalization: textCapitalization,
         textInputAction: TextInputAction.next,
         autovalidateMode: AutovalidateMode.onUserInteraction,
-        style: const TextStyle(
+        // FIX (DARK THEME): dropped `const` — uses the dynamic _kTextHigh.
+        style: TextStyle(
             fontSize: 14,
             color: _kTextHigh,
             fontWeight: FontWeight.w500),
         validator: validator,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: _kTextLow, fontSize: 13),
+          // FIX (DARK THEME): dropped `const` on both styles below —
+          // they use the dynamic _kTextLow.
+          hintStyle: TextStyle(color: _kTextLow, fontSize: 13),
           helperText: helperText,
-          helperStyle: const TextStyle(fontSize: 11, color: _kTextLow),
+          helperStyle: TextStyle(fontSize: 11, color: _kTextLow),
           prefixIcon: Icon(icon, color: _kPurple, size: 20),
           filled: true,
           fillColor: _kFieldBg,
@@ -1609,7 +1695,9 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: _kBorder),
+            // FIX (DARK THEME): dropped `const` — uses the dynamic
+            // _kBorder.
+            borderSide: BorderSide(color: _kBorder),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
@@ -1635,7 +1723,8 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
           width: 56,
           height: 5,
           decoration: BoxDecoration(
-              color: Colors.grey.shade300,
+              // FIX (DARK THEME): was Colors.grey.shade300.
+              color: _kDivider,
               borderRadius: BorderRadius.circular(100)),
         ),
       );
@@ -1655,13 +1744,20 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
                 color: Colors.white, size: 28),
           ),
           const SizedBox(width: 14),
-          const Expanded(
+          // FIX (DARK THEME): dropped `const` — added an explicit color
+          // to 'Provider Agreement' (it previously had none, which would
+          // default to a dark theme-independent color) and both Texts
+          // now reference the dynamic _kTextHigh / _kTextMid.
+          Expanded(
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
               Text('Provider Agreement',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              SizedBox(height: 4),
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: _kTextHigh)),
+              const SizedBox(height: 4),
               Text('Please read before submitting',
                   style: TextStyle(color: _kTextMid, fontSize: 13)),
             ]),
@@ -1673,9 +1769,10 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8F8FC),
-          borderRadius: BorderRadius.circular(20),
-        ),
+            // FIX (DARK THEME): was a hardcoded light const Color
+            // (0xFFF8F8FC) — replaced with the adaptive surface token.
+            color: _kSurfaceAlt,
+            borderRadius: BorderRadius.circular(20)),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
             padding: const EdgeInsets.all(10),
@@ -1686,9 +1783,14 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
           ),
           const SizedBox(width: 14),
           Expanded(
+            // FIX (DARK THEME): dropped `const` — added an explicit
+            // color (was previously unstyled, i.e. default black text).
             child: Text(text,
-                style: const TextStyle(
-                    fontSize: 14, height: 1.55, fontWeight: FontWeight.w500)),
+                style: TextStyle(
+                    fontSize: 14,
+                    height: 1.55,
+                    fontWeight: FontWeight.w500,
+                    color: _kTextHigh)),
           ),
         ]),
       );
@@ -1706,7 +1808,7 @@ class _ServiceProviderFormState extends State<ServiceProviderForm>
         minimumSize: const Size(double.infinity, 54),
         foregroundColor: _kTextMid,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        side: const BorderSide(color: _kBorder),
+        side: BorderSide(color: _kBorder),
       );
 
   String? Function(String?) _required(String name) =>

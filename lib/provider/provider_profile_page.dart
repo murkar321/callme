@@ -11,20 +11,24 @@ import 'package:image_picker/image_picker.dart';
 import '../provider/service_config.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Design tokens
+//  Design tokens — now theme-aware (light/dark) instead of static const.
+//  Build an instance with `_T(isDark)` and read fields off it.
 // ─────────────────────────────────────────────────────────────────────────────
 class _T {
-  static const primary   = Color(0xFF5C35CC);
-  static const primaryLt = Color(0xFF7C6EFF);
-  static const bg        = Color(0xFFF4F6FB);
-  static const surface   = Colors.white;
-  static const danger    = Color(0xFFE53935);
-  static const success   = Color(0xFF2E7D32);
-  static const textHigh  = Color(0xFF1A1D2E);
-  static const textMid   = Color(0xFF555A72);
-  static const textLow   = Color(0xFF9398B0);
-  static const border    = Color(0xFFE2E4EE);
-  static const fieldBg   = Color(0xFFF7F8FC);
+  final bool isDark;
+  const _T(this.isDark);
+
+  Color get primary   => const Color(0xFF7C6EFF);
+  Color get primaryLt => const Color(0xFF9B8FFF);
+  Color get bg        => isDark ? const Color(0xFF121016) : const Color(0xFFF4F6FB);
+  Color get surface   => isDark ? const Color(0xFF1B1922) : Colors.white;
+  Color get danger    => isDark ? const Color(0xFFEF5350) : const Color(0xFFE53935);
+  Color get success   => isDark ? const Color(0xFF66BB6A) : const Color(0xFF2E7D32);
+  Color get textHigh  => isDark ? Colors.white : const Color(0xFF1A1D2E);
+  Color get textMid   => isDark ? Colors.white70 : const Color(0xFF555A72);
+  Color get textLow   => isDark ? Colors.white54 : const Color(0xFF9398B0);
+  Color get border    => isDark ? Colors.white12 : const Color(0xFFE2E4EE);
+  Color get fieldBg   => isDark ? const Color(0xFF232030) : const Color(0xFFF7F8FC);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,6 +70,10 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   // ── Firebase ──────────────────────────────────────────────────────────────
   final _db      = FirebaseFirestore.instance;
   final _storage = FirebaseStorage.instance;
+
+  // ── Theme ─────────────────────────────────────────────────────────────────
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  _T get _t => _T(_isDark);
 
   // ── Form ──────────────────────────────────────────────────────────────────
   final _formKey = GlobalKey<FormState>();
@@ -544,6 +552,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
 
   // ── Error summary sheet — lists exactly what's missing/invalid ────────────
   void _showErrorSummary(List<String> failures) {
+    final t = _t;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -555,9 +564,9 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           constraints: BoxConstraints(
               maxHeight: MediaQuery.of(ctx).size.height * 0.7),
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-          decoration: const BoxDecoration(
-            color: _T.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: t.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -569,7 +578,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: _T.border,
+                    color: t.border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -579,21 +588,21 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: _T.danger.withOpacity(0.1),
+                    color: t.danger.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.error_rounded,
-                      color: _T.danger, size: 18),
+                  child: Icon(Icons.error_rounded,
+                      color: t.danger, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     '${failures.length} thing${failures.length > 1 ? 's' : ''} '
                     'need${failures.length > 1 ? '' : 's'} your attention',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: _T.textHigh),
+                        color: t.textHigh),
                   ),
                 ),
               ]),
@@ -609,18 +618,18 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                                 crossAxisAlignment:
                                     CrossAxisAlignment.start,
                                 children: [
-                                  const Padding(
-                                    padding: EdgeInsets.only(top: 5),
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 5),
                                     child: Icon(Icons.circle,
-                                        size: 6, color: _T.danger),
+                                        size: 6, color: t.danger),
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
                                       f,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 13.5,
-                                          color: _T.textMid,
+                                          color: t.textMid,
                                           height: 1.4),
                                     ),
                                   ),
@@ -638,7 +647,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(ctx),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _T.primary,
+                    backgroundColor: t.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -705,16 +714,19 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     // Step 2 — type business name to confirm
     final nameToMatch = _businessCtrl.text.trim();
     final inputCtrl   = TextEditingController();
+    final t           = _t;
     final confirmed   = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
+          backgroundColor: t.surface,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(22)),
-          title: const Text(
+          title: Text(
             'Confirm Deletion',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 17, color: t.textHigh),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -722,15 +734,15 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             children: [
               RichText(
                 text: TextSpan(
-                  style: const TextStyle(
-                      color: _T.textMid, fontSize: 14, height: 1.5),
+                  style: TextStyle(
+                      color: t.textMid, fontSize: 14, height: 1.5),
                   children: [
                     const TextSpan(text: 'Type '),
                     TextSpan(
                       text: '"$nameToMatch"',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: _T.danger),
+                          color: t.danger),
                     ),
                     const TextSpan(
                         text: ' below to permanently delete your profile.'),
@@ -742,20 +754,21 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                 controller: inputCtrl,
                 autofocus: true,
                 onChanged: (_) => setS(() {}),
+                style: TextStyle(color: t.textHigh),
                 decoration: InputDecoration(
                   hintText: 'Business name',
-                  hintStyle: const TextStyle(
-                      color: _T.textLow, fontSize: 13),
+                  hintStyle: TextStyle(
+                      color: t.textLow, fontSize: 13),
                   filled: true,
-                  fillColor: _T.fieldBg,
+                  fillColor: t.fieldBg,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: _T.border),
+                    borderSide: BorderSide(color: t.border),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide:
-                        const BorderSide(color: _T.danger, width: 1.6),
+                        BorderSide(color: t.danger, width: 1.6),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 12),
@@ -768,8 +781,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel',
-                  style: TextStyle(color: _T.textMid)),
+              child: Text('Cancel',
+                  style: TextStyle(color: t.textMid)),
             ),
             ValueListenableBuilder<TextEditingValue>(
               valueListenable: inputCtrl,
@@ -780,10 +793,10 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                       ? () => Navigator.pop(ctx, true)
                       : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _T.danger,
+                    backgroundColor: t.danger,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor:
-                        _T.danger.withOpacity(0.3),
+                        t.danger.withOpacity(0.3),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -926,10 +939,10 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Status colour ─────────────────────────────────────────────────────────
-  Color get _statusColor {
+  Color _statusColor(_T t) {
     switch (_status) {
-      case 'approved': return _T.success;
-      case 'rejected': return _T.danger;
+      case 'approved': return t.success;
+      case 'rejected': return t.danger;
       default:         return const Color(0xFFF57C00);
     }
   }
@@ -941,25 +954,28 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     required String action,
     bool destructive = false,
   }) async {
+    final t = _t;
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: t.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Text(title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 17, color: t.textHigh)),
         content: Text(body,
-            style: const TextStyle(
-                color: _T.textMid, fontSize: 14, height: 1.5)),
+            style: TextStyle(
+                color: t.textMid, fontSize: 14, height: 1.5)),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: _T.textMid)),
+            child: Text('Cancel',
+                style: TextStyle(color: t.textMid)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: destructive ? _T.danger : _T.primary,
+              backgroundColor: destructive ? t.danger : t.primary,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -980,6 +996,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   // ── Snackbar ──────────────────────────────────────────────────────────────
   void _snack(String msg, {required bool ok}) {
     if (!mounted) return;
+    final t = _t;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(
@@ -994,7 +1011,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               child: Text(msg,
                   style: const TextStyle(fontWeight: FontWeight.w500))),
         ]),
-        backgroundColor: ok ? _T.success : _T.danger,
+        backgroundColor: ok ? t.success : t.danger,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -1007,27 +1024,29 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   // ═══════════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
+    final t = _t;
+
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: _T.bg,
-        body: Center(child: CircularProgressIndicator(color: _T.primary)),
+      return Scaffold(
+        backgroundColor: t.bg,
+        body: Center(child: CircularProgressIndicator(color: t.primary)),
       );
     }
 
     // Full-screen deletion overlay
     if (_deleting) {
-      return const Scaffold(
-        backgroundColor: _T.bg,
+      return Scaffold(
+        backgroundColor: t.bg,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(color: _T.danger),
-              SizedBox(height: 16),
+              CircularProgressIndicator(color: t.danger),
+              const SizedBox(height: 16),
               Text(
                 'Deleting your profile…',
                 style: TextStyle(
-                    color: _T.textMid,
+                    color: t.textMid,
                     fontSize: 15,
                     fontWeight: FontWeight.w500),
               ),
@@ -1043,7 +1062,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
     final botPad   = mq.viewPadding.bottom + 80;
 
     return Scaffold(
-      backgroundColor: _T.bg,
+      backgroundColor: t.bg,
       extendBody: true,
       resizeToAvoidBottomInset: true,
       body: SafeArea(
@@ -1051,7 +1070,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         child: Form(
           key: _formKey,
           child: Column(children: [
-            _buildTopBar(),
+            _buildTopBar(t),
             Expanded(
               child: SingleChildScrollView(
                 controller: _scrollCtrl,
@@ -1063,39 +1082,43 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                   const SizedBox(height: 12),
-                  _buildHeroCard(),
+                  _buildHeroCard(t),
                   const SizedBox(height: 16),
                   _section(
+                    t: t,
                     title: 'Business Info',
                     icon: Icons.storefront_rounded,
-                    child: _buildBusinessFields(),
+                    child: _buildBusinessFields(t),
                   ),
                   const SizedBox(height: 16),
                   _section(
+                    t: t,
                     title: 'Services & Categories',
                     icon: Icons.miscellaneous_services_rounded,
-                    child: _buildServicesSection(),
+                    child: _buildServicesSection(t),
                   ),
                   const SizedBox(height: 16),
                   _section(
+                    t: t,
                     title: 'Documents',
                     icon: Icons.description_rounded,
-                    child: _buildDocumentsSection(),
+                    child: _buildDocumentsSection(t),
                   ),
                   const SizedBox(height: 16),
                   _section(
+                    t: t,
                     title: 'Bank Details',
                     icon: Icons.account_balance_rounded,
-                    child: _buildBankFields(),
+                    child: _buildBankFields(t),
                   ),
                   // ── Admin danger zone ────────────────────────────────────
                   if (widget.isAdmin) ...[
                     const SizedBox(height: 16),
-                    _buildAdminDangerZone(),
+                    _buildAdminDangerZone(t),
                   ],
                   // ── Self-delete — always visible to the provider ─────────
                   const SizedBox(height: 16),
-                  _buildSelfDeleteZone(),
+                  _buildSelfDeleteZone(t),
                   const SizedBox(height: 16),
                 ]),
               ),
@@ -1103,40 +1126,40 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           ]),
         ),
       ),
-      bottomNavigationBar: _buildSaveBar(),
+      bottomNavigationBar: _buildSaveBar(t),
     );
   }
 
   // ── Top bar ───────────────────────────────────────────────────────────────
-  Widget _buildTopBar() {
+  Widget _buildTopBar(_T t) {
     return Container(
-      color: _T.bg,
+      color: t.bg,
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
       child: Row(children: [
         Material(
-          color: _T.surface,
+          color: t.surface,
           borderRadius: BorderRadius.circular(14),
           elevation: 1,
           shadowColor: Colors.black12,
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
             onTap: () => Navigator.pop(context),
-            child: const SizedBox(
+            child: SizedBox(
               width: 44,
               height: 44,
               child: Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 18, color: _T.textHigh),
+                  size: 18, color: t.textHigh),
             ),
           ),
         ),
         const SizedBox(width: 12),
-        const Expanded(
+        Expanded(
           child: Text(
             'Provider Profile',
             style: TextStyle(
               fontSize: 19,
               fontWeight: FontWeight.w800,
-              color: _T.textHigh,
+              color: t.textHigh,
               letterSpacing: -0.3,
             ),
             overflow: TextOverflow.ellipsis,
@@ -1149,17 +1172,17 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: _statusColor.withOpacity(0.1),
+                color: _statusColor(t).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(30),
                 border:
-                    Border.all(color: _statusColor.withOpacity(0.3)),
+                    Border.all(color: _statusColor(t).withOpacity(0.3)),
               ),
               child: Text(
                 _status.toUpperCase(),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: _statusColor,
+                  color: _statusColor(t),
                   letterSpacing: 0.5,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -1172,18 +1195,18 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Hero card ─────────────────────────────────────────────────────────────
-  Widget _buildHeroCard() {
+  Widget _buildHeroCard(_T t) {
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [_T.primary, _T.primaryLt],
+        gradient: LinearGradient(
+          colors: [t.primary, t.primaryLt],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: _T.primary.withOpacity(0.28),
+            color: t.primary.withOpacity(0.28),
             blurRadius: 22,
             offset: const Offset(0, 8),
           ),
@@ -1223,8 +1246,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                 height: 30,
                 decoration: const BoxDecoration(
                     color: Colors.white, shape: BoxShape.circle),
-                child: const Icon(Icons.camera_alt_rounded,
-                    size: 16, color: _T.primary),
+                child: Icon(Icons.camera_alt_rounded,
+                    size: 16, color: t.primary),
               ),
             ),
             if (_hasImage)
@@ -1237,7 +1260,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: _T.danger,
+                      color: t.danger,
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 1.5),
                     ),
@@ -1361,17 +1384,18 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
 
   // ── Section wrapper ───────────────────────────────────────────────────────
   Widget _section({
+    required _T t,
     required String title,
     required IconData icon,
     required Widget child,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: _T.surface,
+        color: t.surface,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withOpacity(t.isDark ? 0.25 : 0.04),
               blurRadius: 14,
               offset: const Offset(0, 4)),
         ],
@@ -1386,18 +1410,18 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: _T.primary.withOpacity(0.1),
+              color: t.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: _T.primary, size: 18),
+            child: Icon(icon, color: t.primary, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(title,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: _T.textHigh),
+                    color: t.textHigh),
                 overflow: TextOverflow.ellipsis),
           ),
         ]),
@@ -1408,15 +1432,15 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Business fields ───────────────────────────────────────────────────────
-  Widget _buildBusinessFields() {
+  Widget _buildBusinessFields(_T t) {
     return Column(mainAxisSize: MainAxisSize.min, children: [
-      _field(_businessCtrl, 'Business Name *', Icons.store_rounded,
+      _field(t, _businessCtrl, 'Business Name *', Icons.store_rounded,
           focusNode: _businessFocus,
           validator: _required('Business name')),
-      _field(_ownerCtrl, 'Owner / Manager Name *', Icons.person_rounded,
+      _field(t, _ownerCtrl, 'Owner / Manager Name *', Icons.person_rounded,
           focusNode: _ownerFocus,
           validator: _required('Owner name')),
-      _field(_phoneCtrl, 'Phone Number *', Icons.phone_rounded,
+      _field(t, _phoneCtrl, 'Phone Number *', Icons.phone_rounded,
           focusNode: _phoneFocus,
           keyboardType: TextInputType.phone,
           inputFormatters: [
@@ -1430,7 +1454,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               return 'Enter a valid 10-digit number.';
             return null;
           }),
-      _field(_emailCtrl, 'Email Address *', Icons.email_rounded,
+      _field(t, _emailCtrl, 'Email Address *', Icons.email_rounded,
           focusNode: _emailFocus,
           keyboardType: TextInputType.emailAddress,
           helperText: 'e.g. you@example.com',
@@ -1441,13 +1465,13 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               return 'Enter a valid email address.';
             return null;
           }),
-      _field(_addressCtrl, 'Full Address *', Icons.location_on_rounded,
+      _field(t, _addressCtrl, 'Full Address *', Icons.location_on_rounded,
           focusNode: _addressFocus,
           validator: _required('Address')),
       Row(children: [
         Expanded(
           child: _field(
-            _cityCtrl, 'City *', Icons.location_city_rounded,
+            t, _cityCtrl, 'City *', Icons.location_city_rounded,
             focusNode: _cityFocus,
             validator: _required('City'),
           ),
@@ -1455,13 +1479,13 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         const SizedBox(width: 10),
         Expanded(
           child: _field(
-            _stateCtrl, 'State *', Icons.map_rounded,
+            t, _stateCtrl, 'State *', Icons.map_rounded,
             focusNode: _stateFocus,
             validator: _required('State'),
           ),
         ),
       ]),
-      _field(_pincodeCtrl, 'Pincode *', Icons.pin_drop_rounded,
+      _field(t, _pincodeCtrl, 'Pincode *', Icons.pin_drop_rounded,
           focusNode: _pincodeFocus,
           keyboardType: TextInputType.number,
           inputFormatters: [
@@ -1479,27 +1503,27 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Services section ──────────────────────────────────────────────────────
-  Widget _buildServicesSection() {
+  Widget _buildServicesSection(_T t) {
     return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
       Container(
         decoration: BoxDecoration(
-          color: _T.fieldBg,
+          color: t.fieldBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _T.border),
+          border: Border.all(color: t.border),
         ),
         child: SwitchListTile(
-          title: const Text('Own Tools & Equipment',
+          title: Text('Own Tools & Equipment',
               style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
-                  color: _T.textHigh)),
-          subtitle: const Text('I bring my own equipment',
-              style: TextStyle(fontSize: 12, color: _T.textLow)),
+                  color: t.textHigh)),
+          subtitle: Text('I bring my own equipment',
+              style: TextStyle(fontSize: 12, color: t.textLow)),
           value: _ownTools,
-          activeColor: _T.primary,
+          activeColor: t.primary,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
           shape: RoundedRectangleBorder(
@@ -1509,11 +1533,11 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
       ),
       if (_allCats.isNotEmpty) ...[
         const SizedBox(height: 16),
-        const Text('Service Categories',
+        Text('Service Categories',
             style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: _T.textMid,
+                color: t.textMid,
                 letterSpacing: 0.3)),
         const SizedBox(height: 10),
         Wrap(
@@ -1534,11 +1558,11 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: sel
-                      ? _T.primary.withOpacity(0.1)
-                      : _T.fieldBg,
+                      ? t.primary.withOpacity(0.1)
+                      : t.fieldBg,
                   borderRadius: BorderRadius.circular(30),
                   border: Border.all(
-                    color: sel ? _T.primary : _T.border,
+                    color: sel ? t.primary : t.border,
                     width: 1.5,
                   ),
                 ),
@@ -1548,7 +1572,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     fontSize: 13,
                     fontWeight:
                         sel ? FontWeight.w700 : FontWeight.w400,
-                    color: sel ? _T.primary : _T.textMid,
+                    color: sel ? t.primary : t.textMid,
                   ),
                 ),
               ),
@@ -1559,18 +1583,18 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: _T.fieldBg,
+            color: t.fieldBg,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _T.border),
+            border: Border.all(color: t.border),
           ),
           child: Row(children: [
-            const Icon(Icons.info_outline_rounded,
-                color: _T.textLow, size: 18),
+            Icon(Icons.info_outline_rounded,
+                color: t.textLow, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 'No category config found for "$_serviceType".',
-                style: const TextStyle(color: _T.textMid, fontSize: 13),
+                style: TextStyle(color: t.textMid, fontSize: 13),
               ),
             ),
           ]),
@@ -1579,7 +1603,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Documents section ─────────────────────────────────────────────────────
-  Widget _buildDocumentsSection() {
+  Widget _buildDocumentsSection(_T t) {
     final docs = _docList;
     return Column(
         mainAxisSize: MainAxisSize.min,
@@ -1592,17 +1616,17 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: uploaded
-                  ? const Color(0xFFF0FAF0)
+                  ? t.success.withOpacity(t.isDark ? 0.12 : 0.06)
                   : isCompulsory
-                      ? _T.primary.withOpacity(0.04)
-                      : _T.fieldBg,
+                      ? t.primary.withOpacity(0.04)
+                      : t.fieldBg,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: uploaded
-                    ? const Color(0xFF66BB6A)
+                    ? t.success
                     : isCompulsory
-                        ? _T.primary.withOpacity(0.4)
-                        : _T.border,
+                        ? t.primary.withOpacity(0.4)
+                        : t.border,
                 width: uploaded || isCompulsory ? 1.5 : 1,
               ),
             ),
@@ -1612,15 +1636,15 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                 height: 36,
                 decoration: BoxDecoration(
                   color: uploaded
-                      ? Colors.green.withOpacity(0.1)
-                      : _T.primary.withOpacity(0.08),
+                      ? t.success.withOpacity(0.1)
+                      : t.primary.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   uploaded
                       ? Icons.check_circle_rounded
                       : Icons.insert_drive_file_rounded,
-                  color: uploaded ? Colors.green : _T.primary,
+                  color: uploaded ? t.success : t.primary,
                   size: 18,
                 ),
               ),
@@ -1632,9 +1656,9 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                   Wrap(spacing: 6, runSpacing: 4, children: [
                     Text(
                       name,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: _T.textHigh,
+                          color: t.textHigh,
                           fontSize: 13),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
@@ -1644,7 +1668,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                            color: _T.primary,
+                            color: t.primary,
                             borderRadius: BorderRadius.circular(6)),
                         child: const Text('Required',
                             style: TextStyle(
@@ -1661,7 +1685,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                             : 'Optional · PDF or Image · max 5 MB',
                     style: TextStyle(
                         fontSize: 11,
-                        color: uploaded ? Colors.green : _T.textLow),
+                        color: uploaded ? t.success : t.textLow),
                   ),
                 ]),
               ),
@@ -1669,7 +1693,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               Row(mainAxisSize: MainAxisSize.min, children: [
                 _IconBtn(
                   icon: Icons.upload_rounded,
-                  color: _T.primary,
+                  color: t.primary,
                   tooltip: uploaded ? 'Re-upload' : 'Upload',
                   onTap: () => _uploadDoc(name),
                 ),
@@ -1677,7 +1701,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                   const SizedBox(width: 4),
                   _IconBtn(
                     icon: Icons.delete_rounded,
-                    color: _T.danger,
+                    color: t.danger,
                     tooltip: 'Remove',
                     onTap: () => _deleteDoc(name),
                   ),
@@ -1689,13 +1713,13 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Bank fields ───────────────────────────────────────────────────────────
-  Widget _buildBankFields() {
+  Widget _buildBankFields(_T t) {
     return Column(mainAxisSize: MainAxisSize.min, children: [
-      _field(_holderCtrl, 'Account Holder Name *',
+      _field(t, _holderCtrl, 'Account Holder Name *',
           Icons.person_outline_rounded,
           focusNode: _holderFocus,
           validator: _required('Account holder name')),
-      _field(_accountCtrl, 'Account Number *',
+      _field(t, _accountCtrl, 'Account Number *',
           Icons.account_balance_wallet_rounded,
           focusNode: _accountFocus,
           keyboardType: TextInputType.number,
@@ -1708,7 +1732,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               return 'Enter a valid account number (9–18 digits).';
             return null;
           }),
-      _field(_ifscCtrl, 'IFSC Code *', Icons.code_rounded,
+      _field(t, _ifscCtrl, 'IFSC Code *', Icons.code_rounded,
           focusNode: _ifscFocus,
           textCapitalization: TextCapitalization.characters,
           helperText: 'e.g. SBIN0001234',
@@ -1719,7 +1743,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               return 'Invalid IFSC (e.g. SBIN0001234).';
             return null;
           }),
-      _field(_upiCtrl, 'UPI ID (optional)', Icons.qr_code_rounded,
+      _field(t, _upiCtrl, 'UPI ID (optional)', Icons.qr_code_rounded,
           focusNode: _upiFocus,
           helperText: 'e.g. name@upi',
           validator: (v) {
@@ -1732,15 +1756,15 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Admin danger zone ─────────────────────────────────────────────────────
-  Widget _buildAdminDangerZone() {
+  Widget _buildAdminDangerZone(_T t) {
     return Container(
       decoration: BoxDecoration(
-        color: _T.surface,
+        color: t.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _T.danger.withOpacity(0.25)),
+        border: Border.all(color: t.danger.withOpacity(0.25)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withOpacity(t.isDark ? 0.2 : 0.03),
               blurRadius: 12,
               offset: const Offset(0, 4)),
         ],
@@ -1755,24 +1779,24 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: _T.danger.withOpacity(0.1),
+              color: t.danger.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.admin_panel_settings_rounded,
-                color: _T.danger, size: 18),
+            child: Icon(Icons.admin_panel_settings_rounded,
+                color: t.danger, size: 18),
           ),
           const SizedBox(width: 12),
-          const Text('Admin — Danger Zone',
+          Text('Admin — Danger Zone',
               style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: _T.danger)),
+                  color: t.danger)),
         ]),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'As admin you can permanently delete this provider. '
           'All associated data will be removed and cannot be recovered.',
-          style: TextStyle(fontSize: 13, color: _T.textMid, height: 1.5),
+          style: TextStyle(fontSize: 13, color: t.textMid, height: 1.5),
         ),
         const SizedBox(height: 16),
         SizedBox(
@@ -1784,8 +1808,8 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
             label: const Text('Delete Provider',
                 style: TextStyle(fontWeight: FontWeight.w700)),
             style: OutlinedButton.styleFrom(
-              foregroundColor: _T.danger,
-              side: const BorderSide(color: _T.danger, width: 1.5),
+              foregroundColor: t.danger,
+              side: BorderSide(color: t.danger, width: 1.5),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
             ),
@@ -1796,15 +1820,15 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Self-delete zone — visible to the provider themselves ─────────────────
-  Widget _buildSelfDeleteZone() {
+  Widget _buildSelfDeleteZone(_T t) {
     return Container(
       decoration: BoxDecoration(
-        color: _T.surface,
+        color: t.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _T.danger.withOpacity(0.20)),
+        border: Border.all(color: t.danger.withOpacity(0.20)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withOpacity(t.isDark ? 0.2 : 0.03),
               blurRadius: 12,
               offset: const Offset(0, 4)),
         ],
@@ -1820,19 +1844,19 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: _T.danger.withOpacity(0.08),
+                color: t.danger.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.warning_amber_rounded,
-                  color: _T.danger, size: 18),
+              child: Icon(Icons.warning_amber_rounded,
+                  color: t.danger, size: 18),
             ),
             const SizedBox(width: 12),
-            const Text(
+            Text(
               'Delete My Profile',
               style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: _T.danger),
+                  color: t.danger),
             ),
           ]),
           const SizedBox(height: 12),
@@ -1841,16 +1865,16 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: _T.danger.withOpacity(0.05),
+              color: t.danger.withOpacity(0.05),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _T.danger.withOpacity(0.15)),
+              border: Border.all(color: t.danger.withOpacity(0.15)),
             ),
-            child: const Row(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(Icons.info_outline_rounded,
-                    color: _T.danger, size: 16),
-                SizedBox(width: 8),
+                    color: t.danger, size: 16),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'This will permanently delete your profile, '
@@ -1859,7 +1883,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     'This action cannot be undone.',
                     style: TextStyle(
                         fontSize: 12,
-                        color: _T.danger,
+                        color: t.danger,
                         height: 1.5),
                   ),
                 ),
@@ -1881,9 +1905,9 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
                     fontSize: 15, fontWeight: FontWeight.w700),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _T.danger,
+                backgroundColor: t.danger,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: _T.danger.withOpacity(0.35),
+                disabledBackgroundColor: t.danger.withOpacity(0.35),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
@@ -1896,15 +1920,15 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
   }
 
   // ── Save bar ──────────────────────────────────────────────────────────────
-  Widget _buildSaveBar() {
+  Widget _buildSaveBar(_T t) {
     final bot = MediaQuery.of(context).viewPadding.bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(16, 10, 16, bot + 12),
       decoration: BoxDecoration(
-        color: _T.surface,
+        color: t.surface,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.07),
+              color: Colors.black.withOpacity(t.isDark ? 0.3 : 0.07),
               blurRadius: 16,
               offset: const Offset(0, -4)),
         ],
@@ -1916,9 +1940,9 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           child: ElevatedButton(
             onPressed: (_saving || _deleting) ? null : _save,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _T.primary,
+              backgroundColor: t.primary,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: _T.primary.withOpacity(0.45),
+              disabledBackgroundColor: t.primary.withOpacity(0.45),
               elevation: 0,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
@@ -1948,6 +1972,7 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
 
   // ── Shared form field ─────────────────────────────────────────────────────
   Widget _field(
+    _T t,
     TextEditingController ctrl,
     String hint,
     IconData icon, {
@@ -1968,19 +1993,19 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
         textCapitalization: textCapitalization,
         textInputAction: TextInputAction.next,
         autovalidateMode: AutovalidateMode.onUserInteraction,
-        style: const TextStyle(
+        style: TextStyle(
             fontSize: 14,
-            color: _T.textHigh,
+            color: t.textHigh,
             fontWeight: FontWeight.w500),
         validator: validator,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: _T.textLow, fontSize: 13),
+          hintStyle: TextStyle(color: t.textLow, fontSize: 13),
           helperText: helperText,
-          helperStyle: const TextStyle(fontSize: 11, color: _T.textLow),
-          prefixIcon: Icon(icon, color: _T.primary, size: 20),
+          helperStyle: TextStyle(fontSize: 11, color: t.textLow),
+          prefixIcon: Icon(icon, color: t.primary, size: 20),
           filled: true,
-          fillColor: _T.fieldBg,
+          fillColor: t.fieldBg,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           errorStyle: const TextStyle(fontSize: 11),
@@ -1990,19 +2015,19 @@ class _ProviderProfilePageState extends State<ProviderProfilePage> {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: _T.border),
+            borderSide: BorderSide(color: t.border),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: _T.primary, width: 1.6),
+            borderSide: BorderSide(color: t.primary, width: 1.6),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: _T.danger, width: 1.2),
+            borderSide: BorderSide(color: t.danger, width: 1.2),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: _T.danger, width: 1.6),
+            borderSide: BorderSide(color: t.danger, width: 1.6),
           ),
         ),
       ),

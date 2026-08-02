@@ -1,5 +1,3 @@
-
-
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -164,11 +162,16 @@ class _SuccessPageState extends State<SuccessPage> {
     if (!mounted) return;
 
     final isApproved = newStatus == 'approved';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1A1D2E);
+    final subColor = isDark ? Colors.white60 : Colors.grey[600];
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
+        backgroundColor: cardBg,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24)),
         content: Column(
@@ -192,9 +195,10 @@ class _SuccessPageState extends State<SuccessPage> {
             const SizedBox(height: 20),
             Text(
               isApproved ? 'You are Approved!' : 'Registration Rejected',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize:   20,
                 fontWeight: FontWeight.bold,
+                color: textColor,
               ),
               textAlign: TextAlign.center,
             ),
@@ -207,7 +211,7 @@ class _SuccessPageState extends State<SuccessPage> {
                     'Please contact support for more information.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color:    Colors.grey[600],
+                color:    subColor,
                 fontSize: 14,
                 height:   1.5,
               ),
@@ -249,13 +253,20 @@ class _SuccessPageState extends State<SuccessPage> {
   }
 
   // =====================================================
-  // BUILD — UI unchanged
+  // BUILD
   // =====================================================
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF121016) : const Color(0xFFF4F6FA);
+    final cardBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final textHigh = isDark ? Colors.white : const Color(0xFF1A1D2E);
+    final textMid = isDark ? Colors.white60 : Colors.grey[600];
+    final textLow = isDark ? Colors.white38 : Colors.grey[500];
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: bgColor,
       body: StreamBuilder<QuerySnapshot>(
         stream: _providerStream,
         builder: (context, snap) {
@@ -264,7 +275,10 @@ class _SuccessPageState extends State<SuccessPage> {
           }
 
           if (snap.data!.docs.isEmpty) {
-            return const Center(child: Text('Provider not found'));
+            return Center(
+              child: Text('Provider not found',
+                  style: TextStyle(color: textHigh)),
+            );
           }
 
           final doc  = snap.data!.docs.first;
@@ -304,11 +318,12 @@ class _SuccessPageState extends State<SuccessPage> {
 
                   const SizedBox(height: 24),
 
-                  const Text(
+                  Text(
                     'Registration Submitted',
                     style: TextStyle(
                       fontSize:   26,
                       fontWeight: FontWeight.bold,
+                      color: textHigh,
                     ),
                   ),
 
@@ -317,7 +332,7 @@ class _SuccessPageState extends State<SuccessPage> {
                   Text(
                     'Your business is under review.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey[600]),
+                    style: TextStyle(color: textMid),
                   ),
 
                   const SizedBox(height: 28),
@@ -327,24 +342,30 @@ class _SuccessPageState extends State<SuccessPage> {
                     width:   double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color:        Colors.white,
+                      color:        cardBg,
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black12, blurRadius: 10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+                          blurRadius: 10,
+                        ),
                       ],
                     ),
                     child: Column(
                       children: [
                         Text(
                           businessName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize:   20,
                             fontWeight: FontWeight.bold,
+                            color: textHigh,
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text('Type: ${data['providerType'] ?? widget.providerType}'),
-                        Text('Service: $resolvedServiceType'),
+                        Text('Type: ${data['providerType'] ?? widget.providerType}',
+                            style: TextStyle(color: textMid)),
+                        Text('Service: $resolvedServiceType',
+                            style: TextStyle(color: textMid)),
                         const SizedBox(height: 12),
 
                         // Status chip
@@ -380,7 +401,7 @@ class _SuccessPageState extends State<SuccessPage> {
                               Text(
                                 'Waiting for admin approval...',
                                 style: TextStyle(
-                                  color:    Colors.grey[500],
+                                  color:    textLow,
                                   fontSize: 12,
                                 ),
                               ),

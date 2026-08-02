@@ -18,6 +18,45 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
   // ✅ Reads from the hotel model — works for every hotel automatically
   List<Map<String, String>> get _galleryImages => widget.hotel.images;
 
+  // ══════════════════════════════════════════════════════════════════
+  // FIX (DARK THEME): every surface/text color in this page used to be a
+  // hardcoded light-mode value (Colors.white, Colors.grey.shadeXXX,
+  // Colors.black87, or a literal hex), so the page never actually
+  // responded to Theme.of(context).brightness — it stayed light no
+  // matter what the app's theme mode was set to.
+  //
+  // These getters read brightness once per build and every card/text/
+  // placeholder below now goes through them instead of a hardcoded
+  // color. Brand/status accents (red app bar, red CTA, green price,
+  // orange rating, orange rule icon) are left as-is — they read fine on
+  // both light and dark surfaces.
+  // ══════════════════════════════════════════════════════════════════
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _pageBg =>
+      _isDark ? const Color(0xFF121016) : const Color(0xFFF5F6FA);
+  Color get _cardBg =>
+      _isDark ? const Color(0xFF1E1B27) : Colors.white;
+  Color get _textHigh =>
+      _isDark ? Colors.white : Colors.black87;
+  Color get _textMid =>
+      _isDark ? Colors.white70 : Colors.grey.shade800;
+  Color get _textLow =>
+      _isDark ? Colors.white54 : Colors.grey.shade600;
+  Color get _textFaint =>
+      _isDark ? Colors.white38 : Colors.grey.shade500;
+  Color get _divider =>
+      _isDark ? Colors.white24 : Colors.grey.shade300;
+  Color get _imgPlaceholder =>
+      _isDark ? Colors.white10 : Colors.grey.shade200;
+  Color get _imgPlaceholderIcon =>
+      _isDark ? Colors.white24 : Colors.grey.shade400;
+  // Used for the light-red "Room Types" / highlight-icon chips — the
+  // original Colors.red.shade50 is nearly white and would look like a
+  // glaring mistake on a dark card.
+  Color get _redChipBg =>
+      _isDark ? Colors.red.withOpacity(0.18) : Colors.red.shade50;
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -31,7 +70,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
         hotel.price - (hotel.price * hotel.discount ~/ 100);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      // FIX (DARK THEME): was const Color(0xFFF5F6FA).
+      backgroundColor: _pageBg,
 
       /// ================= APP BAR =================
       appBar: AppBar(
@@ -85,10 +125,12 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                             fit: BoxFit.cover,
                             filterQuality: FilterQuality.high,
                             gaplessPlayback: true,
+                            // FIX (DARK THEME): placeholder colors were
+                            // Colors.grey.shade200/400 — now adaptive.
                             errorBuilder: (_, __, ___) => Container(
-                              color: Colors.grey.shade200,
+                              color: _imgPlaceholder,
                               child: Icon(Icons.image,
-                                  size: 60, color: Colors.grey.shade400),
+                                  size: 60, color: _imgPlaceholderIcon),
                             ),
                           ),
                           Container(
@@ -236,7 +278,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
             /// ================= THUMBNAIL STRIP =================
             Container(
               height: 72,
-              color: Colors.white,
+              // FIX (DARK THEME): was Colors.white.
+              color: _cardBg,
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: ListView.separated(
@@ -274,9 +317,9 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                           filterQuality: FilterQuality.high,
                           gaplessPlayback: true,
                           errorBuilder: (_, __, ___) => Container(
-                            color: Colors.grey.shade200,
+                            color: _imgPlaceholder,
                             child: Icon(Icons.image,
-                                size: 24, color: Colors.grey.shade400),
+                                size: 24, color: _imgPlaceholderIcon),
                           ),
                         ),
                       ),
@@ -298,7 +341,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      // FIX (DARK THEME): was Colors.white.
+                      color: _cardBg,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
@@ -320,9 +364,13 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                                   hotel.location,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  // FIX (DARK THEME): had no color before
+                                  // (defaulted to black) — now explicit
+                                  // and adaptive.
+                                  style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
+                                    color: _textHigh,
                                   ),
                                 ),
                               ),
@@ -337,9 +385,11 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                             const SizedBox(width: 4),
                             Text(
                               hotel.rating.toString(),
-                              style: const TextStyle(
+                              // FIX (DARK THEME): had no color before.
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
+                                color: _textHigh,
                               ),
                             ),
                           ],
@@ -355,7 +405,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      // FIX (DARK THEME): was Colors.white.
+                      color: _cardBg,
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
@@ -376,20 +427,23 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 6),
+                        // FIX (DARK THEME): dropped `const` — the "/ night"
+                        // text was Colors.grey (fixed), now adaptive.
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
                           child: Text(
                             "/ night",
                             style: TextStyle(
-                                color: Colors.grey, fontSize: 15),
+                                color: _textLow, fontSize: 15),
                           ),
                         ),
                         const Spacer(),
                         if (hotel.discount > 0)
                           Text(
                             "₹${hotel.originalPrice}",
+                            // FIX (DARK THEME): was Colors.grey.shade500.
                             style: TextStyle(
-                              color: Colors.grey.shade500,
+                              color: _textFaint,
                               fontSize: 18,
                               decoration: TextDecoration.lineThrough,
                             ),
@@ -418,13 +472,19 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.red.shade50,
+                          // FIX (DARK THEME): was Colors.red.shade50 —
+                          // near-white, invisible against a dark card.
+                          color: _redChipBg,
                           borderRadius: BorderRadius.circular(30),
                         ),
                         child: Text(
                           f,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w500),
+                          // FIX (DARK THEME): dropped `const`, added an
+                          // explicit color so text stays legible on the
+                          // adaptive chip background.
+                          style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: _textHigh),
                         ),
                       );
                     }).toList(),
@@ -446,7 +506,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      // FIX (DARK THEME): was Colors.white.
+                      color: _cardBg,
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
@@ -457,9 +518,10 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                     ),
                     child: Text(
                       hotel.description,
+                      // FIX (DARK THEME): was Colors.grey.shade800.
                       style: TextStyle(
                         fontSize: 15,
-                        color: Colors.grey.shade800,
+                        color: _textMid,
                         height: 1.6,
                       ),
                     ),
@@ -483,7 +545,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
         child: Container(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            // FIX (DARK THEME): was Colors.white.
+            color: _cardBg,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.08),
@@ -553,7 +616,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
         final item = highlights[index];
         return Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            // FIX (DARK THEME): was Colors.white.
+            color: _cardBg,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
@@ -567,7 +631,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.red.shade50,
+                  // FIX (DARK THEME): was Colors.red.shade50.
+                  color: _redChipBg,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -580,15 +645,19 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
               Text(
                 item['label'] as String,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600),
+                // FIX (DARK THEME): dropped `const`, added explicit color
+                // (previously defaulted to black).
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _textHigh),
               ),
               const SizedBox(height: 2),
               Text(
                 item['sub'] as String,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 10, color: Colors.grey.shade500),
+                // FIX (DARK THEME): was Colors.grey.shade500.
+                style: TextStyle(fontSize: 10, color: _textFaint),
               ),
             ],
           ),
@@ -611,7 +680,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        // FIX (DARK THEME): was Colors.white.
+        color: _cardBg,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
@@ -630,8 +700,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                 Expanded(
                   child: Text(
                     text,
-                    style: TextStyle(
-                        fontSize: 14, color: Colors.grey.shade800),
+                    // FIX (DARK THEME): was Colors.grey.shade800.
+                    style: TextStyle(fontSize: 14, color: _textMid),
                   ),
                 ),
               ],
@@ -663,7 +733,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        // FIX (DARK THEME): was Colors.white.
+        color: _cardBg,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
@@ -686,15 +757,19 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                     width: 100,
                     child: Text(
                       item['label'] as String,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600),
+                      // FIX (DARK THEME): dropped `const`, added explicit
+                      // color (previously defaulted to black).
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _textHigh),
                     ),
                   ),
                   Expanded(
                     child: Text(
                       item['value'] as String,
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.grey.shade700),
+                      // FIX (DARK THEME): was Colors.grey.shade700.
+                      style: TextStyle(fontSize: 13, color: _textMid),
                     ),
                   ),
                 ],
@@ -702,17 +777,23 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
             );
           }),
 
-          const Divider(height: 24),
+          // FIX (DARK THEME): dropped `const`, gave the divider an
+          // explicit adaptive color.
+          Divider(height: 24, color: _divider),
 
           Row(
             children: [
               Icon(Icons.info_outline,
                   color: Colors.orange.shade600, size: 18),
               const SizedBox(width: 8),
-              const Text(
+              // FIX (DARK THEME): dropped `const`, added explicit color
+              // (previously defaulted to black).
+              Text(
                 "Important Rules",
                 style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.bold),
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _textHigh),
               ),
             ],
           ),
@@ -730,8 +811,8 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
                   Expanded(
                     child: Text(
                       rule,
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.grey.shade700),
+                      // FIX (DARK THEME): was Colors.grey.shade700.
+                      style: TextStyle(fontSize: 13, color: _textMid),
                     ),
                   ),
                 ],
@@ -747,7 +828,10 @@ class _HotelDetailPageState extends State<HotelDetailPage> {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+      // FIX (DARK THEME): dropped `const`, added explicit color
+      // (previously defaulted to black).
+      style: TextStyle(
+          fontSize: 22, fontWeight: FontWeight.bold, color: _textHigh),
     );
   }
 }
