@@ -50,133 +50,123 @@ class EducationDetailPage extends StatelessWidget {
         ),
       ),
 
-      body: Stack(
-        children: [
-          // ── Scrollable content ────────────────────────────────────────
-          SingleChildScrollView(
-            padding: EdgeInsets.only(
-              bottom: 88 + mq.viewPadding.bottom,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+      // ── Scrollable content ──────────────────────────────────────────
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
 
-                // ── Hero image ──────────────────────────────────────────
-                _HeroImage(service: service, accent: accent),
+            // ── Hero image ──────────────────────────────────────────
+            _HeroImage(service: service, accent: accent),
 
-                // ── Body ────────────────────────────────────────────────
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 16 * sp,
-                    vertical: 20,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            // ── Body ────────────────────────────────────────────────
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 16 * sp,
+                vertical: 20,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  // Category chip + Duration
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-
-                      // Category chip + Duration
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _Chip(
-                            label: service.category,
-                            color: accent.withOpacity(isDark ? 0.22 : 0.12),
-                            textColor: accent,
-                          ),
-                          _Chip(
-                            icon: Icons.schedule_outlined,
-                            label: service.duration,
-                            color: isDark ? const Color(0xFF1B1922) : Colors.grey.shade100,
-                            textColor: isDark ? Colors.white70 : Colors.grey.shade700,
-                          ),
-                        ],
+                      _Chip(
+                        label: service.category,
+                        color: accent.withOpacity(isDark ? 0.22 : 0.12),
+                        textColor: accent,
                       ),
-
-                      const SizedBox(height: 20),
-
-                      // About section
-                      _SectionTitle("About this course", isDark: isDark),
-                      const SizedBox(height: 8),
-                      Text(
-                        service.description,
-                        style: TextStyle(
-                          fontSize: 14 * sp,
-                          color: aboutTextColor,
-                          height: 1.65,
-                        ),
+                      _Chip(
+                        icon: Icons.schedule_outlined,
+                        label: service.duration,
+                        color: isDark ? const Color(0xFF1B1922) : Colors.grey.shade100,
+                        textColor: isDark ? Colors.white70 : Colors.grey.shade700,
                       ),
-
-                      const SizedBox(height: 24),
-
-                      // What you'll learn
-                      if (service.includes.isNotEmpty) ...[
-                        _BulletCard(
-                          title: "What you'll learn",
-                          items: service.includes,
-                          iconColor: accent,
-                          sp: sp, iconData: Icons.check,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Course flow / steps
-                      if (service.steps.isNotEmpty) ...[
-                        _StepsCard(
-                          steps: service.steps,
-                          accent: accent,
-                          sp: sp,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Tools & Materials
-                      if (service.tools.isNotEmpty) ...[
-                        _InfoCard(
-                          icon: Icons.build_outlined,
-                          title: "Tools & Materials",
-                          body: service.tools,
-                          accent: accent,
-                          sp: sp,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Support / Warranty
-                      if (service.warranty.isNotEmpty) ...[
-                        _InfoCard(
-                          icon: Icons.headset_mic_outlined,
-                          title: "Support",
-                          body: service.warranty,
-                          accent: accent,
-                          sp: sp,
-                          isDark: isDark,
-                        ),
-                      ],
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
 
-          // ── Sticky bottom bar ─────────────────────────────────────────
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _BottomBar(
-              service: service,
-              accent: accent,
-              sp: sp,
-              context: context,
-              isDark: isDark,
+                  const SizedBox(height: 20),
+
+                  // About section
+                  _SectionTitle("About this course", isDark: isDark),
+                  const SizedBox(height: 8),
+                  Text(
+                    service.description,
+                    style: TextStyle(
+                      fontSize: 14 * sp,
+                      color: aboutTextColor,
+                      height: 1.65,
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // What you'll learn
+                  if (service.includes.isNotEmpty) ...[
+                    _BulletCard(
+                      title: "What you'll learn",
+                      items: service.includes,
+                      iconColor: accent,
+                      sp: sp, iconData: Icons.check,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Course flow / steps
+                  if (service.steps.isNotEmpty) ...[
+                    _StepsCard(
+                      steps: service.steps,
+                      accent: accent,
+                      sp: sp,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Tools & Materials
+                  if (service.tools.isNotEmpty) ...[
+                    _InfoCard(
+                      icon: Icons.build_outlined,
+                      title: "Tools & Materials",
+                      body: service.tools,
+                      accent: accent,
+                      sp: sp,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Support / Warranty
+                  if (service.warranty.isNotEmpty) ...[
+                    _InfoCard(
+                      icon: Icons.headset_mic_outlined,
+                      title: "Support",
+                      body: service.warranty,
+                      accent: accent,
+                      sp: sp,
+                      isDark: isDark,
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+
+      // ── Bottom bar now lives in the proper Scaffold slot ────────────
+      // This lets Scaffold reserve space for it, and lets the
+      // ScaffoldMessenger automatically float the SnackBar above it
+      // instead of overlapping it.
+      bottomNavigationBar: _BottomBar(
+        service: service,
+        accent: accent,
+        sp: sp,
+        isDark: isDark,
       ),
     );
   }
@@ -566,23 +556,80 @@ class _InfoCard extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// STICKY BOTTOM BAR
+// STICKY BOTTOM BAR (proper bottomNavigationBar slot)
 // ──────────────────────────────────────────────────────────────────────────────
 
 class _BottomBar extends StatelessWidget {
   final EducationService service;
   final Color accent;
   final double sp;
-  final BuildContext context;
   final bool isDark;
 
   const _BottomBar({
     required this.service,
     required this.accent,
     required this.sp,
-    required this.context,
     required this.isDark,
   });
+
+  void _addToEnquiry(BuildContext context) {
+    Cart.addEducation(
+      id: service.id,
+      name: service.name,
+      price: 0,
+      category: service.category,
+      image: service.image,
+    );
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: isDark ? const Color(0xFF2A2733) : const Color(0xFF1F1B24),
+        margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        elevation: 6,
+        duration: const Duration(seconds: 3),
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: accent, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "${service.name} added to enquiry",
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: "View Cart",
+          textColor: accent,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CartPage(
+                  service: "Education",
+                  serviceName: "Education",
+                  cart: [],
+                  providerId: '',
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -611,41 +658,7 @@ class _BottomBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
           ),
-          onPressed: () {
-            Cart.addEducation(
-              id: service.id,
-              name: service.name,
-              price: 0,
-              category: service.category,
-              image: service.image,
-            );
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("${service.name} added to enquiry"),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                action: SnackBarAction(
-                  label: "View Courses",
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const CartPage(
-                          service: "Education",
-                          serviceName: '',
-                          cart: [],
-                          providerId: '',
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            );
-          },
+          onPressed: () => _addToEnquiry(context),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
