@@ -6,7 +6,7 @@ import 'package:callme/bookings/booking_page.dart';
 import 'package:callme/data/laundry_fabric_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LAUNDRY DETAIL PAGE – Android-safe, fully adaptive
+// LAUNDRY DETAIL PAGE – Android-safe, fully adaptive, theme-aware
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LaundryDetailPage extends StatefulWidget {
@@ -26,6 +26,7 @@ class LaundryDetailPage extends StatefulWidget {
 }
 
 class _LaundryDetailPageState extends State<LaundryDetailPage> {
+  // Brand accent — stays constant across light/dark, only surfaces around it change.
   static const _theme = Color(0xFFAE91BA);
 
   void _openFabricSheet() {
@@ -70,14 +71,19 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final cartCount = Cart.totalItems('Laundry');
-    // Only used to keep scroll content clear of the floating bottom bar —
-    // the bar itself now insets via SafeArea, so this just needs to be a
-    // safe upper-bound estimate of the bar's height.
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final cardBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final primaryText = isDark ? Colors.white : const Color(0xFF111827);
+    final secondaryText = isDark ? Colors.white54 : Colors.grey.shade500;
+    final shadowColor = Colors.black.withOpacity(isDark ? 0.35 : 0.05);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4FA),
+      backgroundColor: scaffoldBg,
       extendBody: true,
       body: Stack(
         children: [
@@ -177,6 +183,8 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _infoCard(
+                        cardBg: cardBg,
+                        shadowColor: shadowColor,
                         child: Row(
                           children: [
                             Expanded(
@@ -184,8 +192,7 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('Service Price',
-                                      style: TextStyle(
-                                          color: Colors.grey.shade500)),
+                                      style: TextStyle(color: secondaryText)),
                                   const SizedBox(height: 6),
                                   Text(
                                     '₹${widget.product.calculatedFinalPrice}',
@@ -202,15 +209,22 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 14, vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: Colors.green.shade50,
+                                  color: isDark
+                                      ? Colors.green.withOpacity(0.15)
+                                      : Colors.green.shade50,
                                   borderRadius: BorderRadius.circular(14),
-                                  border:
-                                      Border.all(color: Colors.green.shade200),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.green.withOpacity(0.4)
+                                        : Colors.green.shade200,
+                                  ),
                                 ),
                                 child: Text(
                                   '${widget.product.discount}% OFF',
                                   style: TextStyle(
-                                      color: Colors.green.shade700,
+                                      color: isDark
+                                          ? Colors.green.shade300
+                                          : Colors.green.shade700,
                                       fontWeight: FontWeight.bold),
                                 ),
                               ),
@@ -221,14 +235,23 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                         const SizedBox(height: 18),
                         _sectionCard(
                           title: 'Description',
+                          cardBg: cardBg,
+                          shadowColor: shadowColor,
+                          titleColor: primaryText,
                           child: Text(widget.product.description!,
-                              style: const TextStyle(fontSize: 15, height: 1.65)),
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  height: 1.65,
+                                  color: primaryText)),
                         ),
                       ],
                       if (widget.product.safeIncludes.isNotEmpty) ...[
                         const SizedBox(height: 18),
                         _sectionCard(
                           title: "What's Included",
+                          cardBg: cardBg,
+                          shadowColor: shadowColor,
+                          titleColor: primaryText,
                           child: Column(
                             children: widget.product.safeIncludes.map((item) {
                               return Padding(
@@ -248,8 +271,10 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Text(item,
-                                          style: const TextStyle(
-                                              fontSize: 15, height: 1.5)),
+                                          style: TextStyle(
+                                              fontSize: 15,
+                                              height: 1.5,
+                                              color: primaryText)),
                                     ),
                                   ],
                                 ),
@@ -262,8 +287,14 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                         const SizedBox(height: 18),
                         _sectionCard(
                           title: 'Tools Used',
+                          cardBg: cardBg,
+                          shadowColor: shadowColor,
+                          titleColor: primaryText,
                           child: Text(widget.product.tools!,
-                              style: const TextStyle(fontSize: 15, height: 1.65)),
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  height: 1.65,
+                                  color: primaryText)),
                         ),
                       ],
                     ],
@@ -283,10 +314,10 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
               child: Container(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cardBg,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.09),
+                      color: Colors.black.withOpacity(isDark ? 0.4 : 0.09),
                       blurRadius: 16,
                       offset: const Offset(0, -4),
                     ),
@@ -300,13 +331,15 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Starting from',
-                              style: TextStyle(
-                                  color: Colors.grey.shade500, fontSize: 12)),
+                              style:
+                                  TextStyle(color: secondaryText, fontSize: 12)),
                           const SizedBox(height: 3),
                           Text(
                             '₹${widget.product.calculatedFinalPrice}',
-                            style: const TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: primaryText),
                           ),
                         ],
                       ),
@@ -358,42 +391,49 @@ class _LaundryDetailPageState extends State<LaundryDetailPage> {
     );
   }
 
-  Widget _infoCard({required Widget child}) => Container(
+  Widget _infoCard({
+    required Widget child,
+    required Color cardBg,
+    required Color shadowColor,
+  }) =>
+      Container(
         width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardBg,
           borderRadius: BorderRadius.circular(22),
           boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4)),
+            BoxShadow(color: shadowColor, blurRadius: 10, offset: const Offset(0, 4)),
           ],
         ),
         child: child,
       );
 
-  Widget _sectionCard({required String title, required Widget child}) =>
+  Widget _sectionCard({
+    required String title,
+    required Widget child,
+    required Color cardBg,
+    required Color shadowColor,
+    required Color titleColor,
+  }) =>
       Container(
         width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardBg,
           borderRadius: BorderRadius.circular(22),
           boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4)),
+            BoxShadow(color: shadowColor, blurRadius: 10, offset: const Offset(0, 4)),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(title,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: titleColor)),
             const SizedBox(height: 14),
             child,
           ],

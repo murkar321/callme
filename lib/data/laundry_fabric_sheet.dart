@@ -26,14 +26,28 @@ Future<void> showLaundryFabricSheet(
     builder: (ctx) {
       return StatefulBuilder(
         builder: (ctx, setModal) {
+          final theme = Theme.of(ctx);
+          final isDark = theme.brightness == Brightness.dark;
+
+          final sheetBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+          final primaryText = isDark ? Colors.white : const Color(0xFF111827);
+          final secondaryText = isDark ? Colors.white54 : Colors.grey.shade500;
+          final dividerColor = isDark ? Colors.white12 : Colors.grey.shade100;
+          final handleColor = isDark ? Colors.white24 : Colors.grey.shade300;
+          final closeBtnBg = isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100;
+          final closeIconColor = isDark ? Colors.white70 : Colors.black87;
+          final rowBorderInactive = isDark ? Colors.white24 : Colors.grey.shade200;
+          final disabledBtnBg = isDark ? Colors.white12 : Colors.grey.shade200;
+          final disabledBtnFg = isDark ? Colors.white38 : null;
+
           final totalPieces = qty.values.fold(0, (s, q) => s + q);
           final maxHeight = MediaQuery.of(ctx).size.height * 0.7;
 
           return Container(
             constraints: BoxConstraints(maxHeight: maxHeight),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            decoration: BoxDecoration(
+              color: sheetBg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -44,7 +58,7 @@ Future<void> showLaundryFabricSheet(
                     width: 44,
                     height: 5,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: handleColor,
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
@@ -62,14 +76,15 @@ Future<void> showLaundryFabricSheet(
                               product.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryText),
                             ),
                             const SizedBox(height: 3),
                             Text(
                               'Choose fabric & quantity',
-                              style: TextStyle(
-                                  fontSize: 13, color: Colors.grey.shade500),
+                              style: TextStyle(fontSize: 13, color: secondaryText),
                             ),
                           ],
                         ),
@@ -79,17 +94,17 @@ Future<void> showLaundryFabricSheet(
                         child: Container(
                           padding: const EdgeInsets.all(7),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
+                            color: closeBtnBg,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.close, size: 18),
+                          child: Icon(Icons.close, size: 18, color: closeIconColor),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Divider(height: 1),
+                Divider(height: 1, color: dividerColor),
                 Flexible(
                   child: ListView.separated(
                     shrinkWrap: true,
@@ -97,7 +112,7 @@ Future<void> showLaundryFabricSheet(
                         const EdgeInsets.symmetric(vertical: 4, horizontal: 18),
                     itemCount: kLaundryFabrics.length,
                     separatorBuilder: (_, __) =>
-                        Divider(height: 1, color: Colors.grey.shade100),
+                        Divider(height: 1, color: dividerColor),
                     itemBuilder: (_, i) {
                       final name = kLaundryFabrics[i];
                       final q = qty[name]!;
@@ -111,12 +126,12 @@ Future<void> showLaundryFabricSheet(
                         decoration: BoxDecoration(
                           color: active
                               ? themeColor.withOpacity(0.07)
-                              : Colors.white,
+                              : sheetBg,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: active
                                 ? themeColor.withOpacity(0.5)
-                                : Colors.grey.shade200,
+                                : rowBorderInactive,
                             width: 1.3,
                           ),
                         ),
@@ -125,13 +140,17 @@ Future<void> showLaundryFabricSheet(
                             Expanded(
                               child: Text(
                                 name,
-                                style: const TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.w600),
+                                style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: primaryText),
                               ),
                             ),
                             _QtyControl(
                               qty: q,
                               color: themeColor,
+                              isDark: isDark,
+                              textColor: primaryText,
                               onDecrement: q > 0
                                   ? () => setModal(() => qty[name] = q - 1)
                                   : null,
@@ -153,8 +172,7 @@ Future<void> showLaundryFabricSheet(
                       if (totalPieces > 0) ...[
                         Text(
                           '$totalPieces piece${totalPieces == 1 ? '' : 's'} selected',
-                          style:
-                              TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                          style: TextStyle(fontSize: 13, color: secondaryText),
                         ),
                         const SizedBox(height: 10),
                       ],
@@ -182,7 +200,8 @@ Future<void> showLaundryFabricSheet(
                                 },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: themeColor,
-                            disabledBackgroundColor: Colors.grey.shade200,
+                            disabledBackgroundColor: disabledBtnBg,
+                            disabledForegroundColor: disabledBtnFg,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16)),
                             elevation: 0,
@@ -213,12 +232,16 @@ Future<void> showLaundryFabricSheet(
 class _QtyControl extends StatelessWidget {
   final int qty;
   final Color color;
+  final bool isDark;
+  final Color textColor;
   final VoidCallback? onDecrement;
   final VoidCallback onIncrement;
 
   const _QtyControl({
     required this.qty,
     required this.color,
+    required this.isDark,
+    required this.textColor,
     required this.onDecrement,
     required this.onIncrement,
   });
@@ -231,6 +254,7 @@ class _QtyControl extends StatelessWidget {
         _Btn(
           icon: Icons.remove,
           color: color,
+          isDark: isDark,
           enabled: onDecrement != null,
           onTap: onDecrement ?? () {},
         ),
@@ -239,10 +263,17 @@ class _QtyControl extends StatelessWidget {
           child: Text(
             '$qty',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            style: TextStyle(
+                fontSize: 15, fontWeight: FontWeight.bold, color: textColor),
           ),
         ),
-        _Btn(icon: Icons.add, color: color, enabled: true, onTap: onIncrement),
+        _Btn(
+          icon: Icons.add,
+          color: color,
+          isDark: isDark,
+          enabled: true,
+          onTap: onIncrement,
+        ),
       ],
     );
   }
@@ -251,28 +282,33 @@ class _QtyControl extends StatelessWidget {
 class _Btn extends StatelessWidget {
   final IconData icon;
   final Color color;
+  final bool isDark;
   final bool enabled;
   final VoidCallback onTap;
 
   const _Btn({
     required this.icon,
     required this.color,
+    required this.isDark,
     required this.enabled,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final disabledBg = isDark ? Colors.white12 : Colors.grey.shade100;
+    final disabledIcon = isDark ? Colors.white30 : Colors.grey.shade400;
+
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: Container(
         width: 28,
         height: 28,
         decoration: BoxDecoration(
-          color: enabled ? color.withOpacity(0.15) : Colors.grey.shade100,
+          color: enabled ? color.withOpacity(0.15) : disabledBg,
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, size: 15, color: enabled ? color : Colors.grey.shade400),
+        child: Icon(icon, size: 15, color: enabled ? color : disabledIcon),
       ),
     );
   }

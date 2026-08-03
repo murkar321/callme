@@ -59,12 +59,23 @@ class LaundryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // ✅ THEME FIX: card surface, text, and border colors now branch on
+    // isDark instead of the previous hardcoded light-mode values.
+    final Color cardBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color shadowColor =
+        isDark ? Colors.black.withOpacity(0.35) : Colors.grey.shade300;
+    final Color primaryText = isDark ? Colors.white : Colors.black;
+    final Color mutedText = isDark ? Colors.white54 : Colors.grey.shade600;
+    final Color outlineBorder = isDark ? Colors.white24 : Colors.grey.shade300;
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.grey.shade300, blurRadius: 4),
+          BoxShadow(color: shadowColor, blurRadius: 4),
         ],
       ),
       child: Column(
@@ -113,16 +124,20 @@ class LaundryCard extends StatelessWidget {
                     product.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: primaryText),
                   ),
                   const SizedBox(height: 3),
                   Row(
                     children: [
                       Text(
                         '₹${product.calculatedFinalPrice}',
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: primaryText),
                       ),
                       const SizedBox(width: 6),
                       if (product.discount != null && product.discount! > 0)
@@ -141,13 +156,12 @@ class LaundryCard extends StatelessWidget {
                       const Icon(Icons.star, size: 12, color: Colors.orange),
                       const SizedBox(width: 2),
                       Text(product.safeRating.toString(),
-                          style: const TextStyle(fontSize: 10)),
+                          style: TextStyle(fontSize: 10, color: primaryText)),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           product.serviceTime,
-                          style: TextStyle(
-                              fontSize: 10, color: Colors.grey.shade600),
+                          style: TextStyle(fontSize: 10, color: mutedText),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -185,12 +199,13 @@ class LaundryCard extends StatelessWidget {
                             style: OutlinedButton.styleFrom(
                               padding: EdgeInsets.zero,
                               side: BorderSide(
-                                  color: Colors.grey.shade300, width: 1.2),
+                                  color: outlineBorder, width: 1.2),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
                             ),
-                            child: const Text('VIEW',
-                                style: TextStyle(fontSize: 12)),
+                            child: Text('VIEW',
+                                style:
+                                    TextStyle(fontSize: 12, color: primaryText)),
                           ),
                         ),
                       ),

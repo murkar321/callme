@@ -29,9 +29,31 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   @override
   Widget build(BuildContext context) {
     final resort = widget.resort;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // ✅ THEME FIX: every background/text/border color below now branches
+    // on isDark instead of the previous hardcoded light-mode values
+    // (Color(0xFFF5F6FA), Colors.white, Colors.black87, etc).
+    final Color scaffoldBg =
+        isDark ? const Color(0xFF121016) : const Color(0xFFF5F6FA);
+    final Color cardBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color primaryText = isDark ? Colors.white : Colors.black87;
+    final Color secondaryText =
+        isDark ? Colors.white70 : Colors.grey.shade800;
+    final Color mutedText = isDark ? Colors.white54 : Colors.grey.shade600;
+    final Color shadowColor = Colors.black.withOpacity(isDark ? 0.35 : 0.04);
+    final Color thumbStripBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final Color placeholderBg =
+        isDark ? const Color(0xFF262430) : Colors.grey.shade200;
+    final Color placeholderIcon =
+        isDark ? Colors.white24 : Colors.grey.shade400;
+    final Color facilityChipBg = isDark
+        ? Colors.blue.withOpacity(0.15)
+        : Colors.blue.shade50;
+    final Color facilityChipText = isDark ? Colors.blue.shade200 : Colors.black87;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: scaffoldBg,
 
       appBar: AppBar(
         elevation: 0,
@@ -40,7 +62,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
         title: Text(
           resort.name,
           style: const TextStyle(
-            color: Colors.black,
+            color: Colors.white,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -79,9 +101,9 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                             filterQuality: FilterQuality.high,
                             gaplessPlayback: true,
                             errorBuilder: (_, __, ___) => Container(
-                              color: Colors.grey.shade200,
+                              color: placeholderBg,
                               child: Icon(Icons.image,
-                                  size: 60, color: Colors.grey.shade400),
+                                  size: 60, color: placeholderIcon),
                             ),
                           ),
 
@@ -229,7 +251,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
             /// ================= THUMBNAIL STRIP =================
             Container(
               height: 72,
-              color: Colors.white,
+              color: thumbStripBg,
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: ListView.separated(
@@ -267,9 +289,9 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                           filterQuality: FilterQuality.high,
                           gaplessPlayback: true,
                           errorBuilder: (_, __, ___) => Container(
-                            color: Colors.grey.shade200,
+                            color: placeholderBg,
                             child: Icon(Icons.image,
-                                size: 24, color: Colors.grey.shade400),
+                                size: 24, color: placeholderIcon),
                           ),
                         ),
                       ),
@@ -287,13 +309,12 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                 children: [
 
                   /// ================= TAGLINE =================
-                  // ✅ NEW — the one-line distinguisher shown right under the gallery
                   Text(
                     resort.tagline,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.blue.shade700,
+                      color: isDark ? Colors.blue.shade200 : Colors.blue.shade700,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -303,12 +324,10 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: cardBg,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
-                            blurRadius: 8),
+                        BoxShadow(color: shadowColor, blurRadius: 8),
                       ],
                     ),
                     child: Column(
@@ -327,9 +346,10 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                                       resort.location,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 14,
-                                          fontWeight: FontWeight.w500),
+                                          fontWeight: FontWeight.w500,
+                                          color: primaryText),
                                     ),
                                   ),
                                 ],
@@ -343,27 +363,26 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                                 const SizedBox(width: 4),
                                 Text(
                                   resort.rating.toString(),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 15),
+                                      fontSize: 15,
+                                      color: primaryText),
                                 ),
                               ],
                             ),
                           ],
                         ),
-                        // ✅ NEW — distance/access line, differs per resort
                         const SizedBox(height: 8),
                         Row(
                           children: [
                             Icon(Icons.directions,
-                                color: Colors.grey.shade500, size: 16),
+                                color: mutedText, size: 16),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 resort.distanceInfo,
                                 style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: Colors.grey.shade600),
+                                    fontSize: 12.5, color: mutedText),
                               ),
                             ),
                           ],
@@ -379,12 +398,10 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: cardBg,
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10),
+                        BoxShadow(color: shadowColor, blurRadius: 10),
                       ],
                     ),
                     child: Row(
@@ -399,12 +416,11 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 6),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
                           child: Text(
                             "/ person",
-                            style: TextStyle(
-                                color: Colors.grey, fontSize: 15),
+                            style: TextStyle(color: mutedText, fontSize: 15),
                           ),
                         ),
                         const Spacer(),
@@ -412,7 +428,9 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                           Text(
                             "₹${resort.originalPrice}",
                             style: TextStyle(
-                              color: Colors.grey.shade500,
+                              color: isDark
+                                  ? Colors.white38
+                                  : Colors.grey.shade500,
                               fontSize: 18,
                               decoration: TextDecoration.lineThrough,
                             ),
@@ -424,14 +442,21 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                   const SizedBox(height: 22),
 
                   /// ================= HIGHLIGHTS =================
-                  _sectionTitle("Resort Highlights"),
+                  _sectionTitle("Resort Highlights", primaryText),
                   const SizedBox(height: 12),
-                  _buildHighlightsGrid(resort.highlights),
+                  _buildHighlightsGrid(
+                    resort.highlights,
+                    isDark: isDark,
+                    cardBg: cardBg,
+                    shadowColor: shadowColor,
+                    primaryText: primaryText,
+                    mutedText: mutedText,
+                  ),
 
                   const SizedBox(height: 24),
 
                   /// ================= FACILITIES =================
-                  _sectionTitle("Facilities"),
+                  _sectionTitle("Facilities", primaryText),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 10,
@@ -441,12 +466,13 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
+                          color: facilityChipBg,
                           borderRadius: BorderRadius.circular(30),
                         ),
                         child: Text(f,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w500)),
+                            style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: facilityChipText)),
                       );
                     }).toList(),
                   ),
@@ -454,42 +480,51 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                   const SizedBox(height: 24),
 
                   /// ================= WHAT'S INCLUDED =================
-                  _sectionTitle("What's Included"),
+                  _sectionTitle("What's Included", primaryText),
                   const SizedBox(height: 12),
-                  _buildInclusionsList(resort.inclusions),
+                  _buildInclusionsList(
+                    resort.inclusions,
+                    cardBg: cardBg,
+                    shadowColor: shadowColor,
+                    secondaryText: secondaryText,
+                  ),
 
                   const SizedBox(height: 24),
 
                   /// ================= DESCRIPTION =================
-                  _sectionTitle("Description"),
+                  _sectionTitle("Description", primaryText),
                   const SizedBox(height: 12),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: cardBg,
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
-                            blurRadius: 8),
+                        BoxShadow(color: shadowColor, blurRadius: 8),
                       ],
                     ),
                     child: Text(
                       resort.description,
                       style: TextStyle(
-                          fontSize: 15,
-                          color: Colors.grey.shade800,
-                          height: 1.6),
+                          fontSize: 15, color: secondaryText, height: 1.6),
                     ),
                   ),
 
                   const SizedBox(height: 24),
 
                   /// ================= TIMINGS & RULES =================
-                  _sectionTitle("Resort Timings & Rules"),
+                  _sectionTitle("Resort Timings & Rules", primaryText),
                   const SizedBox(height: 12),
-                  _buildTimingCard(resort.timings, resort.rules),
+                  _buildTimingCard(
+                    resort.timings,
+                    resort.rules,
+                    isDark: isDark,
+                    cardBg: cardBg,
+                    shadowColor: shadowColor,
+                    primaryText: primaryText,
+                    secondaryText: secondaryText,
+                  ),
                 ],
               ),
             ),
@@ -502,10 +537,10 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
         child: Container(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardBg,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
                 blurRadius: 10,
                 offset: const Offset(0, -2),
               ),
@@ -544,8 +579,14 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   }
 
   /// ================= HIGHLIGHTS GRID =================
-  // ✅ now driven entirely by resort.highlights — different per resort
-  Widget _buildHighlightsGrid(List<HighlightItem> highlights) {
+  Widget _buildHighlightsGrid(
+    List<HighlightItem> highlights, {
+    required bool isDark,
+    required Color cardBg,
+    required Color shadowColor,
+    required Color primaryText,
+    required Color mutedText,
+  }) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -560,11 +601,10 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
         final item = highlights[index];
         return Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardBg,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.04), blurRadius: 6),
+              BoxShadow(color: shadowColor, blurRadius: 6),
             ],
           ),
           child: Column(
@@ -574,25 +614,29 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: isDark
+                      ? Colors.blue.withOpacity(0.15)
+                      : Colors.blue.shade50,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(item.icon,
-                    color: Colors.blue.shade700, size: 22),
+                    color: isDark ? Colors.blue.shade200 : Colors.blue.shade700,
+                    size: 22),
               ),
               const SizedBox(height: 8),
               Text(
                 item.label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: primaryText),
               ),
               const SizedBox(height: 2),
               Text(
                 item.sub,
                 textAlign: TextAlign.center,
-                style:
-                    TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                style: TextStyle(fontSize: 10, color: mutedText),
               ),
             ],
           ),
@@ -602,16 +646,19 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   }
 
   /// ================= INCLUSIONS LIST =================
-  // ✅ now driven entirely by resort.inclusions
-  Widget _buildInclusionsList(List<String> inclusions) {
+  Widget _buildInclusionsList(
+    List<String> inclusions, {
+    required Color cardBg,
+    required Color shadowColor,
+    required Color secondaryText,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04), blurRadius: 8),
+          BoxShadow(color: shadowColor, blurRadius: 8),
         ],
       ),
       child: Column(
@@ -626,8 +673,7 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
                 Expanded(
                   child: Text(
                     text,
-                    style: TextStyle(
-                        fontSize: 14, color: Colors.grey.shade800),
+                    style: TextStyle(fontSize: 14, color: secondaryText),
                   ),
                 ),
               ],
@@ -639,16 +685,22 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   }
 
   /// ================= TIMING CARD =================
-  // ✅ now driven entirely by resort.timings + resort.rules
-  Widget _buildTimingCard(List<TimingItem> timings, List<String> rules) {
+  Widget _buildTimingCard(
+    List<TimingItem> timings,
+    List<String> rules, {
+    required bool isDark,
+    required Color cardBg,
+    required Color shadowColor,
+    required Color primaryText,
+    required Color secondaryText,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04), blurRadius: 8),
+          BoxShadow(color: shadowColor, blurRadius: 8),
         ],
       ),
       child: Column(
@@ -661,21 +713,23 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
               child: Row(
                 children: [
                   Icon(item.icon,
-                      color: Colors.blue.shade600, size: 18),
+                      color: isDark ? Colors.blue.shade200 : Colors.blue.shade600,
+                      size: 18),
                   const SizedBox(width: 10),
                   SizedBox(
                     width: 100,
                     child: Text(
                       item.label,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: primaryText),
                     ),
                   ),
                   Expanded(
                     child: Text(
                       item.value,
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.grey.shade700),
+                      style: TextStyle(fontSize: 13, color: secondaryText),
                     ),
                   ),
                 ],
@@ -683,17 +737,21 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
             );
           }),
 
-          const Divider(height: 24),
+          Divider(
+              height: 24, color: isDark ? Colors.white12 : null),
 
           Row(
             children: [
               Icon(Icons.info_outline,
-                  color: Colors.orange.shade600, size: 18),
+                  color: isDark ? Colors.orange.shade300 : Colors.orange.shade600,
+                  size: 18),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 "Important Rules",
                 style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.bold),
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: primaryText),
               ),
             ],
           ),
@@ -705,14 +763,16 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("• ",
-                      style:
-                          TextStyle(fontSize: 15, color: Colors.orange)),
+                  Text("• ",
+                      style: TextStyle(
+                          fontSize: 15,
+                          color: isDark
+                              ? Colors.orange.shade300
+                              : Colors.orange)),
                   Expanded(
                     child: Text(
                       rule,
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.grey.shade700),
+                      style: TextStyle(fontSize: 13, color: secondaryText),
                     ),
                   ),
                 ],
@@ -725,10 +785,11 @@ class _ResortDetailPageState extends State<ResortDetailPage> {
   }
 
   /// ================= SECTION TITLE =================
-  Widget _sectionTitle(String title) {
+  Widget _sectionTitle(String title, Color color) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+      style: TextStyle(
+          fontSize: 22, fontWeight: FontWeight.bold, color: color),
     );
   }
 }

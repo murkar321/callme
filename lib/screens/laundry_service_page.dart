@@ -42,10 +42,17 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final cartCount = Cart.totalItems('Laundry');
 
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final railBg = isDark ? const Color(0xFF1B1922) : Colors.white;
+    final unselectedRail = isDark ? Colors.white70 : Colors.black87;
+    final unselectedAvatarBg = isDark ? Colors.white12 : Colors.grey.shade200;
+
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
         title: const Text('Laundry',
             style:
@@ -95,7 +102,7 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
           // ── Left: category rail ──────────────────────────────────
           Container(
             width: 88,
-            color: Colors.white,
+            color: railBg,
             child: ListView(
               padding: const EdgeInsets.only(top: 8),
               children: _laundryData.keys.map((cat) {
@@ -110,7 +117,7 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
                         CircleAvatar(
                           radius: 28,
                           backgroundColor:
-                              selected ? _theme : Colors.grey.shade200,
+                              selected ? _theme : unselectedAvatarBg,
                           child: CircleAvatar(
                             radius: 24,
                             backgroundImage: AssetImage(img),
@@ -123,7 +130,7 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: selected ? _theme : Colors.black87,
+                            color: selected ? _theme : unselectedRail,
                           ),
                         ),
                       ],
@@ -139,9 +146,6 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final width = constraints.maxWidth;
-                // Wider screens (tablets/foldables) get 3 columns and a
-                // shorter card; phones get 2 columns and a taller card so
-                // text never gets squeezed into overflow.
                 final crossAxisCount = width > 700 ? 3 : 2;
                 final aspectRatio = width > 700 ? 0.74 : 0.60;
 
@@ -170,9 +174,6 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
         ],
       ),
 
-      // Scaffold already reserves space for bottomNavigationBar in body,
-      // so no manual bottom padding is needed on the grid — that double
-      // padding was the source of the overflow/extra gap before.
       bottomNavigationBar: cartCount > 0
           ? SafeArea(
               child: Container(
@@ -182,7 +183,7 @@ class _LaundryServicePageState extends State<LaundryServicePage> {
                   color: _theme,
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
+                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.12),
                         blurRadius: 8,
                         offset: const Offset(0, -2)),
                   ],
